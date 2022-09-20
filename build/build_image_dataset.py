@@ -9,7 +9,7 @@ folderList = os.listdir(imageDir)
 # filter
 #folderList = [s for s in folderList if "Export" in s]
 # load images in each subdirectory
-for f in range(1):
+for f in range(2):
     subDir = os.path.join(imageDir,folderList[f])
     print(subDir)
     imList = os.listdir(subDir)
