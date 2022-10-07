@@ -296,16 +296,15 @@ class scRNA_VAE:
             saver = tf.train.import_meta_graph(output_model + '_step4/mymodel.meta')
             saver.restore(self.sess, tf.train.latest_checkpoint(output_model + '_step4/'))
 
-    def predict_embedding(self, data_x, data_y, batch_x, batch_y):
+    def predict_embedding(self, data_x, batch_x):
         """
         return scRNA and scATAC projections on VAE embedding layers
         """
-        return self.sess.run([self.encoded_x, self.translator_encoded_x, self.encoded_y, self.translator_encoded_y],
-                             feed_dict={self.input_x: data_x, self.input_y: data_y, self.batch_x: batch_x,
-                                        self.batch_y: batch_y});
+        return self.sess.run([self.encoded_x],
+                             feed_dict={self.input_x: data_x, self.batch_x: batch_x})
     
     
-    def get_losses_rna(self, data_x, data_y, batch_x, batch_y, kl_weight_x, kl_weight_y):
+    def get_losses_rna(self, data_x, batch_x, kl_weight_x):
         """
         return scRNA reconstruction loss
         """
