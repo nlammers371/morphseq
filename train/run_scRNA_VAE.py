@@ -85,6 +85,7 @@ def pred_latent_scRNA(autoencoder, data_rna_test, batch_rna_test, output_prefix=
         np.savetxt(output_prefix + '_atacnorm_pred.txt', test_translator_reconstr_atac_norm_output, delimiter='\t',
                    fmt='%1.5f')
 
+'''
 def eval_rna_correlation(autoencoder, data_rna_val, data_atac_val, batch_atac_val, data_rna_test, data_atac_test, batch_atac_test, batch_dim_x, output_prefix, batch_size=16):
     """
     evaluate predicted scRNA normalized expression for both validation and test set, and return gene-wise correlation
@@ -105,121 +106,58 @@ def eval_rna_correlation(autoencoder, data_rna_val, data_atac_val, batch_atac_va
     np.savetxt(output_prefix+'_test_rna_cor.txt', cor_gene, delimiter='\n', fmt='%1.5f')
     np.savetxt(output_prefix+'_stats_rna_cor.txt', sim_metric_rna, delimiter='\n', fmt='%1.5f')
 
+'''
 
-def train_polarbear_model(outdir, sim_url, train_test_split, path_x, path_y, path_x_single, path_y_single, dispersion,
-                          embed_dim_x, embed_dim_y, nlayer, dropout_rate, learning_rate_x, learning_rate_y,
-                          learning_rate_xy, learning_rate_yx, trans_ver, hidden_frac, kl_weight, patience,
-                          nepoch_warmup_x, nepoch_warmup_y, nepoch_klstart_x, nepoch_klstart_y, batch_size, train,
+def train_scRNA_vae(outdir, sim_url, train_test_split, path_x, path_x_single, dispersion,
+                          embed_dim_x, nlayer, dropout_rate, learning_rate_x,
+                          trans_ver, hidden_frac, kl_weight, patience,
+                          nepoch_warmup_x, nepoch_klstart_x, batch_size, train,
                           evaluate, predict):
     """
     train/load the Polarbear model
     Parameters
     ----------
     data_rna_train: scRNA training data, ncell x input_dim_rna
-    data_atac_train: scATAC training data, ncell x input_dim_atac
     data_rna_val: scRNA validation data, ncell x input_dim_rna
-    data_atac_val: scATAC validation data, ncell x input_dim_atac
     data_rna_test: scRNA data, ncell x input_dim_rna
-    data_atac_test: scATAC data, ncell x input_dim_atac
     batch_rna_val: scRNA batch matrix, ncell x nbatch
-    batch_dim_y: nbatch in scATAC
     outdir: output directory
     train_test_split: "random" or "babel"
     path_x: scRNA co-assay (SNARE-seq) file path
-    path_y: scATAC co-assay (SNARE-seq) file path
     path_x_single: scRNA single-assay file path
-    path_y_single: scATAC single-assay file path
     train: "train" or "predict", train the model or just load existing model
 
     """
     os.system('mkdir -p ' + outdir)
-    ## input peak file and filter out peaks in sex chromosomes
-    chr_annot = pd.read_csv(path_y.split('snareseq')[0] + 'peaks.txt', sep=':', header=None)
-    chr_annot.columns = ['chr', 'pos']
-    chr_list = {}
-    for chri in chr_annot['chr'].unique():
-        if chri not in ['chrX', 'chrY']:
-            chr_list[int(chri[3:])] = [i for i, x in enumerate(chr_annot['chr']) if x == chri];
-
-    chr_list_range = []
-    for chri in chr_list.keys():
-        chr_list_range += chr_list[chri]
-
-    ## save the list of peaks
-    chr_annot.iloc[chr_list_range].to_csv(sim_url + '_peaks.txt', index=False, sep=':', header=None)
 
     data_rna, data_rna_batch = load_rna_file_sparse(path_x)
-    data_atac, data_atac_batch = load_atac_file_sparse(path_y, chr_list_range)
 
     ## ======================================
     ## define train, validation and test
     data_rna_barcode = pd.read_csv(path_x.split('.mtx')[0] + '_barcodes.tsv', delimiter='\t')
     barcode_list = data_rna_barcode['index'].to_list()
 
-    if train_test_split == 'babel':
-        # use the exact train/val/test split in BABEL
-        with open('./data/babel_test_barcodes.txt') as fp:
-            test_barcode = fp.read().splitlines()
-
-        with open('./data/babel_valid_barcodes.txt') as fp:
-            valid_barcode = fp.read().splitlines()
-
-        with open('./data/babel_train_barcodes.txt') as fp:
-            train_barcode = fp.read().splitlines()
-
-        train_index = [barcode_list.index(x) for x in train_barcode]
-        val_index = [barcode_list.index(x) for x in valid_barcode]
-        test_index = [barcode_list.index(x) for x in test_barcode]
-
-        data_rna_train = data_rna[train_index,]
-        batch_rna_train = data_rna_batch[train_index,]
-        data_rna_train_co = data_rna[train_index,]
-        batch_rna_train_co = data_rna_batch[train_index,]
-        data_rna_test = data_rna[test_index,]
-        batch_rna_test = data_rna_batch[test_index,]
-        data_rna_val = data_rna[val_index,]
-        batch_rna_val = data_rna_batch[val_index,]
-
-        data_atac_train = data_atac[train_index,]
-        batch_atac_train = data_atac_batch[train_index,]
-        data_atac_train_co = data_atac[train_index,]
-        batch_atac_train_co = data_atac_batch[train_index,]
-        data_atac_test = data_atac[test_index,]
-        batch_atac_test = data_atac_batch[test_index,]
-        data_atac_val = data_atac[val_index,]
-        batch_atac_val = data_atac_batch[val_index,]
-
-    elif train_test_split == 'random':
-        ## randomly assign 1/5 as validation and 1/5 as test set
-        cv_size = data_rna.shape[0] // 5
-        rand_index = list(range(data_rna.shape[0]))
-        random.seed(101)
-        random.shuffle(rand_index)
-        all_ord_index = range(data_rna.shape[0])
-        test_index = rand_index[0: cv_size]
-        all_ord_index = list(set(all_ord_index) - set(range(0, cv_size)))
-        random.seed(101)
-        val_ord_index = random.sample(all_ord_index, cv_size)
-        all_ord_index = list(set(all_ord_index) - set(val_ord_index))
-        val_index = [rand_index[i] for i in val_ord_index]
-        train_index = [rand_index[i] for i in all_ord_index]
-        data_rna_train = data_rna[train_index,]
-        batch_rna_train = data_rna_batch[train_index,]
-        data_rna_train_co = data_rna[train_index,]
-        batch_rna_train_co = data_rna_batch[train_index,]
-        data_rna_test = data_rna[test_index,]
-        batch_rna_test = data_rna_batch[test_index,]
-        data_rna_val = data_rna[val_index,]
-        batch_rna_val = data_rna_batch[val_index,]
-
-        data_atac_train = data_atac[train_index,]
-        batch_atac_train = data_atac_batch[train_index,]
-        data_atac_train_co = data_atac[train_index,]
-        batch_atac_train_co = data_atac_batch[train_index,]
-        data_atac_test = data_atac[test_index,]
-        batch_atac_test = data_atac_batch[test_index,]
-        data_atac_val = data_atac[val_index,]
-        batch_atac_val = data_atac_batch[val_index,]
+    ## randomly assign 1/5 as validation and 1/5 as test set
+    cv_size = data_rna.shape[0] // 5
+    rand_index = list(range(data_rna.shape[0]))
+    random.seed(101)
+    random.shuffle(rand_index)
+    all_ord_index = range(data_rna.shape[0])
+    test_index = rand_index[0: cv_size]
+    all_ord_index = list(set(all_ord_index) - set(range(0, cv_size)))
+    random.seed(101)
+    val_ord_index = random.sample(all_ord_index, cv_size)
+    all_ord_index = list(set(all_ord_index) - set(val_ord_index))
+    val_index = [rand_index[i] for i in val_ord_index]
+    train_index = [rand_index[i] for i in all_ord_index]
+    data_rna_train = data_rna[train_index,]
+    batch_rna_train = data_rna_batch[train_index,]
+    data_rna_train_co = data_rna[train_index,]
+    batch_rna_train_co = data_rna_batch[train_index,]
+    data_rna_test = data_rna[test_index,]
+    batch_rna_test = data_rna_batch[test_index,]
+    data_rna_val = data_rna[val_index,]
+    batch_rna_val = data_rna_batch[val_index,]
 
     if train == 'train':
         ## save the corresponding barcodes
@@ -235,10 +173,6 @@ def train_polarbear_model(outdir, sim_url, train_test_split, path_x, path_y, pat
             data_rna_single, data_rna_single_batch = load_rna_file_sparse(path_x_single)
             data_rna_train = scipy.sparse.vstack((data_rna_train, data_rna_single))
             batch_rna_train = scipy.sparse.vstack((batch_rna_train, data_rna_single_batch))
-        if path_y_single != 'noatacsingle':
-            data_atac_single, data_atac_single_batch = load_atac_file_sparse(path_y_single, chr_list_range)
-            data_atac_train = scipy.sparse.vstack((data_atac_train, data_atac_single))
-            batch_atac_train = scipy.sparse.vstack((batch_atac_train, data_atac_single_batch))
 
         ## shuffle training set
         rand_index_rna = list(range(data_rna_train.shape[0]))
@@ -247,40 +181,26 @@ def train_polarbear_model(outdir, sim_url, train_test_split, path_x, path_y, pat
         data_rna_train = data_rna_train[rand_index_rna,]
         batch_rna_train = batch_rna_train[rand_index_rna,]
 
-        rand_index_atac = list(range(data_atac_train.shape[0]))
-        random.seed(101)
-        random.shuffle(rand_index_atac)
-        data_atac_train = data_atac_train[rand_index_atac,]
-        batch_atac_train = batch_atac_train[rand_index_atac,]
-
         ## train the model
         tf.reset_default_graph()
-        autoencoder = TranslateAE(input_dim_x=data_rna_val.shape[1], input_dim_y=data_atac_val.shape[1],
-                                  batch_dim_x=batch_rna_val.shape[1], batch_dim_y=batch_atac_val.shape[1],
-                                  embed_dim_x=embed_dim_x, embed_dim_y=embed_dim_y, dispersion=dispersion,
-                                  chr_list=chr_list, nlayer=nlayer, dropout_rate=dropout_rate, output_model=sim_url,
-                                  learning_rate_x=learning_rate_x, learning_rate_y=learning_rate_y,
-                                  learning_rate_xy=learning_rate_xy, learning_rate_yx=learning_rate_yx,
-                                  trans_ver=trans_ver, hidden_frac=hidden_frac, kl_weight=kl_weight);
-        iter_list1, iter_list2, iter_list3, iter_list4, val_reconstr_atac_loss_list, val_kl_atac_loss_list, val_reconstr_rna_loss_list, val_kl_rna_loss_list, val_translat_atac_loss_list, val_translat_rna_loss_list = \
-            autoencoder.train(data_rna_train, batch_rna_train, data_atac_train, batch_atac_train, data_rna_val,
-                              batch_rna_val, data_atac_val, batch_atac_val, data_rna_train_co, batch_rna_train_co,
-                              data_atac_train_co, batch_atac_train_co, nepoch_warmup_x, nepoch_warmup_y, patience,
-                              nepoch_klstart_x, nepoch_klstart_y, output_model=sim_url, batch_size=batch_size,
-                              nlayer=nlayer, save_model=True);
+
+        autoencoder_rna = scRNA_VAE(input_dim_x=data_rna_val.shape[1], batch_dim_x=batch_rna_val.shape[1],
+                                  embed_dim_x=embed_dim_x, dispersion=dispersion, nlayer=nlayer, dropout_rate=dropout_rate,
+                                  learning_rate_x=learning_rate_x,hidden_frac=hidden_frac, kl_weight=kl_weight)
+
+        autoencoder_rna.train(data_rna_train, batch_rna_train, data_rna_val, batch_rna_val, data_rna_train_co,
+                              batch_rna_train_co, nepoch_warmup_x, patience, nepoch_klstart_x, output_model=sim_url,
+                              batch_size=batch_size, nlayer=nlayer, save_model=True)
 
     elif train == 'predict':
         tf.reset_default_graph()
-        autoencoder = TranslateAE(input_dim_x=data_rna_val.shape[1], input_dim_y=data_atac_val.shape[1],
-                                  batch_dim_x=batch_rna_val.shape[1], batch_dim_y=batch_atac_val.shape[1],
-                                  embed_dim_x=embed_dim_x, embed_dim_y=embed_dim_y, dispersion=dispersion,
-                                  chr_list=chr_list, nlayer=nlayer, dropout_rate=dropout_rate, output_model=sim_url,
-                                  learning_rate_x=learning_rate_x, learning_rate_y=learning_rate_y,
-                                  learning_rate_xy=learning_rate_xy, learning_rate_yx=learning_rate_yx,
-                                  trans_ver=trans_ver, hidden_frac=hidden_frac, kl_weight=kl_weight);
+        autoencoder_rna = scRNA_VAE(input_dim_x=data_rna_val.shape[1], batch_dim_x=batch_rna_val.shape[1],
+                                    embed_dim_x=embed_dim_x, dispersion=dispersion, nlayer=nlayer,
+                                    dropout_rate=dropout_rate,
+                                    learning_rate_x=learning_rate_x, hidden_frac=hidden_frac, kl_weight=kl_weight)
 
-        autoencoder.load(sim_url);
-
+        autoencoder_rna.load(sim_url);
+    '''
     if evaluate == 'evaluate':
         ## evaluate on size-normalized scRNA true profile
         output_prefix = sim_url
@@ -299,7 +219,7 @@ def train_polarbear_model(outdir, sim_url, train_test_split, path_x, path_y, pat
         ## evaluate alignment
         eval_alignment(autoencoder, data_rna_val, data_atac_val, batch_rna_val, batch_atac_val, data_rna_test,
                        data_atac_test, batch_rna_test, batch_atac_test, output_prefix)
-
+   
     if predict == 'predict':
         ## output normalized scRNA prediction
         output_prefix = sim_url + '_test'
@@ -321,7 +241,7 @@ def train_polarbear_model(outdir, sim_url, train_test_split, path_x, path_y, pat
 
         ## output alignment on the test set
         pred_embedding(autoencoder, data_rna_test, batch_rna_test, data_atac_test, batch_atac_test, output_prefix)
-
+     '''
 
 def main(args):
     learning_rate_x = args.learning_rate_x;
