@@ -108,7 +108,7 @@ def eval_rna_correlation(autoencoder, data_rna_val, data_atac_val, batch_atac_va
 
 '''
 
-def train_scRNA_vae(outdir, sim_url, train_test_split, path_x, path_x_single, dispersion,
+def train_scRNA_vae(outdir, sim_url, path_x, path_x_single, dispersion,
                           embed_dim_x, nlayer, dropout_rate, learning_rate_x,
                           trans_ver, hidden_frac, kl_weight, patience,
                           nepoch_warmup_x, nepoch_klstart_x, batch_size, train,
@@ -122,7 +122,6 @@ def train_scRNA_vae(outdir, sim_url, train_test_split, path_x, path_x_single, di
     data_rna_test: scRNA data, ncell x input_dim_rna
     batch_rna_val: scRNA batch matrix, ncell x nbatch
     outdir: output directory
-    train_test_split: "random" or "babel"
     path_x: scRNA co-assay (SNARE-seq) file path
     path_x_single: scRNA single-assay file path
     train: "train" or "predict", train the model or just load existing model
@@ -245,25 +244,25 @@ def train_scRNA_vae(outdir, sim_url, train_test_split, path_x, path_x_single, di
 
 def main(args):
     learning_rate_x = args.learning_rate_x;
-    learning_rate_y = args.learning_rate_y;
-    learning_rate_xy = args.learning_rate_xy;
-    learning_rate_yx = args.learning_rate_yx;
+    #learning_rate_y = args.learning_rate_y;
+    #learning_rate_xy = args.learning_rate_xy;
+    #learning_rate_yx = args.learning_rate_yx;
     embed_dim_x = args.embed_dim_x;
-    embed_dim_y = args.embed_dim_y;
+    #embed_dim_y = args.embed_dim_y;
     dropout_rate = float(args.dropout_rate);
     nlayer = args.nlayer;
     batch_size = args.batch_size
     trans_ver = args.trans_ver
     patience = args.patience
     nepoch_warmup_x = args.nepoch_warmup_x
-    nepoch_warmup_y = args.nepoch_warmup_y
+    #nepoch_warmup_y = args.nepoch_warmup_y
     nepoch_klstart_x = args.nepoch_klstart_x
-    nepoch_klstart_y = args.nepoch_klstart_y
+    #nepoch_klstart_y = args.nepoch_klstart_y
     dispersion = args.dispersion
     hidden_frac = args.hidden_frac
     kl_weight = args.kl_weight
     train_test_split = args.train_test_split
-
+    """
     sim_url = args.outdir + 'polarbear_' + train_test_split + '_' + dispersion + '_' + str(nlayer) + 'l_lr' + str(
         learning_rate_y) + '_' + str(learning_rate_x) + '_' + str(learning_rate_xy) + '_' + str(
         learning_rate_yx) + '_dropout' + str(dropout_rate) + '_ndim' + str(embed_dim_x) + '_' + str(
@@ -271,11 +270,15 @@ def main(args):
         patience) + '_nwarmup_' + str(nepoch_warmup_x) + '_' + str(nepoch_warmup_y) + '_klstart' + str(
         nepoch_klstart_x) + '_' + str(nepoch_klstart_y) + '_klweight' + str(kl_weight) + '_hiddenfrac' + str(
         hidden_frac)
+    """
+    sim_url = args.outdir + 'polarbear_' + train_test_split + '_' + dispersion + '_' + str(nlayer) + 'l_lr' + '_' + str(
+        learning_rate_x) + '_dropout' + str(dropout_rate) + '_ndim' + str(embed_dim_x) + '_batch' + str(
+        batch_size) + '_' + trans_ver + '_improvement' + str(patience) + '_nwarmup_' + str(nepoch_warmup_x) + '_klstart' + str(
+        nepoch_klstart_x) + '_klweight' + str(kl_weight) + '_hiddenfrac' + str(hidden_frac)
     print(sim_url)
-    train_polarbear_model(args.outdir, sim_url, train_test_split, args.path_x, args.path_y, args.path_x_single,
-                          args.path_y_single, dispersion, embed_dim_x, embed_dim_y, nlayer, dropout_rate,
-                          learning_rate_x, learning_rate_y, learning_rate_xy, learning_rate_yx, trans_ver, hidden_frac,
-                          kl_weight, patience, nepoch_warmup_x, nepoch_warmup_y, nepoch_klstart_x, nepoch_klstart_y,
+
+    train_scRNA_vae(args.outdir, sim_url, args.path_x, args.path_x_single, dispersion, embed_dim_x, nlayer, dropout_rate,
+                          learning_rate_x, trans_ver, hidden_frac, kl_weight, patience, nepoch_warmup_x, nepoch_klstart_x,
                           batch_size, args.train, args.evaluate, args.predict)
 
 
@@ -286,48 +289,48 @@ if __name__ == "__main__":
     parser.add_argument('--train', type=str,
                         help='"train": train the model from the beginning; "predict": load existing model for downstream prediction',
                         default='predict');
-    parser.add_argument('--evaluate', type=str,
-                        help='"evaluate": evaluate translation and alignment performance on the validation set',
-                        default='');
-    parser.add_argument('--predict', type=str, help='"predict": predict translation and alignment on test set',
-                        default='');
+    #parser.add_argument('--evaluate', type=str,
+    #                    help='"evaluate": evaluate translation and alignment performance on the validation set',
+    #                    default='');
+    #parser.add_argument('--predict', type=str, help='"predict": predict translation and alignment on test set',
+    #                    default='');
 
     parser.add_argument('--path_x_single', type=str, help='path of scRNA single assay data file',
                         default='nornasingle');
-    parser.add_argument('--path_y_single', type=str, help='path of scATAC single assay data file',
-                        default='noatacsingle');
+    #parser.add_argument('--path_y_single', type=str, help='path of scATAC single assay data file',
+    #                    default='noatacsingle');
     parser.add_argument('--path_x', type=str, help='path of scRNA snare-seq co-assay data file');
-    parser.add_argument('--path_y', type=str, help='path of scATAC snare-seq co-assay data file');
+    #parser.add_argument('--path_y', type=str, help='path of scATAC snare-seq co-assay data file');
     parser.add_argument('--nlayer', type=int, help='number of hidden layers in encoder and decoders in neural network',
                         default=2);
     parser.add_argument('--outdir', type=str, help='outdir', default='./');
     parser.add_argument('--batch_size', type=int, help='batch size', default=16);
     parser.add_argument('--learning_rate_x', type=float, help='scRNA VAE learning rate', default=0.001);
-    parser.add_argument('--learning_rate_y', type=float, help='scATAC VAE learning rate', default=0.0001);
-    parser.add_argument('--learning_rate_xy', type=float,
-                        help='scRNA embedding to scATAC embedding translation learning rate', default=0.001);
-    parser.add_argument('--learning_rate_yx', type=float,
-                        help='scATAC embedding to scRNA embedding translation learning rate', default=0.001);
+    #parser.add_argument('--learning_rate_y', type=float, help='scATAC VAE learning rate', default=0.0001);
+    #parser.add_argument('--learning_rate_xy', type=float,
+    #                    help='scRNA embedding to scATAC embedding translation learning rate', default=0.001);
+    #parser.add_argument('--learning_rate_yx', type=float,
+    #                    help='scATAC embedding to scRNA embedding translation learning rate', default=0.001);
     parser.add_argument('--dropout_rate', type=float, help='dropout rate in VAE', default=0.1);
     parser.add_argument('--embed_dim_x', type=int, help='embed_dim_x', default=25);
-    parser.add_argument('--embed_dim_y', type=int, help='embed_dim_y', default=25);
-    parser.add_argument('--trans_ver', type=str, help='translation layer in between embeddings, linear or 1l or 2l',
-                        default='linear');
+    #parser.add_argument('--embed_dim_y', type=int, help='embed_dim_y', default=25);
+    #parser.add_argument('--trans_ver', type=str, help='translation layer in between embeddings, linear or 1l or 2l',
+    #                    default='linear');
     parser.add_argument('--patience', type=int, help='patience for early stopping', default=45);
     parser.add_argument('--nepoch_warmup_x', type=int,
                         help='number of epochs to take to warm up RNA VAE kl term to maximum', default=400);
-    parser.add_argument('--nepoch_warmup_y', type=int,
-                        help='number of epochs to take to warm up ATAC VAE kl term to maximum', default=80);
+    #parser.add_argument('--nepoch_warmup_y', type=int,
+    #                    help='number of epochs to take to warm up ATAC VAE kl term to maximum', default=80);
     parser.add_argument('--nepoch_klstart_x', type=int,
                         help='number of epochs to wait to start to warm up RNA VAE kl term', default=0);
-    parser.add_argument('--nepoch_klstart_y', type=int,
-                        help='number of epochs to wait to start to warm up ATAC VAE kl term', default=0);
+    #parser.add_argument('--nepoch_klstart_y', type=int,
+    #                    help='number of epochs to wait to start to warm up ATAC VAE kl term', default=0);
     parser.add_argument('--dispersion', type=str,
                         help='estimate dispersion per gene&batch: genebatch or per gene&cell: genecell',
-                        default='genebatch');
+                        default='genebatch')
     parser.add_argument('--hidden_frac', type=int, help='shrink intermediate dimension by dividing this term',
-                        default=2);
+                        default=2)
     parser.add_argument('--kl_weight', type=float, help='weight of kl loss in beta-VAE', default=1);
 
-    args = parser.parse_args();
-    main(args);
+    args = parser.parse_args()
+    main(args)
