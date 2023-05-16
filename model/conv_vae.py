@@ -45,17 +45,16 @@ def load_split_train_test(datadir, valid_size = .2, batch_size=64):
     train_sampler = SubsetRandomSampler(train_idx)
     test_sampler = SubsetRandomSampler(test_idx)
 
-    trainloader = torch.utils.data.DataLoader(train_data,
-                   sampler=train_sampler, batch_size=batch_size)
-    testloader = torch.utils.data.DataLoader(test_data,
-                   sampler=test_sampler, batch_size=batch_size)
+    trainloader = torch.utils.data.DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
+    testloader = torch.utils.data.DataLoader(test_data, sampler=test_sampler, batch_size=batch_size)
+
     return trainloader, testloader
 
 """
 A Convolutional Variational Autoencoder
 """
 class VAE(nn.Module):
-    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=2):
+    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=2, out_channels=16):
         super(VAE, self).__init__()
 
         # calculate feature size
@@ -68,15 +67,18 @@ class VAE(nn.Module):
         self.im_size2 = [h2, w2]
 
         # Initializing the 2 convolutional layers and 2 full-connected layers for the encoder
-        self.encConv1 = nn.Conv2d(imgChannels, 16, 5, stride=stride)
-        self.encConv2 = nn.Conv2d(16, 32, 5, stride=stride)
+        self.encConv1 = nn.Conv2d(imgChannels, out_channels, 5, stride=stride)
+        self.encConv2 = nn.Conv2d(out_channels, 2*out_channels, 5, stride=stride)
         self.encFC1 = nn.Linear(featureDim, zDim)
         self.encFC2 = nn.Linear(featureDim, zDim)
 
         # Initializing the fully-connected layer and 2 convolutional layers for decoder
+        op = 0
+        if stride == 2:
+            op = 1
         self.decFC1 = nn.Linear(zDim, featureDim)
-        self.decConv1 = nn.ConvTranspose2d(32, 16, 5, stride=stride, output_padding=1) # NL: output padding is needed to recover original shape
-        self.decConv2 = nn.ConvTranspose2d(16, imgChannels, 5, stride=stride, output_padding=1)
+        self.decConv1 = nn.ConvTranspose2d(2*out_channels, out_channels, 5, stride=stride, output_padding=op) # NL: output padding is needed to recover original shape
+        self.decConv2 = nn.ConvTranspose2d(out_channels, imgChannels, 5, stride=stride, output_padding=op)
 
     def encoder(self, x):
 
@@ -127,11 +129,12 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     datadir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/max_images_res014/"
+    modeldir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/"
 
     """
     Initialize Hyperparameters
     """
-    batch_size = 100
+    batch_size = 10
     learning_rate = 1e-3
     num_epochs = 10
 
@@ -177,7 +180,7 @@ if __name__ == "__main__":
 
     net.eval()
     with torch.no_grad():
-        for data in random.sample(list(train_loader), 1):
+        for data in random.sample(list(test_loader), 1):
 
             imgs, _ = data
             imgs = imgs.to(device)
@@ -193,3 +196,6 @@ if __name__ == "__main__":
             plt.show()
 
 
+
+    # save the model
+    torch.save(net.state_dict(), modeldir + '20230516_vae01')
