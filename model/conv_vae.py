@@ -134,9 +134,9 @@ if __name__ == "__main__":
     """
     Initialize Hyperparameters
     """
-    batch_size = 10
+    batch_size = 50
     learning_rate = 1e-3
-    num_epochs = 10
+    num_epochs = 30
 
     train_loader, test_loader = load_split_train_test(datadir, valid_size=.3, batch_size=batch_size)
 
@@ -198,4 +198,4 @@ if __name__ == "__main__":
 
 
     # save the model
-    torch.save(net.state_dict(), modeldir + '20230516_vae01')
+    torch.save(net.state_dict(), modeldir + '20230516_vae_z050')
