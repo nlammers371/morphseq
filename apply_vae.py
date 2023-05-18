@@ -8,7 +8,7 @@ from torchvision import datasets, transforms
 from torchvision.utils import save_image
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from conv_vae import VAE
+from model.conv_vae import VAE
 
 """
 Determine if any GPUs are available
@@ -35,23 +35,24 @@ net = VAE().to(device)
 net.load_state_dict(torch.load(modeldir + '20230516_vae01'))
 net.eval()
 
-iter_i = 0
 mu_array = np.empty((len(data_loader), 50))
 
 with torch.no_grad():
     for idx, data in enumerate(list(data_loader)):
         im_path = im_data.samples[idx][0]
         im_name = im_path.replace(datadir + 'class0/', '')
+        im_name = im_name.replace('.tif', '')
 
         imgs, _ = data
         imgs = imgs.to(device)
         img = np.transpose(imgs[0].cpu().numpy(), [1, 2, 0])
-        plt.title('Original')
+
 
         plt.subplot(121)
         plt.imshow(np.squeeze(img))
         plt.xticks([])
         plt.yticks([])
+        plt.title('Original')
 
         out, mu_array[idx, :], logVAR = net(imgs)
         outimg = np.transpose(out[0].cpu().numpy(), [1, 2, 0])
@@ -64,4 +65,3 @@ with torch.no_grad():
         plt.title('Predicted')
         plt.savefig(outdir + im_name + 'vae_pd.tif')
 
-        iter_i += 1
