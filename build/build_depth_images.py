@@ -3,9 +3,7 @@ import glob
 from aicsimageio import AICSImage
 import numpy as np
 import os
-from tifffile import imsave
 import pickle
-from matplotlib import pyplot as plt
 import skimage
 import scipy
 from skimage.morphology import disk
@@ -14,7 +12,7 @@ from skimage.morphology import (erosion, dilation, opening, closing,  # noqa
                                 white_tophat)
 from skimage import filters
 from PIL import Image
-import cv2
+
 
 overwrite_flag = False
 
@@ -24,9 +22,10 @@ size_y = 128 #256  # output y size (pixels)
 target_res = 7*512/size_x  # target isotropic pixel res (um)
 
 # set path to save images
-out_dir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/"
-depth_dir = out_dir + "depth_images" + f'_res{np.round(target_res).astype(int):03}/'
-max_dir = out_dir + "max_images" + f'_res{np.round(target_res).astype(int):03}/'
+# out_dir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/"
+out_dir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/"
+depth_dir = out_dir + "20230519_depth_images" + f'_res{np.round(target_res).astype(int):03}/class0/'
+max_dir = out_dir + "20230519_max_images" + f'_res{np.round(target_res).astype(int):03}/class0/'
 
 if not os.path.isdir(depth_dir):
     os.makedirs(depth_dir)
@@ -35,8 +34,9 @@ if not os.path.isdir(max_dir):
     os.makedirs(max_dir)
 
 # set input directories
-image_dir_list = ["/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230121/48well_timeseries/",
-                  "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230121/48wells/"]
+# image_dir_list = ["/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230121/48well_timeseries/",
+#                   "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230121/48wells/"]
+image_dir_list = ["E:/Nick\Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230517/"]
 
 metadata_dict = {}
 
@@ -89,7 +89,7 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
         n_wells = len(well_list)
 
         # iterate through each well position
-        for w, well in enumerate(well_list): # enumerate([well_list[0]]):
+        for w, well in enumerate([well_list[20]]): # enumerate([well_list[0]]):
 
             # shift to desired position
             imObject.set_scene(well)
@@ -107,13 +107,13 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
             n_time_points = imObject.dims["T"][0]
 
             # iterate through each time point
-            for t in range(n_time_points):
+            for t in [2]:#range(n_time_points):
 
                 # check to see if files already exist
                 outName = depth_dir + f'im_depth_Source{i:03}_' + f'Embryo{w:03}_' + f'T{t:03}.tiff'
                 outNameMax = max_dir + f'im_max_source{i:03}_' + f'embryo{w:03}_' + f't{t:03}.tif'
 
-                if (not os.path.isfile(outName)) or (not os.path.isfile(outNameMax)) or overwrite_flag:
+                if True: #(not os.path.isfile(outName)) or (not os.path.isfile(outNameMax)) or overwrite_flag:
 
                     # extract image
                     imData = np.squeeze(imObject.get_image_data("CZYX", T=t))
@@ -232,7 +232,7 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
                     im_max_out = Image.fromarray(im_array_max_256, "L")
 
                     # Save depth-encoded image
-                    outNameMax = max_dir + f'im_max_source{i:03}_' + f'embryo{w:03}_' + f't{t:03}.tif'
+                    outNameMax = max_dir + f'im_max_dir{d:03}' + f'source{i:03}_' + f'embryo{w:03}_' + f't{t:03}.tif'
                     im_max_out.save(outNameMax)
                 else:
                     print("File exists. Skipping...")

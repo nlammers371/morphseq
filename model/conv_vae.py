@@ -4,12 +4,10 @@ The following is an import of PyTorch libraries.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
 from torchvision import datasets, transforms
-from torchvision.utils import save_image
-import matplotlib.pyplot as plt
-import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
+import numpy as np
+import os
 import random
 
 
@@ -54,7 +52,7 @@ def load_split_train_test(datadir, valid_size = .2, batch_size=64):
 A Convolutional Variational Autoencoder
 """
 class VAE(nn.Module):
-    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=2, out_channels=16):
+    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=1, out_channels=16):
         super(VAE, self).__init__()
 
         # calculate feature size
@@ -128,15 +126,23 @@ if __name__ == "__main__":
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    datadir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/max_images_res014/"
-    modeldir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/"
+    model_name = '20230519_vae_depth_z050'
+    datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/20230519_depth_images_res014/"
+    modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/" + model_name + "/"
+    # datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/depth_images_res014/"
+    # modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/" + model_name + "/"
+
+    if not os.path.isdir(modeldir):
+        os.makedirs(modeldir)
+    # datadir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/max_images_res014/"
+    # modeldir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/"
 
     """
     Initialize Hyperparameters
     """
-    batch_size = 50
+    batch_size = 100
     learning_rate = 1e-3
-    num_epochs = 30
+    num_epochs = 100
 
     train_loader, test_loader = load_split_train_test(datadir, valid_size=.3, batch_size=batch_size)
 
@@ -175,7 +181,6 @@ if __name__ == "__main__":
     """
 
     import matplotlib.pyplot as plt
-    import numpy as np
     import random
 
     net.eval()
@@ -198,4 +203,4 @@ if __name__ == "__main__":
 
 
     # save the model
-    torch.save(net.state_dict(), modeldir + '20230516_vae_z050')
+    torch.save(net.state_dict(), modeldir + model_name)
