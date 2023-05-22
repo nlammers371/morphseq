@@ -211,22 +211,24 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
                     fish_mask = (max_b_z < threshold_sa) * 1
 
                     # empirically, I find that different filter sizes are needed for 4x and 10x
-                    if res_array[2] > 2:
-                        fp = disk(8)
-                        fp_small = disk(3)
-                    else:
-                        fp = disk(10)
-                        fp_small = disk(5)
-
-                    fish_closed = closing(fish_mask, fp)  # morphological closing
-                    fish_strip = skimage.morphology.remove_small_objects(label(fish_closed), min_size=600)  # remove small objects
-                    fish_clean = skimage.morphology.binary_erosion(fish_strip, fp_small)  # clean up edges
-                    fish_clean = scipy.ndimage.binary_fill_holes(fish_clean)
-                    fish_clean = skimage.morphology.remove_small_objects(label(fish_clean), min_size=600)
+                    # if res_array[2] > 2:
+                    #     fp = disk(8)
+                    #     fp_small = disk(3)
+                    # else:
+                    #     fp = disk(10)
+                    #     fp_small = disk(5)
+                    fish_strip = skimage.morphology.remove_small_objects(label(fish_mask),
+                                                                         min_size=600)  # remove small objects
+                    fish_clean = convex_hull_image(fish_strip)
+                    # fish_closed = closing(fish_mask, fp)  # morphological closing
+                    # fish_strip = skimage.morphology.remove_small_objects(label(fish_closed), min_size=600)  # remove small objects
+                    # fish_clean = skimage.morphology.binary_erosion(fish_strip, fp_small)  # clean up edges
+                    # fish_clean = scipy.ndimage.binary_fill_holes(fish_clean)
+                    # fish_clean = skimage.morphology.remove_small_objects(label(fish_clean), min_size=600)
 
                     # step 5: Normalize
-                    mean_z = np.mean(max_z_b) #[np.where(fish_clean > 0)])
-                    std_z = np.std(max_z_b) #[np.where(fish_clean > 0)])
+                    mean_z = np.mean(max_z_b)  # [np.where(fish_clean > 0)])
+                    std_z = np.std(max_z_b)  # [np.where(fish_clean > 0)])
 
                     im_norm = -(max_z_b - mean_z) / std_z
 
@@ -246,27 +248,28 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
 
                     im_centroid = np.round(im_center).astype(int)
 
-                    im_array_depth = np.random.normal(loc=mean_z_depth_b, scale=std_z_depth_b, size=(size_y, size_x))  # initialize array
+                    im_array_depth = np.random.normal(loc=mean_z_depth_b, scale=std_z_depth_b,
+                                                      size=(size_y, size_x))  # initialize array
 
-                    c_diff_y = size_y / 2 - im_center[0] + 0.5
-                    c_diff_x = size_x / 2 - im_center[1] + 0.5
+                    c_diff_y = np.floor(size_y / 2) - im_centroid[0]
+                    c_diff_x = np.floor(size_x / 2) - im_centroid[1]
 
-                    xmin = max(im_centroid[1] - (size_x/2), 0)
-                    xmax = min(im_centroid[1] + size_x/2, fish_clean.shape[1])
+                    xmin = max(im_centroid[1] - (size_x / 2), 0)
+                    xmax = min(im_centroid[1] + size_x / 2, fish_clean.shape[1])
                     from_x = np.arange(xmin, xmax).astype(int)
 
-                    ymin = max(im_centroid[0] - (size_y/2), 0)
-                    ymax = min(im_centroid[0] + size_y/2, fish_clean.shape[0])
+                    ymin = max(im_centroid[0] - (size_y / 2), 0)
+                    ymax = min(im_centroid[0] + size_y / 2, fish_clean.shape[0])
                     from_y = np.arange(ymin, ymax).astype(int)
 
                     to_y = np.round(from_y + c_diff_y).astype(int)
                     to_x = np.round(from_x + c_diff_x).astype(int)
 
                     im_array_depth[to_y[0]:to_y[-1], to_x[0]:to_x[-1]] = \
-                                           im_norm[from_y[0]:from_y[-1], from_x[0]:from_x[-1]]
+                        im_norm[from_y[0]:from_y[-1], from_x[0]:from_x[-1]]
 
                     im_array_depth[np.where(np.abs(im_array_depth) > 1)] = \
-                                        1 * np.sign(im_array_depth[np.where(np.abs(im_array_depth) > 1)])
+                        1 * np.sign(im_array_depth[np.where(np.abs(im_array_depth) > 1)])
 
                     # convert to 8-bit format
                     im_array_depth_256 = im_array_depth - np.min(im_array_depth)
@@ -289,10 +292,11 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
                     mean_z_max_b = np.mean(im_norm_max[np.where(fish_clean == 0)])
                     std_z_max_b = np.std(im_norm_max[np.where(fish_clean == 0)])
 
-                    im_array_max = np.random.normal(loc=mean_z_max_b, scale=std_z_max_b, size=(size_y, size_x)) # np.zeros((size_y, size_x))  # initialize array
+                    im_array_max = np.random.normal(loc=mean_z_max_b, scale=std_z_max_b, size=(
+                    size_y, size_x))  # np.zeros((size_y, size_x))  # initialize array
 
                     im_array_max[to_y[0]:to_y[-1], to_x[0]:to_x[-1]] = \
-                                                            im_norm_max[from_y[0]:from_y[-1], from_x[0]:from_x[-1]]
+                        im_norm_max[from_y[0]:from_y[-1], from_x[0]:from_x[-1]]
 
                     prc99 = np.percentile(np.abs(im_array_max), 99.5)
                     im_array_max[np.where(np.abs(im_array_max) > prc99)] = \
@@ -307,7 +311,7 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
                     im_max_out = Image.fromarray(im_array_max_256, "L")
 
                     # Save depth-encoded image
-                    outNameMax = max_dir + f'im_max_source{i:03}_' + f'embryo{w:03}_' + f't{t:03}.tif'
+                    outNameMax = max_dir + f'im_max_dir{d:03}' + f'source{i:03}_' + f'embryo{w:03}_' + f't{t:03}.tif'
                     im_max_out.save(outNameMax)
                 else:
                     print("File exists. Skipping...")
