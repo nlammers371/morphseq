@@ -52,7 +52,7 @@ def load_split_train_test(datadir, valid_size = .2, batch_size=64):
 A Convolutional Variational Autoencoder
 """
 class VAE(nn.Module):
-    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=1, out_channels=16):
+    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=2, out_channels=16):
         super(VAE, self).__init__()
 
         # calculate feature size
@@ -126,9 +126,9 @@ if __name__ == "__main__":
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model_name = '20230519_vae_depth_z050'
-    datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/20230519_depth_images_res014/"
-    modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/" + model_name + "/"
+    model_name = 'vae_max_z050'
+    datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_20230522/max_images_res014/"
+    modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_20230522/" + model_name + "/"
     # datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/depth_images_res014/"
     # modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/" + model_name + "/"
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     """
     Initialize Hyperparameters
     """
-    batch_size = 100
+    batch_size = 10
     learning_rate = 1e-3
     num_epochs = 100
 
@@ -157,6 +157,7 @@ if __name__ == "__main__":
     The loss after every epoch is printed
     """
     for epoch in range(num_epochs):
+        loss_list = []
         for idx, data in enumerate(train_loader, 0):
             imgs, _ = data
             imgs = imgs.to(device)
@@ -173,7 +174,12 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
-        print('Epoch {}: Loss {}'.format(epoch, loss))
+            loss_val = loss.cpu().detach().numpy()
+            if len(loss_list) >= 10:
+                loss_list.pop(0)
+            loss_list.append(loss_val)
+
+        print('Epoch {}: Loss {}'.format(epoch, np.round(np.mean(np.asarray(loss_list))/batch_size)))
 
     """
     The following part takes a random image from test loader to feed into the VAE.

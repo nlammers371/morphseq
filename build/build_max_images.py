@@ -4,6 +4,7 @@ from aicsimageio import AICSImage
 import numpy as np
 import os
 from tifffile import imsave
+from skimage.morphology import convex_hull_image
 import pickle
 from matplotlib import pyplot as plt
 import skimage
@@ -15,12 +16,22 @@ from skimage.morphology import (erosion, dilation, opening, closing,  # noqa
 from skimage import filters
 from PIL import Image
 import pandas as pd
-import cv2
+import pathlib
 
 def parse_exp_metadata(sheet_df, n_wells, n_time_points):
     sheet_shape = sheet_df.shape
     read_df = pd.DataFrame(index=range(n_wells), columns=["start_i", "stop_i"])
-    if sheet_shape[0]*(sheet_shape[1]-1) == n_wells:
+    total_frames = 0
+    if len(sheet_shape) == 1:
+        iter_i = 0
+        for i in range(sheet_shape[0]):
+            for j in range(sheet_shape[1] - 1):
+                read_df["start_i"].iloc[iter_i] = 0
+                read_df["stop_i"].iloc[iter_i] = n_time_points - 1
+                iter_i += 1
+                total_frames += read_df["stop_i"].iloc[iter_i] - read_df["start_i"].iloc[iter_i]
+
+    elif sheet_shape[0]*(sheet_shape[1]-1) == n_wells:
         iter_i = 0
         for col in range(sheet_shape[1]-1):
             for row in range(sheet_shape[0]):
@@ -50,7 +61,7 @@ def parse_exp_metadata(sheet_df, n_wells, n_time_points):
                 else:
                     read_df["start_i"].iloc[iter_i] = -1
                     read_df["stop_i"].iloc[iter_i] = -1
-
+                total_frames += read_df["stop_i"].iloc[iter_i] - read_df["start_i"].iloc[iter_i]
                 iter_i += 1
 
     else:
@@ -59,10 +70,12 @@ def parse_exp_metadata(sheet_df, n_wells, n_time_points):
             for j in range(sheet_shape[1] - 1):
                 read_df["start_i"].iloc[iter_i] = 0
                 read_df["stop_i"].iloc[iter_i] = n_time_points - 1
+                iter_i += 1
+                total_frames += read_df["stop_i"].iloc[iter_i] - read_df["start_i"].iloc[iter_i]
 
-    return read_df
+    return read_df #, total_frames
 
-overwrite_flag = False
+overwrite_flag = True
 
 # set key parameters for image generation
 size_x = 256 #512  # output x size (pixels)
@@ -70,10 +83,11 @@ size_y = 128 #256  # output y size (pixels)
 target_res = 7*512/size_x  # target isotropic pixel res (um)
 
 # set path to excel doc with metadata
-excel_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/embryo_metadata.xlsx"
+db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/"
+excel_path = db_path + "Nick/morphSeq/data/embryo_metadata.xlsx"
 
 # set path to save images
-out_dir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_20230522/"
+out_dir = db_path + "Nick/morphSeq/data/vae_20230522/"
 depth_dir = out_dir + "depth_images" + f'_res{np.round(target_res).astype(int):03}/'
 max_dir = out_dir + "max_images" + f'_res{np.round(target_res).astype(int):03}/'
 
@@ -84,7 +98,7 @@ if not os.path.isdir(max_dir):
     os.makedirs(max_dir)
 
 # set input directories
-image_dir_list = ["/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230517/"]
+image_dir_list = [db_path + "Nick/morphSeq/data/20230517/"]
 
 metadata_dict = {}
 
@@ -97,6 +111,7 @@ for d, im_dir in enumerate(image_dir_list):
     im_list = sorted(glob.glob(im_dir + "*.nd2"))
 
     for i, im in enumerate(im_list):
+
         # set path to image
         imObject = AICSImage(im)
 
@@ -133,6 +148,8 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
     im_list = sorted(glob.glob(im_dir + "*.nd2"))
 
     for i, im in enumerate(im_list):   # enumerate([im_list[0]]):
+        im = pathlib.PureWindowsPath(im)
+        im = im.as_posix()
         # set path to image
         imObject = AICSImage(im)
 
@@ -218,7 +235,7 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
                     #     fp = disk(10)
                     #     fp_small = disk(5)
                     fish_strip = skimage.morphology.remove_small_objects(label(fish_mask),
-                                                                         min_size=600)  # remove small objects
+                                                                         min_size=1000)  # remove small objects
                     fish_clean = convex_hull_image(fish_strip)
                     # fish_closed = closing(fish_mask, fp)  # morphological closing
                     # fish_strip = skimage.morphology.remove_small_objects(label(fish_closed), min_size=600)  # remove small objects
@@ -242,7 +259,7 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
                     # Step 7: resize and center image
                     regions = regionprops(label(fish_clean))
                     try:
-                        im_center = regions[0].centroid
+                        im_center = regions[0].centroid # by construction there is only 1 binary region at this point
                     except:
                         im_center = [size_y / 2 + 0.5, size_x / 2 + 0.5]
 
