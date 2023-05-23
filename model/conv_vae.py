@@ -52,7 +52,7 @@ def load_split_train_test(datadir, valid_size = .2, batch_size=64):
 A Convolutional Variational Autoencoder
 """
 class VAE(nn.Module):
-    def __init__(self, imgChannels=1, h=128, w=256, zDim=50, kernel_size=5, stride=2, out_channels=16):
+    def __init__(self, imgChannels=1, h=128, w=256, zDim=10, kernel_size=5, stride=2, out_channels=16):
         super(VAE, self).__init__()
 
         # calculate feature size
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model_name = 'vae_max_z050'
+    model_name = 'vae_max_z010'
     datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_20230522/max_images_res014/"
     modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_20230522/" + model_name + "/"
     # datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/depth_images_res014/"
