@@ -83,7 +83,8 @@ size_y = 128 #256  # output y size (pixels)
 target_res = 7*512/size_x  # target isotropic pixel res (um)
 
 # set path to excel doc with metadata
-db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/"
+# db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/"
+db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/"
 excel_path = db_path + "Nick/morphSeq/data/embryo_metadata.xlsx"
 
 # set path to save images
@@ -258,9 +259,9 @@ for d, im_dir in enumerate(image_dir_list):   # enumerate([image_dir_list[0]]):
 
                     # Step 7: resize and center image
                     regions = regionprops(label(fish_clean))
-                    try:
+                    if False:#try:
                         im_center = regions[0].centroid # by construction there is only 1 binary region at this point
-                    except:
+                    else:#except:
                         im_center = [size_y / 2 + 0.5, size_x / 2 + 0.5]
 
                     im_centroid = np.round(im_center).astype(int)
