@@ -10,11 +10,6 @@ import cv2
 
 from tqdm import trange
 import glob
-import tifffile
-matplotlib.use('TkAgg')
-from matplotlib import pyplot as plt
-io.use_plugin('matplotlib')
-
 import glob2 as glob
 
 # this could be useful: https://scikit-image.org/skimage-tutorials/lectures/three_dimensional_image_processing.html
