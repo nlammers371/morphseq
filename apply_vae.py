@@ -8,7 +8,7 @@ import os
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 from torch.utils.data.sampler import SubsetRandomSampler
-
+import pathlib
 from model.conv_vae import VAE
 
 """
@@ -17,9 +17,10 @@ Determine if any GPUs are available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # set path to model and data
-model_name = '20230519_vae_max_z050'
-datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/20230519_max_images_res014/"
-modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/" + model_name + "/"
+model_name = 'vae_depth_z050'
+db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/"
+datadir = db_path + "Nick/morphSeq/data/vae_20230522/depth_images_res014/"
+modeldir = db_path + "Nick/morphSeq/data/vae_20230522/" + model_name + "/"
 zd = int(model_name[-3:])
 # datadir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/max_images_res014/"
 # modeldir = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/vae_test/" + model_name + "/"
@@ -34,19 +35,23 @@ batch_size = 1
 im_data = datasets.ImageFolder(datadir, transform=transforms.Compose([transforms.Grayscale(num_output_channels=1),
                                                                             transforms.ToTensor()]))
 data_loader = torch.utils.data.DataLoader(im_data, batch_size=batch_size)
-
+n_plot = 250
 # Model class must be defined somewhere
 net = VAE().to(device)
-net.load_state_dict(torch.load(modeldir + model_name))
+net.load_state_dict(torch.load(modeldir + model_name, map_location=device))
 net.eval()
 
 mu_array = np.empty((len(data_loader), zd))
 
 with torch.no_grad():
-    for idx, data in enumerate(list(data_loader)):
+    for idx, data in enumerate(random.sample(list(data_loader), n_plot)):
         im_path = im_data.samples[idx][0]
-        im_name = im_path.replace(datadir + 'class0\\', '')
+        im_path = pathlib.PureWindowsPath(im_path)
+        im_path = im_path.as_posix()
+
+        im_name = im_path.replace(datadir + 'class0/', '')
         im_name = im_name.replace('.tif', '')
+        im_name = im_name.replace('.tiff', '')
 
         imgs, _ = data
         imgs = imgs.to(device)
