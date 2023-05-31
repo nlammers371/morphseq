@@ -30,7 +30,7 @@ def build_ff_from_keyence(read_path, db_path, data_folder, overwrite_flag=False,
     read_dir = read_path + data_folder + "/"
 
     # set number of sample folders to read
-    n_stitch_samples = 100
+    n_stitch_samples = 500
 
     # Get a list of directories
     dir_list = sorted(glob.glob(read_dir + "*"))
@@ -58,7 +58,7 @@ def build_ff_from_keyence(read_path, db_path, data_folder, overwrite_flag=False,
             cytometer_flag = True
             well_list = sorted(glob.glob(dir_path + "/W0*"))
 
-        print(f'Building full-focus images in directory {d:01} of ' + f'{len(dir_indices)}')
+        print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         for w in tqdm(range(len(well_list))):
 
             well_dir = well_list[w]
@@ -185,7 +185,7 @@ def build_ff_from_keyence(read_path, db_path, data_folder, overwrite_flag=False,
         align_array = np.empty((n_stitch_samples, 2, 3))
         align_array[:] = np.nan
 
-        print(f'Estimating stitch priors for images in directory {d:01} of ' + f'{len(dir_indices)}')
+        print(f'Estimating stitch priors for images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         for n in tqdm(range(len(stitch_samples))):
             im_ind = stitch_samples[n]
             ff_path = ff_folder_list[im_ind]
@@ -256,7 +256,7 @@ def build_ff_from_keyence(read_path, db_path, data_folder, overwrite_flag=False,
         depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
         ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
 
-        print(f'Stitching images in directory {d:01} of ' + f'{len(dir_indices)}')
+        print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         for t in tqdm(range(len(ff_folder_list))):
             # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
             ff_path = os.path.join(ff_folder_list[t], '')
