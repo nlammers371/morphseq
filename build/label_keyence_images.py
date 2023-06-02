@@ -3,12 +3,13 @@ import napari
 import os
 import glob2 as glob
 import cv2
-from aicsimageio import AICSImage
-from PIL import Image
+# from aicsimageio import AICSImage
+# from PIL import Image
 
 
 project_name = '20230525_bf_timeseries_stack1000_pitch040'
-db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
+# db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
+db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
 n_im = 10
 im_dims = [641, 1158]
 
@@ -57,7 +58,7 @@ im_name = im_path.replace(path_to_images, '')
 lb_name = 'labels_' + im_name
 
 # initialize viewer
-viewer = napari.view_image(image_array, channel_axis=0, colormap="gray")
+viewer = napari.view_image(image_array[0],  colormap="gray")
 # load label file if it exists
 # if os.path.isfile(out_path + lb_name):
 #     lb_object = AICSImage(out_path + lb_name)
