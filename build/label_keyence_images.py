@@ -8,9 +8,11 @@ from aicsimageio import AICSImage
 
 
 project_name = '20230525_bf_timeseries_stack1000_pitch040'
-# db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
-db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
-n_im = 100
+
+db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
+# db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
+n_im = 10
+
 im_dims = [641, 1158]
 overwrite_flag = False
 

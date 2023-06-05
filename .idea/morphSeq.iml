@@ -4,7 +4,11 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
+<<<<<<< HEAD
     <orderEntry type="jdk" jdkName="napari-env" jdkType="Python SDK" />
+=======
+    <orderEntry type="jdk" jdkName="$USER_HOME$/miniforge3/envs/morphseq-env" jdkType="Python SDK" />
+>>>>>>> f3d1bad (First cut of a script for image labeling)
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
