@@ -164,7 +164,7 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
                     else:
                         sub_pos_list = np.ones((len(im_list),))
 
-                    sub_pos_index = np.unique(sub_pos_list)
+                    sub_pos_index = np.unique(sub_pos_list).astype(int)
 
                     # load
                     images = []
@@ -194,21 +194,11 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
 
                     laps = np.asarray(laps)
                     abs_laps = np.absolute(laps)
+
+                    # check to see if images have already been generated
+                    do_flags = [1]*len(sub_pos_index)
+                    # print(sub_pos_index)
                     for pi in sub_pos_index:
-
-                        # calculat full-focus and depth images
-                        ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
-                        pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
-                        abs_laps_pos = abs_laps[pos_indices]
-                        depth_image = np.argmax(abs_laps_pos, axis=0)
-                        maxima = abs_laps_pos.max(axis=0)
-                        bool_mask = abs_laps_pos == maxima
-                        mask = bool_mask.astype(np.uint8)
-                        for i in range(len(pos_indices)):
-                            ff_image[np.where(mask[i] == 1)] = images[pos_indices[i]][np.where(mask[i] == 1)]
-
-                        ff_image = 255-ff_image
-
                         tt = int(time_dir[-4:])
                         if cytometer_flag:
                             # pos_id_list.append(p)
@@ -217,27 +207,50 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
                             # pos_id_list.append(pi)
                             pos_string = f'p{pi:04}'
 
-                        # save images
                         ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                        depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                        op_ff = os.path.join(ff_dir, ff_out_name)
-                        op_depth = os.path.join(depth_dir, depth_out_name)
+                        if os.path.isfile(ff_out_name) and not overwrite_flag:
+                            do_flags[pi] = 0
 
-                        if not os.path.isdir(op_ff):
-                            os.makedirs(op_ff)
-                        if not os.path.isdir(op_depth):
-                            os.makedirs(op_depth)
-                        # if op_ff not in fn_ff_list:
-                        #     fn_ff_list.append(op_ff)
-                        #     time_id_list.append(tt)
-                        #     fn_depth_list.append(op_depth)
+                    for pi in sub_pos_index:
+                        if do_flags[pi-1]:
+                            # calculat full-focus and depth images
+                            ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
+                            pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
+                            abs_laps_pos = abs_laps[pos_indices]
+                            depth_image = np.argmax(abs_laps_pos, axis=0)
+                            maxima = abs_laps_pos.max(axis=0)
+                            bool_mask = abs_laps_pos == maxima
+                            mask = bool_mask.astype(np.uint8)
+                            for i in range(len(pos_indices)):
+                                ff_image[np.where(mask[i] == 1)] = images[pos_indices[i]][np.where(mask[i] == 1)]
 
-                        # convet depth image to 8 bit
-                        max_z = abs_laps_pos.shape[0]
-                        depth_image_int8 = np.round(depth_image/max_z*255).astype('uint8')
+                            ff_image = 255-ff_image
 
-                        cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif'), ff_image)
-                        cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
+                            tt = int(time_dir[-4:])
+                            if cytometer_flag:
+                                # pos_id_list.append(p)
+                                pos_string = f'p{p:04}'
+                            else:
+                                # pos_id_list.append(pi)
+                                pos_string = f'p{pi:04}'
+
+                            # save images
+                            ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                            depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                            op_ff = os.path.join(ff_dir, ff_out_name)
+                            op_depth = os.path.join(depth_dir, depth_out_name)
+
+                            if not os.path.isdir(op_ff):
+                                os.makedirs(op_ff)
+                            if not os.path.isdir(op_depth):
+                                os.makedirs(op_depth)
+
+                            # convet depth image to 8 bit
+                            max_z = abs_laps_pos.shape[0]
+                            depth_image_int8 = np.round(depth_image/max_z*255).astype('uint8')
+
+                            cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif'), ff_image)
+                            cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
 
         with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
             pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -337,61 +350,65 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
 
         print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         for t in tqdm(range(len(ff_folder_list))):
+
             # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
             ff_path = os.path.join(ff_folder_list[t], '')
             ff_name = ff_path.replace(ff_tile_dir, "")
             n_images = len(glob.glob(ff_path + '*.tif'))
             depth_path = os.path.join(depth_folder_list[t], '')
             depth_name = depth_path.replace(depth_tile_dir, "")
-            # perform stitching
-            ff_mosaic = StructuredMosaic(
-                ff_path,
-                dim=n_images,  # number of tiles in primary axis
-                origin="upper left",  # position of first tile
-                direction="vertical",
-                pattern="raster"
-            )
-
-            try:
-                # mosaic.downsample(0.6)
-                ff_mosaic.align()
-            except:
-                pass
-            if len(ff_mosaic.params["coords"]) != 3:
-                ff_mosaic.load_params(ff_tile_dir + "/master_params.json")
-            ff_mosaic.reset_tiles()
-            ff_mosaic.save_params(ff_path + 'params.json')
-            # ff_mosaic.save_params(path=depth_path)
-            ff_mosaic.smooth_seams()
-
-            # perform stitching
-            depth_mosaic = StructuredMosaic(
-                depth_path,
-                dim=n_images,  # number of tiles in primary axis
-                origin="upper left",  # position of first tile
-                direction="vertical",
-                pattern="raster"
-            )
-
-            # mosaic.downsample(0.6)
-            depth_mosaic.load_params(ff_path + 'params.json')
-            depth_mosaic.smooth_seams()
-
-            name_start_ind = ff_path.find("/ff_")
-            well_name = ff_path[name_start_ind+4:name_start_ind+7]
 
             ff_out_name = ff_name[3:-1] + '_stitch.tif'
             depth_out_name = depth_name[6:-1] + '_stitch.tif'
 
-            # trim to standardie the size
-            ff_arr = ff_mosaic.stitch()
-            ff_out = trim_image(ff_arr, out_shape)
+            if not os.path.isfile(os.path.join(stitch_ff_dir, ff_out_name)) or overwrite_flag:
 
-            depth_arr = depth_mosaic.stitch()
-            depth_out = trim_image(depth_arr, out_shape)
+                # perform stitching
+                ff_mosaic = StructuredMosaic(
+                    ff_path,
+                    dim=n_images,  # number of tiles in primary axis
+                    origin="upper left",  # position of first tile
+                    direction="vertical",
+                    pattern="raster"
+                )
 
-            cv2.imwrite(os.path.join(stitch_ff_dir, ff_out_name), ff_out)
-            cv2.imwrite(os.path.join(stitch_depth_dir, depth_out_name), depth_out)
+                try:
+                    # mosaic.downsample(0.6)
+                    ff_mosaic.align()
+                except:
+                    pass
+                if len(ff_mosaic.params["coords"]) != 3:
+                    ff_mosaic.load_params(ff_tile_dir + "/master_params.json")
+                ff_mosaic.reset_tiles()
+                ff_mosaic.save_params(ff_path + 'params.json')
+                # ff_mosaic.save_params(path=depth_path)
+                ff_mosaic.smooth_seams()
+
+                # perform stitching
+                depth_mosaic = StructuredMosaic(
+                    depth_path,
+                    dim=n_images,  # number of tiles in primary axis
+                    origin="upper left",  # position of first tile
+                    direction="vertical",
+                    pattern="raster"
+                )
+
+                # mosaic.downsample(0.6)
+                depth_mosaic.load_params(ff_path + 'params.json')
+                depth_mosaic.smooth_seams()
+
+                name_start_ind = ff_path.find("/ff_")
+                well_name = ff_path[name_start_ind+4:name_start_ind+7]
+
+                # trim to standardie the size
+                ff_arr = ff_mosaic.stitch()
+                ff_out = trim_image(ff_arr, out_shape)
+
+                depth_arr = depth_mosaic.stitch()
+                depth_out = trim_image(depth_arr, out_shape)
+
+                cv2.imwrite(os.path.join(stitch_ff_dir, ff_out_name), ff_out)
+                cv2.imwrite(os.path.join(stitch_depth_dir, depth_out_name), depth_out)
 
 
 if __name__ == "__main__":
