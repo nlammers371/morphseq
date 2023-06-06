@@ -1,14 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module type="PYTHON_MODULE" version="4">
-  <component name="NewModuleRootManager">
-    <content url="file://$MODULE_DIR$">
-      <excludeFolder url="file://$MODULE_DIR$/venv" />
-    </content>
-<<<<<<< HEAD
-    <orderEntry type="jdk" jdkName="napari-env" jdkType="Python SDK" />
-=======
-    <orderEntry type="jdk" jdkName="$USER_HOME$/miniforge3/envs/morphseq-env" jdkType="Python SDK" />
->>>>>>> f3d1bad (First cut of a script for image labeling)
-    <orderEntry type="sourceFolder" forTests="false" />
+<module version="4">
+  <component name="PyDocumentationSettings">
+    <option name="format" value="PLAIN" />
+    <option name="myDocStringFormat" value="Plain" />
   </component>
 </module>
