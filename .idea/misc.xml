@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-<<<<<<< HEAD
-  <component name="ProjectRootManager" version="2" project-jdk-name="napari-env" project-jdk-type="Python SDK" />
-=======
-  <component name="ProjectRootManager" version="2" project-jdk-name="$USER_HOME$/miniforge3/envs/morphseq-env" project-jdk-type="Python SDK" />
->>>>>>> f3d1bad (First cut of a script for image labeling)
+  <component name="ProjectRootManager" version="2" project-jdk-name="morphseq-env" project-jdk-type="Python SDK" />
 </project>
