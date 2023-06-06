@@ -410,4 +410,4 @@ if __name__ == "__main__":
 
     # ch_to_use = [1]  # ,2,3]
 
-    build_ff_from_keyence(read_path, db_path, overwrite_flag)
+    build_ff_from_keyence(read_dir, db_path, overwrite_flag)
