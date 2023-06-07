@@ -7,14 +7,14 @@ import cv2
 # from PIL import Image
 
 
-project_name = '20230525_bf_timeseries_stack1000_pitch040'
-db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
+project_name = '20230525'
+db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data/"
 # db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_data/"
 n_im = 10
-im_dims = [641, 1158]
+# im_dims = [641, 1158]
 
 # set random seed for reproducibility
-seed = 124
+seed = 126
 np.random.seed(seed)
 
 # make write path
@@ -32,8 +32,8 @@ im_lb_indices = np.random.choice(range(len(im_list)), n_im, replace=False)
 images = []
 for n in range(n_im):
     im_path = im_list[im_lb_indices[n]]
-    im_temp = cv2.imread(im_path)
-    im_rs = cv2.resize(im_temp, im_dims)
+    im_rs = cv2.imread(im_path)
+    # im_rs = cv2.resize(im_temp, im_dims)
     im_name = im_path.replace(path_to_images, '')
     cv2.imwrite(out_path + im_name, im_rs)
 
