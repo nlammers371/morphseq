@@ -453,4 +453,4 @@ if __name__ == "__main__":
     # build FF images
     build_ff_from_keyence(read_dir, db_path, overwrite_flag=False)
     # stitch FF images
-    stitch_ff_from_keyence(read_dir, db_path, overwrite_flag=True)
+    stitch_ff_from_keyence(read_dir, db_path, overwrite_flag=False)

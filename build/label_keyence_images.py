@@ -46,7 +46,7 @@ for p in project_list:
 im_lb_indices = np.random.choice(range(len(im_list)), n_im, replace=False)
 
 # #
-i = 0
+i = 6
 # check to see if we have label file for this image
 im_path = im_list[im_lb_indices[i]]
 im_name = im_path.replace(path_to_images, '')
@@ -54,7 +54,7 @@ lb_name = 'labels_' + im_name
 
 # load
 # initialize viewer
-image_i = 0
+image_i = 6
 while image_i < len(im_lb_indices)-1:
     # load image
     im_path = im_list[im_lb_indices[image_i]]
