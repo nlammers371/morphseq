@@ -12,21 +12,25 @@ def path_leaf(path):
     return tail or ntpath.basename(head)
 
 # project_name = '20230525'
-db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data/"
+db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
 path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
 project_list = glob.glob(path_to_images)
 # db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data/"
 n_im = 1000
+image_i = 52  # set starting point
 # im_dims = [641, 1158]
 overwrite_flag = False
-skip_labeled_flag = True
+skip_labeled_flag = False
+if overwrite_flag:
+    skip_labeled_flag = False
+
 # set random seed for reproducibility
 seed = 126
 np.random.seed(seed)
 
 # make write paths
 image_path = os.path.join(db_path, 'UNET_training', str(seed), 'images', '')
-label_path = os.path.join(db_path, 'UNET_training', str(seed), 'labels', '')
+label_path = os.path.join(db_path, 'UNET_training', str(seed), 'annotations', '')
 if not os.path.isdir(image_path):
     os.makedirs(image_path)
 if not os.path.isdir(label_path):
@@ -48,10 +52,25 @@ for ind, p in enumerate(project_list):
     _, tail = ntpath.split(p)
     project_index.append(tail)
     project_ind_long += [ind]*len(im_list_temp)
-im_lb_indices = np.random.choice(range(len(im_list)), n_im, replace=False)
+im_lb_indices_raw = np.random.choice(range(len(im_list)), n_im, replace=False)
 
+# ensure that existing labels are accounted for in the new list. They should always appear, but I swapped between
+# random seed early in the labeling process, so there are some inconsistencies
+im_name_list = []
+for i in range(len(im_list)):
+    _, im_name = ntpath.split(im_list[i])
+    prefix = project_index[project_ind_long[i]]
+    lb_path_full = label_path + prefix + '_' + im_name
+    im_name_list.append(lb_path_full)
+
+
+existing_indices = [im_name_list.index(ex) for ex in existing_labels]
+full_list = existing_indices + im_lb_indices_raw.tolist()
+new_indices = np.unique(full_list, return_index=True)[1]
+im_lb_indices = [full_list[index] for index in sorted(new_indices)]
+im_lb_indices = im_lb_indices[0:n_im]
 # initialize viewer
-image_i = 0
+
 while image_i < len(im_lb_indices)-1:
     prefix = project_index[project_ind_long[im_lb_indices[image_i]]]
     # load image
@@ -60,8 +79,7 @@ while image_i < len(im_lb_indices)-1:
 
     # open labels if they exist (and we want to keep them)
     lb_path_full = label_path + prefix + '_' + im_name
-    lb_path_old = label_path + im_name
-    if (not skip_labeled_flag) or ((lb_path_full not in existing_labels) and (lb_path_old not in existing_labels)):
+    if (lb_path_full not in existing_labels) or (not skip_labeled_flag):
 
         im_temp = cv2.imread(im_path)
         # save

@@ -7,6 +7,7 @@ from skimage import (exposure, feature, filters, io, measure,
                       util)
 import matplotlib
 from tqdm import tqdm
+from PIL import Image
 import glob2 as glob
 import cv2
 from stitch2d import StructuredMosaic
@@ -63,13 +64,23 @@ def findnth(haystack, needle, n):
 def trim_image(im, out_shape):
     im_shape = im.shape
     im_diffs = im_shape - out_shape
-    im_out = im.copy()
+
+    pad_width = -im_diffs
+    pad_width[np.where(pad_width < 0)] = 0
+    im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype('uint8')
+
+    im_diffs[np.where(im_diffs < 0)] = 0
     sv = np.floor(im_diffs / 2).astype(int)
-    im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
+    if np.all(sv>0):
+        im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
+    elif sv[0]==0:
+        im_out = im_out[:, sv[1]:-(im_diffs[1] - sv[1])]
+    elif sv[1]==0:
+        im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
 
     return im_out
 
-def doLap(image, lap_size=5, blur_size=5):
+def doLap(image, lap_size=3, blur_size=3):
 
     # YOU SHOULD TUNE THESE VALUES TO SUIT YOUR NEEDS
 #     kernel_size = 5  # Size of the laplacian window
@@ -102,8 +113,8 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
         dir_path = dir_list[d]
         sub_name = dir_path.replace(read_dir, "")
 
-        depth_dir = os.path.join(db_path[:-1], "built_keyence_data", "D_images", sub_name)
-        ff_dir = os.path.join(db_path[:-1], "built_keyence_data", "FF_images",  sub_name)
+        depth_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "D_images", sub_name)
+        ff_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "FF_images",  sub_name)
 
         if not os.path.isdir(depth_dir):
             os.makedirs(depth_dir)
@@ -202,24 +213,29 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
 
                             if do_flags[pi - 1]:
                                 laps = []
+                                laps_d = []
                                 for i in range(len(images)):
                                     # print
                                     # "Lap {}".format(i)
                                     laps.append(doLap(images[i]))
+                                    laps_d.append(doLap(images[i], lap_size=7, blur_size=7)) # I've found that depth stacking works better with larger filters
 
                                 laps = np.asarray(laps)
                                 abs_laps = np.absolute(laps)
 
+                                laps_d = np.asarray(laps_d)
+                                abs_laps_d = np.absolute(laps_d)
+
                                 # calculat full-focus and depth images
                                 ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
-                                depth_image = np.argmax(abs_laps, axis=0)
+                                depth_image = np.argmax(abs_laps_d, axis=0)
                                 maxima = abs_laps.max(axis=0)
                                 bool_mask = abs_laps == maxima
                                 mask = bool_mask.astype(np.uint8)
                                 for i in range(len(images)):
                                     ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
 
-                                ff_image = 255-ff_image
+                                ff_image = 255-ff_image # take the negative
 
                                 tt = int(time_dir[-4:])
                                 if cytometer_flag:
@@ -276,8 +292,8 @@ def stitch_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1,
         sub_name = dir_path.replace(read_dir, "")
 
         # directories containing image tiles
-        depth_tile_dir = os.path.join(db_path[:-1], "built_keyence_data", "D_images", sub_name, '')
-        ff_tile_dir = os.path.join(db_path[:-1], "built_keyence_data", "FF_images", sub_name, '')
+        depth_tile_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "D_images", sub_name, '')
+        ff_tile_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "FF_images", sub_name, '')
 
         # get list of subfolders
         # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
@@ -344,12 +360,12 @@ def stitch_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1,
         sub_name = dir_path.replace(read_dir, "")
 
         # directories containing image tiles
-        depth_tile_dir = os.path.join(db_path[:-1], "built_keyence_data", "D_images", sub_name, '')
-        ff_tile_dir = os.path.join(db_path[:-1], "built_keyence_data", "FF_images", sub_name, '')
+        depth_tile_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "D_images", sub_name, '')
+        ff_tile_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "FF_images", sub_name, '')
 
         # directories to write stitched files to
-        stitch_depth_dir = os.path.join(db_path[:-1], "built_keyence_data", "stitched_depth_images", sub_name)
-        stitch_ff_dir = os.path.join(db_path[:-1], "built_keyence_data", "stitched_FF_images", sub_name)
+        stitch_depth_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "stitched_depth_images", sub_name)
+        stitch_ff_dir = os.path.join(db_path[:-1], "built_keyence_data_v2", "stitched_FF_images", sub_name)
 
         if not os.path.isdir(stitch_depth_dir):
             os.makedirs(stitch_depth_dir)
@@ -451,6 +467,6 @@ if __name__ == "__main__":
     # ch_to_use = [1]  # ,2,3]
 
     # build FF images
-    build_ff_from_keyence(read_dir, db_path, overwrite_flag=False)
+    # build_ff_from_keyence(read_dir, db_path, overwrite_flag=False)
     # stitch FF images
     stitch_ff_from_keyence(read_dir, db_path, overwrite_flag=False)
