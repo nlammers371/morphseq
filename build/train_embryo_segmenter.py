@@ -20,6 +20,7 @@ if __name__ == "__main__":
     # Set path do data
     data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphSeq\data\\built_keyence_data_v2\\UNET_training\\"
     seed_str = str(126)  # specify random seed that points to specific set of labeled training images
+    suffix = "v2"
     root = os.path.join(data_path, seed_str)
 
     # extract key info about computational resources
@@ -38,8 +39,8 @@ if __name__ == "__main__":
     ttv_split = [0.85, 0.0, 0.15]
     im_dims = [576, 320]
 
-    image_list = glob.glob(os.path.join(data_path, seed_str, 'images', '*.tif'))
-    mask_list = glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.tif'))
+    image_list = glob.glob(os.path.join(data_path, seed_str + '_' + suffix, 'images', '*.tif'))
+    mask_list = glob.glob(os.path.join(data_path, seed_str + '_' + suffix, 'annotations', '*.tif'))
     n_samples_total = len(mask_list)
 
     im_list = []
@@ -59,9 +60,9 @@ if __name__ == "__main__":
     # test_files = [im_list[r] for r in random_indices[n_train:n_train + n_test]]
     valid_files = [im_list[r] for r in random_indices[n_train + n_test:]]
 
-    train_dataset = Dataset(root, train_files, im_dims, num_classes=2)#, transform=transforms)
+    train_dataset = Dataset(root, train_files, im_dims, num_classes=5)#, transform=transforms)
     # test_dataset = Dataset(root, test_files, im_dims)
-    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=2)#, transform=transforms)
+    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=5)#, transform=transforms)
 
     # It is a good practice to check datasets don`t intersects with each other
     assert set(train_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
