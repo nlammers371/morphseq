@@ -18,7 +18,7 @@ path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
 project_list = glob.glob(path_to_images)
 #
 n_im = 1000
-image_i = 9
+image_i = 202
 # set starting point
 # im_dims = [641, 1158]
 overwrite_flag = False
@@ -94,8 +94,6 @@ while image_i < len(im_lb_indices)-1:
     if (lb_path_full not in existing_labels) or (not skip_labeled_flag):
 
         im_temp = cv2.imread(im_path)
-        # save
-        cv2.imwrite(image_path + prefix + '_' + im_name, im_temp)
 
         # open viewer
         viewer = napari.view_image(im_temp[:, :, 0], colormap="gray")
@@ -117,7 +115,8 @@ while image_i < len(im_lb_indices)-1:
         except:
             lb_layer = viewer.layers["SAM labels"]
         AICSImage(lb_layer.data.astype(np.uint8)).save(lb_path_full)
-
+        # save
+        cv2.imwrite(image_path + prefix + '_' + im_name, im_temp)
             # time_in_msec = 1000
             # QTimer().singleShot(time_in_msec, app.quit)
 
