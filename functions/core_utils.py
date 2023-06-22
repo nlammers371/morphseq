@@ -81,7 +81,7 @@ class Dataset(torch.utils.data.Dataset):
                 mask_temp = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
                 mask = np.zeros((self.num_classes, self.out_dims[0], self.out_dims[1]))
                 for c in range(self.num_classes):
-                    mask[c, :, :,] = (mask_temp == (c+1))*1.0
+                    mask[c, :, :] = (mask_temp == (c+1))*1.0
         else:
             if self.num_classes == 1:
                 mask = np.empty(self.out_dims)
@@ -145,14 +145,13 @@ class FishModel(pl.LightningModule):
 
         # Shape of the mask should be [batch_size, num_classes, height, width]
         # for binary segmentation num_classes = 1
-        # assert mask.ndim == 4
+        assert mask.ndim == 4
 
         # Check that mask values in between 0 and 1, NOT 0 and 255 for binary segmentation
-        # assert mask.max() <= 1.0 and mask.min() >= 0
+        assert mask.max() <= 1.0 and mask.min() >= 0
 
         logits_mask = self.forward(image)
-        # print(logits_mask.shape)
-        # print(mask.shape)
+
         # Predicted mask contains logits, and loss_fn param `from_logits` is set to True
         loss = self.loss_fn(logits_mask, mask)
 

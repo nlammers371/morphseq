@@ -14,7 +14,7 @@ from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
 import pickle
-import multiprocessing as mp
+from parfor import pmap
 
 def scrape_keyence_metadata(im_path):
     # im_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230531/bf_timeseries_stack0850_pitch040/W001/P00001/T0004/wt_W001_P00001_T0004_Z005_CH1.tif"
@@ -92,6 +92,144 @@ def doLap(image, lap_size=3, blur_size=3):
     blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
     return cv2.Laplacian(blurred, cv2.CV_64F, ksize=lap_size)
 
+def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, overwrite_flag=False):
+
+    well_dir = well_list[w]
+    # extract basic well info
+    well_name = well_dir[-4:]
+    # well_num = well_name[-2:]
+    well_dict = dict({})
+    # get conventional well name
+    well_name_conv = sorted(glob.glob(os.path.join(well_dir, "_*")))
+    well_name_conv = well_name_conv[0][-3:]
+
+    # if multiple positions were taken per well, then there will be a layer of position folders
+    position_dir_list = sorted(glob.glob(well_dir + "/P*"))
+
+    for p, pos_dir in enumerate(position_dir_list):
+
+        # each pos dir contains one or more time points
+        time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
+
+        for t, time_dir in enumerate(time_dir_list):
+
+            # each time directoy contains a list of Z slices for each channel
+            ch_string = "CH" + str(ch_to_use)
+            im_list = sorted(glob.glob(time_dir + "/*" + ch_string + "*"))
+
+            # it is possible that multiple positionas are present within the same time folder
+            if not cytometer_flag:
+                sub_pos_list = []
+                for i, im in enumerate(im_list):
+                    im_name = im.replace(time_dir, "")
+                    well_ind = im_name.find(well_name)
+                    pos_id = int(im_name[well_ind + 5:well_ind + 10])
+                    sub_pos_list.append(pos_id)
+            else:
+                sub_pos_list = np.ones((len(im_list),))
+
+            sub_pos_index = np.unique(sub_pos_list).astype(int)
+
+            # check to see if images have already been generated
+            do_flags = [1] * len(sub_pos_index)
+            # print(sub_pos_index)
+            for pi in sub_pos_index:
+                tt = int(time_dir[-4:])
+                if cytometer_flag:
+                    # pos_id_list.append(p)
+                    pos_string = f'p{p:04}'
+                else:
+                    # pos_id_list.append(pi)
+                    pos_string = f'p{pi:04}'
+
+                ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                if os.path.isfile(
+                        os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif')) and not overwrite_flag:
+                    do_flags[pi - 1] = 0
+                    if t == 0 and p == 0 and w == 0:
+                        print("Skipping pre-existing files. Set 'overwrite_flag=True' to overwrite existing images")
+
+            for pi in sub_pos_index:
+                pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
+                # load
+                images = []
+                for iter_i, i in enumerate(pos_indices):
+                    if do_flags[pi - 1]:
+                        im = cv2.imread(im_list[i])
+                        if im is not None:
+                            images.append(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY))
+
+                    # scrape metadata from first image
+                    if (iter_i == 0) and (p == 0):
+                        temp_dict = scrape_keyence_metadata(im_list[i])
+                        if (t == 0) and (w == 0):
+                            base_time = temp_dict["Time (s)"]
+                        temp_dict["Time (s)"] = temp_dict["Time (s)"]# - base_time
+                        # add to main dictionary
+                        tstring = 'T' + time_dir[-4:]
+
+
+                        well_dict[tstring] = temp_dict
+                         # metadata_dict[well_name_conv] = temp_dict2
+
+                if do_flags[pi - 1]:
+                    laps = []
+                    laps_d = []
+                    for i in range(len(images)):
+                        # print
+                        # "Lap {}".format(i)
+                        laps.append(doLap(images[i]))
+                        laps_d.append(doLap(images[i], lap_size=7,
+                                            blur_size=7))  # I've found that depth stacking works better with larger filters
+
+                    laps = np.asarray(laps)
+                    abs_laps = np.absolute(laps)
+
+                    laps_d = np.asarray(laps_d)
+                    abs_laps_d = np.absolute(laps_d)
+
+                    # calculate full-focus and depth images
+                    ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
+                    depth_image = np.argmax(abs_laps_d, axis=0)
+                    maxima = abs_laps.max(axis=0)
+                    bool_mask = abs_laps == maxima
+                    mask = bool_mask.astype(np.uint8)
+                    for i in range(len(images)):
+                        ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
+
+                    ff_image = 255 - ff_image  # take the negative
+
+                    tt = int(time_dir[-4:])
+                    if cytometer_flag:
+                        # pos_id_list.append(p)
+                        pos_string = f'p{p:04}'
+                    else:
+                        # pos_id_list.append(pi)
+                        pos_string = f'p{pi:04}'
+
+                    # save images
+                    ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                    depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                    op_ff = os.path.join(ff_dir, ff_out_name)
+                    op_depth = os.path.join(depth_dir, depth_out_name)
+
+                    if not os.path.isdir(op_ff):
+                        os.makedirs(op_ff)
+                    if not os.path.isdir(op_depth):
+                        os.makedirs(op_depth)
+
+                    # convet depth image to 8 bit
+                    max_z = abs_laps.shape[0]
+                    depth_image_int8 = np.round(depth_image / max_z * 255).astype('uint8')
+
+                    cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif'), ff_image)
+
+                    cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
+
+    well_dict_out = dict({well_name_conv: well_dict})
+
+    return well_dict_out
+
 def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, n_stitch_samples=500,
                           out_shape=None, dir_list=None):
 
@@ -131,139 +269,45 @@ def build_ff_from_keyence(read_dir, db_path, overwrite_flag=False, ch_to_use=1, 
             well_list = sorted(glob.glob(dir_path + "/W0*"))
 
         print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        for w in tqdm(range(len(well_list))):
+        # for w in tqdm(range(len(well_list))):
+        # (w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1)
+        metadata_dict_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
 
-            well_dir = well_list[w]
-            # extract basic well info
-            well_name = well_dir[-4:]
-            # well_num = well_name[-2:]
+        # metadata_dict = dict({})
+        # for w in range(20):
+        #     key, well_metadata = process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, False)
+        #     metadata_dict[key] = well_metadata
+        key_list = [list(dd.keys())[0] for dd in metadata_dict_list]
+        metadata_dict = dict({})
+        first_time = np.inf
+        for k, key in enumerate(key_list):
+            # add entry to master dictionary
+            dd = metadata_dict_list[k]
+            dd_sub = dd[key]
 
-            # get conventional well name
-            well_name_conv = sorted(glob.glob(os.path.join(well_dir , "_*")))
-            well_name_conv = well_name_conv[0][-3:]
+            # iterate through well and find the earliest time stamp it contains
+            sub_keys = list(dd_sub.keys())
+            t_vec = np.empty((len(sub_keys,)))
+            for s, sub_key in enumerate(sub_keys):
+                t_vec[s] = dd_sub[sub_key]['Time (s)']
+            first_time = np.min([first_time, np.min(t_vec)])
 
-            # if multiple positions were taken per well, then there will be a layer of position folders
-            position_dir_list = sorted(glob.glob(well_dir + "/P*"))
+            # dd_sub['first_time'] = np.min(t_vec)
+            metadata_dict[key] = dd_sub
 
-            for p, pos_dir in enumerate(position_dir_list):
+        # generate new relative time field
+        for well_key in list(metadata_dict.keys()):
+            well_dict = metadata_dict[well_key]
+            for time_key in list(well_dict.keys()):
+                time_dict = well_dict[time_key]
+                time_stamp_abs = time_dict['Time (s)']
+                time_dict['Time Rel (s)'] = time_stamp_abs - first_time
 
-                # each pos dir contains one or more time points
-                time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
+                well_dict[time_key] = time_dict
 
-                for t, time_dir in enumerate(time_dir_list):
+            metadata_dict[well_key] = well_dict
 
-                    # each time directoy contains a list of Z slices for each channel
-                    ch_string = "CH" + str(ch_to_use)
-                    im_list = sorted(glob.glob(time_dir + "/*" + ch_string + "*"))
-
-                    # it is possible that multiple positionas are present within the same time folder
-                    if not cytometer_flag:
-                        sub_pos_list = []
-                        for i, im in enumerate(im_list):
-                            im_name = im.replace(time_dir, "")
-                            well_ind = im_name.find(well_name)
-                            pos_id = int(im_name[well_ind + 5:well_ind + 10])
-                            sub_pos_list.append(pos_id)
-                    else:
-                        sub_pos_list = np.ones((len(im_list),))
-
-                    sub_pos_index = np.unique(sub_pos_list).astype(int)
-
-                    # check to see if images have already been generated
-                    do_flags = [1]*len(sub_pos_index)
-                    # print(sub_pos_index)
-                    for pi in sub_pos_index:
-                        tt = int(time_dir[-4:])
-                        if cytometer_flag:
-                            # pos_id_list.append(p)
-                            pos_string = f'p{p:04}'
-                        else:
-                            # pos_id_list.append(pi)
-                            pos_string = f'p{pi:04}'
-
-                        ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                        if os.path.isfile(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif')) and not overwrite_flag:
-                            do_flags[pi-1] = 0
-                            if t==0 and p==0 and w==0:
-                                print("Skipping pre-existing files. Set 'overwrite_flag=True' to overwrite existing images")
-
-
-                    for pi in sub_pos_index:
-                            pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
-                            # load
-                            images = []
-                            for iter_i, i in enumerate(pos_indices):
-                                if do_flags[pi - 1]:
-                                    im = cv2.imread(im_list[i])
-                                    images.append(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY))
-
-                                # scrape metadata from first image
-                                if (iter_i == 0) and (p == 0):
-                                    temp_dict = scrape_keyence_metadata(im_list[i])
-                                    if (t == 0) and (w == 0):
-                                        base_time = temp_dict["Time (s)"]
-                                    temp_dict["Time (s)"] = temp_dict["Time (s)"] - base_time
-                                    # add to main dictionary
-                                    tstring = 'T' + time_dir[-4:]
-                                    if t == 0:
-                                        metadata_dict[well_name_conv] = dict({tstring: temp_dict})
-                                    else:
-                                        temp_dict2 = metadata_dict[well_name_conv]
-                                        temp_dict2[tstring] = temp_dict
-                                        metadata_dict[well_name_conv] = temp_dict2
-
-                            if do_flags[pi - 1]:
-                                laps = []
-                                laps_d = []
-                                for i in range(len(images)):
-                                    # print
-                                    # "Lap {}".format(i)
-                                    laps.append(doLap(images[i]))
-                                    laps_d.append(doLap(images[i], lap_size=7, blur_size=7)) # I've found that depth stacking works better with larger filters
-
-                                laps = np.asarray(laps)
-                                abs_laps = np.absolute(laps)
-
-                                laps_d = np.asarray(laps_d)
-                                abs_laps_d = np.absolute(laps_d)
-
-                                # calculat full-focus and depth images
-                                ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
-                                depth_image = np.argmax(abs_laps_d, axis=0)
-                                maxima = abs_laps.max(axis=0)
-                                bool_mask = abs_laps == maxima
-                                mask = bool_mask.astype(np.uint8)
-                                for i in range(len(images)):
-                                    ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
-
-                                ff_image = 255-ff_image # take the negative
-
-                                tt = int(time_dir[-4:])
-                                if cytometer_flag:
-                                    # pos_id_list.append(p)
-                                    pos_string = f'p{p:04}'
-                                else:
-                                    # pos_id_list.append(pi)
-                                    pos_string = f'p{pi:04}'
-
-                                # save images
-                                ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                                depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                                op_ff = os.path.join(ff_dir, ff_out_name)
-                                op_depth = os.path.join(depth_dir, depth_out_name)
-
-                                if not os.path.isdir(op_ff):
-                                    os.makedirs(op_ff)
-                                if not os.path.isdir(op_depth):
-                                    os.makedirs(op_depth)
-
-                                # convet depth image to 8 bit
-                                max_z = abs_laps.shape[0]
-                                depth_image_int8 = np.round(depth_image/max_z*255).astype('uint8')
-
-                                cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif'), ff_image)
-                                cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
-
+        # print('made it')
         with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
             pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
         with open(os.path.join(depth_dir, 'metadata.pickle'), 'wb') as handle:

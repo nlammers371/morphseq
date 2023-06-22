@@ -1,26 +1,25 @@
+# this script abd supporting function draw heavily from:
 import os
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
-import segmentation_models_pytorch as smp
 from functions.core_utils import Dataset, FishModel
 from pprint import pprint
 from torch.utils.data import DataLoader
-from torchvision import transforms
 import glob
 import ntpath
-
-from aicsimageio import AICSImage
-import skimage.transform as st
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning import loggers as pl_loggers
 
 
 if __name__ == "__main__":
 
+    n_classes = 5
+    n_epoch = 50
+    model_name = 'unet_5c_v2_'
     # Set path do data
     data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphSeq\data\\built_keyence_data_v2\\UNET_training\\"
-    seed_str = str(126)  # specify random seed that points to specific set of labeled training images
-    suffix = "v2"
+    seed_str = str(126) + '_v2' # specify random seed that points to specific set of labeled training images
     root = os.path.join(data_path, seed_str)
 
     # extract key info about computational resources
@@ -35,19 +34,17 @@ if __name__ == "__main__":
     #     transforms.RandomVerticalFlip()
     # )
 
-
     ttv_split = [0.85, 0.0, 0.15]
     im_dims = [576, 320]
 
-    image_list = glob.glob(os.path.join(data_path, seed_str + '_' + suffix, 'images', '*.tif'))
-    mask_list = glob.glob(os.path.join(data_path, seed_str + '_' + suffix, 'annotations', '*.tif'))
+    image_list = glob.glob(os.path.join(data_path, seed_str, 'images', '*.tif'))
+    mask_list = glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.tif'))
     n_samples_total = len(mask_list)
 
     im_list = []
     for n in range(n_samples_total):
         _, im_name = ntpath.split(image_list[n])
         im_list.append(im_name.replace('.tif', ''))
-
 
     # split into train, test, and validation sets
     n_train = np.round(ttv_split[0] * n_samples_total).astype(int)
@@ -60,9 +57,9 @@ if __name__ == "__main__":
     # test_files = [im_list[r] for r in random_indices[n_train:n_train + n_test]]
     valid_files = [im_list[r] for r in random_indices[n_train + n_test:]]
 
-    train_dataset = Dataset(root, train_files, im_dims, num_classes=5)#, transform=transforms)
+    train_dataset = Dataset(root, train_files, im_dims, num_classes=n_classes)#, transform=transforms)
     # test_dataset = Dataset(root, test_files, im_dims)
-    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=5)#, transform=transforms)
+    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=n_classes)#, transform=transforms)
 
     # It is a good practice to check datasets don`t intersects with each other
     assert set(train_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
@@ -78,17 +75,27 @@ if __name__ == "__main__":
     model = FishModel("FPN",
                       "resnet34",
                       in_channels=3,
-                      out_classes=2)
+                      out_classes=n_classes)
                       # classes=['live', 'dead'])
 
     n_devices = 1 if gpu_flag else n_cpu
-    n_epoch = 30
+
+    # instrcut pytorch to track model performance and save the best-performing versions
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(data_path, seed_str, model_name + '_checkpoints', ''),
+                                          save_top_k=2,
+                                          monitor='valid_per_image_iou',
+                                          mode='max')
+
+    # initialize custom logger so I can control where the (rather large) training logs are stored
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join(data_path, seed_str, model_name + "logs", ''))
     trainer = pl.Trainer(
         gpus=1,
         # devices=n_devices,
         accelerator='auto',
         max_epochs=n_epoch,
-        row_log_interval=1000 # NL I'm hoping this will reduce the size of the log files
+        callbacks=[checkpoint_callback],
+        logger=tb_logger
+        # row_log_interval=1000 # NL I'm hoping this will reduce the size of the log files
     )
 
     trainer.fit(
@@ -98,10 +105,15 @@ if __name__ == "__main__":
     )
 
     # save
-    torch.save(model.state_dict(), os.path.join(root, 'unet_live_dead_' + f'{n_epoch:04}'))
+    torch.save(model.state_dict(), os.path.join(root, model_name + f'{n_epoch:04}'))
 
     valid_metrics = trainer.validate(model, dataloaders=valid_dataloader, verbose=False)
     pprint(valid_metrics)
+
+    best_model_path = checkpoint_callback.best_model_path
+    best_model_score = checkpoint_callback.best_model_score
+    print(best_model_path)
+    print(best_model_score)
 
     # test_metrics = trainer.test(model, dataloaders=test_dataloader, verbose=False)
     # pprint(test_metrics)
