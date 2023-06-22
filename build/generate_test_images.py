@@ -9,7 +9,8 @@ def path_leaf(path):
     return tail or ntpath.basename(head)
 
 # project_name = '20230525'
-db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
+# db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
+db_path = "D:\\Nick\\morphseq\\built_keyence_data\\"
 path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
 project_list = glob.glob(path_to_images)
 # db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data/"
@@ -17,7 +18,7 @@ n_im = 500
 
 # set random seed for reproducibility
 # seed_str = str(126) # points to training subfolder I've been useing
-seed = 1294
+seed = 546
 np.random.seed(seed)
 
 # make write paths

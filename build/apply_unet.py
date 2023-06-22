@@ -2,27 +2,23 @@ import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-import pytorch_lightning as pl
-import segmentation_models_pytorch as smp
 from functions.core_utils import Dataset, FishModel
-from pprint import pprint
 from torch.utils.data import DataLoader
-from torchvision import transforms
 import glob
 import ntpath
-import random
-from aicsimageio import AICSImage
-import skimage.transform as st
+
 
 
 if __name__ == "__main__":
-    model_name = 'unet_live_dead_0030'
-
+    model_name = 'unet_ldb_0030'  # 'unet_live_dead_0030'
+    n_classes = 3
+    pd_only_flag = True
     # Set path do data
     db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphSeq\data\\built_keyence_data_v2\\"
     data_path = os.path.join(db_path, "UNET_training", '')
 
     seed_str = "1294_test_node"
+    # seed_str = "126_live_dead_bubble"
 
     # make write paths
     figure_path = os.path.join(db_path, 'UNET_training', seed_str, model_name + '_predictions', '')
@@ -61,7 +57,7 @@ if __name__ == "__main__":
     valid_files = im_list#[im_list[r] for r in random_indices]#[n_train:]]
 
     # train_dataset = Dataset(root, train_files, im_dims, num_classes=2) #, transform=transforms)
-    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=2, predict_only_flag=True) #, transform=transforms)
+    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=n_classes, predict_only_flag=pd_only_flag) #, transform=transforms)
 
     # train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=n_cpu)#**kwargs) # I think it is OK for Dataloader to use CPU workers
     valid_dataloader = DataLoader(valid_dataset, batch_size=1, shuffle=False)#**kwargs)
@@ -69,7 +65,7 @@ if __name__ == "__main__":
     model = FishModel("FPN",
                       "resnet34",
                       in_channels=3,
-                      out_classes=2)
+                      out_classes=n_classes)
 
     n_devices = 1 if gpu_flag else n_cpu
     n_plot = len(valid_files)
@@ -92,8 +88,10 @@ if __name__ == "__main__":
             # print(im.shape)
 
             lb_predicted = np.zeros((pr_masks.shape[1], pr_masks.shape[2]))
-            lb_predicted[np.where(pr_masks[0, :, :] >= 0.5)] = 1
-            lb_predicted[np.where(pr_masks[1, :, :] >= 0.5)] = 2
+            for c in range(n_classes):
+                lb_predicted[np.where(pr_masks[c, :, :] >= 0.5)] = c+1
+            lb_predicted = lb_predicted.astype(int)
+            # lb_predicted[np.where(pr_masks[1, :, :] >= 0.5)] = 2
             im_plot = np.squeeze(im.numpy()).transpose(1, 2, 0).astype(int)
 
             s = im_plot.shape
@@ -110,13 +108,13 @@ if __name__ == "__main__":
 
             # plt.pcolormesh(x, y, Image2_mask, cmap='jet')
             plt.imshow(im_plot)
-            plt.imshow(lb_predicted, cmap='viridis', alpha=0.3, vmin=0, vmax=2)
+            plt.imshow(lb_predicted, cmap='Set1', alpha=0.5, vmin=0, vmax=n_classes+1, interpolation='none')
             # plt.axis([x.min(), x.max(), y.min(), y.max()])
 
             plt.xlim([x.min(), x.max()])
             plt.ylim([y.min(), y.max()])
             plt.colorbar(
-                ticks=[0, 1, 2]
+                ticks=range(n_classes+1)
             )
             # plt.show()
             # plt.colorbar()
