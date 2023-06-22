@@ -14,10 +14,11 @@ if __name__ == "__main__":
     n_classes = 3
     pd_only_flag = True
     # Set path do data
-    db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphSeq\data\\built_keyence_data_v2\\"
+    db_path = "D:\\Nick\\morphseq\\built_keyence_data\\"
     data_path = os.path.join(db_path, "UNET_training", '')
 
-    seed_str = "1294_test_node"
+    # seed_str = "1294_test_node"
+    seed_str = "546_test_node"
     # seed_str = "126_live_dead_bubble"
 
     # make write paths
