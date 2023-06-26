@@ -11,14 +11,14 @@ def path_leaf(path):
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
 
-# project_name = '20230525'
+morph_label_flag = False
 # db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
-db_path = "E:/Nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
+db_path = "D:\\Nick\\morphseq\\built_keyence_data\\"   #"E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\"
 path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
 project_list = glob.glob(path_to_images)
 #
 n_im = 1000
-image_i = 202
+image_i = 0
 # set starting point
 # im_dims = [641, 1158]
 overwrite_flag = False
@@ -28,12 +28,17 @@ if overwrite_flag:
 
 # set random seed for reproducibility
 seed = 126
-suffix = "_v2"
+suffix = "_live_dead_bubble"
 np.random.seed(seed)
 
 # make write paths
-image_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
-label_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
+if not morph_label_flag:
+    image_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
+else:
+    image_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'annotations', '')
+
 if not os.path.isdir(image_path):
     os.makedirs(image_path)
 if not os.path.isdir(label_path):

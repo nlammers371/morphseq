@@ -10,7 +10,7 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = 'unet_ldb_0030'  # 'unet_live_dead_0030'
+    model_name = 'unet_ldb_v3_0050'  # 'unet_live_dead_0030'
     n_classes = 3
     pd_only_flag = True
     # Set path do data
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     data_path = os.path.join(db_path, "UNET_training", '')
 
     # seed_str = "1294_test_node"
-    seed_str = "546_test_node"
+    seed_str = "111_test_node"
     # seed_str = "126_live_dead_bubble"
 
     # make write paths
