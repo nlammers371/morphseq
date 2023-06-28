@@ -75,7 +75,7 @@ class Dataset(torch.utils.data.Dataset):
         if not self.predict_only_flag:
             lbObject = AICSImage(mask_path)
             lb_temp = np.squeeze(lbObject.data)
-            if self.num_classes == 1:
+            if False: #self.num_classes == 1:
                 mask = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
             else:
                 mask_temp = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
@@ -94,7 +94,7 @@ class Dataset(torch.utils.data.Dataset):
         image = st.resize(im_temp[:, :, 0], self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
         image = np.repeat(image[np.newaxis, :, :], 3, axis=0)
         # image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
-        if self.num_classes == 1:
+        if False: #self.num_classes == 1:
             sample = dict(image=image.astype(np.float32), mask=mask[np.newaxis, :, :].astype(np.float32))  #, trimap=trimap)
         else:
             sample = dict(image=image.astype(np.float32), mask=mask.astype(np.float32))
@@ -178,7 +178,7 @@ class FishModel(pl.LightningModule):
         }
 
     def shared_epoch_end(self, outputs, stage):
-        # aggregate step metics
+        # aggregate step metrics
         tp = torch.cat([x["tp"] for x in outputs])
         fp = torch.cat([x["fp"] for x in outputs])
         fn = torch.cat([x["fn"] for x in outputs])
@@ -241,7 +241,6 @@ class FishModel(pl.LightningModule):
     #     elif self.mode == "valid":  # 10% for validation
     #         filenames = [x for i, x in enumerate(filenames) if i % 10 == 0]
     #     return filenames
-
 
 
 class TqdmUpTo(tqdm):
