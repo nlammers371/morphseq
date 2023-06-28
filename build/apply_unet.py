@@ -8,21 +8,23 @@ import glob
 import ntpath
 
 
-
 if __name__ == "__main__":
-    model_name = 'unet_ldb_v3_0050'  # 'unet_live_dead_0030'
+    model_name = "unet_yh_v2_0003"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
     n_classes = 3
-    pd_only_flag = True
+    pd_only_flag = False
+    type_string = "morph_UNET_training"
     # Set path do data
-    db_path = "D:\\Nick\\morphseq\\built_keyence_data\\"
-    data_path = os.path.join(db_path, "UNET_training", '')
+    db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data" #"D:\\Nick\\morphseq\\built_keyence_data\\"
+    # data_path = os.path.join(db_path, "UNET_training", '')
+    data_path = os.path.join(db_path, type_string, '')
 
     # seed_str = "1294_test_node"
-    seed_str = "111_test_node"
+    # seed_str = "141_test_node"
+    seed_str = "932_yolk_head_tail"
     # seed_str = "126_live_dead_bubble"
 
     # make write paths
-    figure_path = os.path.join(db_path, 'UNET_training', seed_str, model_name + '_predictions', '')
+    figure_path = os.path.join(db_path, type_string, seed_str, model_name + '_predictions', '')
 
     if not os.path.isdir(figure_path):
         os.makedirs(figure_path)

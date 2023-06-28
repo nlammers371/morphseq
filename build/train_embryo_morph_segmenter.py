@@ -14,13 +14,14 @@ from pytorch_lightning import loggers as pl_loggers
 
 if __name__ == "__main__":
 
-    n_classes = 3
+    n_classes = 1
     n_epoch = 50
-    model_name = 'unet_ldb_v4_'
+    model_name = 'unet_yolk_v0_'
     # Set path do data
-    data_path = "D:\\Nick\morphseq\\built_keyence_data\\UNET_training\\"
-    # data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphSeq\data\\built_keyence_data_v2\\UNET_training\\"
-    seed_str = str(126) + '_live_dead_bubble'# '_v2' # specify random seed that points to specific set of labeled training images
+    # data_path = "D:\\Nick\morphseq\\built_keyence_data\\UNET_training\\"
+    data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\morph_UNET_training\\"
+
+    seed_str = str(932) + '_yolk_head_tail'# '_v2' # specify random seed that points to specific set of labeled training images
     root = os.path.join(data_path, seed_str)
 
     # extract key info about computational resources
