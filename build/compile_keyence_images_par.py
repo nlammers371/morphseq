@@ -15,6 +15,7 @@ import json
 from tqdm import tqdm
 import pickle
 from parfor import pmap
+import pandas as pd
 
 def scrape_keyence_metadata(im_path):
     # im_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230531/bf_timeseries_stack0850_pitch040/W001/P00001/T0004/wt_W001_P00001_T0004_Z005_CH1.tif"
@@ -23,16 +24,20 @@ def scrape_keyence_metadata(im_path):
     metadata = fulldata.partition(b'<Data>')[2].partition(b'</Data>')[0].decode()
 
     meta_dict = dict({})
-    keyword_list = ['ShootingDateTime', 'LensName', 'Observation Type', 'Width', 'Height']
-    outname_list = ['Time (s)', 'Objective', 'Channel', 'Width (um)', 'Height (um)']
+    keyword_list = ['ShootingDateTime', 'LensName', 'Observation Type', 'Width', 'Height', 'Width', 'Height']
+    outname_list = ['Time (s)', 'Objective', 'Channel', 'Width (px)', 'Height (px)', 'Width (um)', 'Height (um)']
 
     for k in range(len(keyword_list)):
         param_string = keyword_list[k]
         name = outname_list[k]
 
         if (param_string == 'Width') or (param_string == 'Height'):
-            ind1 = findnth(metadata, param_string + ' Type', 2)
-            ind2 = findnth(metadata, '/' + param_string, 2)
+            if 'um' in name:
+                ind1 = findnth(metadata, param_string + ' Type', 2)
+                ind2 = findnth(metadata, '/' + param_string, 2)
+            else:
+                ind1 = findnth(metadata, param_string + ' Type', 1)
+                ind2 = findnth(metadata, '/' + param_string, 1)
         else:
             ind1 = metadata.find(param_string)
             ind2 = metadata.find('/' + param_string)
@@ -48,13 +53,53 @@ def scrape_keyence_metadata(im_path):
 
         if param_string == "ShootingDateTime":
             param_val = param_val / 10 / 1000 / 1000  # convert to seconds (native unit is 100 nanoseconds)
-        elif (param_string=='Height') or (param_string=='Width'):
+        elif "um" in name:
             param_val = param_val / 1000
 
         # add to dict
         meta_dict[name] = param_val
 
     return meta_dict
+
+# def scrape_keyence_metadata_v2(im_path):
+#     # im_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230531/bf_timeseries_stack0850_pitch040/W001/P00001/T0004/wt_W001_P00001_T0004_Z005_CH1.tif"
+#     with open(im_path, 'rb') as a:
+#         fulldata = a.read()
+#     metadata = fulldata.partition(b'<Data>')[2].partition(b'</Data>')[0].decode()
+#
+#     meta_dict = dict({})
+#     keyword_list = ['ShootingDateTime', 'LensName', 'Observation Type', 'Width', 'Height']
+#     outname_list = ['Time (s)', 'Objective', 'Channel', 'Width (um)', 'Height (um)']
+#
+#     for k in range(len(keyword_list)):
+#         param_string = keyword_list[k]
+#         name = outname_list[k]
+#
+#         if (param_string == 'Width') or (param_string == 'Height'):
+#             ind1 = findnth(metadata, param_string + ' Type', 2)
+#             ind2 = findnth(metadata, '/' + param_string, 2)
+#         else:
+#             ind1 = metadata.find(param_string)
+#             ind2 = metadata.find('/' + param_string)
+#         long_string = metadata[ind1:ind2]
+#         subind1 = long_string.find(">")
+#         subind2 = long_string.find("<")
+#         param_val = long_string[subind1+1:subind2]
+#
+#         sysind = long_string.find("System.")
+#         dtype = long_string[sysind+7:subind1-1]
+#         if 'Int' in dtype:
+#             param_val = int(param_val)
+#
+#         if param_string == "ShootingDateTime":
+#             param_val = param_val / 10 / 1000 / 1000  # convert to seconds (native unit is 100 nanoseconds)
+#         elif (param_string=='Height') or (param_string=='Width'):
+#             param_val = param_val / 1000
+#
+#         # add to dict
+#         meta_dict[name] = param_val
+#
+#     return meta_dict
 
 def findnth(haystack, needle, n):
     parts = haystack.split(needle, n+1)
@@ -98,7 +143,10 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
     # extract basic well info
     well_name = well_dir[-4:]
     # well_num = well_name[-2:]
-    well_dict = dict({})
+    # well_dict = dict({})
+    well_df = pd.DataFrame([], columns=['well', 'time_int', 'time_string', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Channel', 'Objective', 'Time (s)'])
+    master_iter_i = 0
+
     # get conventional well name
     well_name_conv = sorted(glob.glob(os.path.join(well_dir, "_*")))
     well_name_conv = well_name_conv[0][-3:]
@@ -162,15 +210,26 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                     # scrape metadata from first image
                     if (iter_i == 0) and (p == 0):
                         temp_dict = scrape_keyence_metadata(im_list[i])
-                        if (t == 0) and (w == 0):
-                            base_time = temp_dict["Time (s)"]
-                        temp_dict["Time (s)"] = temp_dict["Time (s)"]# - base_time
+                        k_list = list(temp_dict.keys())
+                        temp_df = pd.DataFrame(np.empty((1, len(k_list))), columns=k_list)
+                        for k in k_list:
+                            temp_df[k] = temp_dict[k]
+                        # if (t == 0) and (w == 0):
+                        #     base_time = temp_dict["Time (s)"]
+                        # temp_dict["Time (s)"] = temp_dict["Time (s)"]# - base_time
                         # add to main dictionary
+
                         tstring = 'T' + time_dir[-4:]
-
-
-                        well_dict[tstring] = temp_dict
-                         # metadata_dict[well_name_conv] = temp_dict2
+                        temp_df["time_string"] = tstring
+                        temp_df["time_int"] = int(time_dir[-4:])
+                        temp_df["well"] = well_name_conv
+                        temp_df = temp_df[temp_df.columns[::-1]]
+                        # add to main dataframe
+                        well_df.loc[master_iter_i] = temp_df.loc[0]
+                        master_iter_i += 1
+                            # temp_df = temp_df[temp_df.columns[::-1]]
+                            # well_dict[tstring] = temp_dict
+                             # metadata_dict[well_name_conv] = temp_dict2
 
                 if do_flags[pi - 1]:
                     laps = []
@@ -179,8 +238,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                         # print
                         # "Lap {}".format(i)
                         laps.append(doLap(images[i]))
-                        laps_d.append(doLap(images[i], lap_size=7,
-                                            blur_size=7))  # I've found that depth stacking works better with larger filters
+                        laps_d.append(doLap(images[i], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
 
                     laps = np.asarray(laps)
                     abs_laps = np.absolute(laps)
@@ -226,9 +284,9 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
 
                     cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
 
-    well_dict_out = dict({well_name_conv: well_dict})
+    # well_dict_out = dict({well_name_conv: well_dict})
 
-    return well_dict_out
+    return well_df
 
 
 def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir, stitch_depth_dir, overwrite_flag, out_shape):
@@ -309,8 +367,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
 
     return{}
 
-def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, n_stitch_samples=500,
-                          out_shape=None, dir_list=None, write_dir=None):
+def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list=None, write_dir=None):
 
     read_dir = os.path.join(data_root, 'raw_keyence_data', '') 
     if write_dir is None:
@@ -354,59 +411,74 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, n_stitch
         print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # for w in tqdm(range(len(well_list))):
         # (w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1)
-        metadata_dict_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
+        # metadata_dict_list = []
+        # for w in range(len(well_list)):
+        #     process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag)
+        metadata_df_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
+        if len(metadata_df_list) > 0:
+            metadata_df = pd.concat(metadata_df_list)
+            first_time = np.min(metadata_df['Time (s)'].copy())
+            metadata_df['Time Rel (s)'] = metadata_df['Time (s)'] - first_time
+        else:
+            metadata_df = []
 
         # metadata_dict = dict({})
         # for w in range(20):
         #     key, well_metadata = process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, False)
         #     metadata_dict[key] = well_metadata
-        key_list = [list(dd.keys())[0] for dd in metadata_dict_list]
-        metadata_dict = dict({})
-        first_time = np.inf
-        for k, key in enumerate(key_list):
-            # add entry to master dictionary
-            dd = metadata_dict_list[k]
-            dd_sub = dd[key]
+        # key_list = [list(dd.keys())[0] for dd in metadata_dict_list]
+        # metadata_dict = dict({})
+        # first_time = np.inf
+        # for k, key in enumerate(key_list):
+        #     # add entry to master dictionary
+        #     dd = metadata_dict_list[k]
+        #     dd_sub = dd[key]
 
             # iterate through well and find the earliest time stamp it contains
-            sub_keys = list(dd_sub.keys())
-            t_vec = np.empty((len(sub_keys,)))
-            for s, sub_key in enumerate(sub_keys):
-                t_vec[s] = dd_sub[sub_key]['Time (s)']
-            first_time = np.min([first_time, np.min(t_vec)])
+            # sub_keys = list(dd_sub.keys())
+            # t_vec = np.empty((len(sub_keys,)))
+            # for s, sub_key in enumerate(sub_keys):
+            #     t_vec[s] = dd_sub[sub_key]['Time (s)']
+            # first_time = np.min([first_time, np.min(t_vec)])
 
             # dd_sub['first_time'] = np.min(t_vec)
-            metadata_dict[key] = dd_sub
+            # metadata_dict[key] = dd_sub
 
         # generate new relative time field
-        for well_key in list(metadata_dict.keys()):
-            well_dict = metadata_dict[well_key]
-            for time_key in list(well_dict.keys()):
-                time_dict = well_dict[time_key]
-                time_stamp_abs = time_dict['Time (s)']
-                time_dict['Time Rel (s)'] = time_stamp_abs - first_time
-
-                well_dict[time_key] = time_dict
-
-            metadata_dict[well_key] = well_dict
+        # for well_key in list(metadata_dict.keys()):
+        #     well_dict = metadata_dict[well_key]
+        #     for time_key in list(well_dict.keys()):
+        #         time_dict = well_dict[time_key]
+        #         time_stamp_abs = time_dict['Time (s)']
+        #         time_dict['Time Rel (s)'] = time_stamp_abs - first_time
+        #
+        #         well_dict[time_key] = time_dict
+        #
+        #     metadata_dict[well_key] = well_dict
 
         # print('made it')
-        with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
-            pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open(os.path.join(depth_dir, 'metadata.pickle'), 'wb') as handle:
-            pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # load previous metadata
+        metadata_path = os.path.join(ff_dir, 'metadata.csv')
+        # if os.path.isfile(metadata_path) and len(metadata_df) > 0:
+        #     prev_metadata = pd.read_csv(metadata_path, index_col=0)
+        #     updated_metadata_df = pd.concat([metadata_df, prev_metadata])
+        #     updated_metadata_df.drop_duplicates(subset=["well", "Time (s)"])
+
+        if len(metadata_df) > 0:
+            metadata_df.reset_index()
+            metadata_df.to_csv(metadata_path)
+        # with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
+        #     pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
     print('Done.')
 
-def stitch_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, n_stitch_samples=500,
+def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=500,
                            out_shape=None, dir_list=None, write_dir=None):
     
     read_dir = os.path.join(data_root, 'raw_keyence_data', '')
     if write_dir is None:
         write_dir = data_root
-        
-    if out_shape == None:
-        out_shape = np.asarray([1140, 630])
 
     # handle paths
     if dir_list == None:
@@ -426,6 +498,13 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, n_stitc
         # directories containing image tiles
         depth_tile_dir = os.path.join(write_dir, "built_keyence_data", "D_images", sub_name, '')
         ff_tile_dir = os.path.join(write_dir, "built_keyence_data", "FF_images", sub_name, '')
+
+        if out_shape == None:
+            metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
+            metadata_df = pd.read_csv(metadata_path, index_col=0)
+            size_factor = metadata_df["Width (px)"].loc[0] / 640
+            out_shape = np.asarray([1140, 630])*size_factor
+            out_shape = out_shape.astype(int)
 
         # get list of subfolders
         # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
@@ -526,11 +605,11 @@ if __name__ == "__main__":
     # write_dir = "D:\\Nick\\morphseq\\" #"Z:\\morphseq\\" # "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/"
     # read_path = "/Volumes/LaCie/Keyence/"
     # read_dir = data_root + 'raw_keyence_data\\' #'"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/raw_keyence_data/"
-    write_dir = "D:\\Nick\\morphseq"
+    write_dir = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq" #"D:\\Nick\\morphseq"
 
     # ch_to_use = [1]  # ,2,3]
-
+    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230627\\"]
     # build FF images
-    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False)
+    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False)#, dir_list=dir_list)
     # stitch FF images
-    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False)
+    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False)#, dir_list=dir_list)

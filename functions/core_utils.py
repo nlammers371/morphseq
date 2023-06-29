@@ -63,6 +63,7 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
 
         filename = self.filenames[idx]
+        filename = filename.replace(".tif", "")  # get rid of tif suffix if it exists
         image_path = os.path.join(self.images_directory, filename + ".tif")
         mask_path = os.path.join(self.masks_directory, filename + ".tif")
 
@@ -91,7 +92,9 @@ class Dataset(torch.utils.data.Dataset):
         # load and resize image
         imObject = AICSImage(image_path)
         im_temp = np.squeeze(imObject.data)
-        image = st.resize(im_temp[:, :, 0], self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
+        if len(im_temp.shape) == 3:
+            im_temp = im_temp[:, :, 0]
+        image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
         image = np.repeat(image[np.newaxis, :, :], 3, axis=0)
         # image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
         if False: #self.num_classes == 1:
