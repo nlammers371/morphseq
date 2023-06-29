@@ -9,9 +9,9 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = "unet_yh_v2_0003"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
-    n_classes = 3
-    pd_only_flag = False
+    model_name = "unet_yolk_v0_0050"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
+    n_classes = 1
+    pd_only_flag = True
     type_string = "morph_UNET_training"
     # Set path do data
     db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data" #"D:\\Nick\\morphseq\\built_keyence_data\\"
@@ -19,8 +19,8 @@ if __name__ == "__main__":
     data_path = os.path.join(db_path, type_string, '')
 
     # seed_str = "1294_test_node"
-    # seed_str = "141_test_node"
-    seed_str = "932_yolk_head_tail"
+    seed_str = "111_test_node"
+    # seed_str = "932_yolk_head_tail"
     # seed_str = "126_live_dead_bubble"
 
     # make write paths
@@ -84,11 +84,10 @@ if __name__ == "__main__":
             im = batch["image"]
             logits = model(im)
             pr_masks = np.squeeze(np.asarray(logits.sigmoid()))
+
+            if n_classes==1:
+                pr_masks = pr_masks[np.newaxis, :, :]
             im_name = im_list[idx]
-            # print(pr_masks.shape)
-            # print(pr_masks)
-            # print(pr_masks.shape)
-            # print(im.shape)
 
             lb_predicted = np.zeros((pr_masks.shape[1], pr_masks.shape[2]))
             for c in range(n_classes):
