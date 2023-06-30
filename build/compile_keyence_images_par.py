@@ -502,7 +502,7 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=500
         if out_shape == None:
             metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
             metadata_df = pd.read_csv(metadata_path, index_col=0)
-            size_factor = metadata_df["Width (px)"].loc[0] / 640
+            size_factor = metadata_df["Width (px)"].iloc[0] / 640
             out_shape = np.asarray([1140, 630])*size_factor
             out_shape = out_shape.astype(int)
 
@@ -608,8 +608,8 @@ if __name__ == "__main__":
     write_dir = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq" #"D:\\Nick\\morphseq"
 
     # ch_to_use = [1]  # ,2,3]
-    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230627\\"]
+    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230622\\", "Z:\\morphseq\\raw_keyence_data\\20230627\\"]
     # build FF images
-    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False)#, dir_list=dir_list)
+    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=[dir_list[0]])
     # stitch FF images
-    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False)#, dir_list=dir_list)
+    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=[dir_list[0]])

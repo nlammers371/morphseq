@@ -11,14 +11,15 @@ def path_leaf(path):
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
 
-morph_label_flag = True
+morph_label_flag = False
+focus_label_flag = True
 # db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
 db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\" # "D:\\Nick\\morphseq\\built_keyence_data\\"   #
 path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
 project_list = glob.glob(path_to_images)
 #
 n_im = 1000
-image_i = 26
+image_i = 0
 
 # set starting point
 # im_dims = [641, 1158]
@@ -28,17 +29,21 @@ if overwrite_flag:
     skip_labeled_flag = False
 
 # set random seed for reproducibility
-seed = 932
-suffix = "_yolk_head_tail"
+seed = 678
+suffix = "_focus"
 np.random.seed(seed)
 
 # make write paths
-if not morph_label_flag:
-    image_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
-else:
+if morph_label_flag:
     image_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'images', '')
     label_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'annotations', '')
+elif focus_label_flag:
+    image_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'annotations', '')
+else:
+    image_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
+
 
 if not os.path.isdir(image_path):
     os.makedirs(image_path)
