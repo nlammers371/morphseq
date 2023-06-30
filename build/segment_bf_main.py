@@ -50,7 +50,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
     # remove images with previously existing labels if overwrite_flag=False
     if not overwrite_flag:
         image_path_list = [image_path_list[e] for e in range(len(image_path_list)) if not exist_flags[e]]
-        label_path_list = [label_path_list[e] for e in range(len(image_path_list)) if not exist_flags[e]]
+        label_path_list = [label_path_list[e] for e in range(len(label_path_list)) if not exist_flags[e]]
         n_ex = np.sum(np.asarray(exist_flags) == 1)
         if n_ex > 0:
             print('Skipping ' + str(n_ex) + " previously segmented images. Set 'overwrite_flag=True' to overwrite")
@@ -101,7 +101,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
 if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data"
 
-    # first, apply classifier to identify livign and dead embryos, as well as well bubbles
+    # first, apply classifier to identify livign and dead embryos, as well bubbles
     n_classes = 3
     model_name = "unet_ldb_v4_0050"
     apply_unet(root, model_name, n_classes)
