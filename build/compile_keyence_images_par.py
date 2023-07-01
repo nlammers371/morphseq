@@ -608,8 +608,8 @@ if __name__ == "__main__":
     write_dir = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq" #"D:\\Nick\\morphseq"
 
     # ch_to_use = [1]  # ,2,3]
-    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230622\\", "Z:\\morphseq\\raw_keyence_data\\20230627\\"]
+    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230622\\", "Z:\\morphseq\\raw_keyence_data\\20230629\\"]
     # build FF images
-    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=[dir_list[0]])
+    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False, dir_list=[dir_list[1]])
     # stitch FF images
-    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=[dir_list[0]])
+    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False, dir_list=[dir_list[1]])
