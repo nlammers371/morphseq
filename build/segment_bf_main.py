@@ -101,7 +101,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
 if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data"
 
-    # first, apply classifier to identify livign and dead embryos, as well bubbles
+    # first, apply classifier to identify living and dead embryos, as well bubbles
     n_classes = 3
     model_name = "unet_ldb_v4_0050"
     apply_unet(root, model_name, n_classes)
@@ -109,6 +109,11 @@ if __name__ == "__main__":
     # now apply yolk classifier
     n_classes = 1
     model_name = "unet_yolk_v0_0050"
+    apply_unet(root, model_name, n_classes)
+
+    # now apply classifier to flag out-of-focus embryos
+    n_classes = 1
+    model_name = "unet_focus_v2_0050"
     apply_unet(root, model_name, n_classes)
 
     # n_classes = 3

@@ -9,7 +9,7 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = "unet_focus_v1_0025"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
+    model_name = "unet_focus_v2_0050"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
     n_classes = 1
     pd_only_flag = True
     type_string = "focus_UNET_training"
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     data_path = os.path.join(db_path, type_string, '')
 
     # seed_str = "1294_test_node"
-    seed_str = "401_test_node"
+    seed_str = "421_test_node"
     # seed_str = "932_yolk_head_tail"
     # seed_str = "126_live_dead_bubble"
 
