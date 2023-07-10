@@ -89,7 +89,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
             for c in range(n_classes):
                 lb_predicted[np.where(pr_masks[c, :, :] >= 0.5)] = c+2
             lb_predicted = lb_predicted / (n_classes+1) * 255
-            lb_predicted = lb_predicted.astype(np.uint8) # convert to integer
+            lb_predicted = lb_predicted.astype(np.uint8)  # convert to integer
 
             # write to file
             # AICSImage(lb_predicted).save(label_path_list[idx])
