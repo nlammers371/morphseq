@@ -8,6 +8,9 @@ from skimage.measure import label, regionprops, regionprops_table
 import cv2
 import pandas as pd
 from functions.utilities import path_leaf
+import sklearn
+from scipy.optimize import linear_sum_assignment
+from sklearn.metrics import pairwise_distances
 
 def make_well_names():
     row_list = ["A", "B", "C", "D", "E", "F", "G", "H"]
@@ -127,11 +130,11 @@ def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
         master_df_update["e" + str(n) + "_frac_alive"] = np.nan
 
     # extract position and live/dead status of each embryo in each well
-    for e, experiment_path in enumerate(experiment_list):
+    for e, experiment_path in enumerate([experiment_list[1]]):
         ename = path_leaf(experiment_path)
         # get list of tif files to process
         image_list = sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
-        for i, image_path in enumerate(image_list):
+        for i, image_path in enumerate(image_list[:3000]):
             iname = path_leaf(image_path)
 
             # extract metadata from image name
@@ -171,8 +174,10 @@ def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
 
             # revise cutoff to ensure we do not track more embryos than initially
             n_prior = int(master_df_update.loc[master_index, ["embryos_per_well"]].values[0])
-            min_sa_new = np.max([sa_vec[-n_prior], min_sa])
-
+            if len(sa_vec) > n_prior:
+                min_sa_new = np.max([sa_vec[-n_prior], min_sa])
+            else:
+                min_sa_new = min_sa
 
             i_pass = 0
             for r in regions:
@@ -191,6 +196,11 @@ def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
     # embryo_id that persists over time
 
     # get list of uniqure well instances
+    master_df = master_df.iloc[np.where(~np.isnan(master_df_update["n_embryos_observed"].values))]
+    master_df.reset_index(inplace=True)
+    master_df_update = master_df_update.dropna(subset=["n_embryos_observed"])
+    master_df_update.reset_index(inplace=True)
+
     well_id_list = np.unique(master_df_update["well_id"])
     i_pass = 0
     for w, well_id in enumerate(well_id_list):
@@ -204,16 +214,87 @@ def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
         elif np.max(n_emb_col) == 1:  # no need for tracking
             use_indices = [well_indices[w] for w in range(len(well_indices)) if n_emb_col[w] == 1]
             df_temp = master_df.iloc[use_indices].copy()
-            df_temp["xpos"] = master_df_update.loc[use_indices, ["e1_x"]]
-            df_temp["ypos"] = master_df_update.loc[use_indices, ["e1_y"]]
-            df_temp["fraction_alive"] = master_df_update.loc[use_indices, ["e1_fraction_alive"]]
+            df_temp.reset_index(inplace=True)
+            df_temp = df_temp.iloc[:, 2:]
+
+            df_temp["xpos"] = master_df_update.loc[use_indices, ["e0_x"]].values
+            df_temp["ypos"] = master_df_update.loc[use_indices, ["e0_y"]].values
+            df_temp["fraction_alive"] = master_df_update.loc[use_indices, ["e0_frac_alive"]].values
+            df_temp["embryo_id"] = well_id + '_e00'
+
             if i_pass == 0:
                 embryo_metadata_df = df_temp.copy()
             else:
                 embryo_metadata_df = pd.concat([embryo_metadata_df, df_temp.copy()], axis=0, ignore_index=True)
             i_pass += 1
-        else: # this case is more complicated 
-            print("track")
+        else:  # this case is more complicated
+            last_i = np.max(np.where(n_emb_col > 1)[0]) + 1
+            track_indices = well_indices[:last_i]
+            n_emb = master_df_update.loc[track_indices[0], "n_embryos_observed"].astype(int)
+            n_emb_orig = n_emb.copy()
+
+            # initialize helper arrays for tracking
+            id_array = np.empty((len(track_indices), n_emb))
+            id_array[:] = np.nan
+            last_pos_array = np.empty((n_emb, 2))
+            last_pos_array[:] = np.nan
+            id_array[0, :] = range(n_emb)
+            for n in range(n_emb):
+                last_pos_array[n, 0] = master_df_update.loc[track_indices[0], ["e" + str(n) + "_x"]]
+                last_pos_array[n, 1] = master_df_update.loc[track_indices[0], ["e" + str(n) + "_y"]]
+
+            # carry out tracking
+            for t, ind in enumerate(track_indices[1:]):
+                # check how many embryos were detected
+                n_emb = n_emb_col[t+1].astype(int)
+                if n_emb == 0:
+                    pass  # note that we carry over last_pos_array
+                else:
+                    curr_pos_array = np.empty((n_emb, 2))
+                    for n in range(n_emb):
+                        curr_pos_array[n, 0] = master_df_update.loc[ind, ["e" + str(n) + "_x"]]
+                        curr_pos_array[n, 1] = master_df_update.loc[ind, ["e" + str(n) + "_y"]]
+                    # ensure 2D
+                    curr_pos_array = np.reshape(curr_pos_array, (n_emb, 2))
+
+                    # get pairwise distances
+                    dist_matrix = pairwise_distances(last_pos_array, curr_pos_array)
+                    dist_matrix = np.reshape(dist_matrix, (last_pos_array.shape[0], n_emb))
+
+                    # get min cost assignments
+                    from_ind, to_ind = linear_sum_assignment(dist_matrix)
+
+                    # update ID assignments
+                    id_array[t+1, from_ind] = to_ind
+
+                    # update positions
+                    last_pos_array[from_ind, :] = curr_pos_array[to_ind]  # note that unassigned positions carried over
+
+            # carry assignments forward if necessary
+            id_array[t+2:, :] = id_array[t+1, :]
+
+            # use ID array to generate stable embryo IDs
+            for n in range(n_emb_orig):
+                use_indices = [well_indices[w] for w in range(len(well_indices)) if ~np.isnan(id_array[w, n])]
+                use_subindices = [w for w in range(len(well_indices)) if ~np.isnan(id_array[w, n])]
+                df_temp = master_df.iloc[use_indices].copy()
+                df_temp.reset_index(inplace=True)
+                df_temp = df_temp.iloc[:, 2:]
+                for iter, ui in enumerate(use_indices):
+
+                    id = int(id_array[use_subindices[iter], n])
+
+                    df_temp.loc[iter, "xpos"] = master_df_update.loc[ui, "e" + str(id) + "_x"]
+                    df_temp.loc[iter, "ypos"] = master_df_update.loc[ui, "e" + str(id) + "_y"]
+                    df_temp.loc[iter, "fraction_alive"] = master_df_update.loc[ui, "e" + str(id) + "_frac_alive"]
+                df_temp["embryo_id"] = well_id + f'_e{n:02}'
+
+                if i_pass == 0:
+                    embryo_metadata_df = df_temp.copy()
+                else:
+                    embryo_metadata_df = pd.concat([embryo_metadata_df, df_temp.copy()], axis=0, ignore_index=True)
+                i_pass += 1
+    print("phew")
 
 
 if __name__ == "__main__":
@@ -222,3 +303,6 @@ if __name__ == "__main__":
 
     print('Compiling well metadata...')
     build_well_metadata_master(root)
+
+    print('Extracing embryo metadata...')
+    segment_wells(root)
