@@ -4,6 +4,7 @@ import glob
 import ntpath
 from aicsimageio import AICSImage
 from tqdm import tqdm
+from skimage.measure import label, regionprops, regionprops_table
 import cv2
 import pandas as pd
 from functions.utilities import path_leaf
@@ -92,6 +93,127 @@ def build_well_metadata_master(root, well_sheets=None):
 
     # save to file
     master_well_table.to_csv(os.path.join(metadata_path, 'master_well_metadata.csv'))
+
+    return {}
+
+
+def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
+
+    # generate paths to useful directories
+    metadata_path = os.path.join(root, 'metadata', '')
+    segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
+
+    # load well-level metadata
+    master_df = pd.read_csv(os.path.join(metadata_path, 'master_well_metadata.csv'), index_col=0)
+
+    # get list of segmentation directories
+    seg_dir_list_raw = glob.glob(segmentation_path + "*")
+    seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
+
+    ######
+    # Track number of embryos and position over time
+    ######
+    ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    # get list of experiments
+    experiment_list = sorted(glob.glob(os.path.join(ldb_path, "*")))
+    experiment_list = [e for e in experiment_list if "ignore" not in e]
+
+    # initialize empty columns to store embryo information
+    master_df_update = master_df.copy()
+    master_df_update["n_embryos_observed"] = np.nan
+    for n in range(4):
+        master_df_update["e" + str(n) + "_x"] = np.nan
+        master_df_update["e" + str(n) + "_y"] = np.nan
+        master_df_update["e" + str(n) + "_frac_alive"] = np.nan
+
+    # extract position and live/dead status of each embryo in each well
+    for e, experiment_path in enumerate(experiment_list):
+        ename = path_leaf(experiment_path)
+        # get list of tif files to process
+        image_list = sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
+        for i, image_path in enumerate(image_list):
+            iname = path_leaf(image_path)
+
+            # extract metadata from image name
+            dash_index = iname.find("_")
+            well = iname[:dash_index]
+            t_index = int(iname[dash_index+2:dash_index+6])
+
+            # find corresponding index in master dataset
+            t_indices = np.where(master_df_update["time_int"] == t_index)[0]
+            well_indices = np.where(master_df_update[["well"]] == well)[0]
+            e_indices = np.where(master_df_update[["experiment_date"]] == int(ename))[0]
+            master_index = [i for i in t_indices if (i in well_indices) and (i in e_indices)]
+            if len(master_index) != 1:
+                raise Exception("Incorect number of matching entries found for " + iname + f". Expected 1, got {len(master_index)}." )
+            else:
+                master_index = master_index[0]
+
+            # load label image
+            im = cv2.imread(image_path)
+            im = im/np.min(im) - 1
+            im = im[:, :, 0].astype(int)
+
+            # merge live/dead labels for now
+            im_merge = np.zeros(im.shape, dtype="uint8")
+            im_merge[np.where(im == 1)] = 1
+            im_merge[np.where(im == 2)] = 1
+            im_merge_lb = label(im_merge)
+            regions = regionprops(im_merge_lb)
+
+            # get surface areas
+            sa_vec = np.empty((len(regions), ))
+            for r, region in enumerate(regions):
+                sa_vec[r] = region.area
+
+            sa_vec = sa_vec[np.where(sa_vec <= max_sa)]
+            sa_vec = sorted(sa_vec)
+
+            # revise cutoff to ensure we do not track more embryos than initially
+            n_prior = int(master_df_update.loc[master_index, ["embryos_per_well"]].values[0])
+            min_sa_new = np.max([sa_vec[-n_prior], min_sa])
+
+
+            i_pass = 0
+            for r in regions:
+                sa = r.area
+                if (sa >= min_sa_new) and (sa <= max_sa):
+                    master_df_update.loc[master_index, ["e" + str(i_pass) + "_x"]] = r.centroid[1]
+                    master_df_update.loc[master_index, ["e" + str(i_pass) + "_y"]] = r.centroid[0]
+                    lb_indices = np.where(im_merge_lb == r.label)
+                    master_df_update.loc[master_index, ["e" + str(i_pass) + "_frac_alive"]] = np.mean(im[lb_indices] == 1)
+
+                    i_pass += 1
+
+            master_df_update.loc[master_index, ["n_embryos_observed"]] = i_pass
+
+    # Next, iterate through the extracted positions and use rudimentary tracking to assign embryo instances to stable
+    # embryo_id that persists over time
+
+    # get list of uniqure well instances
+    well_id_list = np.unique(master_df_update["well_id"])
+    i_pass = 0
+    for w, well_id in enumerate(well_id_list):
+        well_indices = np.where(master_df_update[["well_id"]].values == well_id)[0]
+
+        # check how many embryos we are dealing with
+        n_emb_col = master_df_update.loc[well_indices, ["n_embryos_observed"]].values.ravel()
+
+        if np.max(n_emb_col) == 0:  # skip
+            pass
+        elif np.max(n_emb_col) == 1:  # no need for tracking
+            use_indices = [well_indices[w] for w in range(len(well_indices)) if n_emb_col[w] == 1]
+            df_temp = master_df.iloc[use_indices].copy()
+            df_temp["xpos"] = master_df_update.loc[use_indices, ["e1_x"]]
+            df_temp["ypos"] = master_df_update.loc[use_indices, ["e1_y"]]
+            df_temp["fraction_alive"] = master_df_update.loc[use_indices, ["e1_fraction_alive"]]
+            if i_pass == 0:
+                embryo_metadata_df = df_temp.copy()
+            else:
+                embryo_metadata_df = pd.concat([embryo_metadata_df, df_temp.copy()], axis=0, ignore_index=True)
+            i_pass += 1
+        else: # this case is more complicated 
+            print("track")
 
 
 if __name__ == "__main__":
