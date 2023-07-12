@@ -8,7 +8,7 @@ from skimage.measure import label, regionprops, regionprops_table
 import cv2
 import pandas as pd
 from functions.utilities import path_leaf
-import sklearn
+import scipy
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 
@@ -100,7 +100,7 @@ def build_well_metadata_master(root, well_sheets=None):
     return {}
 
 
-def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
+def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_um=150, overwrite_flag=False):
 
     # generate paths to useful directories
     metadata_path = os.path.join(root, 'metadata', '')
@@ -155,7 +155,7 @@ def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
             # load label image
             im = cv2.imread(image_path)
             im = im/np.min(im) - 1
-            im = im[:, :, 0].astype(int)
+            im = np.round(im[:, :, 0]).astype(int)
 
             # merge live/dead labels for now
             im_merge = np.zeros(im.shape, dtype="uint8")
@@ -294,7 +294,120 @@ def segment_wells(root, min_sa=2500, max_sa=10000, overwrite_flag=False):
                 else:
                     embryo_metadata_df = pd.concat([embryo_metadata_df, df_temp.copy()], axis=0, ignore_index=True)
                 i_pass += 1
+
+    ######
+    # Add key embryo characteristics and flag QC issues
+    ######
+    # initialize new variables
+    embryo_metadata_df["surface_area"] = np.nan
+    embryo_metadata_df["length"] = np.nan
+    embryo_metadata_df["width"] = np.nan
+    embryo_metadata_df["speed"] = np.nan
+    embryo_metadata_df["bubble_flag"] = False
+    embryo_metadata_df["focus_flag"] = False
+    embryo_metadata_df["frame_flag"] = False
+    embryo_metadata_df["dead_flag"] = False
+    embryo_metadata_df["no_yolk_flag"] = False
+    # embryo_metadata_df["use_embryo_flag"] = False
+
+
+
+    for index, row in embryo_metadata_df.iterrows():
+
+        # generate path and image name
+        segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
+        seg_dir_list_raw = glob.glob(segmentation_path + "*")
+        seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
+
+        ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
+        focus_path = [m for m in seg_dir_list if "focus" in m][0]
+        yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
+
+        well = embryo_metadata_df.loc[index, "well"]
+        time_int = embryo_metadata_df.loc[index, "time_int"]
+        date = str(embryo_metadata_df.loc[index, "experiment_date"])
+
+        im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
+
+        im_ldb_path = os.path.join(ldb_path, date, im_name)
+        im_ldb = cv2.imread(im_ldb_path)
+        im_ldb = im_ldb[:, :, 0]
+        im_ldb = np.round(im_ldb/np.min(im_ldb) - 1).astype(int)
+        im_merge = np.zeros(im_ldb.shape, dtype="uint8")
+        im_merge[np.where(im_ldb == 1)] = 1
+        im_merge[np.where(im_ldb == 2)] = 1
+        im_merge_lb = label(im_merge)
+
+        im_focus_path = os.path.join(focus_path, date, im_name)
+        im_focus = cv2.imread(im_focus_path)
+        im_focus = im_focus[:, :, 0]
+        im_focus = np.round(im_focus / np.min(im_focus) - 1).astype(int)
+
+        im_yolk_path = os.path.join(yolk_path, date, im_name)
+        im_yolk = cv2.imread(im_yolk_path)
+        im_yolk = im_yolk[:, :, 0]
+        im_yolk = np.round(im_yolk / np.min(im_yolk) - 1).astype(int)
+
+        # get surface area
+        px_dim = row["Height (um)"] / row["Height (px)"] * 2  # to adjust for size reduction (need to automate this)
+        qc_scale_px = int(np.ceil(qc_scale_um / px_dim))
+        ih, iw = im_yolk.shape
+        yi = np.min([np.max([int(row["ypos"]), 1]), iw])
+        xi = np.min([np.max([int(row["xpos"]), 1]), ih])
+        lbi = im_merge_lb[yi, xi]
+        im_merge_lb = (im_merge_lb == lbi).astype(int)
+
+        # calculate sa-related metrics
+        rg = regionprops(im_merge_lb)
+        embryo_metadata_df.loc[index, "surface_area_um"] = rg[0].area * px_dim ** 2
+        embryo_metadata_df.loc[index, "length_um"] = rg[0].axis_major_length * px_dim
+        embryo_metadata_df.loc[index, "width_um"] = rg[0].axis_minor_length * px_dim
+
+        # calculate speed
+        if row["time_int"] > 1:
+            dr = np.sqrt((embryo_metadata_df.loc[index, "xpos"] - embryo_metadata_df.loc[index-1, "xpos"])**2 +
+                         (embryo_metadata_df.loc[index, "ypos"] - embryo_metadata_df.loc[index-1, "ypos"])**2) * px_dim
+            dt = embryo_metadata_df.loc[index, "Time Rel (s)"] - embryo_metadata_df.loc[index-1, "Time Rel (s)"]
+            embryo_metadata_df.loc[index, "speed"] = dr / dt
+
+        ######
+        # now do QC checks
+        ######
+
+        # Assess live/dead status
+        embryo_metadata_df.loc[index, "dead_flag"] = embryo_metadata_df.loc[index, "fraction_alive"] < ld_rat_thresh
+
+        # is there a yolk detected in the vicinity of the embryo body?
+        im_intersect = (im_yolk == 1) & (im_merge_lb == 1)
+        embryo_metadata_df.loc[index, "no_yolk_flag"] = ~np.any(im_intersect)
+
+        # is a part of the embryo mask at or near the image boundary?
+        im_trunc = im_merge_lb[qc_scale_px:-qc_scale_px, qc_scale_px:-qc_scale_px]
+        embryo_metadata_df.loc[index, "frame_flag"] = np.sum(im_merge_lb) != np.sum(im_trunc)
+
+        # is there an out-of-focus region in the vicinity of the mask?
+        if np.any(im_focus) or np.any(im_ldb == 3):
+            im_dist = scipy.ndimage.distance_transform_edt(im_merge_lb == 0)
+
+        if np.any(im_focus):
+            min_dist = np.min(im_dist[np.where(im_focus == 1)])
+            embryo_metadata_df.loc[index, "focus_flag"] = min_dist <= 2*qc_scale_px
+
+        # is there bubble in the vicinity of embryo?
+        if np.any(im_ldb == 3):
+            min_dist_bubb = np.min(im_dist[np.where(im_ldb == 3)])
+            embryo_metadata_df.loc[index, "bubble_flag"] = min_dist_bubb <= 2 * qc_scale_px
+
+    embryo_metadata_df["use_embryo_flag"] = ~(
+                embryo_metadata_df["bubble_flag"].values | embryo_metadata_df["focus_flag"].values |
+                embryo_metadata_df["frame_flag"].values | embryo_metadata_df["dead_flag"].values |
+                embryo_metadata_df["no_yolk_flag"].values)
+
     print("phew")
+
+
+
+
 
 
 if __name__ == "__main__":
