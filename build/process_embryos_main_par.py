@@ -118,7 +118,7 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
         n_emb_orig = n_emb.copy()
 
         # initialize helper arrays for tracking
-        id_array = np.empty((len(track_indices), n_emb))
+        id_array = np.empty((len(well_indices), n_emb))
         id_array[:] = np.nan
         last_pos_array = np.empty((n_emb, 2))
         last_pos_array[:] = np.nan
@@ -373,46 +373,50 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     experiment_list = sorted(glob.glob(os.path.join(ldb_path, "*")))
     experiment_list = [e for e in experiment_list if "ignore" not in e]
 
-    # initialize empty columns to store embryo information
-    master_df_update = master_df.copy()
-    master_df_update["n_embryos_observed"] = np.nan
-    for n in range(4):
-        master_df_update["e" + str(n) + "_x"] = np.nan
-        master_df_update["e" + str(n) + "_y"] = np.nan
-        master_df_update["e" + str(n) + "_frac_alive"] = np.nan
+    ckpt1_path = (os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv"))
 
-    # extract position and live/dead status of each embryo in each well
-    emb_df_list = []
-    print("Extracting embryo locations...")
-    for e, experiment_path in enumerate(experiment_list):
-        ename = path_leaf(experiment_path)
-        # get list of tif files to process
-        image_list = sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
-        if par_flag:
-            emb_df_temp = pmap(count_embryo_regions, range(len(image_list)),
-                               (image_list, master_df_update, ename, max_sa, min_sa), rP=0.75)
-            emb_df_list += emb_df_temp
-        else:
-            for index in tqdm(range(len(image_list))):
-                df_temp = count_embryo_regions(index, image_list, master_df_update, ename, max_sa, min_sa)
-                emb_df_list.append(df_temp)
+    if (not os.path.isfile(ckpt1_path)) or overwrite_flag:
+        # initialize empty columns to store embryo information
+        master_df_update = master_df.copy()
+        master_df_update["n_embryos_observed"] = np.nan
+        for n in range(4):
+            master_df_update["e" + str(n) + "_x"] = np.nan
+            master_df_update["e" + str(n) + "_y"] = np.nan
+            master_df_update["e" + str(n) + "_frac_alive"] = np.nan
 
-    # udate the df
-    for e in range(len(emb_df_list)):
-        master_index = emb_df_list[e][0]
-        row = emb_df_list[e][1]
-        master_df_update.loc[master_index, :] = row.iloc[0, :]
+        # extract position and live/dead status of each embryo in each well
+        emb_df_list = []
+        print("Extracting embryo locations...")
+        for e, experiment_path in enumerate(experiment_list):
+            ename = path_leaf(experiment_path)
+            # get list of tif files to process
+            image_list = sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
+            if par_flag:
+                emb_df_temp = pmap(count_embryo_regions, range(len(image_list)),
+                                   (image_list, master_df_update, ename, max_sa, min_sa), rP=0.75)
+                emb_df_list += emb_df_temp
+            else:
+                for index in tqdm(range(len(image_list))):
+                    df_temp = count_embryo_regions(index, image_list, master_df_update, ename, max_sa, min_sa)
+                    emb_df_list.append(df_temp)
 
+        # udate the df
+        for e in range(len(emb_df_list)):
+            master_index = emb_df_list[e][0]
+            row = emb_df_list[e][1]
+            master_df_update.loc[master_index, :] = row.iloc[0, :]
+
+        master_df_update.to_csv(ckpt1_path)
+
+    else:
+        master_df_update = pd.read_csv(ckpt1_path, index_col=0)
     # Next, iterate through the extracted positions and use rudimentary tracking to assign embryo instances to stable
     # embryo_id that persists over time
 
     # get list of unique well instances
     if np.any(np.isnan(master_df_update["n_embryos_observed"].values.astype(float))):
-        raise Exception("Missing rows found in metandata df")
-    # master_df = master_df.iloc[np.where(~np.isnan(master_df_update["n_embryos_observed"].values.astype(float)))]
-    # master_df.reset_index(inplace=True)
-    # master_df_update = master_df_update.dropna(subset=["n_embryos_observed"])
-    # master_df_update.reset_index(inplace=True)
+        raise Exception("Missing rows found in metadata df")
+
 
     well_id_list = np.unique(master_df_update["well_id"])
     track_df_list = []
