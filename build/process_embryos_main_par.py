@@ -124,8 +124,8 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
         last_pos_array[:] = np.nan
         id_array[0, :] = range(n_emb)
         for n in range(n_emb):
-            last_pos_array[n, 0] = master_df_update.loc[track_indices[0], ["e" + str(n) + "_x"]]
-            last_pos_array[n, 1] = master_df_update.loc[track_indices[0], ["e" + str(n) + "_y"]]
+            last_pos_array[n, 0] = master_df_update.loc[track_indices[0], "e" + str(n) + "_x"]
+            last_pos_array[n, 1] = master_df_update.loc[track_indices[0], "e" + str(n) + "_y"]
 
         # carry out tracking
         for t, ind in enumerate(track_indices[1:]):
@@ -136,8 +136,8 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
             else:
                 curr_pos_array = np.empty((n_emb, 2))
                 for n in range(n_emb):
-                    curr_pos_array[n, 0] = master_df_update.loc[ind, ["e" + str(n) + "_x"]]
-                    curr_pos_array[n, 1] = master_df_update.loc[ind, ["e" + str(n) + "_y"]]
+                    curr_pos_array[n, 0] = master_df_update.loc[ind, "e" + str(n) + "_x"]
+                    curr_pos_array[n, 1] = master_df_update.loc[ind, "e" + str(n) + "_y"]
                 # ensure 2D
                 curr_pos_array = np.reshape(curr_pos_array, (n_emb, 2))
 
@@ -221,8 +221,8 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     px_dim = row["Height (um)"] / row["Height (px)"] * 2  # to adjust for size reduction (need to automate this)
     qc_scale_px = int(np.ceil(qc_scale_um / px_dim))
     ih, iw = im_yolk.shape
-    yi = np.min([np.max([int(row["ypos"]), 1]), iw])
-    xi = np.min([np.max([int(row["xpos"]), 1]), ih])
+    yi = np.min([np.max([int(row["ypos"]), 1]), ih])
+    xi = np.min([np.max([int(row["xpos"]), 1]), iw])
     lbi = im_merge_lb[yi, xi]
     im_merge_lb = (im_merge_lb == lbi).astype(int)
 
@@ -247,7 +247,7 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     row.loc["dead_flag"] = row["fraction_alive"] < ld_rat_thresh
 
     # is there a yolk detected in the vicinity of the embryo body?
-    im_intersect = (im_yolk == 1) & (im_merge_lb == 1)
+    im_intersect = np.multiply((im_yolk == 1)*1, (im_merge_lb == 1)*1)
     row.loc["no_yolk_flag"] = ~np.any(im_intersect)
 
     # is a part of the embryo mask at or near the image boundary?
@@ -267,7 +267,8 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
         min_dist_bubb = np.min(im_dist[np.where(im_ldb == 3)])
         row.loc["bubble_flag"] = min_dist_bubb <= 2 * qc_scale_px
 
-    return row
+    row_out = pd.DataFrame(row).transpose()
+    return row_out
 
 def build_well_metadata_master(root, well_sheets=None):
 
@@ -363,9 +364,10 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    ######
+    ###################
     # Track number of embryos and position over time
-    ######
+    ###################
+
     ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
     # get list of experiments
     experiment_list = sorted(glob.glob(os.path.join(ldb_path, "*")))
@@ -381,14 +383,17 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
 
     # extract position and live/dead status of each embryo in each well
     emb_df_list = []
-    for e, experiment_path in enumerate([experiment_list[1]]):
+    print("Extracting embryo locations...")
+    for e, experiment_path in enumerate(experiment_list):
         ename = path_leaf(experiment_path)
         # get list of tif files to process
         image_list = sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
         if par_flag:
-            emb_df_list = pmap(count_embryo_regions, range(len(image_list)), (image_list, master_df_update, ename, max_sa, min_sa))
+            emb_df_temp = pmap(count_embryo_regions, range(len(image_list)),
+                               (image_list, master_df_update, ename, max_sa, min_sa), rP=0.75)
+            emb_df_list += emb_df_temp
         else:
-            for index in range(len(image_list[:3000])):
+            for index in tqdm(range(len(image_list))):
                 df_temp = count_embryo_regions(index, image_list, master_df_update, ename, max_sa, min_sa)
                 emb_df_list.append(df_temp)
 
@@ -402,14 +407,17 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     # embryo_id that persists over time
 
     # get list of unique well instances
-    master_df = master_df.iloc[np.where(~np.isnan(master_df_update["n_embryos_observed"].values.astype(float)))]
-    master_df.reset_index(inplace=True)
-    master_df_update = master_df_update.dropna(subset=["n_embryos_observed"])
-    master_df_update.reset_index(inplace=True)
+    if np.any(np.isnan(master_df_update["n_embryos_observed"].values.astype(float))):
+        raise Exception("Missing rows found in metandata df")
+    # master_df = master_df.iloc[np.where(~np.isnan(master_df_update["n_embryos_observed"].values.astype(float)))]
+    # master_df.reset_index(inplace=True)
+    # master_df_update = master_df_update.dropna(subset=["n_embryos_observed"])
+    # master_df_update.reset_index(inplace=True)
 
     well_id_list = np.unique(master_df_update["well_id"])
     track_df_list = []
-    for w, well_id in enumerate(well_id_list):
+    print("Performing embryo tracking...")
+    for w, well_id in tqdm(enumerate(well_id_list)):
         df_temp = do_embryo_tracking(well_id, master_df, master_df_update)
         track_df_list.append(df_temp)
 
@@ -422,9 +430,9 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     # Add key embryo characteristics and flag QC issues
     ######
     # initialize new variables
-    embryo_metadata_df["surface_area"] = np.nan
-    embryo_metadata_df["length"] = np.nan
-    embryo_metadata_df["width"] = np.nan
+    embryo_metadata_df["surface_area_um"] = np.nan
+    embryo_metadata_df["length_um"] = np.nan
+    embryo_metadata_df["width_um"] = np.nan
     embryo_metadata_df["speed"] = np.nan
     embryo_metadata_df["bubble_flag"] = False
     embryo_metadata_df["focus_flag"] = False
@@ -435,34 +443,31 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
 
     if par_flag:
         emb_df_list = pmap(get_embryo_stats, range(embryo_metadata_df.shape[0]),
-                                (embryo_metadata_df, qc_scale_um, ld_rat_thresh), rP=0.5)
+                                (embryo_metadata_df, qc_scale_um, ld_rat_thresh), rP=0.75)
     else:
         emb_df_list = []
-        for index in range(embryo_metadata_df.shape[0]):
+        for index in tqdm(range(embryo_metadata_df.shape[0])):
             df_temp = get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh)
             emb_df_list.append(df_temp)
 
-    embryo_metadata_df_new = pd.concat(emb_df_list)
+    embryo_metadata_df_new = pd.concat(emb_df_list, ignore_index=True)
     embryo_metadata_df_new["use_embryo_flag"] = ~(
             embryo_metadata_df_new["bubble_flag"].values | embryo_metadata_df_new["focus_flag"].values |
             embryo_metadata_df_new["frame_flag"].values | embryo_metadata_df_new["dead_flag"].values |
             embryo_metadata_df_new["no_yolk_flag"].values)
 
-        
+    embryo_metadata_df_new.to_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
 
     print("phew")
 
 
-
-
-
-
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
     print('Compiling well metadata...')
     build_well_metadata_master(root)
 
-    print('Extracting embryo metadata...')
-    segment_wells(root)
+    print('Compiling embryo metadata...')
+    segment_wells(root, par_flag=False)
