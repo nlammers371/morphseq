@@ -113,7 +113,8 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
         # i_pass += 1
     else:  # this case is more complicated
         last_i = np.max(np.where(n_emb_col > 1)[0]) + 1
-        track_indices = well_indices[:last_i]
+        first_i = np.min(np.where(n_emb_col > 0)[0])
+        track_indices = well_indices[first_i:last_i]
         n_emb = master_df_update.loc[track_indices[0], "n_embryos_observed"].astype(int)
         n_emb_orig = n_emb.copy()
 
@@ -122,7 +123,7 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
         id_array[:] = np.nan
         last_pos_array = np.empty((n_emb, 2))
         last_pos_array[:] = np.nan
-        id_array[0, :] = range(n_emb)
+        id_array[first_i, :] = range(n_emb)
         for n in range(n_emb):
             last_pos_array[n, 0] = master_df_update.loc[track_indices[0], "e" + str(n) + "_x"]
             last_pos_array[n, 1] = master_df_update.loc[track_indices[0], "e" + str(n) + "_y"]
@@ -130,7 +131,7 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
         # carry out tracking
         for t, ind in enumerate(track_indices[1:]):
             # check how many embryos were detected
-            n_emb = n_emb_col[t + 1].astype(int)
+            n_emb = n_emb_col[t + 1 + first_i].astype(int)
             if n_emb == 0:
                 pass  # note that we carry over last_pos_array
             else:
@@ -149,13 +150,13 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
                 from_ind, to_ind = linear_sum_assignment(dist_matrix)
 
                 # update ID assignments
-                id_array[t + 1, from_ind] = to_ind
+                id_array[t + 1 + first_i, from_ind] = to_ind
 
                 # update positions
                 last_pos_array[from_ind, :] = curr_pos_array[to_ind]  # note that unassigned positions carried over
 
         # carry assignments forward if necessary
-        id_array[t + 2:, :] = id_array[t + 1, :]
+        id_array[t + 2 + first_i:, :] = id_array[t + 1 + first_i, :]
 
         # use ID array to generate stable embryo IDs
         for n in range(n_emb_orig):
@@ -445,6 +446,7 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     embryo_metadata_df["no_yolk_flag"] = False
     # embryo_metadata_df["use_embryo_flag"] = False
 
+    print("Extracting embryo stats")
     if par_flag:
         emb_df_list = pmap(get_embryo_stats, range(embryo_metadata_df.shape[0]),
                                 (embryo_metadata_df, qc_scale_um, ld_rat_thresh), rP=0.75)
