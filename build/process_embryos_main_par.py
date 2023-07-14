@@ -15,6 +15,133 @@ from sklearn.metrics import pairwise_distances
 import numpy as np
 from skimage.morphology import disk, dilation
 
+def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
+
+    # set path to segmentation data
+    ff_image_path = os.path.join(root, 'built_keyence_data', 'stitched_FF_images', '')
+
+    # set path to segmentation data
+    segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
+
+    # make directory for embryo snips
+    im_snip_dir = os.path.join(root, 'training_data', 'bf_embryo_snips', '')
+    mask_snip_dir = os.path.join(root, 'training_data', 'bf_embryo_masks', '')
+
+    # generate path and image name
+    seg_dir_list_raw = glob.glob(segmentation_path + "*")
+    seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
+
+    ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
+
+    row = embryo_metadata_df.iloc[r].copy()
+
+    well = row["well"]
+    time_int = row["time_int"]
+    date = str(row["experiment_date"])
+
+    im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
+
+    ############
+    # Load masks from segmentation
+    ############
+
+    # load main embryo mask
+    im_ldb_path = os.path.join(ldb_path, date, im_name)
+    im_ldb = cv2.imread(im_ldb_path)
+    im_ldb = im_ldb[:, :, 0]
+    im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
+    im_merge = np.zeros(im_ldb.shape, dtype="uint8")
+    im_merge[np.where(im_ldb == 1)] = 1
+    im_merge[np.where(im_ldb == 2)] = 1
+    im_merge_lb = label(im_merge)
+
+    # load yolk mask
+    im_yolk_path = os.path.join(yolk_path, date, im_name)
+    im_yolk = cv2.imread(im_yolk_path)
+    im_yolk = im_yolk[:, :, 0]
+    im_yolk = np.round(im_yolk / np.min(im_yolk) - 1).astype(int)
+
+    # get surface area
+    px_dim_raw = row["Height (um)"] / row["Height (px)"]  # to adjust for size reduction (need to automate this)
+    size_factor_mask = row["Width (px)"] / 640 * 630 / 640
+    # px_dim_mask = px_dim_raw * size_factor_mask
+
+    lbi = row["region_label"]  # im_merge_lb[yi, xi]
+
+    assert lbi != 0  # make sure we're not grabbing empty space
+
+    im_merge_ft = (im_merge_lb == lbi).astype(int)
+    im_merge_other = ((im_merge_lb > 0) & (im_merge_lb != lbi)).astype(int)
+
+    ############
+    # Load raw image
+    ############
+    im_ff_path = os.path.join(ff_image_path, date, im_name)
+    im_ff = cv2.imread(im_ff_path)
+    im_ff = im_ff[:, :, 0]
+
+    # rescale masks and image
+    im_ff_rs = cv2.resize(im_ff, None, fx=px_dim_raw / outscale, fy=px_dim_raw / outscale)
+    mask_emb_rs = cv2.resize(im_merge_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+    # mask_other_rs = cv2.resize(im_merge_other, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+    mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+
+    rp = regionprops(mask_emb_rs)
+    angle = rp[0].orientation
+    cm = rp[0].centroid
+
+    # find the orientation that puts yolk at top
+    # yr1 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle), cm[1], cm[0])
+    # cm1 = scipy.ndimage.center_of_mass(yr1, labels=1)
+    # yr2 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle+np.pi), cm[1], cm[0])
+    # cm2 = scipy.ndimage.center_of_mass(yr2, labels=1)
+    im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(-angle))
+    im_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(-angle))
+    # im_other_rotated = rotate_image(mask_other_rs.astype(np.uint8), np.rad2deg(-angle), cm[1], cm[0])
+    im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(-angle))
+
+    # extract snip
+    dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
+    im_mask_dl = dilation(im_mask_rotated, disk(dl_rad_px))
+
+    masked_image = im_ff_rotated.copy()
+    masked_image[np.where(im_mask_dl == 0)] = 0
+
+    y_indices = np.where(np.max(im_mask_dl, axis=1) == 1)[0]
+    x_indices = np.where(np.max(im_mask_dl, axis=0) == 1)[0]
+    y_mean = int(np.mean(y_indices))
+    x_mean = int(np.mean(x_indices))
+
+    fromshape = im_mask_dl.shape
+    raw_range_y = [y_mean - int(outshape[0] / 2), y_mean + int(outshape[0] / 2)]
+    from_range_y = np.asarray([np.max([raw_range_y[0], 0]), np.min([raw_range_y[1], fromshape[0]])])
+    to_range_y = [0 + (from_range_y[0] - raw_range_y[0]), outshape[0] + (from_range_y[1] - raw_range_y[1])]
+
+    raw_range_x = [x_mean - int(outshape[1] / 2), x_mean + int(outshape[1] / 2)]
+    from_range_x = np.asarray([np.max([raw_range_x[0], 0]), np.min([raw_range_x[1], fromshape[1]])])
+    to_range_x = [0 + (from_range_x[0] - raw_range_x[0]), outshape[1] + (from_range_x[1] - raw_range_x[1])]
+
+    im_mask_cropped = np.zeros(outshape).astype(np.uint8)
+    im_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+        masked_image[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+    emb_mask_cropped = np.zeros(outshape).astype(np.uint8)
+    emb_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+        im_mask_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+    yolk_mask_cropped = np.zeros(outshape).astype(np.uint8)
+    yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+        im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+    # write to file
+    im_name = row["snip_id"]
+
+    write_flag = cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
+    cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
+    cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), yolk_mask_cropped)
+
+    return write_flag
 
 def rotate_image(mat, angle):
     """
@@ -598,23 +725,14 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
 
     print("phew")
 
-def extract_embryo_snips(root, outscale=5.66, outshape=None, dl_rad_um = 25):
+def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_rad_um=10):
 
     if outshape==None:
         outshape = [576, 192]
 
-    x_ref = range(outshape[1])
-    y_ref = range(outshape[0])
-
     # read in metadata
     metadata_path = os.path.join(root, 'metadata', '')
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
-
-    # set path to segmentation data
-    ff_image_path = os.path.join(root, 'built_keyence_data', 'stitched_FF_images', '')
-
-    # set path to segmentation data
-    segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
 
     # make directory for embryo snips
     im_snip_dir = os.path.join(root, 'training_data', 'bf_embryo_snips', '')
@@ -624,126 +742,14 @@ def extract_embryo_snips(root, outscale=5.66, outshape=None, dl_rad_um = 25):
     if not os.path.isdir(mask_snip_dir):
         os.makedirs(mask_snip_dir)
 
-    # generate path and image name
-    seg_dir_list_raw = glob.glob(segmentation_path + "*")
-    seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
-
-    ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
-    yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
-
     # make stable embryo ID
     embryo_metadata_df["snip_id"] = embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
-
-    for r in tqdm(range(embryo_metadata_df.shape[0])):
-        row = embryo_metadata_df.iloc[r].copy()
-        well = row["well"]
-        time_int = row["time_int"]
-        date = str(row["experiment_date"])
-
-        im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
-
-        ############
-        # Load masks from segmentation
-        ############
-
-        # load main embryo mask
-        im_ldb_path = os.path.join(ldb_path, date, im_name)
-        im_ldb = cv2.imread(im_ldb_path)
-        im_ldb = im_ldb[:, :, 0]
-        im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
-        im_merge = np.zeros(im_ldb.shape, dtype="uint8")
-        im_merge[np.where(im_ldb == 1)] = 1
-        im_merge[np.where(im_ldb == 2)] = 1
-        im_merge_lb = label(im_merge)
-
-        # load yolk mask
-        im_yolk_path = os.path.join(yolk_path, date, im_name)
-        im_yolk = cv2.imread(im_yolk_path)
-        im_yolk = im_yolk[:, :, 0]
-        im_yolk = np.round(im_yolk / np.min(im_yolk) - 1).astype(int)
-
-        # get surface area
-        px_dim_raw = row["Height (um)"] / row["Height (px)"]  # to adjust for size reduction (need to automate this)
-        size_factor_mask = row["Width (px)"] / 640 * 630/640
-        px_dim_mask = px_dim_raw * size_factor_mask
-
-        lbi = row["region_label"]  # im_merge_lb[yi, xi]
-
-        assert lbi != 0  # make sure we're not grabbing empty space
-
-        im_merge_ft = (im_merge_lb == lbi).astype(int)
-        im_merge_other = ((im_merge_lb > 0) & (im_merge_lb != lbi)).astype(int)
-
-        # is there a yolk detected in the vicinity of the embryo body?
-        im_intersect = np.multiply((im_yolk == 1) * 1, (im_merge_lb == 1) * 1)
-        row.loc["no_yolk_flag"] = ~np.any(im_intersect)
-
-        ############
-        # Load raw image
-        ############
-        im_ff_path = os.path.join(ff_image_path, date, im_name)
-        im_ff = cv2.imread(im_ff_path)
-        im_ff = im_ff[:, :, 0]
-
-        # rescale masks and image
-        im_ff_rs = cv2.resize(im_ff, None, fx=px_dim_raw/outscale, fy=px_dim_raw/outscale)
-        mask_emb_rs = cv2.resize(im_merge_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-        # mask_other_rs = cv2.resize(im_merge_other, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-        mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-
-        rp = regionprops(mask_emb_rs)
-        angle = rp[0].orientation
-        cm = rp[0].centroid
-
-        # find the orientation that puts yolk at top
-        # yr1 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle), cm[1], cm[0])
-        # cm1 = scipy.ndimage.center_of_mass(yr1, labels=1)
-        # yr2 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle+np.pi), cm[1], cm[0])
-        # cm2 = scipy.ndimage.center_of_mass(yr2, labels=1)
-        im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(-angle))
-        im_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(-angle))
-        # im_other_rotated = rotate_image(mask_other_rs.astype(np.uint8), np.rad2deg(-angle), cm[1], cm[0])
-        im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(-angle))
-
-        # extract snip
-        dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
-        im_mask_dl = dilation(im_mask_rotated, disk(dl_rad_px))
-
-        masked_image = im_ff_rotated.copy()
-        masked_image[np.where(im_mask_dl == 0)] = 0
-
-        y_indices = np.where(np.max(im_mask_dl, axis=1) == 1)[0]
-        x_indices = np.where(np.max(im_mask_dl, axis=0) == 1)[0]
-        y_mean = int(np.mean(y_indices))
-        x_mean = int(np.mean(x_indices))
-
-        fromshape = im_mask_dl.shape
-        raw_range_y = [y_mean - int(outshape[0] / 2), y_mean + int(outshape[0] / 2)]
-        from_range_y = np.asarray([np.max([raw_range_y[0], 0]), np.min([raw_range_y[1], fromshape[0]])])
-        to_range_y = [0 + (from_range_y[0] - raw_range_y[0]), outshape[0] + (from_range_y[1] - raw_range_y[1])]
-
-        raw_range_x = [x_mean - int(outshape[1] / 2), x_mean + int(outshape[1] / 2)]
-        from_range_x = np.asarray([np.max([raw_range_x[0], 0]), np.min([raw_range_x[1], fromshape[1]])])
-        to_range_x = [0 + (from_range_x[0] - raw_range_x[0]), outshape[1] + (from_range_x[1] - raw_range_x[1])]
-
-        im_mask_cropped = np.zeros(outshape).astype(np.uint8)
-        im_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
-                masked_image[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
-
-        emb_mask_cropped = np.zeros(outshape).astype(np.uint8)
-        emb_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
-            im_mask_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
-
-        yolk_mask_cropped = np.zeros(outshape).astype(np.uint8)
-        yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
-            im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
-
-        # write to file
-        im_name = row["snip_id"]
-
-        cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
-        cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
-        cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), yolk_mask_cropped)
+    export_indices = range(embryo_metadata_df.shape[0])
+    if not par_flag:
+        for r in tqdm(export_indices):
+            export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape)
+    else:
+        temp = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale, outshape), rP=0.25)
 
         # rotate and crop image
         # Now, we will perform actual image rotation
@@ -753,8 +759,8 @@ def extract_embryo_snips(root, outscale=5.66, outshape=None, dl_rad_um = 25):
 
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
     print('Compiling well metadata...')
     #build_well_metadata_master(root)
@@ -763,4 +769,4 @@ if __name__ == "__main__":
     #segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
-    extract_embryo_snips(root)
+    extract_embryo_snips(root, par_flag=False)
