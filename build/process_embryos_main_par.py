@@ -12,42 +12,36 @@ import scipy
 from parfor import pmap
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
+import numpy as np
+from skimage.morphology import disk, dilation
 
 
-def rotate_image(rotateImage, angle):
-    # Taking image height and width
-    imgHeight, imgWidth = rotateImage.shape[0], rotateImage.shape[1]
+def rotate_image(mat, angle):
+    """
+        Rotates an image (angle in degrees) and expands image to avoid cropping
+        """
 
-    # Computing the centre x,y coordinates
-    # of an image
-    centreY, centreX = imgHeight // 2, imgWidth // 2
+    height, width = mat.shape[:2]  # image shape has 3 dimensions
+    image_center = (
+    width / 2, height / 2)  # getRotationMatrix2D needs coordinates in reverse order (width, height) compared to shape
 
-    # Computing 2D rotation Matrix to rotate an image
-    rotationMatrix = cv2.getRotationMatrix2D((centreY, centreX), angle, 1.0)
+    rotation_mat = cv2.getRotationMatrix2D(image_center, angle, 1.)
 
-    # Now will take out sin and cos values from rotationMatrix
-    # Also used numpy absolute function to make positive value
-    cosofRotationMatrix = np.abs(rotationMatrix[0][0])
-    sinofRotationMatrix = np.abs(rotationMatrix[0][1])
+    # rotation calculates the cos and sin, taking absolutes of those.
+    abs_cos = abs(rotation_mat[0, 0])
+    abs_sin = abs(rotation_mat[0, 1])
 
-    # Now will compute new height & width of
-    # an image so that we can use it in
-    # warpAffine function to prevent cropping of image sides
-    newImageHeight = int((imgHeight * sinofRotationMatrix) +
-                         (imgWidth * cosofRotationMatrix))
-    newImageWidth = int((imgHeight * cosofRotationMatrix) +
-                        (imgWidth * sinofRotationMatrix))
+    # find the new width and height bounds
+    bound_w = int(height * abs_sin + width * abs_cos)
+    bound_h = int(height * abs_cos + width * abs_sin)
 
-    # After computing the new height & width of an image
-    # we also need to update the values of rotation matrix
-    rotationMatrix[0][2] += (newImageWidth / 2) - centreX
-    rotationMatrix[1][2] += (newImageHeight / 2) - centreY
+    # subtract old image center (bringing image back to origo) and adding the new image center coordinates
+    rotation_mat[0, 2] += bound_w / 2 - image_center[0]
+    rotation_mat[1, 2] += bound_h / 2 - image_center[1]
 
-    # Now, we will perform actual image rotation
-    rotatingimage = cv2.warpAffine(
-        rotateImage, rotationMatrix, (newImageWidth, newImageHeight))
-
-    return rotatingimage
+    # rotate image with the new bounds and translated rotation matrix
+    rotated_mat = cv2.warpAffine(mat, rotation_mat, (bound_w, bound_h))
+    return rotated_mat
 
 def make_well_names():
     row_list = ["A", "B", "C", "D", "E", "F", "G", "H"]
@@ -604,10 +598,14 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
 
     print("phew")
 
-def extract_embryo_snips(root, outscale=5.66, outshape=None):
+def extract_embryo_snips(root, outscale=5.66, outshape=None, dl_rad_um = 25):
 
     if outshape==None:
         outshape = [576, 192]
+
+    x_ref = range(outshape[1])
+    y_ref = range(outshape[0])
+
     # read in metadata
     metadata_path = os.path.join(root, 'metadata', '')
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
@@ -626,7 +624,6 @@ def extract_embryo_snips(root, outscale=5.66, outshape=None):
     if not os.path.isdir(mask_snip_dir):
         os.makedirs(mask_snip_dir)
 
-
     # generate path and image name
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
@@ -634,7 +631,10 @@ def extract_embryo_snips(root, outscale=5.66, outshape=None):
     ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
-    for r in range(embryo_metadata_df.shape[0]):
+    # make stable embryo ID
+    embryo_metadata_df["snip_id"] = embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
+
+    for r in tqdm(range(embryo_metadata_df.shape[0])):
         row = embryo_metadata_df.iloc[r].copy()
         well = row["well"]
         time_int = row["time_int"]
@@ -687,8 +687,63 @@ def extract_embryo_snips(root, outscale=5.66, outshape=None):
 
         # rescale masks and image
         im_ff_rs = cv2.resize(im_ff, None, fx=px_dim_raw/outscale, fy=px_dim_raw/outscale)
-        mask_emb_rs = cv2.resize(im_merge_ft, im_ff_rs.shape, interpolation=cv2.INTER_NEAREST)
-        mask_other_rs = cv2.resize(im_merge_other, im_ff_rs.shape, interpolation=cv2.INTER_NEAREST)
+        mask_emb_rs = cv2.resize(im_merge_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+        # mask_other_rs = cv2.resize(im_merge_other, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+        mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+
+        rp = regionprops(mask_emb_rs)
+        angle = rp[0].orientation
+        cm = rp[0].centroid
+
+        # find the orientation that puts yolk at top
+        # yr1 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle), cm[1], cm[0])
+        # cm1 = scipy.ndimage.center_of_mass(yr1, labels=1)
+        # yr2 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle+np.pi), cm[1], cm[0])
+        # cm2 = scipy.ndimage.center_of_mass(yr2, labels=1)
+        im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(-angle))
+        im_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(-angle))
+        # im_other_rotated = rotate_image(mask_other_rs.astype(np.uint8), np.rad2deg(-angle), cm[1], cm[0])
+        im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(-angle))
+
+        # extract snip
+        dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
+        im_mask_dl = dilation(im_mask_rotated, disk(dl_rad_px))
+
+        masked_image = im_ff_rotated.copy()
+        masked_image[np.where(im_mask_dl == 0)] = 0
+
+        y_indices = np.where(np.max(im_mask_dl, axis=1) == 1)[0]
+        x_indices = np.where(np.max(im_mask_dl, axis=0) == 1)[0]
+        y_mean = int(np.mean(y_indices))
+        x_mean = int(np.mean(x_indices))
+
+        fromshape = im_mask_dl.shape
+        raw_range_y = [y_mean - int(outshape[0] / 2), y_mean + int(outshape[0] / 2)]
+        from_range_y = np.asarray([np.max([raw_range_y[0], 0]), np.min([raw_range_y[1], fromshape[0]])])
+        to_range_y = [0 + (from_range_y[0] - raw_range_y[0]), outshape[0] + (from_range_y[1] - raw_range_y[1])]
+
+        raw_range_x = [x_mean - int(outshape[1] / 2), x_mean + int(outshape[1] / 2)]
+        from_range_x = np.asarray([np.max([raw_range_x[0], 0]), np.min([raw_range_x[1], fromshape[1]])])
+        to_range_x = [0 + (from_range_x[0] - raw_range_x[0]), outshape[1] + (from_range_x[1] - raw_range_x[1])]
+
+        im_mask_cropped = np.zeros(outshape).astype(np.uint8)
+        im_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+                masked_image[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+        emb_mask_cropped = np.zeros(outshape).astype(np.uint8)
+        emb_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+            im_mask_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+        yolk_mask_cropped = np.zeros(outshape).astype(np.uint8)
+        yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+            im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+        # write to file
+        im_name = row["snip_id"]
+
+        cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
+        cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
+        cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), yolk_mask_cropped)
 
         # rotate and crop image
         # Now, we will perform actual image rotation
@@ -698,14 +753,14 @@ def extract_embryo_snips(root, outscale=5.66, outshape=None):
 
 if __name__ == "__main__":
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
     print('Compiling well metadata...')
-    build_well_metadata_master(root)
+    #build_well_metadata_master(root)
 
     print('Compiling embryo metadata...')
-    segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=True)
+    #segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
-    # extract_embryo_snips(root)
+    extract_embryo_snips(root)
