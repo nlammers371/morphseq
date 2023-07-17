@@ -87,8 +87,6 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     # mask_other_rs = cv2.resize(im_merge_other, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
     mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
 
-    other_pixel_array = im_ff_rs[np.where(mask_emb_rs == 0)]
-
     rp = regionprops(mask_emb_rs)
     angle = rp[0].orientation
     cm = rp[0].centroid
@@ -107,8 +105,8 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
     im_mask_dl = dilation(im_mask_rotated, disk(dl_rad_px))
 
-    masked_image = im_ff_rotated.copy()
-    masked_image[np.where(im_mask_dl == 0)] = np.random.choice(other_pixel_array, np.sum(im_mask_dl == 0))
+    # masked_image = im_ff_rotated.copy()
+    # masked_image[np.where(im_mask_dl == 0)] = np.random.choice(other_pixel_array, np.sum(im_mask_dl == 0))
 
     y_indices = np.where(np.max(im_mask_dl, axis=1) == 1)[0]
     x_indices = np.where(np.max(im_mask_dl, axis=0) == 1)[0]
@@ -124,9 +122,9 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     from_range_x = np.asarray([np.max([raw_range_x[0], 0]), np.min([raw_range_x[1], fromshape[1]])])
     to_range_x = [0 + (from_range_x[0] - raw_range_x[0]), outshape[1] + (from_range_x[1] - raw_range_x[1])]
 
-    im_mask_cropped = np.random.choice(other_pixel_array, size=outshape).astype(np.uint8)
-    im_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
-        masked_image[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+    im_cropped = np.zeros(outshape).astype(np.uint8)
+    im_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+        im_ff_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
 
     emb_mask_cropped = np.zeros(outshape).astype(np.uint8)
     emb_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
@@ -135,6 +133,11 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     yolk_mask_cropped = np.zeros(outshape).astype(np.uint8)
     yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
         im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+    # crop out background
+    other_pixel_array = im_cropped[np.where(emb_mask_cropped == 0)]
+    im_mask_cropped = im_cropped.copy()
+    im_mask_cropped[np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
 
     # write to file
     im_name = row["snip_id"]
@@ -727,7 +730,7 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
 
     print("phew")
 
-def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_rad_um=150):
+def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_rad_um=10):
 
     if outshape == None:
         outshape = [576, 192]
@@ -761,8 +764,8 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
 
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
     print('Compiling well metadata...')
     #build_well_metadata_master(root)
