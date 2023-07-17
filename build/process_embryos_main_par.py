@@ -139,14 +139,17 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     im_mask_cropped = im_cropped.copy()
     im_mask_cropped[np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
 
+    # check whether we cropped out part of the embryo
+    out_of_frame_flag = np.sum(emb_mask_cropped == lbi) / np.sum(im_mask_rotated == lbi) < 0.99
+
     # write to file
     im_name = row["snip_id"]
 
-    write_flag = cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
+    cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), yolk_mask_cropped)
 
-    return write_flag
+    return out_of_frame_flag
 
 def rotate_image(mat, angle):
     """
@@ -733,7 +736,7 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
 def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_rad_um=10):
 
     if outshape == None:
-        outshape = [576, 192]
+        outshape = [576, 256]
 
     # read in metadata
     metadata_path = os.path.join(root, 'metadata', '')
@@ -750,16 +753,19 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
     # make stable embryo ID
     embryo_metadata_df["snip_id"] = embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
     export_indices = range(embryo_metadata_df.shape[0])
+    out_of_frame_flags = []
     if not par_flag:
         for r in tqdm(export_indices):
-            export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape)
+            oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape)
+            out_of_frame_flags.append(oof)
     else:
-        temp = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale, outshape), rP=0.25)
+        out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale, outshape), rP=0.25)
 
-        # rotate and crop image
-        # Now, we will perform actual image rotation
-        # rotatingimage = cv2.warpAffine(
-        #     rotateImage, rotationMatrix, (newImageWidth, newImageHeight))
+    # add oof flag
+    embryo_metadata_df["out_of_frame_flag"].iloc[export_indices] = out_of_frame_flags
+    embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
+    # save
+    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
 
 
 if __name__ == "__main__":
