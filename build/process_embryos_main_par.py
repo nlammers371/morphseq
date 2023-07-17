@@ -147,7 +147,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
 
     cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
-    cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), yolk_mask_cropped)
+    cv2.imwrite(os.path.join(mask_snip_dir, "yolk_" + im_name + ".tif"), yolk_mask_cropped)
 
     return out_of_frame_flag
 
