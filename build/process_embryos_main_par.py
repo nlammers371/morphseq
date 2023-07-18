@@ -64,7 +64,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
 
     # get surface area
     px_dim_raw = row["Height (um)"] / row["Height (px)"]  # to adjust for size reduction (need to automate this)
-    size_factor_mask = row["Width (px)"] / 640 * 630 / 640
+    # size_factor_mask = row["Width (px)"] / 640 * 630 / 640
     # px_dim_mask = px_dim_raw * size_factor_mask
 
     lbi = row["region_label"]  # im_merge_lb[yi, xi]
@@ -72,7 +72,18 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     assert lbi != 0  # make sure we're not grabbing empty space
 
     im_merge_ft = (im_merge_lb == lbi).astype(int)
-    im_merge_other = ((im_merge_lb > 0) & (im_merge_lb != lbi)).astype(int)
+    # filter out yolk regions that don't contact the embryo ROI
+    im_intersect = np.multiply((im_yolk == 1) * 1, im_merge_ft * 1)
+
+    if np.sum(im_intersect) < 10:
+        im_yolk = np.zeros(im_yolk.shape).astype(int)
+    else:
+        y_lb = label(im_yolk)
+        lbu = np.unique(y_lb[np.where(im_intersect)])
+        im_yolk = (y_lb == lbu[0]).astype(int)
+
+
+    # im_merge_other = ((im_merge_lb > 0) & (im_merge_lb != lbi)).astype(int)
 
     ############
     # Load raw image
@@ -89,17 +100,31 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
 
     rp = regionprops(mask_emb_rs)
     angle = rp[0].orientation
-    cm = rp[0].centroid
+    # cm = rp[0].centroid
 
     # find the orientation that puts yolk at top
-    # yr1 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle), cm[1], cm[0])
-    # cm1 = scipy.ndimage.center_of_mass(yr1, labels=1)
-    # yr2 = im_ff_rotated = rotate_image(mask_yolk_rs, np.rad2deg(-angle+np.pi), cm[1], cm[0])
-    # cm2 = scipy.ndimage.center_of_mass(yr2, labels=1)
-    im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(-angle))
-    im_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(-angle))
+    er1 = rotate_image(mask_emb_rs, np.rad2deg(-angle))
+    e_cm1 = scipy.ndimage.center_of_mass(er1, labels=1)
+    if np.any(mask_yolk_rs):
+        yr1 = rotate_image(mask_yolk_rs, np.rad2deg(-angle))
+        y_cm1 = scipy.ndimage.center_of_mass(yr1, labels=1)
+        e_cm1 = scipy.ndimage.center_of_mass(er1, labels=1)
+        if (e_cm1[0] - y_cm1[0]) >= 0:
+            angle_to_use = -angle
+        else:
+            angle_to_use = -angle+np.pi
+    else:
+        y_indices = np.where(np.max(er1, axis=1))[0]
+        vert_rat = np.sum(y_indices > e_cm1[0]) / len(y_indices)
+        if vert_rat >= 0.5:
+            angle_to_use = -angle
+        else:
+            angle_to_use = -angle+np.pi
+
+    im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(angle_to_use))
+    im_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(angle_to_use))
     # im_other_rotated = rotate_image(mask_other_rs.astype(np.uint8), np.rad2deg(-angle), cm[1], cm[0])
-    im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(-angle))
+    im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(angle_to_use))
 
     # extract snip
     dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
@@ -305,6 +330,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
     row.loc["n_embryos_observed"] = i_pass
     row_out = pd.DataFrame(row).transpose()
     return [master_index, row_out]
+
 def do_embryo_tracking(well_id, master_df, master_df_update):
     well_indices = np.where(master_df_update[["well_id"]].values == well_id)[0]
 
@@ -456,7 +482,7 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     # xi = np.min([np.max([int(row["xpos"]), 1]), iw])
     lbi = row["region_label"]# im_merge_lb[yi, xi]
 
-    assert lbi != 0 # make sure we're not grabbing empty space
+    assert lbi != 0  # make sure we're not grabbing empty space
 
     im_merge_lb = (im_merge_lb == lbi).astype(int)
 
@@ -770,8 +796,8 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
 
 if __name__ == "__main__":
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
     print('Compiling well metadata...')
     #build_well_metadata_master(root)
