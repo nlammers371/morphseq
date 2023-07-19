@@ -15,8 +15,12 @@ from pytorch_lightning import loggers as pl_loggers
 if __name__ == "__main__":
 
     n_classes = 2
-    n_epoch = 5
+    n_epoch = 50
     model_name = 'unet_emb_v0_'
+    # n_classes = 3
+    # n_epoch = 5
+    # model_name = 'unet_morph_v0_'
+
     # Set path do data
     # data_path = "D:\\Nick\morphseq\\built_keyence_data\\UNET_training\\"
     # data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\morph_UNET_training\\"
