@@ -12,14 +12,11 @@ def path_leaf(path):
     return tail or ntpath.basename(head)
 
 morph_label_flag = False
-focus_label_flag = True
+focus_label_flag = False
 # db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
 db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\" # "D:\\Nick\\morphseq\\built_keyence_data\\"   #
 path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
 project_list = glob.glob(path_to_images)
-#
-n_im = 1000
-image_i = 0
 
 # set starting point
 # im_dims = [641, 1158]
@@ -29,9 +26,11 @@ if overwrite_flag:
     skip_labeled_flag = False
 
 # set random seed for reproducibility
-seed = 678
-suffix = "_focus"
-np.random.seed(seed)
+# seed = 678
+# suffix = "_focus"
+seed = 126
+suffix = "_v2"
+
 
 # make write paths
 if morph_label_flag:
@@ -40,111 +39,78 @@ if morph_label_flag:
 elif focus_label_flag:
     image_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'images', '')
     label_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'annotations', '')
-else:
-    image_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
 
+image_path_in = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
+label_path_in = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
 
-if not os.path.isdir(image_path):
-    os.makedirs(image_path)
-if not os.path.isdir(label_path):
-    os.makedirs(label_path)
+image_path_bubble = os.path.join(db_path, 'bubble_UNET_training', str(seed) + suffix, 'images', '')
+label_path_bubble = os.path.join(db_path, 'bubble_UNET_training', str(seed) + suffix, 'annotations', '')
+
+image_path_emb = os.path.join(db_path, 'emb_UNET_training', str(seed) + suffix, 'images', '')
+label_path_emb = os.path.join(db_path, 'emb_UNET_training', str(seed) + suffix, 'annotations', '')
+
+if not os.path.isdir(image_path_bubble):
+    os.makedirs(image_path_bubble)
+if not os.path.isdir(label_path_bubble):
+    os.makedirs(label_path_bubble)
+if not os.path.isdir(image_path_emb):
+    os.makedirs(image_path_emb)
+if not os.path.isdir(label_path_emb):
+    os.makedirs(label_path_emb)
 
 # get list of existing labels (if any)
-existing_labels = sorted(glob.glob(label_path + "*tif"))
+existing_labels = sorted(glob.glob(label_path_in + "*tif"))
 existing_label_names = []
 for ex in existing_labels:
     _, im_name = ntpath.split(ex)
     existing_label_names.append(im_name)
 
-existing_images = sorted(glob.glob(image_path + "*tif"))
+existing_images = sorted(glob.glob(image_path_in + "*tif"))
 existing_image_names = []
 for ex in existing_images:
     _, im_name = ntpath.split(ex)
     existing_image_names.append(im_name)
 
+transfer_name_list = [i for i in existing_image_names if i in existing_image_names]
 
-# select subset of images to label
-im_list = []
-project_index = []
-project_ind_long = []
-for ind, p in enumerate(project_list):
-    im_list_temp = glob.glob(os.path.join(p, '*.tif'))
-    im_list += im_list_temp
-    _, tail = ntpath.split(p)
-    project_index.append(tail)
-    project_ind_long += [ind]*len(im_list_temp)
-im_lb_indices_raw = np.random.choice(range(len(im_list)), n_im, replace=False)
+np.random.seed(334)
+toggle = True
+for image_i in range(len(transfer_name_list)):
+    t_name = transfer_name_list[image_i]
 
-# ensure that existing labels are accounted for in the new list. They should always appear, but I swapped between
-# random seed early in the labeling process, so there are some inconsistencies
-im_name_list = []
-for i in range(len(im_list)):
-    _, im_name = ntpath.split(im_list[i])
-    prefix = project_index[project_ind_long[i]]
-    # lb_path_full = label_path + prefix + '_' + im_name
-    im_name_list.append(prefix + '_' + im_name)
+    # read in image
+    im_path = os.path.join(image_path_in, t_name)
+    t_image = cv2.imread(im_path)
 
-# concatenate existing labels to randomly drawn list
-existing_indices = [im_name_list.index(ex) for ex in existing_label_names]
-existing_im_indices = [im_name_list.index(ex) for ex in existing_image_names if ex not in existing_label_names]
-full_list = existing_im_indices + existing_indices + im_lb_indices_raw.tolist()
-new_indices = np.unique(full_list, return_index=True)[1]
-im_lb_indices = [full_list[index] for index in sorted(new_indices)]
-im_lb_indices = im_lb_indices[0:n_im]
-# initialize viewer
+    # read label
+    lb_path = os.path.join(label_path_in, t_name)
+    t_label = cv2.imread(lb_path)
 
-while image_i < len(im_lb_indices)-1:
-    prefix = project_index[project_ind_long[im_lb_indices[image_i]]]
-    # load image
-    im_path = im_list[im_lb_indices[image_i]]
-    _, im_name = ntpath.split(im_path)
+    # make an embryo-only label version
+    t_label_emb = t_label.copy()
+    t_label_emb[np.where(t_label_emb > 2)] = 0
+    if np.sum(t_label_emb) <= 30:  # zero out bubble labels
+        t_label_emb[:] = 0
+    # make a bubble-only label version
+    t_label_bubble = t_label.copy()
+    t_label_bubble[np.where(t_label_bubble != 4)] = 0  # zero out embryo_labels
 
-    # open labels if they exist (and we want to keep them)
-    lb_path_full = label_path + prefix + '_' + im_name
-    if (lb_path_full not in existing_labels) or (not skip_labeled_flag):
+    # write embryo image and labels to file
+    cv2.imwrite(os.path.join(image_path_emb, t_name), t_image)
+    cv2.imwrite(os.path.join(label_path_emb, t_name), t_label_emb)
 
-        im_temp = cv2.imread(im_path)
-
-        # open viewer
-        viewer = napari.view_image(im_temp[:, :, 0], colormap="gray")
-
-        if not overwrite_flag and (lb_path_full in existing_labels):
-            lbObject = AICSImage(lb_path_full)
-            lb_temp = np.squeeze(lbObject.data)
-            viewer.add_labels(lb_temp, name='Labels')
-        # else:
-        #     lbObject = AICSImage(os.path.join(db_path, 'well_mask.tif'))
-        #     lb_temp = np.squeeze(lbObject.data)
-
-
-        napari.run()
-
-        # save new  label layer
-        try:
-            lb_layer = viewer.layers["Labels"]
-        except:
-            lb_layer = viewer.layers["SAM labels"]
-        AICSImage(lb_layer.data.astype(np.uint8)).save(lb_path_full)
-        # save
-        cv2.imwrite(image_path + prefix + '_' + im_name, im_temp)
-            # time_in_msec = 1000
-            # QTimer().singleShot(time_in_msec, app.quit)
-
-        # viewer.close()
-        # cv2.imwrite(label_path + im_name, lb_layer.data)
-
-        wait = input("Press Enter to continue to next image. \nPress 'x' then Enter to exit. \nType a digit then Enter to jump to a specific image")
-        if wait == 'x':
-            break
-        elif isinstance(wait, int):
-            image_i = wait
-        else:
-            image_i += 1
-            print(image_i)
-
+    # write bubble
+    if np.any(t_label_bubble):
+        cv2.imwrite(os.path.join(image_path_bubble, t_name), t_image)
+        cv2.imwrite(os.path.join(label_path_bubble, t_name), t_label_bubble)
+    elif toggle:
+        cv2.imwrite(os.path.join(image_path_bubble, t_name), t_image)
+        cv2.imwrite(os.path.join(label_path_bubble, t_name), t_label_bubble)
+        toggle = False
     else:
-        image_i += 1
+        toggle = True
+
+
 
 
 # load label file if it exists

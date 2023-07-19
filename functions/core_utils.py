@@ -76,6 +76,9 @@ class Dataset(torch.utils.data.Dataset):
         if not self.predict_only_flag:
             lbObject = AICSImage(mask_path)
             lb_temp = np.squeeze(lbObject.data)
+            if len(lb_temp.shape) == 3:
+                lb_temp = lb_temp[:, :, 0]
+
             if False: #self.num_classes == 1:
                 mask = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
             else:
