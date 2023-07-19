@@ -9,17 +9,17 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = "unet_focus_v2_0050"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
-    n_classes = 1
+    model_name = "unet_ldb_v4_0050"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
+    n_classes = 3
     pd_only_flag = True
-    type_string = "focus_UNET_training"
+    type_string = "UNET_training"
     # Set path do data
     db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data" #"D:\\Nick\\morphseq\\built_keyence_data\\"
     # data_path = os.path.join(db_path, "UNET_training", '')
     data_path = os.path.join(db_path, type_string, '')
 
     # seed_str = "1294_test_node"
-    seed_str = "421_test_node"
+    seed_str = "671_test_node"
     # seed_str = "932_yolk_head_tail"
     # seed_str = "126_live_dead_bubble"
 

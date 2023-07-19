@@ -18,7 +18,7 @@ n_im = 500
 
 # set random seed for reproducibility
 # seed_str = str(126) # points to training subfolder I've been useing
-seed = 421
+seed = 671
 np.random.seed(seed)
 
 # make write paths
