@@ -18,11 +18,11 @@ n_im = 500
 
 # set random seed for reproducibility
 # seed_str = str(126) # points to training subfolder I've been useing
-seed = 671
+seed = 672
 np.random.seed(seed)
 
 # make write paths
-test_image_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + '_test_node', 'images', '')
+test_image_path = os.path.join(db_path, 'emb_UNET_training', str(seed) + '_test_node', 'images', '')
 if not os.path.isdir(test_image_path):
     os.makedirs(test_image_path)
 
