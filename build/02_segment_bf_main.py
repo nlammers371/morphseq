@@ -102,8 +102,13 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data"
 
     # first, apply classifier to identify living and dead embryos, as well bubbles
-    n_classes = 3
-    model_name = "unet_ldb_v4_0050"
+    n_classes = 2
+    model_name = "unet_emb_v4_0050"
+    apply_unet(root, model_name, n_classes)
+
+    # now apply bubble classifier
+    n_classes = 1
+    model_name = "unet_bubble_v0_0050"
     apply_unet(root, model_name, n_classes)
 
     # now apply yolk classifier

@@ -9,19 +9,19 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = "unet_head_v0_0050"  #"unet_emb_v3_0050" #"unet_morph_yolk_head_v2_0050" #"unet_emb_v1_0030"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
-    n_classes = 1
+    model_name = "unet_emb_v4_0050"  #"unet_emb_v3_0050" #"unet_morph_yolk_head_v2_0050" #"unet_emb_v1_0030"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
+    n_classes = 2
     use_checkpoint = False
     chk_path = "E:\\Nick\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\emb_UNET_training\\126_v2\\unet_emb_v3_checkpoints\\epoch=36-step=1183.ckpt"
     pd_only_flag = True
-    type_string = "UNET_training_head"
+    type_string = "UNET_training_emb"
     # Set path do data
     db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data" #"D:\\Nick\\morphseq\\built_keyence_data\\"
     # data_path = os.path.join(db_path, "UNET_training", '')
     data_path = os.path.join(db_path, type_string, '')
 
     # seed_str = "1294_test_node"
-    seed_str = "111_test_node"
+    seed_str = "672_test_node"
     # seed_str = "932_yolk_head_tail"
     # seed_str = "126_live_dead_bubble"
 
