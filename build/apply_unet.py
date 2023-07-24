@@ -9,12 +9,12 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = "unet_morph_yolk_head_v4_0050"  #"unet_emb_v3_0050" #"unet_morph_yolk_head_v2_0050" #"unet_emb_v1_0030"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
-    n_classes = 2
+    model_name = "unet_head_v0_0050"  #"unet_emb_v3_0050" #"unet_morph_yolk_head_v2_0050" #"unet_emb_v1_0030"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
+    n_classes = 1
     use_checkpoint = False
     chk_path = "E:\\Nick\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\emb_UNET_training\\126_v2\\unet_emb_v3_checkpoints\\epoch=36-step=1183.ckpt"
     pd_only_flag = True
-    type_string = "morph_UNET_training"
+    type_string = "UNET_training_head"
     # Set path do data
     db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data" #"D:\\Nick\\morphseq\\built_keyence_data\\"
     # data_path = os.path.join(db_path, "UNET_training", '')
