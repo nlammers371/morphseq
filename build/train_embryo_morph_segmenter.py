@@ -14,9 +14,9 @@ from pytorch_lightning import loggers as pl_loggers
 
 if __name__ == "__main__":
 
-    n_classes = 2
+    n_classes = 1
     n_epoch = 50
-    model_name = 'unet_emb_v0_'
+    model_name = 'unet_yolk_v0_'
     # n_classes = 3
     # n_epoch = 5
     # model_name = 'unet_morph_v0_'
@@ -24,21 +24,14 @@ if __name__ == "__main__":
     # Set path do data
     # data_path = "D:\\Nick\morphseq\\built_keyence_data\\UNET_training\\"
     # data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\morph_UNET_training\\"
-    data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\emb_UNET_training\\"
-    seed_str = str(126) + '_v2'# '_v2' # specify random seed that points to specific set of labeled training images
+    data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\UNET_training_yolk\\"
+    seed_str = str(932) # '_v2' # specify random seed that points to specific set of labeled training images
     root = os.path.join(data_path, seed_str)
 
     # extract key info about computational resources
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     n_cpu = os.cpu_count()
     gpu_flag = device.type == 'cuda'
-    # kwargs = {'num_workers': 1, 'pin_memory': True} if gpu_flag else {'num_workers': n_cpu, 'pin_memory': False}
-
-    # designate transformations to apply to augment data
-    # transform = torch.nn.Sequential(
-    #     transforms.RandomHorizontalFlip(),
-    #     transforms.RandomVerticalFlip()
-    # )
 
     ttv_split = [0.85, 0.0, 0.15]
     im_dims = [576, 320]
@@ -57,7 +50,7 @@ if __name__ == "__main__":
     n_test = np.round(ttv_split[1] * n_samples_total).astype(int)
     n_validate = n_samples_total - n_train - n_test
 
-    np.random.seed(345)
+    # np.random.seed(345)
     random_indices = np.random.choice(np.arange(n_samples_total), n_samples_total, replace=False)
     train_files = [im_list[r] for r in random_indices[0:n_train]]
     # test_files = [im_list[r] for r in random_indices[n_train:n_train + n_test]]
@@ -88,7 +81,7 @@ if __name__ == "__main__":
 
     # instrcut pytorch to track model performance and save the best-performing versions
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(data_path, seed_str, model_name + 'checkpoints', ''),
-                                          save_top_k=2,
+                                          save_top_k=5,
                                           monitor='valid_per_image_iou',
                                           mode='max')
 

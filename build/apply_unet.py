@@ -9,8 +9,10 @@ import ntpath
 
 
 if __name__ == "__main__":
-    model_name = "unet_morph_v0_0005"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
-    n_classes = 3
+    model_name = "unet_morph_yolk_head_v4_0050"  #"unet_emb_v3_0050" #"unet_morph_yolk_head_v2_0050" #"unet_emb_v1_0030"  #'unet_ldb_v4_0050'  # 'unet_live_dead_0030'
+    n_classes = 2
+    use_checkpoint = False
+    chk_path = "E:\\Nick\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\emb_UNET_training\\126_v2\\unet_emb_v3_checkpoints\\epoch=36-step=1183.ckpt"
     pd_only_flag = True
     type_string = "morph_UNET_training"
     # Set path do data
@@ -74,7 +76,25 @@ if __name__ == "__main__":
     n_plot = len(valid_files)
     #############
     # load model
-    model.load_state_dict(torch.load(os.path.join(root, model_name), map_location=device))
+    # model.load_state_dict(torch.load(os.path.join(root, model_name), map_location=device)
+    if use_checkpoint:
+        model = FishModel.load_from_checkpoint(
+            chk_path,
+            arch="FPN",
+            encoder_name="resnet34",
+            in_channels=3,
+            out_classes=n_classes)
+
+    else:
+        model = FishModel(
+            arch="FPN",
+            encoder_name="resnet34",
+            in_channels=3,
+            out_classes=n_classes)
+
+        model.load_state_dict(torch.load(os.path.join(root, model_name), map_location=device))
+
+    #
     model.eval()
 
     with torch.no_grad():
@@ -85,7 +105,7 @@ if __name__ == "__main__":
             logits = model(im)
             pr_masks = np.squeeze(np.asarray(logits.sigmoid()))
 
-            if n_classes==1:
+            if n_classes == 1:
                 pr_masks = pr_masks[np.newaxis, :, :]
             im_name = im_list[idx]
 
