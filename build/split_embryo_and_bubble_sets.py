@@ -1,5 +1,4 @@
 import numpy as np
-import napari
 import os
 import glob2 as glob
 import cv2
@@ -98,7 +97,7 @@ for image_i in range(len(transfer_name_list)):
     # write embryo image and labels to file
     cv2.imwrite(os.path.join(image_path_emb, t_name), t_image)
     cv2.imwrite(os.path.join(label_path_emb, t_name), t_label_emb)
-
+    t_label_bubble[np.where(t_label_bubble == 4)] = 1
     # write bubble
     if np.any(t_label_bubble):
         cv2.imwrite(os.path.join(image_path_bubble, t_name), t_image)
