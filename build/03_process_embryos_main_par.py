@@ -31,7 +31,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    emb_path = [m for m in seg_dir_list if "emb" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
     row = embryo_metadata_df.iloc[r].copy()
@@ -47,8 +47,8 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     ############
 
     # load main embryo mask
-    im_ldb_path = os.path.join(ldb_path, date, im_name)
-    im_ldb = cv2.imread(im_ldb_path)
+    im_emb_path = os.path.join(emb_path, date, im_name)
+    im_ldb = cv2.imread(im_emb_path)
     im_ldb = im_ldb[:, :, 0]
     im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
     im_merge = np.zeros(im_ldb.shape, dtype="uint8")
@@ -443,7 +443,8 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    emb_path = [m for m in seg_dir_list if "emb" in m][0]
+    bubble_path = [m for m in seg_dir_list if "bubble" in m][0]
     focus_path = [m for m in seg_dir_list if "focus" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
@@ -453,14 +454,19 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
 
     im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
 
-    im_ldb_path = os.path.join(ldb_path, date, im_name)
-    im_ldb = cv2.imread(im_ldb_path)
+    im_emb_path = os.path.join(emb_path, date, im_name)
+    im_ldb = cv2.imread(im_emb_path)
     im_ldb = im_ldb[:, :, 0]
     im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
     im_merge = np.zeros(im_ldb.shape, dtype="uint8")
     im_merge[np.where(im_ldb == 1)] = 1
     im_merge[np.where(im_ldb == 2)] = 1
     im_merge_lb = label(im_merge)
+
+    im_bubble_path = os.path.join(focus_path, date, im_name)
+    im_bubble = cv2.imread(im_bubble_path)
+    im_bubble = im_bubble[:, :, 0]
+    im_focus = np.round(im_bubble / np.min(im_bubble) - 1).astype(int)
 
     im_focus_path = os.path.join(focus_path, date, im_name)
     im_focus = cv2.imread(im_focus_path)
@@ -523,9 +529,9 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
         row.loc["focus_flag"] = min_dist <= 2 * qc_scale_px
 
     # is there bubble in the vicinity of embryo?
-    if np.any(im_ldb == 3):
-        min_dist_bubb = np.min(im_dist[np.where(im_ldb == 3)])
-        row.loc["bubble_flag"] = min_dist_bubb <= 2 * qc_scale_px
+    if np.any(im_bubble == 1):
+        min_dist_bubble = np.min(im_dist[np.where(im_bubble == 1)])
+        row.loc["bubble_flag"] = min_dist_bubble <= 2 * qc_scale_px
 
     row_out = pd.DataFrame(row).transpose()
     return row_out
@@ -628,9 +634,9 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     # Track number of embryos and position over time
     ###################
 
-    ldb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    emb_path = [m for m in seg_dir_list if "ldb" in m][0]
     # get list of experiments
-    experiment_list = sorted(glob.glob(os.path.join(ldb_path, "*")))
+    experiment_list = sorted(glob.glob(os.path.join(emb_path, "*")))
     experiment_list = [e for e in experiment_list if "ignore" not in e]
 
     ckpt1_path = (os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv"))
@@ -796,9 +802,9 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
 
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    
     print('Compiling well metadata...')
     #build_well_metadata_master(root)
 

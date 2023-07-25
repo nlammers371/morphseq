@@ -120,11 +120,3 @@ if __name__ == "__main__":
     n_classes = 1
     model_name = "unet_focus_v2_0050"
     apply_unet(root, model_name, n_classes)
-
-    # n_classes = 3
-    # pd_only_flag = False
-    # type_string = "morph_UNET_training"
-    # # Set path do data
-    # db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data" #"D:\\Nick\\morphseq\\built_keyence_data\\"
-    # # data_path = os.path.join(db_path, "UNET_training", '')
-    # data_path = os.path.join(db_path, type_string, '')
