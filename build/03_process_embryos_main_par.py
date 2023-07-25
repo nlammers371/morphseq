@@ -31,7 +31,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    emb_path = [m for m in seg_dir_list if "emb" in m][0]
+    emb_path = [m for m in seg_dir_list if "ldb" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
     row = embryo_metadata_df.iloc[r].copy()
@@ -127,8 +127,9 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(angle_to_use))
 
     # extract snip
+    distTransform = scipy.ndimage.distance_transform_edt(1 * (im_mask_rotated == 0))
     dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
-    im_mask_dl = dilation(im_mask_rotated, disk(dl_rad_px))
+    im_mask_dl = 1*(distTransform <= dl_rad_px)
 
     # masked_image = im_ff_rotated.copy()
     # masked_image[np.where(im_mask_dl == 0)] = np.random.choice(other_pixel_array, np.sum(im_mask_dl == 0))
