@@ -870,13 +870,15 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
         time_id = embryo_metadata_df["time_int"].iloc[r]
         embryo_metadata_df.loc[r, "snip_id"] = embryo_id + f'_t{time_id:04}'
 
-    embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
+    #embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
 
     export_indices = range(embryo_metadata_df.shape[0])
 
     # draw random sample to estimate background
     print("Estimating background...")
     px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
+
+    embryo_metadata_df["out_of_frame_flag"] = False
 
     # extract snips
     out_of_frame_flags = []
@@ -902,10 +904,10 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     
     print('Compiling well metadata...')
-    #build_well_metadata_master(root)
+    build_well_metadata_master(root)
 
     print('Compiling embryo metadata...')
-    #segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
+    segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
-    extract_embryo_snips(root, par_flag=False)
+    extract_embryo_snips(root, par_flag=True)
