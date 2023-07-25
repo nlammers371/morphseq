@@ -15,7 +15,63 @@ from sklearn.metrics import pairwise_distances
 import numpy as np
 from skimage.morphology import disk, dilation
 
-def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
+def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100):
+
+    np.random.seed(bkg_seed)
+    bkg_sample_indices = np.random.choice(range(embryo_metadata_df.shape[0]), n_bkg_samples, replace=True)
+    bkg_pixel_list = []
+
+    for r in tqdm(range(len(bkg_sample_indices))):
+        sample_i = bkg_sample_indices[r]
+        row = embryo_metadata_df.iloc[sample_i].copy()
+
+        # set path to segmentation data
+        ff_image_path = os.path.join(root, 'built_keyence_data', 'stitched_FF_images', '')
+        segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
+
+        # generate path and image name
+        seg_dir_list_raw = glob.glob(segmentation_path + "*")
+        seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
+
+        emb_path = [m for m in seg_dir_list if "emb" in m][0]
+
+        well = row["well"]
+        time_int = row["time_int"]
+        date = str(row["experiment_date"])
+
+        im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
+
+        ############
+        # Load masks from segmentation
+        ############
+
+        # load main embryo mask
+        im_emb_path = os.path.join(emb_path, date, im_name)
+        im_ldb = cv2.imread(im_emb_path)
+        im_ldb = im_ldb[:, :, 0]
+        im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
+        im_bkg = np.ones(im_ldb.shape, dtype="uint8")
+        im_bkg[np.where(im_ldb == 1)] = 0
+        im_bkg[np.where(im_ldb == 2)] = 0
+
+        # load image
+        im_ff_path = os.path.join(ff_image_path, date, im_name)
+        im_ff = cv2.imread(im_ff_path)
+        im_ff = im_ff[:, :, 0]
+
+        # extract background pixels
+        bkg_pixels = im_ff[np.where(im_bkg == 1)].tolist()
+
+        bkg_pixel_list += bkg_pixels
+
+    # get mean and standard deviation
+    px_mean = np.mean(bkg_pixel_list)
+    px_std = np.std(bkg_pixel_list)
+
+    return px_mean, px_std
+
+
+def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px_mean, px_std):
 
     # set path to segmentation data
     ff_image_path = os.path.join(root, 'built_keyence_data', 'stitched_FF_images', '')
@@ -72,6 +128,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     assert lbi != 0  # make sure we're not grabbing empty space
 
     im_merge_ft = (im_merge_lb == lbi).astype(int)
+
     # filter out yolk regions that don't contact the embryo ROI
     im_intersect = np.multiply((im_yolk == 1) * 1, im_merge_ft * 1)
 
@@ -127,19 +184,18 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(angle_to_use))
 
     # extract snip
-    distTransform = scipy.ndimage.distance_transform_edt(1 * (im_mask_rotated == 0))
-    dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
-    im_mask_dl = 1*(distTransform <= dl_rad_px)
+    # im_dist = scipy.ndimage.distance_transform_edt(1 * (im_mask_rotated == 0))
+    # im_mask_dl = 1*(im_dist <= dl_rad_px)
 
     # masked_image = im_ff_rotated.copy()
     # masked_image[np.where(im_mask_dl == 0)] = np.random.choice(other_pixel_array, np.sum(im_mask_dl == 0))
 
-    y_indices = np.where(np.max(im_mask_dl, axis=1) == 1)[0]
-    x_indices = np.where(np.max(im_mask_dl, axis=0) == 1)[0]
+    y_indices = np.where(np.max(im_mask_rotated, axis=1) == 1)[0]
+    x_indices = np.where(np.max(im_mask_rotated, axis=0) == 1)[0]
     y_mean = int(np.mean(y_indices))
     x_mean = int(np.mean(x_indices))
 
-    fromshape = im_mask_dl.shape
+    fromshape = im_mask_rotated.shape
     raw_range_y = [y_mean - int(outshape[0] / 2), y_mean + int(outshape[0] / 2)]
     from_range_y = np.asarray([np.max([raw_range_y[0], 0]), np.min([raw_range_y[1], fromshape[0]])])
     to_range_y = [0 + (from_range_y[0] - raw_range_y[0]), outshape[0] + (from_range_y[1] - raw_range_y[1])]
@@ -160,18 +216,41 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
         im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
 
+    # im_dist_cropped = np.zeros(outshape).astype(np.uint8)
+    # im_dist_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
+    #     im_dist[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+
+
+    # fill holes in embryo and yolk masks
+    emb_mask_cropped = scipy.ndimage.binary_fill_holes(emb_mask_cropped).astype(np.uint8)
+    yolk_mask_cropped = scipy.ndimage.binary_fill_holes(yolk_mask_cropped).astype(np.uint8)
+
+    # calculate the distance transform
+    im_dist_cropped = scipy.ndimage.distance_transform_edt(1 * (emb_mask_cropped == 0))
+
     # crop out background
-    other_pixel_array = im_cropped[np.where(emb_mask_cropped == 0)]
-    im_mask_cropped = im_cropped.copy()
-    im_mask_cropped[np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
+    dl_rad_px = int(np.ceil(dl_rad_um / px_dim_raw))
+    # dl_rad_px = 0
+    # im_dist_cropped = im_dist_cropped * dl_rad_px**-1
+    # im_dist_cropped[np.where(im_dist_cropped > 2)] = 1
+    noise_array = np.random.normal(px_mean, px_std, outshape)
+    # noise_array_scaled = np.multiply(noise_array, im_dist_cropped).astype(np.uint8)
+
+    im_masked_cropped = im_cropped.copy()
+    # im_masked_cropped += noise_array_scaled # [np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
+    im_masked_cropped[np.where(im_dist_cropped > dl_rad_px)] = noise_array[np.where(im_dist_cropped > dl_rad_px)]
+    im_masked_cropped[np.where(im_masked_cropped < 0)] = 0
+    im_masked_cropped[np.where(im_masked_cropped > 255)] = 255
+    im_masked_cropped = np.round(im_masked_cropped).astype(int)
 
     # check whether we cropped out part of the embryo
-    out_of_frame_flag = np.sum(emb_mask_cropped == lbi) / np.sum(im_mask_rotated == lbi) < 0.99
+    out_of_frame_flag = np.sum(emb_mask_cropped == 1) / np.sum(im_mask_rotated == 1) < 0.99
+
 
     # write to file
     im_name = row["snip_id"]
 
-    cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_mask_cropped)
+    cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_masked_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "yolk_" + im_name + ".tif"), yolk_mask_cropped)
 
@@ -522,7 +601,7 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     row.loc["frame_flag"] = np.sum(im_merge_lb) != np.sum(im_trunc)
 
     # is there an out-of-focus region in the vicinity of the mask?
-    if np.any(im_focus) or np.any(im_ldb == 3):
+    if np.any(im_focus) or np.any(im_bubble):
         im_dist = scipy.ndimage.distance_transform_edt(im_merge_lb == 0)
 
     if np.any(im_focus):
@@ -785,19 +864,34 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
         os.makedirs(mask_snip_dir)
 
     # make stable embryo ID
-    embryo_metadata_df["snip_id"] = embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
+    embryo_metadata_df["snip_id"] = ''
+    for r in range(embryo_metadata_df.shape[0]):
+        embryo_id = embryo_metadata_df["embryo_id"].iloc[r]
+        time_id = embryo_metadata_df["time_int"].iloc[r]
+        embryo_metadata_df.loc[r, "snip_id"] = embryo_id + f'_t{time_id:04}'
+
+    embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
+
     export_indices = range(embryo_metadata_df.shape[0])
+
+    # draw random sample to estimate background
+    print("Estimating background...")
+    px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
+
+    # extract snips
     out_of_frame_flags = []
     if not par_flag:
         for r in tqdm(export_indices):
-            oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape)
+            oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px_mean, px_std)
             out_of_frame_flags.append(oof)
     else:
-        out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale, outshape), rP=0.25)
+        out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale,
+                                                                        outshape, px_mean, px_std), rP=0.75)
 
     # add oof flag
     embryo_metadata_df["out_of_frame_flag"].iloc[export_indices] = out_of_frame_flags
     embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
+
     # save
     embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
 
@@ -808,10 +902,10 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     
     print('Compiling well metadata...')
-    build_well_metadata_master(root)
+    #build_well_metadata_master(root)
 
     print('Compiling embryo metadata...')
-    segment_wells(root, par_flag=False, overwrite_well_stats=True, overwrite_embryo_stats=True)
+    #segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
     extract_embryo_snips(root, par_flag=False)
