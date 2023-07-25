@@ -533,7 +533,7 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
 def build_well_metadata_master(root, well_sheets=None):
 
     if well_sheets == None:
-        well_sheets = ["medium", "genotype", "chem_perturbation", "start_age_hpf", "embryos_per_well"]
+        well_sheets = ["medium", "mold_type", "genotype", "chem_perturbation", "start_age_hpf", "embryos_per_well"]
 
     metadata_path = os.path.join(root, 'metadata', '')
     well_meta_path = os.path.join(metadata_path, 'well_metadata', '*.xlsx')
@@ -570,6 +570,7 @@ def build_well_metadata_master(root, well_sheets=None):
             date_string = pname[:8]
             # read in excel file
             xl_temp = pd.ExcelFile(project)
+
             # sheet_names = xl_temp.sheet_names  # see all sheet names
             well_df = pd.DataFrame(well_name_list, columns=["well"])
 
@@ -610,7 +611,7 @@ def build_well_metadata_master(root, well_sheets=None):
     return {}
 
 
-def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_um=150, par_flag=False,
+def segment_wells(root, min_sa=2500, max_sa=15000, ld_rat_thresh=0.75, qc_scale_um=150, par_flag=False,
                   overwrite_well_stats=False, overwrite_embryo_stats=False):
 
     # generate paths to useful directories
@@ -777,7 +778,12 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
         os.makedirs(mask_snip_dir)
 
     # make stable embryo ID
-    embryo_metadata_df["snip_id"] = embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
+    embryo_metadata_df["snip_id"] = ''
+    embryo_metadata_df["out_of_frame_flag"] = False
+    for r in range(embryo_metadata_df.shape[0]):
+        eid = embryo_metadata_df["embryo_id"].iloc[r]
+        tid = embryo_metadata_df["time_int"].iloc[r].astype(int)
+        embryo_metadata_df["snip_id"].iloc[r] = eid + f"_t{tid:04}"
     export_indices = range(embryo_metadata_df.shape[0])
     out_of_frame_flags = []
     if not par_flag:
@@ -785,7 +791,7 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
             oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape)
             out_of_frame_flags.append(oof)
     else:
-        out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale, outshape), rP=0.25)
+        out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale, outshape), rP=0.75)
 
     # add oof flag
     embryo_metadata_df["out_of_frame_flag"].iloc[export_indices] = out_of_frame_flags
@@ -799,11 +805,11 @@ if __name__ == "__main__":
     root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
-    print('Compiling well metadata...')
-    #build_well_metadata_master(root)
-
-    print('Compiling embryo metadata...')
-    #segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
+    # print('Compiling well metadata...')
+    # build_well_metadata_master(root)
+    #
+    # # print('Compiling embryo metadata...')
+    # segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
-    extract_embryo_snips(root, par_flag=False)
+    extract_embryo_snips(root, par_flag=True)
