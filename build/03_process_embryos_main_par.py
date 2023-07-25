@@ -31,7 +31,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape):
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    emb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    emb_path = [m for m in seg_dir_list if "emb" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
     row = embryo_metadata_df.iloc[r].copy()
@@ -464,10 +464,10 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     im_merge[np.where(im_ldb == 2)] = 1
     im_merge_lb = label(im_merge)
 
-    im_bubble_path = os.path.join(focus_path, date, im_name)
+    im_bubble_path = os.path.join(bubble_path, date, im_name)
     im_bubble = cv2.imread(im_bubble_path)
     im_bubble = im_bubble[:, :, 0]
-    im_focus = np.round(im_bubble / np.min(im_bubble) - 1).astype(int)
+    im_bubble = np.round(im_bubble / np.min(im_bubble) - 1).astype(int)
 
     im_focus_path = os.path.join(focus_path, date, im_name)
     im_focus = cv2.imread(im_focus_path)
@@ -484,10 +484,10 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     size_factor = row["Width (px)"] / 640 * 630/320
     px_dim = px_dim_raw * size_factor
     qc_scale_px = int(np.ceil(qc_scale_um / px_dim))
-    ih, iw = im_yolk.shape
+    # ih, iw = im_yolk.shape
     # yi = np.min([np.max([int(row["ypos"]), 1]), ih])
     # xi = np.min([np.max([int(row["xpos"]), 1]), iw])
-    lbi = row["region_label"]# im_merge_lb[yi, xi]
+    lbi = row["region_label"]  # im_merge_lb[yi, xi]
 
     assert lbi != 0  # make sure we're not grabbing empty space
 
@@ -495,7 +495,7 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
 
     # calculate sa-related metrics
     rg = regionprops(im_merge_lb)
-    row.loc["surface_area_um"] = rg[0].area * px_dim ** 2
+    row.loc["surface_area_um"] = rg[0].area_filled * px_dim ** 2
     row.loc["length_um"] = rg[0].axis_major_length * px_dim
     row.loc["width_um"] = rg[0].axis_minor_length * px_dim
 
@@ -617,7 +617,7 @@ def build_well_metadata_master(root, well_sheets=None):
     return {}
 
 
-def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_um=150, par_flag=False,
+def segment_wells(root, min_sa=2500, max_sa=15000, ld_rat_thresh=0.75, qc_scale_um=150, par_flag=False,
                   overwrite_well_stats=False, overwrite_embryo_stats=False):
 
     # generate paths to useful directories
@@ -635,7 +635,8 @@ def segment_wells(root, min_sa=2500, max_sa=10000, ld_rat_thresh=0.75, qc_scale_
     # Track number of embryos and position over time
     ###################
 
-    emb_path = [m for m in seg_dir_list if "ldb" in m][0]
+    emb_path = [m for m in seg_dir_list if "emb" in m][0]
+
     # get list of experiments
     experiment_list = sorted(glob.glob(os.path.join(emb_path, "*")))
     experiment_list = [e for e in experiment_list if "ignore" not in e]
@@ -807,10 +808,10 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     
     print('Compiling well metadata...')
-    #build_well_metadata_master(root)
+    build_well_metadata_master(root)
 
     print('Compiling embryo metadata...')
-    #segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
+    segment_wells(root, par_flag=False, overwrite_well_stats=True, overwrite_embryo_stats=True)
 
     # print('Extracting embryo snips...')
     extract_embryo_snips(root, par_flag=False)
