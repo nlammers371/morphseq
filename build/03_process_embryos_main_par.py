@@ -12,8 +12,14 @@ import scipy
 from parfor import pmap
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
+import skimage
 import numpy as np
 from skimage.morphology import disk, dilation
+
+from scipy.spatial import Delaunay
+import numpy as np
+
+
 
 def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100):
 
@@ -117,6 +123,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
     im_yolk = cv2.imread(im_yolk_path)
     im_yolk = im_yolk[:, :, 0]
     im_yolk = np.round(im_yolk / np.min(im_yolk) - 1).astype(int)
+    im_yolk = skimage.morphology.remove_small_objects(im_yolk, min_size=75)  # remove small stuff
 
     # get surface area
     px_dim_raw = row["Height (um)"] / row["Height (px)"]  # to adjust for size reduction (need to automate this)
@@ -130,15 +137,22 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
     im_merge_ft = (im_merge_lb == lbi).astype(int)
 
     # filter out yolk regions that don't contact the embryo ROI
-    im_intersect = np.multiply((im_yolk == 1) * 1, im_merge_ft * 1)
+    im_intersect = np.multiply(im_yolk * 1, im_merge_ft * 1)
 
     if np.sum(im_intersect) < 10:
         im_yolk = np.zeros(im_yolk.shape).astype(int)
     else:
         y_lb = label(im_yolk)
         lbu = np.unique(y_lb[np.where(im_intersect)])
-        im_yolk = (y_lb == lbu[0]).astype(int)
-
+        if len(lbu) == 1:
+            im_yolk = (y_lb == lbu[0]).astype(int)
+        else:
+            i_lb = label(im_intersect)
+            rgi = regionprops(i_lb)
+            a_vec = [r.area for r in rgi]
+            i_max = np.argmax(a_vec)
+            lu = np.unique(y_lb[np.where(i_lb == i_max+1)])
+            im_yolk = (y_lb == lu[0])*1
 
     # im_merge_other = ((im_merge_lb > 0) & (im_merge_lb != lbi)).astype(int)
 
@@ -246,13 +260,14 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
     # check whether we cropped out part of the embryo
     out_of_frame_flag = np.sum(emb_mask_cropped == 1) / np.sum(im_mask_rotated == 1) < 0.99
 
-
     # write to file
     im_name = row["snip_id"]
 
     cv2.imwrite(os.path.join(im_snip_dir, im_name + ".tif"), im_masked_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".tif"), emb_mask_cropped)
     cv2.imwrite(os.path.join(mask_snip_dir, "yolk_" + im_name + ".tif"), yolk_mask_cropped)
+
+
 
     return out_of_frame_flag
 
@@ -879,6 +894,7 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
     px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
 
     embryo_metadata_df["out_of_frame_flag"] = False
+    embryo_metadata_df["snip_um_per_pixel"] = outscale
 
     # extract snips
     out_of_frame_flags = []
@@ -903,11 +919,11 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     
-    print('Compiling well metadata...')
-    build_well_metadata_master(root)
-
-    print('Compiling embryo metadata...')
-    segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
+    # print('Compiling well metadata...')
+    # build_well_metadata_master(root)
+    #
+    # print('Compiling embryo metadata...')
+    # segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
-    extract_embryo_snips(root, par_flag=True)
+    extract_embryo_snips(root, par_flag=False, outscale=6.5)
