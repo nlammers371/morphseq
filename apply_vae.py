@@ -6,10 +6,9 @@ import numpy as np
 import random
 import os
 from torchvision import datasets, transforms
-from torchvision.utils import save_image
 from torch.utils.data.sampler import SubsetRandomSampler
 import pathlib
-from model.conv_vae import VAE
+from model._Archive.conv_vae import VAE
 
 """
 Determine if any GPUs are available
