@@ -6,11 +6,14 @@ import imageio
 import glob2 as glob
 import pandas as pd
 from functions.utilities import path_leaf
+import imageio
 
 train_eval_test = None
 frac_total = 0.1
 train_name = "20230802_vae_test"
+label_var = "experiment_date"
 test_ids = []
+np.random.seed(371)
 
 # set path to data
 root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
@@ -35,29 +38,61 @@ train_eval_test = (np.asarray(train_eval_test)*frac_total).tolist()
 n_frames_total = np.sum(embryo_metadata_df["use_embryo_flag"].values == True)
 snip_id_vec = embryo_metadata_df["snip_id"].values
 good_snip_indices = np.where(embryo_metadata_df["use_embryo_flag"].values == True)[0]
-embryo_id_vec = np.unique(embryo_metadata_df["embryo_id"].values)
-embryo_id_vec_shuffle = np.random.choice(embryo_id_vec, len(embryo_id_vec), replace=False)
-image_list_shuffle = []
-for eid in embryo_id_vec_shuffle:
-    # extract embryos that match current eid
-    e_list = [image_list[e] for e in range(len(image_list)) if (emb_id_list[e] == eid) and (e in good_snip_indices)]
-    # remove frames that did not meet QC standards
-    image_list_shuffle += e_list
+embryo_id_index = np.unique(embryo_metadata_df["embryo_id"].values)
 
+# shuffle and filter
+embryo_id_index_shuffle = np.random.choice(embryo_id_index, len(embryo_id_index), replace=False)
+image_list_shuffle = []
+image_indices_shuffle = []
+
+# if we specified specific embryos to test, remove them now
 if len(test_ids) > 0:
-    test_paths = [image_list[i] for i in range(len(image_list)) if emb_id_list[i] in test_ids]
+    test_paths = []
+    test_indices = []
+    for tid in test_ids:
+        df_ids = \
+        np.where((embryo_metadata_df["embryo_id"].values == tid) & (embryo_metadata_df["use_embryo_flag"].values == True))[
+            0]
+        snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
+        e_list = [os.path.join(data_path, s + ".tif") for s in snip_list]
+        i_list = df_ids.tolist()
+
+        test_paths += e_list
+        test_indices += i_list
+    
     train_eval_test[-1] = 0
     train_eval_test = train_eval_test / np.sum(train_eval_test)
-    embryo_id_vec_shuffle = [e for e in embryo_id_vec_shuffle if e not in test_ids]
+    
+    embryo_id_index_shuffle = [e for e in embryo_id_index_shuffle if e not in test_ids]
 else:
     test_paths = []
+    test_indices = []
+
+# itereate through shuffled IDs
+for eid in embryo_id_index_shuffle:
+
+    # extract embryos that match current eid
+    df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (embryo_metadata_df["use_embryo_flag"].values == True))[0]
+    snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
+    e_list = [os.path.join(data_path, s + ".tif") for s in snip_list]
+    i_list = df_ids.tolist()
+
+    # remove frames that did not meet QC standards
+    image_list_shuffle += e_list
+    image_indices_shuffle += i_list
 
 # assign to groups. Note that a few frames from the same embryo may end up split between categories. I think that this is fine
 n_train = np.round(train_eval_test[0]*n_frames_total).astype(int)
 train_paths = image_list_shuffle[:n_train]
+train_indices = image_indices_shuffle[:n_train]
+
 n_eval = np.round(train_eval_test[1]*n_frames_total).astype(int)
 eval_paths = image_list_shuffle[n_train:n_train+n_eval]
-test_paths += image_list_shuffle[n_train+n_eval:]
+eval_indices = image_indices_shuffle[n_train:n_train+n_eval]
+
+n_test = np.round(train_eval_test[2]*n_frames_total).astype(int)
+test_paths += image_list_shuffle[n_train+n_eval:n_train+n_eval+n_test]
+test_indices += image_indices_shuffle[n_train+n_eval:n_train+n_eval+n_test]
 
 
 train_dir = os.path.join(root, "training_data", train_name)
@@ -70,17 +105,53 @@ if not os.path.exists(os.path.join(train_dir, "eval")):
 if not os.path.exists(os.path.join(train_dir, "test")):
     os.mkdir(os.path.join(train_dir, "test"))
 
-#
-# for i in range(len(train_dataset)):
-#     img = 255.0*train_dataset[i][0].unsqueeze(-1)
-#     img_folder = os.path.join("data_folders", "train", f"{train_targets[i]}")
-#     if not os.path.exists(img_folder):
-#         os.mkdir(img_folder)
-#     imageio.imwrite(os.path.join(img_folder, "%08d.jpg" % i), np.repeat(img, repeats=3, axis=-1).type(torch.uint8))
-#
-# for i in range(len(eval_dataset)):
-#     img = 255.0*eval_dataset[i][0].unsqueeze(-1)
-#     img_folder = os.path.join("data_folders", "eval", f"{eval_targets[i]}")
-#     if not os.path.exists(img_folder):
-#         os.mkdir(img_folder)
-#     imageio.imwrite(os.path.join(img_folder, "%08d.jpg" % i), np.repeat(img, repeats=3, axis=-1).type(torch.uint8))
+#################
+# Write snips to file
+
+# training snips
+for i in range(len(train_paths)):
+    img = torch.from_numpy(imageio.imread(train_paths[i]))
+    img_name = path_leaf(train_paths[i])
+
+    if label_var != None:
+        lb_name = embryo_metadata_df[label_var].iloc[train_indices[i]].astype(str)
+        img_folder = os.path.join(train_dir, "train", lb_name)
+    else:
+        img_folder = os.path.join(train_dir, "train", "0")  # I'm assuming the code will expect a subfolder
+
+    if not os.path.exists(img_folder):
+        os.mkdir(img_folder)
+
+    imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+
+# eval
+for i in range(len(eval_paths)):
+    img = torch.from_numpy(imageio.imread(eval_paths[i]))
+    img_name = path_leaf(eval_paths[i])
+
+    if label_var != None:
+        lb_name = embryo_metadata_df[label_var].iloc[eval_indices[i]].astype(str)
+        img_folder = os.path.join(train_dir, "eval", lb_name)
+    else:
+        img_folder = os.path.join(train_dir, "eval", "0")  # I'm assuming the code will expect a subfolder
+
+    if not os.path.exists(img_folder):
+        os.mkdir(img_folder)
+
+    imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+
+# test
+for i in range(len(test_paths)):
+    img = torch.from_numpy(imageio.imread(test_paths[i]))
+    img_name = path_leaf(test_paths[i])
+
+    if label_var != None:
+        lb_name = embryo_metadata_df[label_var].iloc[test_indices[i]].astype(str)
+        img_folder = os.path.join(train_dir, "test", lb_name)
+    else:
+        img_folder = os.path.join(train_dir, "test", "0")  # I'm assuming the code will expect a subfolder
+
+    if not os.path.exists(img_folder):
+        os.mkdir(img_folder)
+
+    imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
