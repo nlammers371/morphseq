@@ -8,7 +8,10 @@ import pandas as pd
 from functions.utilities import path_leaf
 
 train_eval_test = None
+frac_total = 0.1
+train_name = "20230802_vae_test"
 test_ids = []
+
 # set path to data
 root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
 metadata_path = os.path.join(root, "metadata", '')
@@ -26,6 +29,8 @@ emb_id_list = [eid[0:16] for eid in snip_id_list]
 # this needs to be done at the level of embryos, not images
 if train_eval_test == None:
     train_eval_test = [0.6, 0.2, 0.1]
+train_eval_test = (np.asarray(train_eval_test)*frac_total).tolist()
+
 
 n_frames_total = np.sum(embryo_metadata_df["use_embryo_flag"].values == True)
 snip_id_vec = embryo_metadata_df["snip_id"].values
@@ -55,12 +60,16 @@ eval_paths = image_list_shuffle[n_train:n_train+n_eval]
 test_paths += image_list_shuffle[n_train+n_eval:]
 
 
-# if not os.path.exists("data_folders"):
-#     os.mkdir("data_folders")
-# if not os.path.exists("data_folders/train"):
-#     os.mkdir("data_folders/train")
-# if not os.path.exists("data_folders/eval"):
-#     os.mkdir("data_folders/eval")
+train_dir = os.path.join(root, "training_data", train_name)
+if not os.path.exists(train_dir):
+    os.mkdir(train_dir)
+if not os.path.exists(os.path.join(train_dir, "train")):
+    os.mkdir(os.path.join(train_dir, "train"))
+if not os.path.exists(os.path.join(train_dir, "eval")):
+    os.mkdir(os.path.join(train_dir, "eval"))
+if not os.path.exists(os.path.join(train_dir, "test")):
+    os.mkdir(os.path.join(train_dir, "test"))
+
 #
 # for i in range(len(train_dataset)):
 #     img = 255.0*train_dataset[i][0].unsqueeze(-1)
