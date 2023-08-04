@@ -3,7 +3,7 @@ import os
 import torch
 import numpy as np
 import imageio
-import glob2 as glob
+import glob as glob
 import pandas as pd
 from functions.utilities import path_leaf
 import imageio
@@ -101,7 +101,7 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
 
         # train_eval_test = train_eval_test / np.sum(train_eval_test)
 
-        embryo_id_index_shuffle = [e for e in range(len(embryo_id_index_shuffle)) if e not in used_indices]
+        embryo_id_index_shuffle = [embryo_id_index_shuffle[e] for e in range(len(embryo_id_index_shuffle)) if e not in used_indices]
 
     # itereate through shuffled IDs
     for eid in embryo_id_index_shuffle:
@@ -200,9 +200,10 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
 
 if __name__ == "__main__":
     # set path to data
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
-    train_name = "20230802_vae_test"
+    train_name = "20230804_vae_test"
     label_var = "experiment_date"
 
-    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0)
+    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=0.1)
