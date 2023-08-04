@@ -6,8 +6,10 @@ from pythae.pipelines.training import TrainingPipeline
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
 
-root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-train_name = "20230802_vae_test"
+
+# root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+train_name = "20230804_vae_test"
 train_dir = os.path.join(root, "training_data", train_name)
 
 train_dataset = MyCustomDataset(
@@ -25,7 +27,7 @@ config = BaseTrainerConfig(
     learning_rate=1e-3,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
-    num_epochs=10,  # Change this to train the model a bit more
+    num_epochs=5,  # Change this to train the model a bit more
 )
 
 model_config = VAEConfig(
@@ -67,10 +69,12 @@ gen_data = normal_samper.sample(
 )
 
 # show results with normal sampler
-fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(10, 10))
+fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(10, 10))
 
-for i in range(2):
-    for j in range(2):
+for i in range(3):
+    for j in range(3):
         axes[i][j].imshow(gen_data[i*2 +j].cpu().squeeze(0), cmap='gray')
         axes[i][j].axis('off')
 plt.tight_layout(pad=0.)
+
+plt.show()
