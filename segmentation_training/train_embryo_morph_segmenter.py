@@ -3,7 +3,7 @@ import os
 import torch
 import numpy as np
 import pytorch_lightning as pl
-from functions.core_utils import Dataset, FishModel
+from functions.core_utils_segmentation import Dataset, FishModel
 from pprint import pprint
 from torch.utils.data import DataLoader
 import glob
