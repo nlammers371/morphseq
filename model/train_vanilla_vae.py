@@ -2,6 +2,7 @@ from functions.pythae_utils import *
 import os
 from pythae.models import VAE, VAEConfig
 from pythae.trainers import BaseTrainerConfig
+from pythae.models.nn.benchmarks.mnist import Encoder_Conv_VAE_MNIST, Decoder_Conv_AE_MNIST
 from pythae.pipelines.training import TrainingPipeline
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
@@ -39,8 +40,13 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
         latent_dim=latent_dim
     )
 
+    encoder = Encoder_Conv_VAE_MNIST(model_config)
+    decoder = Decoder_Conv_AE_MNIST(model_config)
+
     model = VAE(
-        model_config=model_config
+        model_config=model_config,
+        encoder=encoder,
+        decoder=decoder
     )
 
     pipeline = TrainingPipeline(
@@ -56,13 +62,15 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
 
 
 if __name__ == "__main__":
+
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20230807_vae_test"
     n_latent = 10
     batch_size = 32
-    n_epochs = 100
-    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    n_epochs = 15
+
+    model_name = f'_conv_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
     train_dir = os.path.join(root, "training_data", train_name)
 
     # train model
