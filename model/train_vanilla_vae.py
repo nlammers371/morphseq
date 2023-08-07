@@ -12,6 +12,8 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, inp
     if input_dim == None:
         input_dim = (1, 576, 256)
 
+    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+
     train_dataset = MyCustomDataset(
         root=os.path.join(train_dir, "train"),
         transform=data_transform,
@@ -23,10 +25,10 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, inp
     )
 
     config = BaseTrainerConfig(
-        output_dir=os.path.join(train_dir, 'vae_' + train_name),
+        output_dir=os.path.join(train_dir, train_name + model_name),
         learning_rate=1e-3,
         per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=16,
+        per_device_eval_batch_size=batch_size,
         num_epochs=n_epochs,  # Change this to train the model a bit more
     )
 
@@ -55,14 +57,18 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20230804_vae_full"
+    n_latent = 5
+    batch_size = 8
+    n_epochs = 25
+    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
     train_dir = os.path.join(root, "training_data", train_name)
 
     # train model
-    train_vanilla_vae(train_dir, latent_dim=24, batch_size=16, n_epochs=100)
+    train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs)
 
-    last_training = sorted(os.listdir(os.path.join(train_dir, 'vae_' + train_name)))[-1]
+    last_training = sorted(os.listdir(os.path.join(train_dir, train_name + model_name)))[-1]
     trained_model = AutoModel.load_from_folder(
-        os.path.join(train_dir, 'vae_' + train_name, last_training, 'final_model'))
+        os.path.join(train_dir, train_name + model_name, last_training, 'final_model'))
 
     # create normal sampler
     normal_samper = NormalSampler(
