@@ -45,8 +45,8 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, inp
     )
 
     pipeline(
-        train_data=train_dataset, # here we use the custom train dataset
-        eval_data=eval_dataset # here we use the custom eval dataset
+        train_data=train_dataset,  # here we use the custom train dataset
+        eval_data=eval_dataset  # here we use the custom eval dataset
     )
 
 
