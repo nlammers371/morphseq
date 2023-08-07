@@ -2,6 +2,7 @@ from functions.pythae_utils import *
 import os
 from pythae.models import VAE, VAEConfig
 from pythae.trainers import BaseTrainerConfig
+from pythae.models.nn.benchmarks.mnist import Encoder_Conv_VAE_MNIST, Decoder_Conv_AE_MNIST
 from pythae.pipelines.training import TrainingPipeline
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
@@ -37,8 +38,13 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, inp
         latent_dim=latent_dim
     )
 
+    encoder = Encoder_Conv_VAE_MNIST(model_config)
+    decoder = Decoder_Conv_AE_MNIST(model_config)
+
     model = VAE(
-        model_config=model_config
+        model_config=model_config,
+        encoder=encoder,
+        decoder=decoder
     )
 
     pipeline = TrainingPipeline(
@@ -54,8 +60,8 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, inp
 
 
 if __name__ == "__main__":
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20230804_vae_full"
     n_latent = 5
     batch_size = 8
