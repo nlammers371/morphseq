@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_name = "20230807_vae_test"
+    train_name = "20230804_vae_full"
     train_dir = os.path.join(root, "training_data", train_name)
 
     n_latent = 5
@@ -66,6 +66,12 @@ if __name__ == "__main__":
     # train model
     #train_vanilla_vae(train_dir, latent_dim=24, batch_size=16, n_epochs=100)
 
+    test_data = MyCustomDataset(
+        root=os.path.join(train_dir, "train"),
+        transform=data_transform_mnist,
+        mnist_size=False
+    )
+
     last_training = sorted(os.listdir(os.path.join(train_dir, train_name + model_name)))[-1]
     trained_model = AutoModel.load_from_folder(
         os.path.join(train_dir, train_name + model_name, last_training, 'final_model'))
@@ -73,11 +79,7 @@ if __name__ == "__main__":
     ############
     # Question 1: how well does it reproduce test images?
     ############
-    test_data = MyCustomDataset(
-        root=os.path.join(train_dir, "train"),
-        transform=data_transform,
-        standardize=True
-    )
+
 
 
     # test_data_loader = DataLoader(
