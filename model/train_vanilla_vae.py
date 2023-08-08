@@ -9,13 +9,22 @@ import matplotlib.pyplot as plt
 from pythae.samplers import NormalSampler
 
 def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, learning_rate=1e-3,
-                      conv_flag=True, input_dim=None, transform=data_transform_rs):
+                      conv_flag=True, input_dim=None, depth=4):
 
-    input_dim = (1, 128, 128)
+    # input_dim = (1, 128, 128)
     if input_dim == None:
         input_dim = (1, 576, 256)
+        transform = data_transform
+    else:
+        transform = make_dynamic_rs_transform(input_dim[1:])
 
-    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    if conv_flag:
+        prefix = '_conv'
+    else:
+        prefix = ''
+
+    model_name = prefix + f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    output_dir = os.path.join(train_dir, train_name + model_name)
 
     train_dataset = MyCustomDataset(
         root=os.path.join(train_dir, "train"),
@@ -28,7 +37,7 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
     )
 
     config = BaseTrainerConfig(
-        output_dir=os.path.join(train_dir, train_name + model_name),
+        output_dir=output_dir,
         learning_rate=learning_rate,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
@@ -41,8 +50,8 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
     )
 
     if conv_flag:
-        encoder = Encoder_Conv_VAE_FLEX(model_config)
-        decoder = Decoder_Conv_AE_FLEX(model_config)
+        encoder = Encoder_Conv_VAE_FLEX(model_config, n_conv_layers=depth) # these are custom classes I wrote for this use case
+        decoder = Decoder_Conv_AE_FLEX(encoder)
 
         model = VAE(
             model_config=model_config,
@@ -64,32 +73,33 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
         eval_data=eval_dataset  # here we use the custom eval dataset
     )
 
+    return output_dir
 
 
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_name = "20230807_vae_test"
+    train_name = "20230804_vae_full"
     n_latent = 10
-    batch_size = 6
-    n_epochs = 15
+    batch_size = 16
+    n_epochs = 100
     conv_flag = True
     if conv_flag:
-        prefix = 'conv_'
+        prefix = 'conv'
     else:
         prefix = ''
 
-    model_name = prefix + f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
     train_dir = os.path.join(root, "training_data", train_name)
 
     # train model
-    train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs, learning_rate=1e-4,
-                      conv_flag=conv_flag, transform=data_transform_rs)
+    output_dir = train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs,
+                                   learning_rate=1e-4, conv_flag=conv_flag) #, input_dim=(1, 256, 128))
 
-    last_training = sorted(os.listdir(os.path.join(train_dir, train_name + model_name)))[-1]
+    last_training = sorted(os.listdir(output_dir))[-1]
     trained_model = AutoModel.load_from_folder(
-        os.path.join(train_dir, train_name + model_name, last_training, 'final_model'))
+        os.path.join(output_dir, last_training, 'final_model'))
 
     # create normal sampler
     normal_samper = NormalSampler(
@@ -102,7 +112,7 @@ if __name__ == "__main__":
     )
 
     # show results with normal sampler
-    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(3, 3))
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(6, 6))
 
     for i in range(3):
         for j in range(3):
