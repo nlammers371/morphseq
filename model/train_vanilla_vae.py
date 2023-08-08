@@ -8,7 +8,7 @@ from pythae.models import AutoModel
 import matplotlib.pyplot as plt
 from pythae.samplers import NormalSampler
 
-def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, learning_rate=1e-3, standardize=False, input_dim=None):
+def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, learning_rate=1e-3, conv_flag=True, input_dim=None):
 
     if input_dim == None:
         input_dim = (1, 576, 256)
@@ -17,14 +17,12 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
 
     train_dataset = MyCustomDataset(
         root=os.path.join(train_dir, "train"),
-        transform=data_transform,
-        standardize=standardize
+        transform=data_transform
     )
 
     eval_dataset = MyCustomDataset(
         root=os.path.join(train_dir, "eval"),
-        transform=data_transform,
-        standardize=standardize
+        transform=data_transform
     )
 
     config = BaseTrainerConfig(
@@ -40,14 +38,19 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
         latent_dim=latent_dim
     )
 
-    encoder = Encoder_Conv_VAE_MNIST(model_config)
-    decoder = Decoder_Conv_AE_MNIST(model_config)
+    if conv_flag:
+        encoder = Encoder_Conv_VAE_MNIST(model_config)
+        decoder = Decoder_Conv_AE_MNIST(model_config)
 
-    model = VAE(
-        model_config=model_config,
-        encoder=encoder,
-        decoder=decoder
-    )
+        model = VAE(
+            model_config=model_config,
+            encoder=encoder,
+            decoder=decoder
+        )
+    else:
+        model = VAE(
+            model_config=model_config
+        )
 
     pipeline = TrainingPipeline(
         training_config=config,
@@ -69,12 +72,18 @@ if __name__ == "__main__":
     n_latent = 10
     batch_size = 32
     n_epochs = 15
+    conv_flag = True
+    if conv_flag:
+        prefix = 'conv_'
+    else:
+        prefix = ''
 
-    model_name = f'_conv_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    model_name = prefix + f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
     train_dir = os.path.join(root, "training_data", train_name)
 
     # train model
-    train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs, learning_rate=1e-4, standardize=False)
+    train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs, learning_rate=1e-4,
+                      conv_flag=conv_flag)
 
     last_training = sorted(os.listdir(os.path.join(train_dir, train_name + model_name)))[-1]
     trained_model = AutoModel.load_from_folder(
