@@ -8,101 +8,82 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import numpy as np
 from pythae.samplers import NormalSampler
-#
-# def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, input_dim=None):
-#
-#     if input_dim == None:
-#         input_dim = (1, 576, 256)
-#
-#     train_dataset = MyCustomDataset(
-#         root=os.path.join(train_dir, "train"),
-#         transform=data_transform,
-#     )
-#
-#     eval_dataset = MyCustomDataset(
-#         root=os.path.join(train_dir, "eval"),
-#         transform=data_transform
-#     )
-#
-#     config = BaseTrainerConfig(
-#         output_dir=os.path.join(train_dir, 'vae_' + train_name),
-#         learning_rate=1e-3,
-#         per_device_train_batch_size=batch_size,
-#         per_device_eval_batch_size=16,
-#         num_epochs=n_epochs,  # Change this to train the model a bit more
-#     )
-#
-#     model_config = VAEConfig(
-#         input_dim=input_dim,
-#         latent_dim=latent_dim
-#     )
-#
-#     model = VAE(
-#         model_config=model_config
-#     )
-#
-#     pipeline = TrainingPipeline(
-#         training_config=config,
-#         model=model
-#     )
-#
-#     pipeline(
-#         train_data=train_dataset, # here we use the custom train dataset
-#         eval_data=eval_dataset # here we use the custom eval dataset
-#     )
 
 
 if __name__ == "__main__":
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_name = "20230804_vae_full"
+    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    train_name = "20230807_vae_test"
     train_dir = os.path.join(root, "training_data", train_name)
 
-    n_latent = 5
-    batch_size = 32
-    n_epochs = 15
-    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
-    # train model
-    #train_vanilla_vae(train_dir, latent_dim=24, batch_size=16, n_epochs=100)
+    # n_latent = 5
+    # batch_size = 32
+    # n_epochs = 15
+    # model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    output_dir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/20230807_vae_test_z10_bs006_ne015"
+
+    main_dims = (128, 128)
+    data_transform = make_dynamic_rs_transform(main_dims)
 
     test_data = MyCustomDataset(
-        root=os.path.join(train_dir, "train"),
-        transform=data_transform_mnist,
-        mnist_size=False
+        root=os.path.join(train_dir, "test"),
+        transform=data_transform
     )
 
-    last_training = sorted(os.listdir(os.path.join(train_dir, train_name + model_name)))[-1]
+    last_training = sorted(os.listdir(output_dir))[-1]
     trained_model = AutoModel.load_from_folder(
-        os.path.join(train_dir, train_name + model_name, last_training, 'final_model'))
+        os.path.join(output_dir, last_training, 'final_model'))
 
     ############
     # Question 1: how well does it reproduce test images?
     ############
+    figure_path = os.path.join(output_dir, last_training, "figures")
+    if not os.path.isdir(figure_path):
+        os.makedirs(figure_path)
+
+    # make subdir for images
+    image_path = os.path.join(figure_path, "images")
+    if not os.path.isdir(image_path):
+        os.makedirs(image_path)
+
+    n_images = len(test_data)
+    n_images_to_sample = 25
+    sample_indices = np.random.choice(range(n_images), n_images_to_sample, replace=False)
+
+    for i_test in sample_indices:
+
+        im_test = torch.reshape(np.asarray(test_data[i_test]).tolist()[0], (1, 1, main_dims[0], main_dims[1]))
+        reconstructions = trained_model.reconstruct(im_test).detach().cpu()
+
+        # show results with normal sampler
+        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 10))
+
+        axes[0].imshow(np.squeeze(im_test), cmap='gray')
+        axes[0].axis('off')
+
+        axes[1].imshow(np.squeeze(reconstructions), cmap='gray')
+        axes[1].axis('off')
+
+        plt.tight_layout(pad=0.)
+
+        plt.savefig(os.path.join(image_path, f'im_{i_test:04}.tiff'))
+        plt.close()
+
+        ############
+        # Question 2: what does latent space look like?
+        ############
+
+        # get latent space representations for all test images
+        z_mu_array = np.empty((n_images, trained_model.latent_dim))
+        z_sigma_array = np.empty((n_images, trained_model.latent_dim))
+        for n in range(n_images):
+            im_test = torch.reshape(np.asarray(test_data[n]).tolist()[0], (1, 1, main_dims[0], main_dims[1]))
+            encoder_out = trained_model.encoder(im_test)
+
+            z_mu_array[n, :] = np.asarray(encoder_out[0].detach())
+            z_sigma_array[n, :] = np.asarray(np.exp(encoder_out[1].detach()/2))
 
 
-
-    # test_data_loader = DataLoader(
-    #         dataset=test_data,
-    #         batch_size=1,
-    #         num_workers=1,
-    #         shuffle=True,
-    #         sampler=None,
-    #         collate_fn=None,
-    #     )
-
-    im_test = np.asarray(test_data[110]).tolist()[0]
-    reconstructions = trained_model.reconstruct(im_test).detach().cpu()
-
-    # show results with normal sampler
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 20))
-
-    axes[0].imshow(np.squeeze(im_test), cmap='gray')
-    axes[0].axis('off')
-
-    axes[1].imshow(np.squeeze(reconstructions), cmap='gray')
-    axes[1].axis('off')
-
-    plt.tight_layout(pad=0.)
-
-    plt.show()
+        # save latent arrays and calculate UMAP
+        import umap
