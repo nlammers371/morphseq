@@ -82,7 +82,7 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20230804_vae_full"
     n_latent = 10
-    batch_size = 16
+    batch_size = 32
     n_epochs = 100
     conv_flag = True
     if conv_flag:
