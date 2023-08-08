@@ -8,8 +8,10 @@ from pythae.models import AutoModel
 import matplotlib.pyplot as plt
 from pythae.samplers import NormalSampler
 
-def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, learning_rate=1e-3, conv_flag=True, input_dim=None):
+def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, learning_rate=1e-3,
+                      conv_flag=True, input_dim=None, transform=data_transform_rs):
 
+    input_dim = (1, 128, 128)
     if input_dim == None:
         input_dim = (1, 576, 256)
 
@@ -17,12 +19,12 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
 
     train_dataset = MyCustomDataset(
         root=os.path.join(train_dir, "train"),
-        transform=data_transform
+        transform=transform
     )
 
     eval_dataset = MyCustomDataset(
         root=os.path.join(train_dir, "eval"),
-        transform=data_transform
+        transform=transform
     )
 
     config = BaseTrainerConfig(
@@ -39,8 +41,8 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
     )
 
     if conv_flag:
-        encoder = Encoder_Conv_VAE_MNIST(model_config)
-        decoder = Decoder_Conv_AE_MNIST(model_config)
+        encoder = Encoder_Conv_VAE_FLEX(model_config)
+        decoder = Decoder_Conv_AE_FLEX(model_config)
 
         model = VAE(
             model_config=model_config,
@@ -70,7 +72,7 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20230807_vae_test"
     n_latent = 10
-    batch_size = 32
+    batch_size = 6
     n_epochs = 15
     conv_flag = True
     if conv_flag:
@@ -83,7 +85,7 @@ if __name__ == "__main__":
 
     # train model
     train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs, learning_rate=1e-4,
-                      conv_flag=conv_flag)
+                      conv_flag=conv_flag, transform=data_transform_rs)
 
     last_training = sorted(os.listdir(os.path.join(train_dir, train_name + model_name)))[-1]
     trained_model = AutoModel.load_from_folder(
