@@ -149,3 +149,54 @@ class Decoder_Conv_AE_FLEX(BaseDecoder):
         output = ModelOutput(reconstruction=self.deconv_layers(h1))
 
         return output
+
+
+class Decoder_Conv_AE_FLEX_Matched(BaseDecoder):
+    def __init__(self, encoder_config):
+        BaseDecoder.__init__(self)
+
+        n_out_channels = encoder_config.n_out_channels
+        kernel_size = encoder_config.kernel_size
+        stride = encoder_config.stride
+        n_conv_layers = encoder_config.n_conv_layers
+
+        self.input_dim = encoder_config.input_dim  # (1, 28, 28)
+        self.latent_dim = encoder_config.latent_dim
+        self.n_channels = self.input_dim[0]
+
+        # get predicted output size of base image
+        [ht, wt] = self.input_dim[1:]
+        for n in range(n_conv_layers):
+            [ht, wt] = conv_output_shape([ht, wt], kernel_size=kernel_size, stride=stride, pad=1)
+        self.h_base = ht
+        self.w_base = wt
+
+        # use this to calculate feature size
+        featureDim = ht * wt * n_out_channels * 2 ** (n_conv_layers - 1)
+        self.featureDim = featureDim
+
+        # self.fc = nn.Linear(self.latent_dim, featureDim * 4 * 4)  # not sure where this factor of 16 comes from
+        self.fc = nn.Linear(self.latent_dim, featureDim)
+
+        self.deconv_layers = nn.Sequential()
+        for n in range(0, n_conv_layers):
+            p_ind = n_conv_layers - n - 1
+            if n == n_conv_layers - 1:
+                n_out = self.n_channels
+            else:
+                n_out = n_out_channels * 2 ** (p_ind - 1)
+            n_in = n_out_channels * 2 ** p_ind
+
+            self.deconv_layers.append(nn.ConvTranspose2d(n_in, n_out, kernel_size, stride, padding=1))
+
+            if n == n_conv_layers - 1:
+                self.deconv_layers.append(nn.Sigmoid())
+            else:
+                self.deconv_layers.append(nn.BatchNorm2d(n_out))
+                self.deconv_layers.append(nn.ReLU())
+
+    def forward(self, z: torch.Tensor):
+        h1 = self.fc(z).reshape(z.shape[0], int(self.featureDim / self.w_base / self.h_base), self.h_base, self.w_base)
+        output = ModelOutput(reconstruction=self.deconv_layers(h1))
+
+        return output

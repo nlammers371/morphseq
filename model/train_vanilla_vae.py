@@ -2,14 +2,13 @@ from functions.pythae_utils import *
 import os
 from pythae.models import VAE, VAEConfig
 from pythae.trainers import BaseTrainerConfig
-from pythae.models.nn.benchmarks.mnist import Encoder_Conv_VAE_MNIST, Decoder_Conv_AE_MNIST
 from pythae.pipelines.training import TrainingPipeline
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
 from pythae.samplers import NormalSampler
 
 def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, learning_rate=1e-3,
-                      conv_flag=True, input_dim=None, depth=4):
+                      conv_flag=True, input_dim=None, depth=5, matched_decoder_flag=False):
 
     # input_dim = (1, 128, 128)
     if input_dim == None:
@@ -23,7 +22,7 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
     else:
         prefix = ''
 
-    model_name = prefix + f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}'
+    model_name = prefix + f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}' + f'matchdec{matched_decoder_flag}'
     output_dir = os.path.join(train_dir, train_name + model_name)
 
     train_dataset = MyCustomDataset(
@@ -51,7 +50,10 @@ def train_vanilla_vae(train_dir, latent_dim=16, batch_size=16, n_epochs=100, lea
 
     if conv_flag:
         encoder = Encoder_Conv_VAE_FLEX(model_config, n_conv_layers=depth) # these are custom classes I wrote for this use case
-        decoder = Decoder_Conv_AE_FLEX(encoder)
+        if matched_decoder_flag:
+            decoder = Decoder_Conv_AE_FLEX_Matched(encoder)
+        else:
+            decoder = Decoder_Conv_AE_FLEX(encoder)
 
         model = VAE(
             model_config=model_config,
@@ -81,7 +83,7 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20230804_vae_full"
-    n_latent = 10
+    n_latent = 25
     batch_size = 32
     n_epochs = 100
     conv_flag = True
@@ -95,7 +97,7 @@ if __name__ == "__main__":
 
     # train model
     output_dir = train_vanilla_vae(train_dir, latent_dim=n_latent, batch_size=batch_size, n_epochs=n_epochs,
-                                   learning_rate=1e-4, conv_flag=conv_flag) #, input_dim=(1, 256, 128))
+                                   learning_rate=1e-4, conv_flag=conv_flag, matched_decoder_flag=True) #, input_dim=(1, 256, 128))
 
     last_training = sorted(os.listdir(output_dir))[-1]
     trained_model = AutoModel.load_from_folder(
