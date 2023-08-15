@@ -5,6 +5,7 @@ from pythae.models.base.base_utils import ModelOutput
 import torch.nn as nn
 import torch
 from math import floor
+import numpy as np
 
 
 # define transforms
@@ -72,13 +73,17 @@ class Encoder_Conv_VAE_FLEX(BaseEncoder):
 
         # get predicted output size of base image
         [ht, wt] = self.input_dim[1:]
-        for n in range(n_conv_layers):
+        n_iter_layers = np.min([n_conv_layers, 6])
+        for n in range(n_iter_layers):
             [ht, wt] = conv_output_shape([ht, wt], kernel_size=kernel_size, stride=stride, pad=1)
 
+        if n_conv_layers > 7:
+            raise Exception("Networks deeper than 7 convolutional layers are not currently supported.")
         # use this to calculate feature size
         featureDim = ht*wt*n_out_channels*2**(n_conv_layers-1)
 
         self.conv_layers = nn.Sequential()
+
         for n in range(n_conv_layers):
             if n == 0:
                 n_in = self.n_channels
@@ -86,7 +91,10 @@ class Encoder_Conv_VAE_FLEX(BaseEncoder):
                 n_in = n_out_channels*2**(n-1)
             n_out = n_out_channels*2**n
 
-            self.conv_layers.append(nn.Conv2d(n_in, out_channels=n_out, kernel_size=kernel_size, stride=stride, padding=1))
+            if (n == 0) and (n_conv_layers == 7):
+                self.conv_layers.append(nn.Conv2d(n_in, out_channels=n_out, kernel_size=5, stride=1, padding=2))  # preserves size
+            else:
+                self.conv_layers.append(nn.Conv2d(n_in, out_channels=n_out, kernel_size=kernel_size, stride=stride, padding=1))
             self.conv_layers.append(nn.BatchNorm2d(n_out))
             self.conv_layers.append(nn.ReLU())
 
@@ -169,7 +177,8 @@ class Decoder_Conv_AE_FLEX_Matched(BaseDecoder):
 
         # get predicted output size of base image
         [ht, wt] = self.input_dim[1:]
-        for n in range(n_conv_layers):
+        n_iter_layers = np.min([n_conv_layers, 6])
+        for n in range(n_iter_layers):
             [ht, wt] = conv_output_shape([ht, wt], kernel_size=kernel_size, stride=stride, pad=1)
         self.h_base = ht
         self.w_base = wt
@@ -182,15 +191,17 @@ class Decoder_Conv_AE_FLEX_Matched(BaseDecoder):
         self.fc = nn.Linear(self.latent_dim, featureDim)
 
         self.deconv_layers = nn.Sequential()
-        for n in range(0, n_conv_layers):
+        for n in range(n_conv_layers):
             p_ind = n_conv_layers - n - 1
             if n == n_conv_layers - 1:
                 n_out = self.n_channels
             else:
                 n_out = n_out_channels * 2 ** (p_ind - 1)
             n_in = n_out_channels * 2 ** p_ind
-
-            self.deconv_layers.append(nn.ConvTranspose2d(n_in, n_out, kernel_size, stride, padding=1))
+            if (n == n_conv_layers-1) and (n_conv_layers == 7):
+                self.deconv_layers.append(nn.ConvTranspose2d(n_in, n_out, 5, 1, padding=2))  # size-preserving
+            else:
+                self.deconv_layers.append(nn.ConvTranspose2d(n_in, n_out, kernel_size, stride, padding=1))
 
             if n == n_conv_layers - 1:
                 self.deconv_layers.append(nn.Sigmoid())
