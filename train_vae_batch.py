@@ -13,7 +13,7 @@ from pythae.pipelines.training import TrainingPipeline
 import argparse
 
 def train_vanilla_vae(train_dir, n_latent=16, batch_size=16, n_epochs=100, learning_rate=1e-3,
-                      input_dim=None, depth=5, matched_decoder_flag=True):
+                      input_dim=None, depth=5):
 
     # input_dim = (1, 128, 128)
     if input_dim == None:
@@ -22,7 +22,7 @@ def train_vanilla_vae(train_dir, n_latent=16, batch_size=16, n_epochs=100, learn
     else:
         transform = make_dynamic_rs_transform(input_dim[1:])
 
-    model_name = f'_z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}'
+    model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}'
     output_dir = os.path.join(train_dir, model_name)
 
     train_dataset = MyCustomDataset(
@@ -50,10 +50,10 @@ def train_vanilla_vae(train_dir, n_latent=16, batch_size=16, n_epochs=100, learn
 
 
     encoder = Encoder_Conv_VAE_FLEX(model_config, n_conv_layers=depth) # these are custom classes I wrote for this use case
-    if matched_decoder_flag:
-        decoder = Decoder_Conv_AE_FLEX_Matched(encoder)
-    else:
-        decoder = Decoder_Conv_AE_FLEX(encoder)
+    # if matched_decoder_flag:
+    decoder = Decoder_Conv_AE_FLEX_Matched(encoder)
+    # else:
+    #     decoder = Decoder_Conv_AE_FLEX(encoder)
 
     model = VAE(
         model_config=model_config,
@@ -97,10 +97,12 @@ if __name__ == "__main__":
     train_folder = "20230815_vae"
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
-    n_epochs = 3
+    n_epochs = 100
     z_dim_vec = [10, 25, 50]
-    depth_vec = [3, 5, 7]
+    depth_vec = [3, 5, 6, 7]
 
+    # output_dir = train_vanilla_vae(train_dir, n_latent=10, batch_size=batch_size, n_epochs=n_epochs,
+    #                                learning_rate=1e-4, depth=7)
     for z in z_dim_vec:
         for d in depth_vec:
             print(f"Depth: {d}")
