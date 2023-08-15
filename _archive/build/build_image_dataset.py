@@ -1,4 +1,4 @@
-# script to define functions for loading and standardizing fish images
+# script to define functions_folder for loading and standardizing fish images
 import os
 from PIL import Image
 import glob2 as glob

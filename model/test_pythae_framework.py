@@ -1,4 +1,4 @@
-from functions.pythae_utils import *
+from _archive.functions_folder.pythae_utils import *
 import os
 from pythae.models import VAE, VAEConfig
 from pythae.trainers import BaseTrainerConfig

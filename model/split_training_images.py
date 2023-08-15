@@ -2,10 +2,9 @@
 import os
 import torch
 import numpy as np
-import imageio
 import glob as glob
 import pandas as pd
-from functions.utilities import path_leaf
+from _archive.functions_folder.utilities import path_leaf
 import imageio
 from tqdm import tqdm
 
@@ -28,7 +27,7 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
     # randomly partition into train, eval, and test
     # this needs to be done at the level of embryos, not images
     if train_eval_test == None:
-        train_eval_test = [0.65, 0.2, 0.15]
+        train_eval_test = [0.7, 0.15, 0.15]
     train_eval_test = (np.asarray(train_eval_test)*frac_to_use).tolist()
     # n_total = embryo_metadata_df.shape[0]
     
@@ -66,42 +65,42 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
         test_paths = []
         test_indices = []
 
-        n_test = np.round(train_eval_test[2]*n_frames_total).astype(int)
-        n_test_curr = 0
-        iter_i = 0
-        # mc_ids = np.where("MC" in embryo_metadata_df["medium"])[0]
-        used_indices = []
-
-        while n_test_curr < n_test:
-            eid = embryo_id_index_shuffle[iter_i]
-
-            # extract embryos that match current eid
-            df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (
-                        embryo_metadata_df["use_embryo_flag"].values == True))[0]
-            if len(df_ids) > 0:
-                medium = embryo_metadata_df["medium"].iloc[df_ids[0]]
-                if "MC" in medium:
-                    used_indices.append(iter_i)
-                    snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
-                    e_list = [os.path.join(data_path, s + ".tif") for s in snip_list]
-                    i_list = df_ids.tolist()
-
-                    # remove frames that did not meet QC standards
-                    test_paths += e_list
-                    test_indices += i_list
-
-                    n_test_curr += len(e_list)
-
-            iter_i += 1
-
-        # reset fractions and avaialable eids
-        n_rem = np.max([0, n_test - n_test_curr])
-        test_frac_new = n_rem / n_frames_total
-        train_eval_test[-1] = test_frac_new
-
-        # train_eval_test = train_eval_test / np.sum(train_eval_test)
-
-        embryo_id_index_shuffle = [embryo_id_index_shuffle[e] for e in range(len(embryo_id_index_shuffle)) if e not in used_indices]
+        # n_test = np.round(train_eval_test[2]*n_frames_total).astype(int)
+        # n_test_curr = 0
+        # iter_i = 0
+        # # mc_ids = np.where("MC" in embryo_metadata_df["medium"])[0]
+        # used_indices = []
+        #
+        # while n_test_curr < n_test:
+        #     eid = embryo_id_index_shuffle[iter_i]
+        #
+        #     # extract embryos that match current eid
+        #     df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (
+        #                 embryo_metadata_df["use_embryo_flag"].values == True))[0]
+        #     if len(df_ids) > 0:
+        #         medium = embryo_metadata_df["medium"].iloc[df_ids[0]]
+        #         if "MC" in medium:
+        #             used_indices.append(iter_i)
+        #             snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
+        #             e_list = [os.path.join(data_path, s + ".tif") for s in snip_list]
+        #             i_list = df_ids.tolist()
+        #
+        #             # remove frames that did not meet QC standards
+        #             test_paths += e_list
+        #             test_indices += i_list
+        #
+        #             n_test_curr += len(e_list)
+        #
+        #     iter_i += 1
+        #
+        # # reset fractions and avaialable eids
+        # n_rem = np.max([0, n_test - n_test_curr])
+        # test_frac_new = n_rem / n_frames_total
+        # train_eval_test[-1] = test_frac_new
+        #
+        # # train_eval_test = train_eval_test / np.sum(train_eval_test)
+        #
+        # embryo_id_index_shuffle = [embryo_id_index_shuffle[e] for e in range(len(embryo_id_index_shuffle)) if e not in used_indices]
 
     # itereate through shuffled IDs
     for eid in embryo_id_index_shuffle:
@@ -203,7 +202,7 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
-    train_name = "20230807_vae_test"
+    train_name = "20230815_vae"
     label_var = "experiment_date"
 
-    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=0.2)
+    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0)

@@ -4,7 +4,7 @@ from sklearn import preprocessing, metrics
 import scipy
 
 """
-evaluation.py provides evaluation functions that takes in predictions and output gene-wise correlation, peak-wise AUROC and AUPRnorm, as well as FCT (FOSCTTM) score
+evaluation.py provides evaluation functions_folder that takes in predictions and output gene-wise correlation, peak-wise AUROC and AUPRnorm, as well as FCT (FOSCTTM) score
 """
 
 

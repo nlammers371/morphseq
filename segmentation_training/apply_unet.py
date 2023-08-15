@@ -2,7 +2,7 @@ import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-from functions.core_utils_segmentation import Dataset, FishModel
+from _archive.functions_folder.core_utils_segmentation import Dataset, FishModel
 from torch.utils.data import DataLoader
 import glob
 import ntpath

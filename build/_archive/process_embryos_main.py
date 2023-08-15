@@ -1,13 +1,10 @@
 import os
 import numpy as np
 import glob
-import ntpath
-from aicsimageio import AICSImage
-from tqdm import tqdm
-from skimage.measure import label, regionprops, regionprops_table
+from skimage.measure import label, regionprops
 import cv2
 import pandas as pd
-from functions.utilities import path_leaf
+from _archive.functions_folder.utilities import path_leaf
 import scipy
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
