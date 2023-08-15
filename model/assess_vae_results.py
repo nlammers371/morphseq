@@ -1,18 +1,13 @@
-from functions.pythae_utils import *
+from _archive.functions_folder.pythae_utils import *
 import os
-from pythae.models import VAE, VAEConfig
-from pythae.trainers import BaseTrainerConfig
-from pythae.pipelines.training import TrainingPipeline
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
 import umap
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from pythae.samplers import NormalSampler
 import torch.nn.functional as F
 import pandas as pd
-from functions.utilities import path_leaf
+from _archive.functions_folder.utilities import path_leaf
 from tqdm import tqdm
 
 if __name__ == "__main__":
@@ -31,7 +26,7 @@ if __name__ == "__main__":
 
     train_name = "20230804_vae_full"
     # model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05"
-    model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05matchdecTrue"
+    model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05_matchdec01"
     train_dir = os.path.join(root, "training_data", train_name)
 
     output_dir = os.path.join(train_dir, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"

@@ -1,21 +1,6 @@
 import os
-import numpy as np
-import glob
-import ntpath
-from aicsimageio import AICSImage
-from tqdm import tqdm
-from skimage.measure import label, regionprops, regionprops_table
-import cv2
 import pandas as pd
-from functions.utilities import path_leaf
 import scipy
-from parfor import pmap
-from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import pairwise_distances
-import skimage
-import numpy as np
-from skimage.morphology import disk, dilation
-from scipy.spatial import Delaunay
 import numpy as np
 
 def perform_embryo_qc(root, dead_lead_time=2):

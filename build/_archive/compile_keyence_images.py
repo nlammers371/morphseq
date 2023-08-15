@@ -1,4 +1,4 @@
-# script to define functions for loading and standardizing fish movies
+# script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
 from PIL import Image
