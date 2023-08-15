@@ -16,7 +16,7 @@ data_transform = transforms.Compose([
 def make_dynamic_rs_transform(im_dims):
     data_transform = transforms.Compose([
         transforms.Grayscale(num_output_channels=1),
-        transforms.Resize((im_dims[0], im_dims[1]), antialias=False),
+        transforms.Resize((im_dims[0], im_dims[1])),
         transforms.ToTensor(),
     ])
     return data_transform
@@ -25,16 +25,19 @@ def make_dynamic_rs_transform(im_dims):
 # Define a custom dataset class
 class MyCustomDataset(datasets.ImageFolder):
 
-    def __init__(self, root, transform=None, target_transform=None):
+    def __init__(self, root, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
     def __getitem__(self, index):
-        X, _ = super().__getitem__(index)
+        X, Y = super().__getitem__(index)
 
-        return DatasetOutput(
-            data=X
-        )
-
+        if not self.return_name:
+            return DatasetOutput(
+                data=X
+            )
+        else:
+            return DatasetOutput(data=X), self.samples[index]
 ##########
 # Define custom convolutional encoder that allows for variable input size
 def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):
