@@ -100,16 +100,23 @@ if __name__ == "__main__":
     n_epochs = 100
     z_dim_vec = [10, 25, 50]
     depth_vec = [3, 5, 6, 7]
-
+    max_tries = 3
     # output_dir = train_vanilla_vae(train_dir, n_latent=10, batch_size=batch_size, n_epochs=n_epochs,
     #                                learning_rate=1e-4, depth=7)
-    for z in z_dim_vec:
+    for z in z_dim_vec[1:]:
         for d in depth_vec:
-            print(f"Depth: {d}")
-            print(f"Latent dim: {z}")
-            # train model
-            output_dir = train_vanilla_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
-                                           learning_rate=1e-4, depth=d)
+            iter_flag = 0
+            while iter_flag < max_tries:
+                try:
+                    print(f"Depth: {d}")
+                    print(f"Latent dim: {z}")
+                    # train model
+                    output_dir = train_vanilla_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
+                                               learning_rate=1e-4, depth=d)
+                    iter_flag = max_tries
+                except:
+                    iter_flag += 1
+                    print(iter_flag)
 
     # last_training = sorted(os.listdir(output_dir))[-1]
     # trained_model = AutoModel.load_from_folder(
