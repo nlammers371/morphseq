@@ -5,7 +5,8 @@ import napari
 from ome_zarr.io import parse_url
 
 
-full_filename = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/yx1_temp/10x_emilin3a-mScarlet_notochord_zstep05_bright_bf_0005.nd2"
+# full_filename = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/yx1_temp/10x_emilin3a-mScarlet_notochord_zstep05_bright_bf_0005.nd2"
+full_filename = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/yx1_temp/20230817/20x_E03_48hpf_tdTom_fin.nd2"
 
 imObject = AICSImage(full_filename)
 # imObject.set_scene("XYPos:17")
