@@ -9,6 +9,7 @@ from ome_zarr.io import parse_url
 # full_filename = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/yx1_temp/20230817/20x_E03_48hpf_tdTom_fin.nd2"
 full_filename = "/Volumes/LaCie/40x_fin_tdTom_ZF_pec_fin.nd2"
 # full_filename = "/Volumes/LaCie/tdTom_ZF_pec_fin.nd2"
+# full_filename = "/Volumes/LaCie/40x_tile_fin_tdTom_ZF_pec_fin001.nd2"
 imObject = AICSImage(full_filename)
 # imObject.set_scene("XYPos:4")
 # imData = np.squeeze(imObject.get_image_data("TZYX", C=0))
