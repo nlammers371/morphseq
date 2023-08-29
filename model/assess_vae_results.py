@@ -1,3 +1,5 @@
+import torch
+
 from _archive.functions_folder.pythae_utils import *
 import os
 from pythae.models import AutoModel
@@ -14,6 +16,7 @@ if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    batch_size = 32
 
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
@@ -77,21 +80,39 @@ if __name__ == "__main__":
         data_sampler = data_sampler_vec[m]
         n_images = len(data_sampler)
         n_image_figs = np.min([n_images, n_image_figures])
-        n_recon_samples = n_images #np.min([n_images, n_images_to_sample])
+        # n_recon_samples = n_images #np.min([n_images, n_images_to_sample])
 
         # draw random samples
-        sample_indices = np.random.choice(range(n_images), n_recon_samples, replace=False)
+        sample_indices = np.random.choice(range(n_images), n_images, replace=False)
+        figure_indices = np.random.choice(range(n_images), n_image_figs, replace=False)
+        batch_id_vec = []
+        n_batches = np.ceil(len(sample_indices)/batch_size).astype(int)
+        for n in range(n_batches):
+            ind1 = n*batch_size
+            ind2 = (n+1)*batch_size
+            batch_id_vec.append(sample_indices[ind1:ind2])
+
+
         # recon_loss_array = np.empty((n_recon_samples,))
 
         print("Scoring image reconstructions for " + mode + " images...")
-        for i, i_test in enumerate(tqdm(sample_indices)):
+        for n in tqdm(range(5)):
 
-            im_raw = np.asarray(data_sampler[i_test][0]).tolist()[0]
-            path_data = data_sampler[i_test][1]
-            snip_name = path_leaf(path_data[0]).replace(".jpg", "")
-            snip_df_index = np.where(snip_name == snip_id_vec)[0][0]
+            im_stack = np.empty((batch_size, main_dims[0], main_dims[1])).astype(np.float32)
+            batch_ids = batch_id_vec[n]
+            snip_index_vec = []
+            snip_name_vec = []
+            for b in range(batch_size):
 
-            im_test = torch.reshape(im_raw, (1, 1, main_dims[0], main_dims[1]))
+                im_raw = np.asarray(data_sampler[batch_ids[b]][0]).tolist()[0]
+                path_data = data_sampler[batch_ids[b]][1]
+                snip_name = path_leaf(path_data[0]).replace(".jpg", "")
+                snip_name_vec.append(snip_name)
+                snip_index_vec.append(np.where(snip_name == snip_id_vec)[0][0])
+
+                im_stack[b, :, :] = im_raw
+
+            im_test = torch.reshape(torch.from_numpy(im_stack), (batch_size, 1, main_dims[0], main_dims[1]))
             im_recon = trained_model.reconstruct(im_test).detach().cpu()
 
             recon_loss = F.mse_loss(
@@ -100,26 +121,24 @@ if __name__ == "__main__":
                 reduction="none",
             ).sum(dim=-1)
             # recon_loss_array[i] = recon_loss
+            for b in range(batch_size):
+                embryo_df.loc[snip_index_vec[b], "train_cat"] = mode
+                embryo_df.loc[snip_index_vec[b], "recon_mse"] = np.asarray(recon_loss)[b]
 
-            embryo_df.loc[snip_df_index, "train_cat"] = mode
-            embryo_df.loc[snip_df_index, "recon_mse"] = np.asarray(recon_loss)[0]
+                if batch_ids[b] in figure_indices:
+                    # show results with normal sampler
+                    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 10))
 
-            if i <= n_image_figs:
-                # show results with normal sampler
-                fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 10))
+                    axes[0].imshow(np.squeeze(im_test[b, :, :]), cmap='gray')
+                    axes[0].axis('off')
 
-                axes[0].imshow(np.squeeze(im_test), cmap='gray')
-                axes[0].axis('off')
+                    axes[1].imshow(np.squeeze(im_recon[b, :, :]), cmap='gray')
+                    axes[1].axis('off')
 
-                axes[1].imshow(np.squeeze(im_recon), cmap='gray')
-                axes[1].axis('off')
+                    plt.tight_layout(pad=0.)
 
-                plt.tight_layout(pad=0.)
-
-                plt.savefig(os.path.join(image_path, f'im_{i_test:04}_loss{int(np.round(recon_loss,0)):05}.tiff'))
-                plt.close()
-
-
+                    plt.savefig(os.path.join(image_path, snip_name_vec[b] + f'_loss{int(np.round(recon_loss[b],0)):05}.tiff'))
+                    plt.close()
 
         # save
         # np.save(os.path.join(figure_path, mode + "_set_recon_loss.npy"), recon_loss_array)
@@ -138,23 +157,40 @@ if __name__ == "__main__":
         data_sampler = data_sampler_vec[m]
         n_images = len(data_sampler)
 
-        # get latent space representations for all test images
-        # z_mu_array = np.empty((n_images, trained_model.latent_dim))
-        # z_sigma_array = np.empty((n_images, trained_model.latent_dim))
-        print(f"Calculating {mode} latent spaces...")
-        for n in tqdm(range(n_images)):
-            im_raw = np.asarray(data_sampler[n][0]).tolist()[0]
-            path_data = data_sampler[n][1]
-            snip_name = path_leaf(path_data[0]).replace(".jpg", "")
-            snip_df_index = np.where(snip_name == snip_id_vec)[0][0]
+        sample_indices = range(n_images)
+        batch_id_vec = []
+        n_batches = np.ceil(len(sample_indices) / batch_size).astype(int)
+        for n in range(n_batches):
+            ind1 = n * batch_size
+            ind2 = (n + 1) * batch_size
+            batch_id_vec.append(sample_indices[ind1:ind2])
 
-            im_test = torch.reshape(im_raw, (1, 1, main_dims[0], main_dims[1]))
+        # get latent space representations for all test images
+        print(f"Calculating {mode} latent spaces...")
+        for n in tqdm(range(n_batches)):
+
+            im_stack = np.empty((batch_size, main_dims[0], main_dims[1])).astype(np.float32)
+            batch_ids = batch_id_vec[n]
+            snip_index_vec = []
+            snip_name_vec = []
+            for b in range(batch_size):
+                im_raw = np.asarray(data_sampler[batch_ids[b]][0]).tolist()[0]
+                path_data = data_sampler[batch_ids[b]][1]
+                snip_name = path_leaf(path_data[0]).replace(".jpg", "")
+                snip_name_vec.append(snip_name)
+                snip_index_vec.append(np.where(snip_name == snip_id_vec)[0][0])
+
+                im_stack[b, :, :] = im_raw
+
+
+            im_test = torch.reshape(torch.from_numpy(im_stack), (batch_size, 1, main_dims[0], main_dims[1]))
             encoder_out = trained_model.encoder(im_test)
             zm_vec = np.asarray(encoder_out[0].detach())
             zs_vec = np.asarray(encoder_out[1].detach())
+            snip_ind_array = np.asarray(snip_index_vec)
             for z in range(trained_model.latent_dim):
-                embryo_df.loc[snip_df_index, f"z_mu_{z:02}"] = zm_vec[0][z]
-                embryo_df.loc[snip_df_index, f"z_sigma_{z:02}"] = zs_vec[0][z]
+                embryo_df.loc[snip_ind_array, f"z_mu_{z:02}"] = zm_vec[:, z]
+                embryo_df.loc[snip_ind_array, f"z_sigma_{z:02}"] = zs_vec[:, z]
 
             # z_mu_array[n, :] = np.asarray(encoder_out[0].detach())
             # z_sigma_array[n, :] = np.asarray(np.exp(encoder_out[1].detach()/2))
