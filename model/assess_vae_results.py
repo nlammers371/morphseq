@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    batch_size = 32
+    batch_size = 128
 
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
@@ -104,11 +104,12 @@ if __name__ == "__main__":
             print("Scoring image reconstructions for " + mode + " images...")
             for n in tqdm(range(n_batches)):
 
-                im_stack = np.empty((batch_size, main_dims[0], main_dims[1])).astype(np.float32)
                 batch_ids = batch_id_vec[n]
+                im_stack = np.empty((len(batch_ids), main_dims[0], main_dims[1])).astype(np.float32)
+
                 snip_index_vec = []
                 snip_name_vec = []
-                for b in range(batch_size):
+                for b in range(len(batch_ids)):
 
                     im_raw = np.asarray(data_sampler[batch_ids[b]][0]).tolist()[0]
                     path_data = data_sampler[batch_ids[b]][1]
@@ -118,7 +119,7 @@ if __name__ == "__main__":
 
                     im_stack[b, :, :] = im_raw
 
-                im_test = torch.reshape(torch.from_numpy(im_stack), (batch_size, 1, main_dims[0], main_dims[1]))
+                im_test = torch.reshape(torch.from_numpy(im_stack), (len(batch_ids), 1, main_dims[0], main_dims[1]))
                 im_recon = trained_model.reconstruct(im_test).detach().cpu()
 
                 recon_loss = F.mse_loss(
@@ -127,7 +128,7 @@ if __name__ == "__main__":
                     reduction="none",
                 ).sum(dim=-1)
                 # recon_loss_array[i] = recon_loss
-                for b in range(batch_size):
+                for b in range(len(batch_ids)):
                     embryo_df.loc[snip_index_vec[b], "train_cat"] = mode
                     embryo_df.loc[snip_index_vec[b], "recon_mse"] = np.asarray(recon_loss)[b]
 
@@ -174,12 +175,11 @@ if __name__ == "__main__":
             # get latent space representations for all test images
             print(f"Calculating {mode} latent spaces...")
             for n in tqdm(range(n_batches)):
-
-                im_stack = np.empty((batch_size, main_dims[0], main_dims[1])).astype(np.float32)
                 batch_ids = batch_id_vec[n]
+                im_stack = np.empty((len(batch_ids), main_dims[0], main_dims[1])).astype(np.float32)
                 snip_index_vec = []
                 snip_name_vec = []
-                for b in range(batch_size):
+                for b in range(len(batch_ids)):
                     im_raw = np.asarray(data_sampler[batch_ids[b]][0]).tolist()[0]
                     path_data = data_sampler[batch_ids[b]][1]
                     snip_name = path_leaf(path_data[0]).replace(".jpg", "")
@@ -188,8 +188,7 @@ if __name__ == "__main__":
 
                     im_stack[b, :, :] = im_raw
 
-
-                im_test = torch.reshape(torch.from_numpy(im_stack), (batch_size, 1, main_dims[0], main_dims[1]))
+                im_test = torch.reshape(torch.from_numpy(im_stack), (len(batch_ids), 1, main_dims[0], main_dims[1]))
                 encoder_out = trained_model.encoder(im_test)
                 zm_vec = np.asarray(encoder_out[0].detach())
                 zs_vec = np.asarray(encoder_out[1].detach())
