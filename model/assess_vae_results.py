@@ -15,10 +15,10 @@ from tqdm import tqdm
 
 if __name__ == "__main__":
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128
-
+    overwrite_flag = False
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
@@ -26,12 +26,11 @@ if __name__ == "__main__":
     train_dir = os.path.join(root, "training_data", train_name, '')
     # model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05"
     # get list of models in this folder
-    model_name_list = glob.glob(train_dir + '*depth*')
+    model_name_list = sorted(glob.glob(train_dir + '*depth*'))
 
     m_iter = 0
     for model_name in model_name_list:
         m_iter += 1
-        print("Evaluating model " + model_name + f'({m_iter:02} of ' + str(len(model_name_list)) + ')')
 
         embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
         embryo_df = embryo_metadata_df[
@@ -69,7 +68,17 @@ if __name__ == "__main__":
         figure_path = os.path.join(output_dir, last_training, "figures")
         if not os.path.isdir(figure_path):
             os.makedirs(figure_path)
-        print("Saving to: " + figure_path)
+
+
+        prev_run_flag = os.path.isfile(os.path.join(figure_path, "embryo_stats_df.csv"))
+
+
+        if prev_run_flag and overwrite_flag==False:
+            print("Results already exist for: " + figure_path + ". Skipping.")
+            continue
+
+        print("Evaluating model " + model_name + f'({m_iter:02} of ' + str(len(model_name_list)) + ')')
+        # print("Saving to: " + figure_path)
 
         np.random.seed(123)
 
