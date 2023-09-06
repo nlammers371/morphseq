@@ -24,7 +24,7 @@ def train_vanilla_vae(train_dir, n_latent=16, batch_size=16, n_epochs=100, learn
     if not tc_flag:
         model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}'
     else:
-        model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}' + '_betaTC'
+        model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}' + f'_beta{beta_factor:02}'
 
     output_dir = os.path.join(train_dir, model_name)
 
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
     n_epochs = 100
-    z_dim_vec = [10, 25, 50]
+    z_dim_vec = [25, 50]
     depth_vec = [5]
     beta_vec = [1, 2, 4, 6]
     max_tries = 3
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     #                                learning_rate=1e-4, depth=7)
 
     if not tc_flag:
-        for z in z_dim_vec[1:]:
+        for z in z_dim_vec:
             for d in depth_vec:
                 iter_flag = 0
                 while iter_flag < max_tries:
@@ -137,23 +137,23 @@ if __name__ == "__main__":
                         iter_flag += 1
                         print(iter_flag)
 
-        else:
-            for z in z_dim_vec[1:]:
-                for d in depth_vec:
-                    for b in beta_vec:
-                        iter_flag = 0
-                        while iter_flag < max_tries:
-                            try:
-                                print(f"Depth: {d}")
-                                print(f"Latent dim: {z}")
-                                print(f"Beta weight: {b}")
-                                # train model
-                                output_dir = train_vanilla_vae(train_dir, n_latent=z, batch_size=batch_size,
-                                                               n_epochs=n_epochs,
-                                                               learning_rate=1e-4, depth=d, tc_flag=tc_flag,
-                                                               beta_factor=b)
-                                iter_flag = max_tries
-                            except:
-                                iter_flag += 1
-                                print(iter_flag)
+    else:
+        for z in z_dim_vec:
+            for d in depth_vec:
+                for b in beta_vec:
+                    iter_flag = 0
+                    while iter_flag < max_tries:
+                        try:
+                            print(f"Depth: {d}")
+                            print(f"Latent dim: {z}")
+                            print(f"Beta weight: {b}")
+                            # train model
+                            output_dir = train_vanilla_vae(train_dir, n_latent=z, batch_size=batch_size,
+                                                           n_epochs=n_epochs,
+                                                           learning_rate=1e-4, depth=d, tc_flag=tc_flag,
+                                                           beta_factor=b)
+                            iter_flag = max_tries
+                        except:
+                            iter_flag += 1
+                            print(iter_flag)
 
