@@ -1,7 +1,7 @@
 import glob as glob
 
 import torch
-from _archive.functions_folder.pythae_utils import *
+from functions.pythae_utils import *
 import os
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
