@@ -15,8 +15,8 @@ from tqdm import tqdm
 
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128
     overwrite_flag = False
     # load metadata
