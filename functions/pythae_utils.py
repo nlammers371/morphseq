@@ -110,7 +110,7 @@ class Encoder_Conv_VAE_FLEX(BaseEncoder):
         )
         return output
 
-
+# Write decoder class that allows for variable number of convolutional layers
 class Decoder_Conv_AE_FLEX(BaseDecoder):
     def __init__(self, encoder_config):
         BaseDecoder.__init__(self)
@@ -214,3 +214,61 @@ class Decoder_Conv_AE_FLEX_Matched(BaseDecoder):
         output = ModelOutput(reconstruction=self.deconv_layers(h1))
 
         return output
+
+
+# see if dropping the size of the convolutional kernel does anything to improve resolution
+class Encoder_Conv_VAE_Kernel3(BaseEncoder):
+    def __init__(self, init_config, n_conv_layers=4, n_out_channels=16):
+        BaseEncoder.__init__(self)
+
+        stride = 2  # I'm keeping this fixed at 2 for now
+        kernel_size = 4 # Keep fixed at
+
+        self.n_out_channels = n_out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.n_conv_layers = n_conv_layers
+
+        self.input_dim = init_config.input_dim
+        self.latent_dim = init_config.latent_dim
+        self.n_channels = self.input_dim[0]
+
+        # get predicted output size of base image
+        [ht, wt] = self.input_dim[1:]
+        n_iter_layers = np.min([n_conv_layers, 6])
+        for n in range(n_iter_layers):
+            [ht, wt] = conv_output_shape([ht, wt], kernel_size=kernel_size, stride=stride, pad=1)
+
+        if n_conv_layers > 7:
+            raise Exception("Networks deeper than 7 convolutional layers are not currently supported.")
+        # use this to calculate feature size
+        featureDim = ht*wt*n_out_channels*2**(n_conv_layers-1)
+
+        self.conv_layers = nn.Sequential()
+
+        for n in range(n_conv_layers):
+            if n == 0:
+                n_in = self.n_channels
+            else:
+                n_in = n_out_channels*2**(n-1)
+            n_out = n_out_channels*2**n
+
+            if (n == 0) and (n_conv_layers == 7):
+                self.conv_layers.append(nn.Conv2d(n_in, out_channels=n_out, kernel_size=5, stride=1, padding=2))  # preserves size
+            else:
+                self.conv_layers.append(nn.Conv2d(n_in, out_channels=n_out, kernel_size=kernel_size, stride=stride, padding=1))
+            self.conv_layers.append(nn.BatchNorm2d(n_out))
+            self.conv_layers.append(nn.ReLU())
+
+        # add latent layers
+        self.embedding = nn.Linear(featureDim, self.latent_dim)
+        self.log_var = nn.Linear(featureDim, self.latent_dim)
+
+    def forward(self, x: torch.Tensor):
+        h1 = self.conv_layers(x).reshape(x.shape[0], -1)
+        output = ModelOutput(
+            embedding=self.embedding(h1),
+            log_covariance=self.log_var(h1)
+        )
+        return output
+
