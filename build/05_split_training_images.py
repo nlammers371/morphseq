@@ -202,7 +202,7 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
-    train_name = "20230815_vae"
+    train_name = "20230915_vae"
     label_var = "experiment_date"
 
     make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0)
