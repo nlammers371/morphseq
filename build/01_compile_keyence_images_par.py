@@ -61,45 +61,6 @@ def scrape_keyence_metadata(im_path):
 
     return meta_dict
 
-# def scrape_keyence_metadata_v2(im_path):
-#     # im_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230531/bf_timeseries_stack0850_pitch040/W001/P00001/T0004/wt_W001_P00001_T0004_Z005_CH1.tif"
-#     with open(im_path, 'rb') as a:
-#         fulldata = a.read()
-#     metadata = fulldata.partition(b'<Data>')[2].partition(b'</Data>')[0].decode()
-#
-#     meta_dict = dict({})
-#     keyword_list = ['ShootingDateTime', 'LensName', 'Observation Type', 'Width', 'Height']
-#     outname_list = ['Time (s)', 'Objective', 'Channel', 'Width (um)', 'Height (um)']
-#
-#     for k in range(len(keyword_list)):
-#         param_string = keyword_list[k]
-#         name = outname_list[k]
-#
-#         if (param_string == 'Width') or (param_string == 'Height'):
-#             ind1 = findnth(metadata, param_string + ' Type', 2)
-#             ind2 = findnth(metadata, '/' + param_string, 2)
-#         else:
-#             ind1 = metadata.find(param_string)
-#             ind2 = metadata.find('/' + param_string)
-#         long_string = metadata[ind1:ind2]
-#         subind1 = long_string.find(">")
-#         subind2 = long_string.find("<")
-#         param_val = long_string[subind1+1:subind2]
-#
-#         sysind = long_string.find("System.")
-#         dtype = long_string[sysind+7:subind1-1]
-#         if 'Int' in dtype:
-#             param_val = int(param_val)
-#
-#         if param_string == "ShootingDateTime":
-#             param_val = param_val / 10 / 1000 / 1000  # convert to seconds (native unit is 100 nanoseconds)
-#         elif (param_string=='Height') or (param_string=='Width'):
-#             param_val = param_val / 1000
-#
-#         # add to dict
-#         meta_dict[name] = param_val
-#
-#     return meta_dict
 
 def findnth(haystack, needle, n):
     parts = haystack.split(needle, n+1)
@@ -422,41 +383,6 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
         else:
             metadata_df = []
 
-        # metadata_dict = dict({})
-        # for w in range(20):
-        #     key, well_metadata = process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, False)
-        #     metadata_dict[key] = well_metadata
-        # key_list = [list(dd.keys())[0] for dd in metadata_dict_list]
-        # metadata_dict = dict({})
-        # first_time = np.inf
-        # for k, key in enumerate(key_list):
-        #     # add entry to master dictionary
-        #     dd = metadata_dict_list[k]
-        #     dd_sub = dd[key]
-
-            # iterate through well and find the earliest time stamp it contains
-            # sub_keys = list(dd_sub.keys())
-            # t_vec = np.empty((len(sub_keys,)))
-            # for s, sub_key in enumerate(sub_keys):
-            #     t_vec[s] = dd_sub[sub_key]['Time (s)']
-            # first_time = np.min([first_time, np.min(t_vec)])
-
-            # dd_sub['first_time'] = np.min(t_vec)
-            # metadata_dict[key] = dd_sub
-
-        # generate new relative time field
-        # for well_key in list(metadata_dict.keys()):
-        #     well_dict = metadata_dict[well_key]
-        #     for time_key in list(well_dict.keys()):
-        #         time_dict = well_dict[time_key]
-        #         time_stamp_abs = time_dict['Time (s)']
-        #         time_dict['Time Rel (s)'] = time_stamp_abs - first_time
-        #
-        #         well_dict[time_key] = time_dict
-        #
-        #     metadata_dict[well_key] = well_dict
-
-        # print('made it')
         # load previous metadata
         metadata_path = os.path.join(ff_dir, 'metadata.csv')
         # if os.path.isfile(metadata_path) and len(metadata_df) > 0:
@@ -608,8 +534,8 @@ if __name__ == "__main__":
     write_dir = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq" #"D:\\Nick\\morphseq"
 
     # ch_to_use = [1]  # ,2,3]
-    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230622\\", "Z:\\morphseq\\raw_keyence_data\\20230629\\"]
+    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230627\\"]
     # build FF images
-    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False, dir_list=[dir_list[1]])
+    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list)
     # stitch FF images
-    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=False, dir_list=[dir_list[1]])
+    stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list)

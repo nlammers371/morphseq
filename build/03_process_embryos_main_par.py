@@ -10,7 +10,7 @@ from parfor import pmap
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 import skimage
-
+from scipy.stats import truncnorm
 import numpy as np
 
 
@@ -241,14 +241,17 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
     # dl_rad_px = 0
     # im_dist_cropped = im_dist_cropped * dl_rad_px**-1
     # im_dist_cropped[np.where(im_dist_cropped > 2)] = 1
-    noise_array = np.random.normal(px_mean, px_std, outshape)
+    # noise_array = np.random.normal(px_mean, px_std, outshape)
+    noise_array_raw = np.reshape(truncnorm.rvs(-px_mean/px_std, 4, size=outshape[0]*outshape[1]), outshape)
+    noise_array = noise_array_raw*px_std + px_mean
+    noise_array[np.where(noise_array < 0)] = 0 # This is redundant, but just in case someone fiddles with the above distributioon
     # noise_array_scaled = np.multiply(noise_array, im_dist_cropped).astype(np.uint8)
 
     im_masked_cropped = im_cropped.copy()
     # im_masked_cropped += noise_array_scaled # [np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
-    im_masked_cropped[np.where(im_dist_cropped > dl_rad_px)] = noise_array[np.where(im_dist_cropped > dl_rad_px)]
-    im_masked_cropped[np.where(im_masked_cropped < 0)] = 0
-    im_masked_cropped[np.where(im_masked_cropped > 255)] = 255
+    im_masked_cropped[np.where(im_dist_cropped > dl_rad_px)] = np.round(noise_array[np.where(im_dist_cropped > dl_rad_px)]).astype(np.uint8)
+    # im_masked_cropped[np.where(im_masked_cropped < 0)] = 0
+    im_masked_cropped[np.where(im_masked_cropped > 255)] = 255 # NL: I think this is redundant but will leave it
     im_masked_cropped = np.round(im_masked_cropped).astype(int)
 
     # check whether we cropped out part of the embryo
@@ -894,11 +897,11 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
     out_of_frame_flags = []
     if not par_flag:
         for r in tqdm(export_indices):
-            oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px_mean, px_std)
+            oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, 0.1*px_mean, 0.1*px_std)
             out_of_frame_flags.append(oof)
     else:
         out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale,
-                                                                        outshape, px_mean, px_std), rP=0.75)
+                                                                        outshape, 0.1*px_mean, 0.1*px_std), rP=0.75)
 
     # add oof flag
     embryo_metadata_df["out_of_frame_flag"].iloc[export_indices] = out_of_frame_flags
