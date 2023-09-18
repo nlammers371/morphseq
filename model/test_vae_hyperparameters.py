@@ -23,7 +23,7 @@ def train_vanilla_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learn
     else:
         transform = make_dynamic_rs_transform(input_dim[1:])
     if not tc_flag:
-        model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}'
+        model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}'
     else:
         model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}' + f'_beta{beta_factor:02}'
 
@@ -59,7 +59,7 @@ def train_vanilla_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learn
             beta=beta_factor
         )
 
-    encoder = Encoder_Conv_VAE(model_config, n_conv_layers=depth) # these are custom classes I wrote for this use case
+    encoder = Encoder_Conv_VAE(model_config, n_conv_layers=depth, n_out_channels=n_out_channels) # these are custom classes I wrote for this use case
     # if matched_decoder_flag:
     decoder = Decoder_Conv_VAE(encoder)
     # else:
@@ -110,12 +110,12 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230815_vae"
+    train_folder = "20230915_vae"
     tc_flag = False  # indicates whether we wish to use standard or disentangled TC vae
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
     n_epochs = 100
-    z_dim_vec = [100]
+    z_dim_vec = [50, 100, 250]
     depth_vec = [5]
     beta_vec = []
     n_out_channel_vec = [16, 32, 64]

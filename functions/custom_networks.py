@@ -6,9 +6,9 @@ import torch.nn as nn
 import torch
 from math import floor
 import numpy as np
-from pythae_utils import conv_output_shape, deconv_output_shape
+from functions.pythae_utils import conv_output_shape, deconv_output_shape
 
-# Define an encoder class with tuneable variables for the number of convultional layers ad the depth of the conv kernels
+# Define an encoder class with tuneable variables for the number of convolutional layers ad the depth of the conv kernels
 class Encoder_Conv_VAE(BaseEncoder):
     def __init__(self, init_config, n_conv_layers=5, n_out_channels=16):
         BaseEncoder.__init__(self)
