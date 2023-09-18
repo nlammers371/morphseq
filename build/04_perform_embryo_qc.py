@@ -57,7 +57,8 @@ def perform_embryo_qc(root, dead_lead_time=2):
             if np.isnan(first_i):
                 first_i = t
         elif ~np.isnan(first_i):
-            last_i = t
+            last_i = t-1
+            break
 
     # fill in blanks
     percentile_array[:first_i] = percentile_array[first_i]
@@ -101,8 +102,8 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
 
 if __name__ == "__main__":
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
     # print('Compiling well metadata...')
     # build_well_metadata_master(root)
