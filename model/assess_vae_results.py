@@ -22,14 +22,14 @@ from sklearn.linear_model import LogisticRegression
 
 if __name__ == "__main__":
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128
     overwrite_flag = False
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20230815_vae"
+    train_name = "20230804_vae_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
     # model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05"
     # get list of models in this folder
@@ -169,6 +169,7 @@ if __name__ == "__main__":
             # np.save(os.path.join(figure_path, mode + "_set_recon_loss.npy"), recon_loss_array)
         if np.any(np.isnan(embryo_df.loc[:, "recon_mse"].to_numpy())):
             print("Uh-Oh")
+            embryo_df = embryo_df.dropna()
         ############
         # Question 2: what does latent space look like?
         ############
@@ -227,8 +228,8 @@ if __name__ == "__main__":
         reducer = umap.UMAP()
         scaled_z_mu = StandardScaler().fit_transform(z_mu_array)
         embedding2d = reducer.fit_transform(scaled_z_mu)
-        embryo_df["UMAP_00"] = embedding2d[:, 0]
-        embryo_df["UMAP_01"] = embedding2d[:, 1]
+        embryo_df.loc[:, "UMAP_00"] = embedding2d[:, 0]
+        embryo_df.loc[:, "UMAP_01"] = embedding2d[:, 1]
 
         print(f"Saving data...")
         #save latent arrays and UMAP
@@ -325,8 +326,14 @@ if __name__ == "__main__":
         # Finally, compare latent encodings of flipped images to assess how far apart they look in latent space,
         # and in what direction
         # sigma_indices = [i for i in range(len(embryo_df.columns)) if "z_sigma_" in embryo_df.columns[i]]
-        orientation_df = pd.concat([embryo_df.loc[test_indices, ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]],
-                                    embryo_df.iloc[test_indices, mu_indices]], axis=1, ignore_index=True)
+        keep_cols = ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]
+        df_cols = embryo_df.columns
+        mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
+        mu_cols = [df_cols[c] for c in range(len(df_cols)) if c in mu_indices]
+        keep_cols += mu_cols
+        orientation_df = embryo_df.loc[test_indices, keep_cols]
+
+        orientation_df = orientation_df.reset_index()
 
         data_sampler = data_sampler_vec[2]
         n_images = len(data_sampler)
@@ -342,7 +349,7 @@ if __name__ == "__main__":
             batch_id_vec.append(sample_indices[ind1:ind2])
 
         # recon_loss_array = np.empty((n_recon_samples,))
-        orientation_codes = ["og", "lr", "ud", "lr-ud"]
+        orientation_codes = ["lr", "ud", "lr-ud"]
         print("Testing how embryo pose impacts encoding...")
         for n in tqdm(range(n_batches)):
 
@@ -361,15 +368,14 @@ if __name__ == "__main__":
                 im_stack[b, :, :] = im_raw
 
             for o, code in enumerate(orientation_codes):
-                if code == "og":
-                    im_test = torch.reshape(torch.from_numpy(im_stack), (len(batch_ids), 1, main_dims[0], main_dims[1]))
-                elif code == "lr":
-                    im_test = torch.reshape(torch.from_numpy(im_stack[:, ::-1, :]), (len(batch_ids), 1, main_dims[0], main_dims[1]))
+                if code == "lr":
+                    im_perm = im_stack[:, ::-1, :].copy()
                 elif code == "ud":
-                    im_test = torch.reshape(torch.from_numpy(im_stack[:, :, ::-1]), (len(batch_ids), 1, main_dims[0], main_dims[1]))
+                    im_perm = im_stack[:, :, ::-1].copy()
                 elif code == "lr-ud":
-                    im_test = torch.reshape(torch.from_numpy(im_stack[:, ::-1, ::-1]), (len(batch_ids), 1, main_dims[0], main_dims[1]))
+                    im_perm = im_stack[:, ::-1, ::-1].copy()
 
+                im_test = torch.reshape(torch.from_numpy(im_perm), (len(batch_ids), 1, main_dims[0], main_dims[1]))
                 encoder_out = trained_model.encoder(im_test)
                 zm_vec = np.asarray(encoder_out[0].detach())
                 zs_vec = np.asarray(encoder_out[1].detach())
