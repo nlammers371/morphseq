@@ -1,11 +1,6 @@
 import glob as glob
 from sklearn.neural_network import MLPRegressor
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
-from tqdm import tqdm
 from sklearn import linear_model
-import statsmodels.api as sm
-from scipy import stats
 from functions.pythae_utils import *
 import os
 from pythae.models import AutoModel
@@ -22,14 +17,14 @@ from sklearn.linear_model import LogisticRegression
 
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128
     overwrite_flag = False
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20230804_vae_test"
+    train_name = "20230915_vae"
     train_dir = os.path.join(root, "training_data", train_name, '')
     # model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05"
     # get list of models in this folder
@@ -65,9 +60,12 @@ if __name__ == "__main__":
 
 
         last_training = sorted(os.listdir(output_dir))[-1]
-        trained_model = AutoModel.load_from_folder(
-            os.path.join(output_dir, last_training, 'final_model'))
-
+        try:
+            trained_model = AutoModel.load_from_folder(
+                os.path.join(output_dir, last_training, 'final_model'))
+        except:
+            print("No final model for " + output_dir + ". Still training?")
+            continue
         ############
         # Question 1: how well does it reproduce train, eval, and test images?
         ############
