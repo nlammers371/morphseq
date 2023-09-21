@@ -22,9 +22,9 @@ def train_vanilla_vae(train_dir, n_latent=16, batch_size=16, n_epochs=100, learn
     else:
         transform = make_dynamic_rs_transform(input_dim[1:])
     if not tc_flag:
-        model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}'
+        model_name = f'z{n_latent:03}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}'
     else:
-        model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}' + f'_beta{beta_factor:02}'
+        model_name = f'z{n_latent:03}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}' + f'_beta{beta_factor:02}'
 
     output_dir = os.path.join(train_dir, model_name)
 
