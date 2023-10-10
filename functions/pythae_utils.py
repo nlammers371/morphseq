@@ -39,6 +39,7 @@ class MyCustomDataset(datasets.ImageFolder):
             )
         else:
             return DatasetOutput(data=X), self.samples[index]
+
 ##########
 # Define custom convolutional encoder that allows for variable input size
 def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):

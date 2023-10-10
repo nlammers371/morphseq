@@ -7,6 +7,7 @@ import os
 from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig
 from pythae.trainers import BaseTrainerConfig
 from pythae.pipelines.training import TrainingPipeline
+from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 # from pythae.models import AutoModel
 # import matplotlib.pyplot as plt
 # from pythae.samplers import NormalSampler
@@ -75,7 +76,6 @@ def train_vanilla_vae(train_dir, n_latent=16, batch_size=16, n_epochs=100, learn
             encoder=encoder,
             decoder=decoder
         )
-
 
     pipeline = TrainingPipeline(
         training_config=config,
