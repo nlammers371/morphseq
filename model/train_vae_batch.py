@@ -121,6 +121,9 @@ if __name__ == "__main__":
     # output_dir = train_vanilla_vae(train_dir, n_latent=10, batch_size=batch_size, n_epochs=n_epochs,
     #                                learning_rate=1e-4, depth=7)
 
+    # dataset = ContrastiveLearningDataset(args.data)
+    #
+    # train_dataset = dataset.get_dataset(args.dataset_name, args.n_views)
     if not tc_flag:
         for z in z_dim_vec:
             for d in depth_vec:

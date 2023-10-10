@@ -14,10 +14,11 @@ class ContrastiveLearningDataset:
         self.root_folder = root_folder
 
     @staticmethod
-    def get_simclr_pipeline_transform(s=1):#(size, s=1):
+    def get_simclr_pipeline_transform():#(size, s=1):
         """Return a set of data augmentation transformations as described in the SimCLR paper."""
-        color_jitter = transforms.ColorJitter(brightness=0.8 * s)
-        data_transforms = transforms.Compose([#transforms.RandomResizedCrop(size=size),
+        color_jitter = transforms.ColorJitter(brightness=0.3)
+        data_transforms = transforms.Compose([#transforms.RandomResizedCrop(size=size, scale=tuple([0.5, 1]),  ratio=ratio),
+                                              transforms.RandomAffine(degrees=10, scale=tuple([0.5, 1.2])),
                                               transforms.RandomHorizontalFlip(),
                                               transforms.RandomVerticalFlip(),
                                               transforms.RandomApply([color_jitter], p=0.8),
@@ -35,7 +36,7 @@ class ContrastiveLearningDataset:
 
                           'stl10': lambda: datasets.STL10(self.root_folder, split='unlabeled',
                                                           transform=ContrastiveLearningViewGenerator(
-                                                              self.get_simclr_pipeline_transform(),#(96),
+                                                              self.get_simclr_pipeline_transform(6),#(96),
                                                               n_views),
                                                           download=True),
 
