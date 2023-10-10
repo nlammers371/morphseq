@@ -18,7 +18,7 @@ from parfor import pmap
 import pandas as pd
 
 def scrape_keyence_metadata(im_path):
-    # im_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/20230531/bf_timeseries_stack0850_pitch040/W001/P00001/T0004/wt_W001_P00001_T0004_Z005_CH1.tif"
+
     with open(im_path, 'rb') as a:
         fulldata = a.read()
     metadata = fulldata.partition(b'<Data>')[2].partition(b'</Data>')[0].decode()
@@ -98,7 +98,7 @@ def doLap(image, lap_size=3, blur_size=3):
     blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
     return cv2.Laplacian(blurred, cv2.CV_64F, ksize=lap_size)
 
-def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, overwrite_flag=False):
+def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, overwrite_flag=False, david_flag=1):
 
     well_dir = well_list[w]
     # extract basic well info
@@ -114,12 +114,14 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
 
     # if multiple positions were taken per well, then there will be a layer of position folders
     position_dir_list = sorted(glob.glob(well_dir + "/P*"))
-
+    if david_flag:
+        position_dir_list = [""]
     for p, pos_dir in enumerate(position_dir_list):
 
         # each pos dir contains one or more time points
         time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
-
+        if david_flag:
+            time_dir_list = [well_dir]
         for t, time_dir in enumerate(time_dir_list):
 
             # each time directoy contains a list of Z slices for each channel
@@ -143,7 +145,10 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
             do_flags = [1] * len(sub_pos_index)
             # print(sub_pos_index)
             for pi in sub_pos_index:
-                tt = int(time_dir[-4:])
+                if not david_flag:
+                    tt = int(time_dir[-4:])
+                else:
+                    tt = 0
                 if cytometer_flag:
                     # pos_id_list.append(p)
                     pos_string = f'p{p:04}'
@@ -179,10 +184,15 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                         #     base_time = temp_dict["Time (s)"]
                         # temp_dict["Time (s)"] = temp_dict["Time (s)"]# - base_time
                         # add to main dictionary
+                        if not david_flag:
+                            tstring = 'T' + time_dir[-4:]
+                            temp_df["time_string"] = tstring
+                            temp_df["time_int"] = int(time_dir[-4:])
+                        else:
+                            tstring = 'T0'
+                            temp_df["time_string"] = tstring
+                            temp_df["time_int"] = 0
 
-                        tstring = 'T' + time_dir[-4:]
-                        temp_df["time_string"] = tstring
-                        temp_df["time_int"] = int(time_dir[-4:])
                         temp_df["well"] = well_name_conv
                         temp_df = temp_df[temp_df.columns[::-1]]
                         # add to main dataframe
@@ -216,9 +226,12 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                     for i in range(len(images)):
                         ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
 
-                    ff_image = 255 - ff_image  # take the negative
+                    # ff_image = 255 - ff_image  # take the negative
 
-                    tt = int(time_dir[-4:])
+                    if not david_flag:
+                        tt = int(time_dir[-4:])
+                    else:
+                        tt = 0
                     if cytometer_flag:
                         # pos_id_list.append(p)
                         pos_string = f'p{p:04}'
@@ -250,7 +263,8 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
     return well_df
 
 
-def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir, stitch_depth_dir, overwrite_flag, out_shape):
+def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
+                      stitch_depth_dir, overwrite_flag, out_shape, david_flag):
 
 
     # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
@@ -282,13 +296,18 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
 
         try:  # NL: skipping one problematic well for now
             default_flag = False
-            if len(ff_mosaic.params["coords"]) != 3:
+            if len(ff_mosaic.params["coords"]) != n_images:
                 default_flag = True
             else:
                 c_params = ff_mosaic.params["coords"]
-                lr_shifts = np.asarray([c_params[0][1], c_params[1][1], c_params[2][1]])
-                if np.max(lr_shifts) > 2:
-                    default_flag = True
+                if n_images == 3:
+                    lr_shifts = np.asarray([c_params[0][1], c_params[1][1], c_params[2][1]])
+                    if np.max(lr_shifts) > 2:
+                        default_flag = True
+                elif n_images == 2:
+                    lr_shifts = np.asarray([c_params[0][1], c_params[1][1]])
+                    # if np.max(lr_shifts) > 1:
+                    #     default_flag = True
 
             if default_flag:
                 ff_mosaic.load_params(ff_tile_dir + "/master_params.json")
@@ -328,7 +347,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
 
     return{}
 
-def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list=None, write_dir=None):
+def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list=None, write_dir=None, david_flag=1):
 
     read_dir = os.path.join(data_root, 'raw_keyence_data', '') 
     if write_dir is None:
@@ -400,7 +419,7 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
     print('Done.')
 
 def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=500,
-                           out_shape=None, dir_list=None, write_dir=None):
+                                                    out_shape=None, dir_list=None, write_dir=None, david_flag=1):
     
     read_dir = os.path.join(data_root, 'raw_keyence_data', '')
     if write_dir is None:
@@ -436,60 +455,61 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=500
         # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
         ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
 
-        if not os.path.isfile(ff_tile_dir + "/master_params.json") or overwrite_flag:
+        if not david_flag:
+            if not os.path.isfile(ff_tile_dir + "/master_params.json") or overwrite_flag:
 
-            # select a random set of directories to iterate through to estimate stitching prior
-            folder_options = range(len(ff_folder_list))
-            stitch_samples = np.random.choice(folder_options, np.min([n_stitch_samples, len(folder_options)]), replace=False)
+                # select a random set of directories to iterate through to estimate stitching prior
+                folder_options = range(len(ff_folder_list))
+                stitch_samples = np.random.choice(folder_options, np.min([n_stitch_samples, len(folder_options)]), replace=False)
 
-            align_array = np.empty((n_stitch_samples, 2, 3))
-            align_array[:] = np.nan
+                align_array = np.empty((n_stitch_samples, 2, 3))
+                align_array[:] = np.nan
 
-            print(f'Estimating stitch priors for images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-            for n in tqdm(range(len(stitch_samples))):
-                im_ind = stitch_samples[n]
-                ff_path = ff_folder_list[im_ind]
-                n_images = len(glob.glob(ff_path + '/*.tif'))
-                n_pass = 0
-                # perform stitching
-                ff_mosaic = StructuredMosaic(
-                    ff_path,
-                    dim=n_images,  # number of tiles in primary axis
-                    origin="upper left",  # position of first tile
-                    direction="vertical",
-                    pattern="raster"
-                )
-                try:
-                    ff_mosaic.align()
-                    n_pass += 1
-                    # ff_mosaic.reset_tiles()
-                except:
-                    pass
+                print(f'Estimating stitch priors for images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+                for n in tqdm(range(len(stitch_samples))):
+                    im_ind = stitch_samples[n]
+                    ff_path = ff_folder_list[im_ind]
+                    n_images = len(glob.glob(ff_path + '/*.tif'))
+                    n_pass = 0
+                    # perform stitching
+                    ff_mosaic = StructuredMosaic(
+                        ff_path,
+                        dim=n_images,  # number of tiles in primary axis
+                        origin="upper left",  # position of first tile
+                        direction="vertical",
+                        pattern="raster"
+                    )
+                    try:
+                        ff_mosaic.align()
+                        n_pass += 1
+                        # ff_mosaic.reset_tiles()
+                    except:
+                        pass
 
-                if len(ff_mosaic.params["coords"]) == 3:       # NL: need to make this more general eventually
-                    c_params = ff_mosaic.params["coords"]
-                    for c in range(len(c_params)):
-                        align_array[n, :, c] = c_params[c]
+                    if len(ff_mosaic.params["coords"]) == 3:       # NL: need to make this more general eventually
+                        c_params = ff_mosaic.params["coords"]
+                        for c in range(len(c_params)):
+                            align_array[n, :, c] = c_params[c]
 
-            # now make a master mosaic to use when alignment fails
-            master_mosaic = ff_mosaic.copy()
-            master_params = master_mosaic.params
-            # calculate median parameters for each tile
-            med_coords = np.nanmedian(align_array, axis=0)
-            c_dict = {0: med_coords[:, 0].tolist(),
-                      1: med_coords[:, 1].tolist(),
-                      2: med_coords[:, 2].tolist()}
-            master_params["coords"] = c_dict
+                # now make a master mosaic to use when alignment fails
+                master_mosaic = ff_mosaic.copy()
+                master_params = master_mosaic.params
+                # calculate median parameters for each tile
+                med_coords = np.nanmedian(align_array, axis=0)
+                c_dict = {0: med_coords[:, 0].tolist(),
+                          1: med_coords[:, 1].tolist(),
+                          2: med_coords[:, 2].tolist()}
+                master_params["coords"] = c_dict
 
-            # save params for subsequent use
-            jason_params = json.dumps(master_params)
-            # Writing to json
-            with open(ff_tile_dir + "/master_params.json", "w") as outfile:
-                outfile.write(jason_params)
+                # save params for subsequent use
+                jason_params = json.dumps(master_params)
+                # Writing to json
+                with open(ff_tile_dir + "/master_params.json", "w") as outfile:
+                    outfile.write(jason_params)
 
-            # Writing to json
-            with open(depth_tile_dir + "/master_params.json", "w") as outfile:
-                outfile.write(jason_params)
+                # Writing to json
+                with open(depth_tile_dir + "/master_params.json", "w") as outfile:
+                    outfile.write(jason_params)
 
     # Now perform the stitching
     print('Done.')
@@ -517,8 +537,21 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=500
 
         print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # Call parallel function to stitch images
-        pmap(stitch_experiment, range(len(ff_folder_list)), (ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
-                          stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
+        if not david_flag:
+            pmap(stitch_experiment, range(len(ff_folder_list)), (ff_folder_list, ff_tile_dir, depth_folder_list,
+                              depth_tile_dir, stitch_ff_dir,
+                              stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
+        else:
+            out_shape[0] = 1230
+            for f in range(0, len(ff_folder_list)):
+                stitch_experiment(f, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
+                                  stitch_depth_dir, overwrite_flag, out_shape, david_flag)
+            # pmap(stitch_experiment, range(len(ff_folder_list)),
+            #                             (ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
+            #                              stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
+
+        # stitch_experiment(1, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
+        #  stitch_depth_dir, overwrite_flag, out_shape)
 
 
 
@@ -527,15 +560,17 @@ if __name__ == "__main__":
     overwrite_flag = False
 
     # set path to excel doc with metadata
-    data_root = "Z:\\morphseq"
+    # data_root = "Z:\\morphseq"
+    data_root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/david_screen_data/"
     # write_dir = "D:\\Nick\\morphseq\\" #"Z:\\morphseq\\" # "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/"
     # read_path = "/Volumes/LaCie/Keyence/"
     # read_dir = data_root + 'raw_keyence_data\\' #'"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/raw_keyence_data/"
-    write_dir = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq" #"D:\\Nick\\morphseq"
-
+    # write_dir = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq" #"D:\\Nick\\morphseq"
+    write_dir = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/david_screen_data/"
     # ch_to_use = [1]  # ,2,3]
-    dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230627\\"]
+    # dir_list = ["Z:\\morphseq\\raw_keyence_data\\20230627\\"]
+    dir_list = ["/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/david_screen_data/raw_keyence_data/20230922_prdm16_SG/"]
     # build FF images
-    build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list)
+    # build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list, ch_to_use=4)
     # stitch FF images
     stitch_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list)
