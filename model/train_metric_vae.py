@@ -10,6 +10,9 @@ from functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
 from pythae.trainers import BaseTrainerConfig
 from pythae.pipelines.training import TrainingPipeline
 from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
+from functions.view_generator import ContrastiveLearningViewGenerator
+from custom_classes.base_trainer_metric import BaseTrainerMetric
+
 # import matplotlib.pyplot as plt
 # from pythae.samplers import NormalSampler
 import argparse
@@ -29,11 +32,23 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
     output_dir = os.path.join(train_dir, model_name)
 
     if contrastive_flag:
-        train_generator = ContrastiveLearningDataset(os.path.join(train_dir, "train"))
-        train_dataset = train_generator.get_dataset('custom', 2)
+        # train_generator = ContrastiveLearningDataset(os.path.join(train_dir, "train"))
+        # train_dataset = train_generator.get_dataset('custom', 2)
+        train_dataset = MyCustomDataset(root=os.path.join(train_dir, "train"),
+                                        transform=ContrastiveLearningViewGenerator(
+                                                 ContrastiveLearningDataset.get_simclr_pipeline_transform(),#(96),
+                                                 2)
+                                        )
 
-        eval_generator = ContrastiveLearningDataset(os.path.join(train_dir, "eval"))
-        eval_dataset = eval_generator.get_dataset('custom', 2)
+        # eval_generator = ContrastiveLearningDataset(os.path.join(train_dir, "eval"))
+        # eval_dataset = eval_generator.get_dataset('custom', 2)
+
+        eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
+                                        transform=ContrastiveLearningViewGenerator(
+                                            ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
+                                            2)
+                                        )
+
     else:
         train_dataset = MyCustomDataset(
             root=os.path.join(train_dir, "train"),
@@ -104,6 +119,7 @@ if __name__ == "__main__":
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20230804_vae_test"
+    contrastive_flag = True
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
     n_epochs = 10
@@ -125,7 +141,7 @@ if __name__ == "__main__":
                         print(f"Out channels: {n}")
                         # train model
                         output_dir = train_metric_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
-                                                        n_out_channels=n, learning_rate=1e-4, depth=d)
+                                                        n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag)
                         iter_flag = max_tries
                     except:
                         iter_flag += 1
