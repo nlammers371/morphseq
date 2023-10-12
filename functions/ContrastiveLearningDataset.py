@@ -36,7 +36,7 @@ class ContrastiveLearningDataset:
 
                           'stl10': lambda: datasets.STL10(self.root_folder, split='unlabeled',
                                                           transform=ContrastiveLearningViewGenerator(
-                                                              self.get_simclr_pipeline_transform(6),#(96),
+                                                              self.get_simclr_pipeline_transform(),#(96),
                                                               n_views),
                                                           download=True),
 
