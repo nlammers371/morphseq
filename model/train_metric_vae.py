@@ -4,8 +4,7 @@ sys.path.append("/functions")
 # import functions
 from functions.pythae_utils import make_dynamic_rs_transform, data_transform, MyCustomDataset
 import os
-from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig
-from custom_classes.metric_vae_model import METRICVAE
+from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig, MetricVAE, MetricVAEConfig
 from functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
 from pythae.trainers import BaseTrainerConfig
 from pythae.pipelines.training import TrainingPipeline
@@ -13,8 +12,6 @@ from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 from functions.view_generator import ContrastiveLearningViewGenerator
 from custom_classes.base_trainer_metric import BaseTrainerMetric
 
-# import matplotlib.pyplot as plt
-# from pythae.samplers import NormalSampler
 import argparse
 
 def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learning_rate=1e-3, n_out_channels=16,
@@ -68,11 +65,16 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
         num_epochs=n_epochs,  # Change this to train the model a bit more
     )
 
-    model_config = VAEConfig(
-        input_dim=input_dim,
-        latent_dim=n_latent
-    )
-
+    if contrastive_flag:
+        model_config = MetricVAEConfig(
+            input_dim=input_dim,
+            latent_dim=n_latent
+        )
+    else:
+        model_config = VAEConfig(
+            input_dim=input_dim,
+            latent_dim=n_latent
+        )
 
     encoder = Encoder_Conv_VAE(model_config, n_conv_layers=depth, n_out_channels=n_out_channels) # these are custom classes I wrote for this use case
     # if matched_decoder_flag:
@@ -80,7 +82,7 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
     # else:
     #     decoder = Decoder_Conv_AE_FLEX(encoder)
 
-    model = METRICVAE(
+    model = MetricVAE(
         model_config=model_config,
         encoder=encoder,
         decoder=decoder
