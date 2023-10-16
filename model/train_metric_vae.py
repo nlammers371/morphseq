@@ -128,6 +128,7 @@ if __name__ == "__main__":
     batch_size = 32
     n_epochs = 10
     z_dim_vec = [50]
+    orth_flag = True
     depth_vec = [5]
     n_out_channel_vec = [16]
     max_tries = 3
@@ -145,7 +146,8 @@ if __name__ == "__main__":
                     #     print(f"Out channels: {n}")
                         # train model
                 output_dir = train_metric_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
-                                                n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag)
+                                              n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
+                                              orth_flag=orth_flag)
                         # iter_flag = max_tries
                     # except:
                     #     iter_flag += 1
