@@ -10,7 +10,7 @@ from pythae.trainers import BaseTrainerConfig
 from pythae.pipelines.training import TrainingPipeline
 from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 from functions.view_generator import ContrastiveLearningViewGenerator
-from custom_classes.base_trainer_metric import BaseTrainerMetric
+# from custom_classes.base_trainer_metric import BaseTrainerMetric
 
 import argparse
 
@@ -68,7 +68,8 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
     if contrastive_flag:
         model_config = MetricVAEConfig(
             input_dim=input_dim,
-            latent_dim=n_latent
+            latent_dim=n_latent,
+            zn_frac=0.2
         )
     else:
         model_config = VAEConfig(
@@ -136,18 +137,18 @@ if __name__ == "__main__":
         for d in depth_vec:
             for n in n_out_channel_vec:
                 iter_flag = 0
-                while iter_flag < max_tries:
-                    try:
-                        print(f"Depth: {d}")
-                        print(f"Latent dim: {z}")
-                        print(f"Out channels: {n}")
+                # while iter_flag < max_tries:
+                    # try:
+                    #     print(f"Depth: {d}")
+                    #     print(f"Latent dim: {z}")
+                    #     print(f"Out channels: {n}")
                         # train model
-                        output_dir = train_metric_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
-                                                        n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag)
-                        iter_flag = max_tries
-                    except:
-                        iter_flag += 1
-                        print(iter_flag)
+                output_dir = train_metric_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
+                                                n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag)
+                        # iter_flag = max_tries
+                    # except:
+                    #     iter_flag += 1
+                    #     print(iter_flag)
 
 
 
