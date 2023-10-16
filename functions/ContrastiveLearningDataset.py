@@ -17,7 +17,7 @@ class ContrastiveLearningDataset:
     def get_simclr_pipeline_transform():#(size, s=1):
         """Return a set of data augmentation transformations as described in the SimCLR paper."""
         color_jitter = transforms.ColorJitter(brightness=0.3)
-        data_transforms = transforms.Compose([#transforms.RandomResizedCrop(size=size, scale=tuple([0.5, 1]),  ratio=ratio),
+        data_transforms = transforms.Compose([transforms.Grayscale(num_output_channels=1),
                                               transforms.RandomAffine(degrees=15, scale=tuple([0.7, 1.3])),
                                               transforms.RandomHorizontalFlip(),
                                               transforms.RandomVerticalFlip(),
