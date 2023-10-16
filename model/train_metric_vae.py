@@ -15,7 +15,7 @@ from functions.view_generator import ContrastiveLearningViewGenerator
 import argparse
 
 def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learning_rate=1e-3, n_out_channels=16,
-                      input_dim=None, depth=5, contrastive_flag=False):
+                      input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
 
     if input_dim == None:
         input_dim = (1, 576, 256)
@@ -69,7 +69,8 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
         model_config = MetricVAEConfig(
             input_dim=input_dim,
             latent_dim=n_latent,
-            zn_frac=0.2
+            zn_frac=0.1,
+            orth_flag=orth_flag
         )
     else:
         model_config = VAEConfig(

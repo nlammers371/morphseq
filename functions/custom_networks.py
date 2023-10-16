@@ -20,7 +20,7 @@ class Encoder_Conv_VAE(BaseEncoder):
         self.kernel_size = kernel_size
         self.stride = stride
         self.n_conv_layers = n_conv_layers
-
+        self.orth_subspace_flag = init_config.orth_flag
         self.input_dim = init_config.input_dim
         self.latent_dim = init_config.latent_dim
         self.n_channels = self.input_dim[0]
@@ -54,15 +54,28 @@ class Encoder_Conv_VAE(BaseEncoder):
             self.conv_layers.append(nn.ReLU())
 
         # add latent layers
-        self.embedding = nn.Linear(featureDim, self.latent_dim)
+        if not self.orth_subspace_flag:
+            self.embedding = nn.Linear(featureDim, self.latent_dim)
+        else:   # in this case we add an additional linear layer
+            self.embedding0 = nn.Linear(featureDim, self.latent_dim)
+            self.embedding = nn.Linear(self.latent_dim, self.latent_dim, bias=False)
+
         self.log_var = nn.Linear(featureDim, self.latent_dim)
 
     def forward(self, x: torch.Tensor):
         h1 = self.conv_layers(x).reshape(x.shape[0], -1)
-        output = ModelOutput(
-            embedding=self.embedding(h1),
-            log_covariance=self.log_var(h1)
-        )
+        if not self.orth_subspace_flag:
+            output = ModelOutput(
+                embedding=self.embedding(h1),
+                log_covariance=self.log_var(h1)
+            )
+        else:
+            h2 = self.embedding0(h1)
+            output = ModelOutput(
+                embedding=self.embedding(h2),
+                log_covariance=self.log_var(h1),
+                weight_matrix=self.embedding.weight # return weights so that we can apply orthogonality constraint
+            )
         return output
 
 # Defines a "matched" decoder class that inherits key features from its paired encoder
