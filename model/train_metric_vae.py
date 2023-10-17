@@ -23,7 +23,7 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
     else:
         transform = make_dynamic_rs_transform(input_dim[1:])
 
-    model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}'
+    model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}_metric_test'
 
 
     output_dir = os.path.join(train_dir, model_name)
@@ -122,11 +122,11 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230804_vae_test"
+    train_folder = "20230915_vae"
     contrastive_flag = True
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
-    n_epochs = 10
+    n_epochs = 250
     z_dim_vec = [50]
     orth_flag = True
     depth_vec = [5]
