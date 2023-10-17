@@ -7,6 +7,7 @@ import torch
 from math import floor
 import numpy as np
 from functions.pythae_utils import conv_output_shape, deconv_output_shape
+from scipy.stats import ortho_group
 
 # Define an encoder class with tuneable variables for the number of convolutional layers ad the depth of the conv kernels
 class Encoder_Conv_VAE(BaseEncoder):
@@ -60,6 +61,14 @@ class Encoder_Conv_VAE(BaseEncoder):
             self.embedding0 = nn.Linear(featureDim, self.latent_dim)
             self.embedding = nn.Linear(self.latent_dim, self.latent_dim, bias=False)
 
+            # fix A to be orthogonal (and not trainable)
+            m = ortho_group.rvs(dim=self.latent_dim).astype('float32')
+            with torch.no_grad():
+                self.embedding.weight = nn.Parameter(
+                    torch.from_numpy(m), requires_grad=False)
+                # self.B.weight = nn.Parameter(
+                #     torch.from_numpy(m[n_labels:, :]), requires_grad=False)
+
         self.log_var = nn.Linear(featureDim, self.latent_dim)
 
     def forward(self, x: torch.Tensor):
@@ -74,7 +83,7 @@ class Encoder_Conv_VAE(BaseEncoder):
             output = ModelOutput(
                 embedding=self.embedding(h2),
                 log_covariance=self.log_var(h1),
-                weight_matrix=self.embedding.weight # return weights so that we can apply orthogonality constraint
+                weight_matrix=self.embedding.weight   # return weights so that we can apply orthogonality constraint
             )
         return output
 
