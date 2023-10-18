@@ -6,7 +6,7 @@ from functions.pythae_utils import make_dynamic_rs_transform, data_transform, My
 import os
 from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig, MetricVAE, MetricVAEConfig
 from functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
-from pythae.trainers import BaseTrainerConfig
+from pythae.trainers import BaseTrainerVerboseConfig
 from pythae.pipelines.training import TrainingPipeline
 from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 from functions.view_generator import ContrastiveLearningViewGenerator
@@ -57,12 +57,13 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
             transform=transform
         )
 
-    config = BaseTrainerConfig(
+    config = BaseTrainerVerboseConfig(
         output_dir=output_dir,
         learning_rate=learning_rate,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         num_epochs=n_epochs,  # Change this to train the model a bit more
+        steps_saving=10
     )
 
     if contrastive_flag:
