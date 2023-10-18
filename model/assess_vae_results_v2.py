@@ -64,8 +64,18 @@ if __name__ == "__main__":
             trained_model = AutoModel.load_from_folder(
                 os.path.join(output_dir, last_training, 'final_model'))
         except:
-            print("No final model for " + output_dir + ". Still training?")
-            continue
+            try:
+                trained_model_list = glob.glob(os.path.join(output_dir, last_training, "*epoch*"))
+                underscore_list = [s.rfind("_") for s in trained_model_list]
+                epoch_num_list = [int(trained_model_list[s][underscore_list[s]+1:]) for s in range(len(underscore_list))]
+                last_ind = np.argmax(epoch_num_list)
+
+                # last_training = path_leaf(trained_model_list[last_ind])
+                trained_model = AutoModel.load_from_folder(trained_model_list[last_ind])
+                print("No final model found for " + output_dir + ". Using most recent saved training isntance.")
+            except:
+                print("No final model for " + output_dir + ". Still training?")
+                continue
         ############
         # Question 1: how well does it reproduce train, eval, and test images?
         ############
@@ -73,7 +83,6 @@ if __name__ == "__main__":
         figure_path = os.path.join(output_dir, last_training, "figures")
         if not os.path.isdir(figure_path):
             os.makedirs(figure_path)
-
 
         prev_run_flag = os.path.isfile(os.path.join(figure_path, "embryo_stats_df.csv"))
 
