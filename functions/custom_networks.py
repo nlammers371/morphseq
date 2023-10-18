@@ -11,24 +11,26 @@ from scipy.stats import ortho_group
 
 # Define an encoder class with tuneable variables for the number of convolutional layers ad the depth of the conv kernels
 class Encoder_Conv_VAE(BaseEncoder):
-    def __init__(self, init_config, n_conv_layers=5, n_out_channels=16):
+    def __init__(self, init_config):
         BaseEncoder.__init__(self)
 
         stride = 2  # I'm keeping this fixed at 2 for now
         kernel_size = 4  # Keep fixed at 4
 
-        self.n_out_channels = n_out_channels
+        self.n_out_channels = init_config.n_out_channels
         self.kernel_size = kernel_size
         self.stride = stride
-        self.n_conv_layers = n_conv_layers
+        self.n_conv_layers = init_config.n_conv_layers
         self.orth_subspace_flag = init_config.orth_flag
         self.input_dim = init_config.input_dim
         self.latent_dim = init_config.latent_dim
         self.n_channels = self.input_dim[0]
 
+        n_out_channels = self.n_out_channels
+        n_conv_layers = self.n_conv_layers
         # get predicted output size of base image
         [ht, wt] = self.input_dim[1:]
-        n_iter_layers = np.min([n_conv_layers, 6])
+        n_iter_layers = np.min([self.n_conv_layers, 6])
         for n in range(n_iter_layers):
             [ht, wt] = conv_output_shape([ht, wt], kernel_size=kernel_size, stride=stride, pad=1)
 

@@ -72,7 +72,9 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
             latent_dim=n_latent,
             zn_frac=0.1,
             orth_flag=orth_flag,
-            temperature=nt_xent_temperature
+            temperature=nt_xent_temperature,
+            n_conv_layers=depth,
+            n_out_channels=n_out_channels
         )
     else:
         model_config = VAEConfig(
@@ -80,7 +82,7 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
             latent_dim=n_latent
         )
 
-    encoder = Encoder_Conv_VAE(model_config, n_conv_layers=depth, n_out_channels=n_out_channels) # these are custom classes I wrote for this use case
+    encoder = Encoder_Conv_VAE(model_config) # these are custom classes I wrote for this use case
     # if matched_decoder_flag:
     decoder = Decoder_Conv_VAE(encoder)
     # else:
@@ -124,12 +126,12 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230915_vae"
+    train_folder = "20230804_vae_test"
     contrastive_flag = True
     temperature = 0.01
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
-    n_epochs = 250
+    n_epochs = 5
     z_dim_vec = [50]
     orth_flag = True
     depth_vec = [5]
