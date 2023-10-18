@@ -28,7 +28,7 @@ if __name__ == "__main__":
     train_name = "20230915_vae"
     train_dir = os.path.join(root, "training_data", train_name, '')
     # get list of models in this folder
-    model_name_list = sorted(glob.glob(train_dir + '*metric_test*'))
+    model_name_list = sorted(glob.glob(train_dir + '*metric_vae_test*'))
 
     m_iter = 0
     for model_name in model_name_list:
@@ -122,7 +122,6 @@ if __name__ == "__main__":
                 ind1 = n*batch_size
                 ind2 = (n+1)*batch_size
                 batch_id_vec.append(sample_indices[ind1:ind2])
-
 
             # recon_loss_array = np.empty((n_recon_samples,))
 
