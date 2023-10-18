@@ -15,7 +15,7 @@ from functions.view_generator import ContrastiveLearningViewGenerator
 import argparse
 
 def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learning_rate=1e-3, n_out_channels=16,
-                      input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
+                      nt_xent_temperature=1, input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
 
     if input_dim == None:
         input_dim = (1, 576, 256)
@@ -71,7 +71,8 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
             input_dim=input_dim,
             latent_dim=n_latent,
             zn_frac=0.1,
-            orth_flag=orth_flag
+            orth_flag=orth_flag,
+            temperature=nt_xent_temperature
         )
     else:
         model_config = VAEConfig(
@@ -125,6 +126,7 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20230915_vae"
     contrastive_flag = True
+    temperature = 0.01
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
     n_epochs = 250
@@ -147,6 +149,7 @@ if __name__ == "__main__":
                     #     print(f"Out channels: {n}")
                         # train model
                 output_dir = train_metric_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
+                                              nt_xent_temperature=temperature,
                                               n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
                                               orth_flag=orth_flag)
                         # iter_flag = max_tries
