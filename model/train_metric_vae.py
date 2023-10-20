@@ -15,7 +15,7 @@ from functions.view_generator import ContrastiveLearningViewGenerator
 import argparse
 
 def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learning_rate=1e-3, n_out_channels=16,
-                      nt_xent_temperature=1, input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
+                      nt_xent_temperature=1.0, input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
 
     if input_dim == None:
         input_dim = (1, 576, 256)
@@ -126,12 +126,12 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230804_vae_test"
+    train_folder = "20230915_vae"
     contrastive_flag = True
-    temperature = 0.01
+    temperature = 0.001
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
-    n_epochs = 5
+    n_epochs = 250
     z_dim_vec = [50]
     orth_flag = True
     depth_vec = [5]
