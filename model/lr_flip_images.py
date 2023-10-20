@@ -104,22 +104,21 @@ if __name__ == "__main__":
             # z_mu_array[n, :] = np.asarray(encoder_out[0].detach())
             # z_sigma_array[n, :] = np.asarray(np.exp(encoder_out[1].detach()/2))
 
+    # remove D/V embryos
+    embryo_df_rev = embryo_df_rev.iloc[np.where(embryo_df_rev["revision_labels"]>=0)[0]]
 
     zm_indices = [i for i in range(len(embryo_df_rev.columns)) if "z_mu_rev" in embryo_df_rev.columns[i]]
     z_mu_array = embryo_df_rev.iloc[:, zm_indices].to_numpy()
-
-    # remove D/V embryos
-    embryo_df_rev = embryo_df_rev.iloc[np.where(embryo_df_rev["revision_labels"]>=0)[0]]
 
     print(f"Calculating UMAP...")
     # calculate 2D morphology UMAPS
     reducer = umap.UMAP()
     scaled_z_mu = StandardScaler().fit_transform(z_mu_array)
     embedding2d = reducer.fit_transform(scaled_z_mu)
-    embryo_df.loc[:, "UMAP_00"] = embedding2d[:, 0]
-    embryo_df.loc[:, "UMAP_01"] = embedding2d[:, 1]
+    embryo_df_rev.loc[:, "UMAP_00_rev"] = embedding2d[:, 0]
+    embryo_df_rev.loc[:, "UMAP_01_rev"] = embedding2d[:, 1]
 
     print(f"Saving data...")
-        #save latent arrays and UMAP
-        embryo_df = embryo_df.iloc[:, 1:]
-        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+    #save latent arrays and UMAP
+    # embryo_df = embryo_df.iloc[:, 1:]
+    embryo_df_rev.to_csv(os.path.join(model_fig_dir, "embryo_stats_df_rev2.csv"))
