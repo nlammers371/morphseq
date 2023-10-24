@@ -87,9 +87,10 @@ if __name__ == "__main__":
                 snip_ind = np.where(snip_name == snip_id_vec)[0][0]
                 snip_index_vec.append(snip_ind)
 
-                if embryo_df_rev.loc[snip_ind, "revision_labels"]<=0:
+                if embryo_df_rev.loc[snip_ind, "revision_labels"] <= 0:
                     im_stack[b, :, :] = im_raw
-                elif embryo_df_rev.loc[snip_ind, "revision_labels"]==1:
+                elif embryo_df_rev.loc[snip_ind, "revision_labels"] == 1:
+                    im_raw = np.squeeze(im_raw)
                     im_stack[b, :, :] = np.fliplr(im_raw)
 
             im_test = torch.reshape(torch.from_numpy(im_stack), (len(batch_ids), 1, main_dims[0], main_dims[1]))
