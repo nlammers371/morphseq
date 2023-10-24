@@ -21,6 +21,9 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = False
+    main_dims = (576, 256)
+    n_image_figures = 100  # make qualitative side-by-side figures
+    n_images_to_sample = 1000  # number of images to reconstruct for loss calc
 
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
@@ -30,9 +33,7 @@ if __name__ == "__main__":
     # get list of models in this folder
     model_name_list = sorted(glob.glob(train_dir + '*metric_test*'))
 
-    m_iter = 0
-    for model_name in model_name_list:
-        m_iter += 1
+    for m_iter, model_name in enumerate(model_name_list):
 
         embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
         embryo_df = embryo_metadata_df[
@@ -43,11 +44,8 @@ if __name__ == "__main__":
 
         output_dir = os.path.join(train_dir, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
 
-        main_dims = (576, 256)
-        n_image_figures = 100  # make qualitative side-by-side figures
-        n_images_to_sample = 1000  # number of images to reconstruct for loss calc
-        data_transform = make_dynamic_rs_transform(main_dims)
 
+        data_transform = make_dynamic_rs_transform(main_dims)
         mode_vec = ["train", "eval", "test"]
         data_sampler_vec = []
         for mode in mode_vec:
@@ -179,13 +177,18 @@ if __name__ == "__main__":
         ############
         # Question 2: what does latent space look like?
         ############
+
         for n in range(trained_model.latent_dim):
-            if n in trained_model.nuisance_indices:
-                embryo_df[f"z_mu_n_{n:02}"] = np.nan
-                embryo_df[f"z_sigma_n_{n:02}"] = np.nan
+            if trained_model.model_name == "MetricVAE":
+                if n in trained_model.nuisance_indices:
+                    embryo_df[f"z_mu_n_{n:02}"] = np.nan
+                    embryo_df[f"z_sigma_n_{n:02}"] = np.nan
+                else:
+                    embryo_df[f"z_mu_b_{n:02}"] = np.nan
+                    embryo_df[f"z_sigma_b_{n:02}"] = np.nan
             else:
-                embryo_df[f"z_mu_b_{n:02}"] = np.nan
-                embryo_df[f"z_sigma_b_{n:02}"] = np.nan
+                embryo_df[f"z_mu_{n:02}"] = np.nan
+                embryo_df[f"z_sigma_{n:02}"] = np.nan
 
         print("Calculating latent embeddings...")
         for m, mode in enumerate(mode_vec):
@@ -223,12 +226,16 @@ if __name__ == "__main__":
                 zs_vec = np.asarray(encoder_out[1].detach())
                 snip_ind_array = np.asarray(snip_index_vec)
                 for z in range(trained_model.latent_dim):
-                    if z in trained_model.nuisance_indices:
-                        embryo_df.loc[snip_ind_array, f"z_mu_n_{z:02}"] = zm_vec[:, z]
-                        embryo_df.loc[snip_ind_array, f"z_sigma_n_{z:02}"] = zs_vec[:, z]
+                    if trained_model.model_name == "MetricVAE":
+                        if z in trained_model.nuisance_indices:
+                            embryo_df.loc[snip_ind_array, f"z_mu_n_{z:02}"] = zm_vec[:, z]
+                            embryo_df.loc[snip_ind_array, f"z_sigma_n_{z:02}"] = zs_vec[:, z]
+                        else:
+                            embryo_df.loc[snip_ind_array, f"z_mu_b_{z:02}"] = zm_vec[:, z]
+                            embryo_df.loc[snip_ind_array, f"z_sigma_b_{z:02}"] = zs_vec[:, z]
                     else:
-                        embryo_df.loc[snip_ind_array, f"z_mu_b_{z:02}"] = zm_vec[:, z]
-                        embryo_df.loc[snip_ind_array, f"z_sigma_b_{z:02}"] = zs_vec[:, z]
+                        embryo_df.loc[snip_ind_array, f"z_mu_{z:02}"] = zm_vec[:, z]
+                        embryo_df.loc[snip_ind_array, f"z_sigma_{z:02}"] = zs_vec[:, z]
 
                 # z_mu_array[n, :] = np.asarray(encoder_out[0].detach())
                 # z_sigma_array[n, :] = np.asarray(np.exp(encoder_out[1].detach()/2))
@@ -245,15 +252,16 @@ if __name__ == "__main__":
         embryo_df.loc[:, "UMAP_00"] = embedding2d[:, 0]
         embryo_df.loc[:, "UMAP_01"] = embedding2d[:, 1]
 
-        reducer_bio = umap.UMAP()
-        embedding2d_bio = reducer.fit_transform(scaled_z_mu[:, trained_model.biological_indices])
-        embryo_df.loc[:, "UMAP_00_bio"] = embedding2d_bio[:, 0]
-        embryo_df.loc[:, "UMAP_01_bio"] = embedding2d_bio[:, 1]
+        if trained_model.model_name == "MetricVAE":
+            reducer_bio = umap.UMAP()
+            embedding2d_bio = reducer.fit_transform(scaled_z_mu[:, trained_model.biological_indices])
+            embryo_df.loc[:, "UMAP_00_bio"] = embedding2d_bio[:, 0]
+            embryo_df.loc[:, "UMAP_01_bio"] = embedding2d_bio[:, 1]
 
-        reducer_n = umap.UMAP()
-        embedding2d_n = reducer.fit_transform(scaled_z_mu[:, trained_model.nuisance_indices])
-        embryo_df.loc[:, "UMAP_00_n"] = embedding2d_n[:, 0]
-        embryo_df.loc[:, "UMAP_01_n"] = embedding2d_n[:, 1]
+            reducer_n = umap.UMAP()
+            embedding2d_n = reducer.fit_transform(scaled_z_mu[:, trained_model.nuisance_indices])
+            embryo_df.loc[:, "UMAP_00_n"] = embedding2d_n[:, 0]
+            embryo_df.loc[:, "UMAP_01_n"] = embedding2d_n[:, 1]
 
         print(f"Saving data...")
         #save latent arrays and UMAP
