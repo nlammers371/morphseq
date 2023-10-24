@@ -21,6 +21,94 @@ from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 
+def get_embryo_age_predictions(embryo_df, mu_indices):
+
+    train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
+    test_indices = np.where(embryo_df["train_cat"] == "test")[0]
+
+    # extract target vector
+    y_train = embryo_df["predicted_stage_hpf"].iloc[train_indices].to_numpy().astype(float)
+    y_test = embryo_df["predicted_stage_hpf"].iloc[test_indices].to_numpy().astype(float)
+
+    # extract predictor variables
+    X_train = embryo_df.iloc[train_indices, mu_indices].to_numpy().astype(float)
+    X_test = embryo_df.iloc[test_indices, mu_indices].to_numpy().astype(float)
+
+    ###################
+    # run MLP regressor
+    clf_age_nonlin = MLPRegressor(random_state=1, max_iter=5000).fit(X_train, y_train)
+
+    ###################
+    # Run multivariate linear regressor
+    clf_age_lin = linear_model.LinearRegression().fit(X_train, y_train)
+
+    # initialize pandas dataframe to store results
+    X_full = embryo_df.iloc[:, mu_indices].to_numpy().astype(float)
+
+    y_pd_nonlin = clf_age_nonlin.predict(X_full)
+    y_score_nonlin = clf_age_nonlin.score(X_test, y_test)
+
+    y_pd_lin = clf_age_lin.predict(X_full)
+    y_score_lin = clf_age_lin.score(X_test, y_test)
+
+    return y_pd_lin, y_score_lin, y_pd_nonlin, y_score_nonlin
+
+def get_gdf3_class_predictions(embryo_df, mu_indices):
+
+    train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
+    test_indices = np.where(embryo_df["train_cat"] == "test")[0]
+
+    gdf3_df = embryo_df.loc[:, ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]].copy()
+
+    ########################
+    # How well does latent space predict perturbation type?
+    pert_class_train = np.asarray(embryo_df["master_perturbation"].iloc[train_indices])
+    train_gdf3_sub_indices = np.where(pert_class_train == "gdf3")[0]
+    # train_shh_sub_indices = np.where((pert_class_train == "shh_100") | (pert_class_train == "shh_75") | (pert_class_train == "shh_50"))[0]
+    train_wik_sub_indices = np.random.choice(np.where(pert_class_train == "wck-AB")[0], len(train_gdf3_sub_indices),
+                                             replace=False)
+    train_sub_indices = np.asarray(train_gdf3_sub_indices.tolist() + train_wik_sub_indices.tolist())
+
+    pert_class_test = np.asarray(embryo_df["master_perturbation"].iloc[test_indices])
+    test_sub_indices = np.where((pert_class_test == "wck-AB") | (pert_class_test == "gdf3"))[0]
+
+    # extract predictor variables
+    X_train = embryo_df.iloc[train_indices, mu_indices].to_numpy().astype(float)
+    X_test = embryo_df.iloc[test_indices, mu_indices].to_numpy().astype(float)
+
+    ###################
+    # run MLP classifier
+    ###################
+    clf = MLPClassifier(random_state=1, max_iter=5000).fit(X_train[train_sub_indices],
+                                                           pert_class_train[train_sub_indices])
+    accuracy_nonlin = clf.score(X_test[test_sub_indices], pert_class_test[test_sub_indices])
+
+    ###################
+    # Run multivariate logistic classifier
+    ###################
+    clf_lin = LogisticRegression(random_state=0).fit(X_train[train_sub_indices],
+                                                     pert_class_train[train_sub_indices])
+    accuracy_lin = clf_lin.score(X_test[test_sub_indices], pert_class_test[test_sub_indices])
+
+    class_pd_nonlin_train = clf.predict(X_train[train_sub_indices, :])
+    class_pd_nonlin_test = clf.predict(X_test[test_sub_indices, :])
+
+    class_pd_lin_train = clf_lin.predict(X_train[train_sub_indices, :])
+    class_pd_lin_test = clf_lin.predict(X_test[test_sub_indices, :])
+
+    gdf3_df_train = gdf3_df.iloc[train_indices[train_sub_indices]]
+    gdf3_df_test = gdf3_df.iloc[test_indices[test_sub_indices]]
+
+    gdf3_df_train.loc[:, "class_nonlinear_pd"] = class_pd_nonlin_train
+    gdf3_df_train.loc[:, "class_linear_pd"] = class_pd_lin_train
+
+    gdf3_df_test.loc[:, "class_nonlinear_pd"] = class_pd_nonlin_test
+    gdf3_df_test.loc[:, "class_linear_pd"] = class_pd_lin_test
+
+    gdf3_df = pd.concat([gdf3_df_train, gdf3_df_test], axis=0, ignore_index=True)
+
+    return accuracy_nonlin, accuracy_lin, gdf3_df
+
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
@@ -378,155 +466,52 @@ if __name__ == "__main__":
         metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
         metric_df_out.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
-                # #########################################
+         # #########################################
         # Test how predictive latent space is of developmental age
         print("Training basic classifiers to test latent space information content...")
-        train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
-        test_indices = np.where(embryo_df["train_cat"] == "test")[0]
-
-        # extract target vector
-        y_train = embryo_df["predicted_stage_hpf"].iloc[train_indices].to_numpy().astype(float)
-        y_test = embryo_df["predicted_stage_hpf"].iloc[test_indices].to_numpy().astype(float)
-
-        # extract predictor variables
         mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
-        X_train = embryo_df.iloc[train_indices, mu_indices].to_numpy().astype(float)
-        # X_test = embryo_df.iloc[test_indices, mu_indices].to_numpy().astype(float)
-
-        ###################
-        # run MLP regressor
-        clf_age_nonlin = MLPRegressor(random_state=1, max_iter=5000).fit(X_train, y_train)
-
-        ###################
-        # Run multivariate linear regressor
-        reg_age_loin = linear_model.LinearRegression().fit(X_train, y_train)
-
-        # initialize pandas dataframe to store results
-        X_full = embryo_df.iloc[:, mu_indices].to_numpy().astype(float)
-
-        y_pd_nonlin = clf_age_nonlin.predict(X_full)
-        y_pd_lin = reg_age_loin.predict(X_full)
 
         age_df = embryo_df.loc[:, ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]].copy()
+
+        y_pd_lin, y_score_lin, y_pd_nonlin, y_score_nonlin = get_embryo_age_predictions(embryo_df, mu_indices)
 
         age_df["stage_nonlinear_pd"] = y_pd_nonlin
         age_df["stage_linear_pd"] = y_pd_lin
 
-        ########################
-        # How well does latent space predict perturbation type?
-        pert_class_train = np.asarray(embryo_df["master_perturbation"].iloc[train_indices])
-        train_gdf3_sub_indices = np.where(pert_class_train == "gdf3")[0]
-        # train_shh_sub_indices = np.where((pert_class_train == "shh_100") | (pert_class_train == "shh_75") | (pert_class_train == "shh_50"))[0]
-        train_wck_sub_indices = np.random.choice(np.where(pert_class_train == "wck-AB")[0], len(train_gdf3_sub_indices),
-                                                 replace=False)
-        train_sub_indices = np.asarray(train_gdf3_sub_indices.tolist() + train_wck_sub_indices.tolist())
+        if trained_model.model_name == "MetricVAE":
+            zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
+            zmn_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_n" in embryo_df.columns[i]]
 
-        pert_class_test = np.asarray(embryo_df["master_perturbation"].iloc[test_indices])
-        test_sub_indices = np.where((pert_class_test == "wck-AB") | (pert_class_test == "gdf3"))[0]
+            y_pd_lin_n, y_score_lin_n, y_pd_nonlin_n, y_score_nonlin_n = get_embryo_age_predictions(embryo_df,
+                                                                                                    zmn_indices)
+            y_pd_lin_b, y_score_lin_b, y_pd_nonlin_b, y_score_nonlin_b = get_embryo_age_predictions(embryo_df,
+                                                                                                    zmb_indices)
 
-        # extract predictor variables
-        mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
-        X_train = embryo_df.iloc[train_indices, mu_indices].to_numpy().astype(float)
-        X_test = embryo_df.iloc[test_indices, mu_indices].to_numpy().astype(float)
+            age_df["stage_nonlinear_pd_n"] = y_pd_nonlin_n
+            age_df["stage_linear_pd_n"] = y_pd_lin_n
+            age_df["stage_nonlinear_pd_b"] = y_pd_nonlin_b
+            age_df["stage_linear_pd_b"] = y_pd_lin_b
 
-        ###################
-        # run MLP classifier
-        ###################
-        clf = MLPClassifier(random_state=1, max_iter=5000).fit(X_train[train_sub_indices],
-                                                               pert_class_train[train_sub_indices])
-        accuracy_nonlin = clf.score(X_test[test_sub_indices], pert_class_test[test_sub_indices])
+        accuracy_nonlin, accuracy_lin, gdf3_df = get_gdf3_class_predictions(embryo_df, mu_indices)
 
-        ###################
-        # Run multivariate logistic classifier
-        ###################
-        clf_lin = LogisticRegression(random_state=0).fit(X_train[train_sub_indices],
-                                                         pert_class_train[train_sub_indices])
-        accuracy_lin = clf_lin.score(X_test[test_sub_indices], pert_class_test[test_sub_indices])
+        if trained_model.model_name == "MetricVAE":
+            accuracy_nonlin_n, accuracy_lin_n, gdf3_df_n = get_gdf3_class_predictions(embryo_df, zmn_indices)
+            accuracy_nonlin_b, accuracy_lin_b, gdf3_df_b = get_gdf3_class_predictions(embryo_df, zmb_indices)
 
-        class_pd_nonlin_train = clf.predict(X_train[train_sub_indices, :])
-        class_pd_nonlin_test = clf.predict(X_test[test_sub_indices, :])
+            # subset
+            gdf3_df_n = gdf3_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+            gdf3_df_n.rename({"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
 
-        class_pd_lin_train = clf_lin.predict(X_train[train_sub_indices, :])
-        class_pd_lin_test = clf_lin.predict(X_test[test_sub_indices, :])
+            gdf3_df_b = gdf3_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+            gdf3_df_b.rename({"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
 
-        gdf3_df = embryo_df.loc[:, ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]].copy()
-        gdf3_df_train = gdf3_df.iloc[train_indices[train_sub_indices]]
-        gdf3_df_test = gdf3_df.iloc[test_indices[test_sub_indices]]
+            gdf3_df = gdf3_df.merge(gdf3_df_n, how="left", on="snip_id")
+            gdf3_df = gdf3_df.merge(gdf3_df_b, how="left", on="snip_id")
 
-        gdf3_df_train.loc[:, "class_nonlinear_pd"] = class_pd_nonlin_train
-        gdf3_df_train.loc[:, "class_linear_pd"] = class_pd_lin_train
-
-        gdf3_df_test.loc[:, "class_nonlinear_pd"] = class_pd_nonlin_test
-        gdf3_df_test.loc[:, "class_linear_pd"] = class_pd_lin_test
-
-        gdf3_df = pd.concat([gdf3_df_train, gdf3_df_test], axis=0, ignore_index=True)
 
         age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
         gdf3_df.to_csv(os.path.join(figure_path, "gdf3_pd_df.csv"))
 
-        #########################
-        # Finally, compare latent encodings of flipped images to assess how far apart they look in latent space,
-        # and in what direction
-        # sigma_indices = [i for i in range(len(embryo_df.columns)) if "z_sigma_" in embryo_df.columns[i]]
-        keep_cols = ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]
-        df_cols = embryo_df.columns
-        mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
-        mu_cols = [df_cols[c] for c in range(len(df_cols)) if c in mu_indices]
-        keep_cols += mu_cols
-        orientation_df = embryo_df.loc[test_indices, keep_cols]
-
-        orientation_df = orientation_df.reset_index()
-
-        data_sampler = data_sampler_vec[2]
-        n_images = len(data_sampler)
-        snip_id_vec = orientation_df["snip_id"]
-        # draw random samples
-        sample_indices = np.random.choice(range(n_images), n_images, replace=False)
-
-        batch_id_vec = []
-        n_batches = np.ceil(len(sample_indices) / batch_size).astype(int)
-        for n in range(n_batches):
-            ind1 = n * batch_size
-            ind2 = (n + 1) * batch_size
-            batch_id_vec.append(sample_indices[ind1:ind2])
-
-        # recon_loss_array = np.empty((n_recon_samples,))
-        orientation_codes = ["lr", "ud", "lr-ud"]
-        print("Testing how embryo pose impacts encoding...")
-        for n in tqdm(range(n_batches)):
-
-            batch_ids = batch_id_vec[n]
-            im_stack = np.empty((len(batch_ids), main_dims[0], main_dims[1])).astype(np.float32)
-
-            snip_index_vec = []
-            snip_name_vec = []
-            for b in range(len(batch_ids)):
-                im_raw = np.asarray(data_sampler[batch_ids[b]][0]).tolist()[0]
-                path_data = data_sampler[batch_ids[b]][1]
-                snip_name = path_leaf(path_data[0]).replace(".jpg", "")
-                snip_name_vec.append(snip_name)
-                snip_index_vec.append(np.where(snip_name == snip_id_vec)[0][0])
-
-                im_stack[b, :, :] = im_raw
-
-            for o, code in enumerate(orientation_codes):
-                if code == "lr":
-                    im_perm = im_stack[:, ::-1, :].copy()
-                elif code == "ud":
-                    im_perm = im_stack[:, :, ::-1].copy()
-                elif code == "lr-ud":
-                    im_perm = im_stack[:, ::-1, ::-1].copy()
-
-                im_test = torch.reshape(torch.from_numpy(im_perm), (len(batch_ids), 1, main_dims[0], main_dims[1]))
-                encoder_out = trained_model.encoder(im_test)
-                zm_vec = np.asarray(encoder_out[0].detach())
-                zs_vec = np.asarray(encoder_out[1].detach())
-                snip_ind_array = np.asarray(snip_index_vec)
-                for z in range(trained_model.latent_dim):
-                    orientation_df.loc[snip_ind_array, f"z_mu_{z:02}_" + code] = zm_vec[:, z]
-                    # embryo_df.loc[snip_ind_array, f"z_sigma_{z:02}_" + code] = zs_vec[:, z]
-
-        orientation_df.to_csv(os.path.join(figure_path, "orientation_df.csv"))
         print("Done.")
 
 
