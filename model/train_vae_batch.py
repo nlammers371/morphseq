@@ -109,13 +109,13 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230815_vae"
+    train_folder = "20230915_vae_flipped"
     tc_flag = False  # indicates whether we wish to use standard or disentangled TC vae
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
     n_epochs = 100
     z_dim_vec = [100]
-    depth_vec = [3, 5, 6, 7]
+    depth_vec = [5]  #[3, 5, 6, 7]
     beta_vec = [1, 2, 4, 6]
     max_tries = 3
     # output_dir = train_vanilla_vae(train_dir, n_latent=10, batch_size=batch_size, n_epochs=n_epochs,

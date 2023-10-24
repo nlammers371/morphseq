@@ -262,7 +262,7 @@ if __name__ == "__main__":
 
         # #########################################
         # Test how predictive latent space is of developmental age
-        print("Training basic classifiers to test latent space information conten...")
+        print("Training basic classifiers to test latent space information content...")
         train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
         test_indices = np.where(embryo_df["train_cat"] == "test")[0]
 

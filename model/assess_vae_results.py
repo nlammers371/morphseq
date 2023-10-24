@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20230915_vae"
+    train_name = "20230915_vae_flipped"
     train_dir = os.path.join(root, "training_data", train_name, '')
     # model_name = "20230804_vae_full_conv_z25_bs032_ne100_depth05"
     # get list of models in this folder

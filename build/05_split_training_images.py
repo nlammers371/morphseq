@@ -10,7 +10,14 @@ from tqdm import tqdm
 
 
 def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_date", train_eval_test=None,
-                            frac_to_use=1.0, test_ids=None):
+                            frac_to_use=1.0, test_ids=None, flip_dataset_path=None):
+
+    flip_flag = False
+    if flip_dataset_path != None:
+        flip_flag = True
+        flip_df = pd.read_csv(flip_dataset_path, index_col=0)
+        flip_snip_id_vec = flip_df["snip_id"]
+        flip_flag_vec = flip_df["revision_labels"]
 
     np.random.seed(r_seed)
     metadata_path = os.path.join(root, "metadata", '')
@@ -143,38 +150,59 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
     # Write snips to file
     
     # training snips
-    print("Generating training snips...")
-    for i in tqdm(range(len(train_paths))):
-        img = torch.from_numpy(imageio.imread(train_paths[i]))
-        img_name = path_leaf(train_paths[i])
-    
-        if label_var != None:
-            lb_name = embryo_metadata_df[label_var].iloc[train_indices[i]].astype(str)
-            img_folder = os.path.join(train_dir, "train", lb_name)
-        else:
-            img_folder = os.path.join(train_dir, "train", "0")  # I'm assuming the code will expect a subfolder
-    
-        if not os.path.exists(img_folder):
-            os.mkdir(img_folder)
-    
-        imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
-    
-    # eval
-    print("Generating evalation snips...")
-    for i in tqdm(range(len(eval_paths))):
-        img = torch.from_numpy(imageio.imread(eval_paths[i]))
-        img_name = path_leaf(eval_paths[i])
-    
-        if label_var != None:
-            lb_name = embryo_metadata_df[label_var].iloc[eval_indices[i]].astype(str)
-            img_folder = os.path.join(train_dir, "eval", lb_name)
-        else:
-            img_folder = os.path.join(train_dir, "eval", "0")  # I'm assuming the code will expect a subfolder
-    
-        if not os.path.exists(img_folder):
-            os.mkdir(img_folder)
-    
-        imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+    # print("Generating training snips...")
+    # for i in tqdm(range(len(train_paths))):
+    #     img = torch.from_numpy(imageio.imread(train_paths[i]))
+    #     img_name = path_leaf(train_paths[i])
+    #
+    #     if label_var != None:
+    #         lb_name = embryo_metadata_df[label_var].iloc[train_indices[i]].astype(str)
+    #         img_folder = os.path.join(train_dir, "train", lb_name)
+    #     else:
+    #         img_folder = os.path.join(train_dir, "train", "0")  # I'm assuming the code will expect a subfolder
+    #
+    #     if not os.path.exists(img_folder):
+    #         os.mkdir(img_folder)
+    #
+    #     write_flag = True
+    #     if flip_flag:
+    #         snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[train_indices[i]][:-4])[0][0]
+    #         flip_id = int(flip_flag_vec[snip_ind])
+    #         if flip_id == 1:
+    #             img = torch.fliplr(img)
+    #         elif flip_id == -1:
+    #             write_flag = False
+    #
+    #     if write_flag:
+    #         imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+    #
+    # # eval
+    # print("Generating evalation snips...")
+    # for i in tqdm(range(len(eval_paths))):
+    #     img = torch.from_numpy(imageio.imread(eval_paths[i]))
+    #     img_name = path_leaf(eval_paths[i])
+    #
+    #     if label_var != None:
+    #         lb_name = embryo_metadata_df[label_var].iloc[eval_indices[i]].astype(str)
+    #         img_folder = os.path.join(train_dir, "eval", lb_name)
+    #     else:
+    #         img_folder = os.path.join(train_dir, "eval", "0")  # I'm assuming the code will expect a subfolder
+    #
+    #     if not os.path.exists(img_folder):
+    #         os.mkdir(img_folder)
+    #
+    #     write_flag = True
+    #     if flip_flag:
+    #         snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[eval_indices[i]][:-4])[0][0]
+    #         flip_id = int(flip_flag_vec[snip_ind])
+    #         if flip_id == 1:
+    #             img = torch.fliplr(img)
+    #         elif flip_id == -1:
+    #             write_flag = False
+    #
+    #     if write_flag:
+    #         imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"),
+    #                         np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
     
     # test
     print("Generating testing snips...")
@@ -187,11 +215,22 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
             img_folder = os.path.join(train_dir, "test", lb_name)
         else:
             img_folder = os.path.join(train_dir, "test", "0")  # I'm assuming the code will expect a subfolder
-    
+
+        write_flag = True
+        if flip_flag:
+            snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[test_indices[i]][:-4])[0][0]
+            flip_id = int(flip_flag_vec[snip_ind])
+            if flip_id == 1:
+                img = torch.fliplr(img)
+            elif flip_id == -1:
+                write_flag = False
+
         if not os.path.exists(img_folder):
             os.mkdir(img_folder)
-    
-        imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+
+        if write_flag:
+            imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"),
+                            np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
 
         
     print("Done.")
@@ -202,7 +241,8 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 
-    train_name = "20230915_vae"
+    train_name = "20230915_vae_flipped"
     label_var = "experiment_date"
 
-    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0)
+    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0,
+                            flip_dataset_path="E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\training_data\\20230815_vae\\z50_bs032_ne100_depth05\\VAE_training_2023-08-17_05-00-08\\figures\\embryo_stats_df_rev1.csv")
