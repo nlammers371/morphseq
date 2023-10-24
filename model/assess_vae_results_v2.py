@@ -21,6 +21,9 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = False
+    main_dims = (576, 256)
+    n_image_figures = 100  # make qualitative side-by-side figures
+    n_images_to_sample = 1000  # number of images to reconstruct for loss calc
 
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
@@ -30,9 +33,7 @@ if __name__ == "__main__":
     # get list of models in this folder
     model_name_list = sorted(glob.glob(train_dir + '*metric_test*'))
 
-    m_iter = 0
-    for model_name in model_name_list:
-        m_iter += 1
+    for m_iter, model_name in enumerate(model_name_list):
 
         embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
         embryo_df = embryo_metadata_df[
@@ -43,11 +44,8 @@ if __name__ == "__main__":
 
         output_dir = os.path.join(train_dir, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
 
-        main_dims = (576, 256)
-        n_image_figures = 100  # make qualitative side-by-side figures
-        n_images_to_sample = 1000  # number of images to reconstruct for loss calc
-        data_transform = make_dynamic_rs_transform(main_dims)
 
+        data_transform = make_dynamic_rs_transform(main_dims)
         mode_vec = ["train", "eval", "test"]
         data_sampler_vec = []
         for mode in mode_vec:
