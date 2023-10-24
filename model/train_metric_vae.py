@@ -126,12 +126,12 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230915_vae"
+    train_folder = "20230804_vae_test"
     contrastive_flag = True
     temperature = 0.001
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
-    n_epochs = 250
+    n_epochs = 5
     z_dim_vec = [50]
     orth_flag = True
     depth_vec = [5]
