@@ -14,21 +14,24 @@ from _archive.functions_folder.utilities import path_leaf
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
+from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
+from functions.view_generator import ContrastiveLearningViewGenerator
 
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
-    overwrite_flag = False
+    overwrite_flag = True
     main_dims = (576, 256)
     n_image_figures = 100  # make qualitative side-by-side figures
     n_images_to_sample = 1000  # number of images to reconstruct for loss calc
+    test_contrastive_pairs = True
 
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20230915_vae"
+    train_name = "20230804_vae_test" #"20230915_vae"
     train_dir = os.path.join(root, "training_data", train_name, '')
     # get list of models in this folder
     model_name_list = sorted(glob.glob(train_dir + '*metric_test*'))
@@ -40,7 +43,6 @@ if __name__ == "__main__":
             ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
              "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
         embryo_df = embryo_df.reset_index()
-        snip_id_vec = embryo_df["snip_id"]
 
         output_dir = os.path.join(train_dir, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
 
@@ -97,6 +99,7 @@ if __name__ == "__main__":
         # initialize new columns
         embryo_df["train_cat"] = ''
         embryo_df["recon_mse"] = np.nan
+        snip_id_vec = embryo_df["snip_id"]
 
         print("Making image figures...")
         for m, mode in enumerate(mode_vec):
@@ -169,17 +172,15 @@ if __name__ == "__main__":
                         plt.savefig(os.path.join(image_path, snip_name_vec[b] + f'_loss{int(np.round(recon_loss[b],0)):05}.tiff'))
                         plt.close()
 
-            # save
-            # np.save(os.path.join(figure_path, mode + "_set_recon_loss.npy"), recon_loss_array)
-        if np.any(np.isnan(embryo_df.loc[:, "recon_mse"].to_numpy())):
-            print("Uh-Oh")
-            embryo_df = embryo_df.dropna()
+        embryo_df = embryo_df.dropna(ignore_index=True)
+        snip_id_vec = embryo_df["snip_id"]
+
         ############
         # Question 2: what does latent space look like?
         ############
-
         for n in range(trained_model.latent_dim):
             if trained_model.model_name == "MetricVAE":
+                print("nice")
                 if n in trained_model.nuisance_indices:
                     embryo_df[f"z_mu_n_{n:02}"] = np.nan
                     embryo_df[f"z_sigma_n_{n:02}"] = np.nan
@@ -191,6 +192,7 @@ if __name__ == "__main__":
                 embryo_df[f"z_sigma_{n:02}"] = np.nan
 
         print("Calculating latent embeddings...")
+        # embryo_df = embryo_df.reset_index()
         for m, mode in enumerate(mode_vec):
 
             data_sampler = data_sampler_vec[m]
@@ -267,6 +269,27 @@ if __name__ == "__main__":
         #save latent arrays and UMAP
         embryo_df = embryo_df.iloc[:, 1:]
         embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+
+        ############################################
+        # Compare latent encodings of contrastive pairs
+        if test_contrastive_pairs:
+            train_dataset = MyCustomDataset(root=os.path.join(train_dir, "train"),
+                                            transform=ContrastiveLearningViewGenerator(
+                                                ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
+                                                2)
+                                            )
+
+            eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
+                                           transform=ContrastiveLearningViewGenerator(
+                                               ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
+                                               2)
+                                           )
+
+            test_dataset = MyCustomDataset(root=os.path.join(train_dir, "test"),
+                                           transform=ContrastiveLearningViewGenerator(
+                                               ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
+                                               2)
+                                           )
 
         # #########################################
         # Test how predictive latent space is of developmental age
