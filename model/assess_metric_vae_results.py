@@ -19,6 +19,7 @@ from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 from functions.view_generator import ContrastiveLearningViewGenerator
 from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
+from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 
 if __name__ == "__main__":
 
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     overwrite_flag = True
     main_dims = (576, 256)
     n_image_figures = 100  # make qualitative side-by-side figures
-    n_images_to_sample = 1000  # number of images to reconstruct for loss calc
+    n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
     test_contrastive_pairs = True
 
     # load metadata
@@ -276,54 +277,108 @@ if __name__ == "__main__":
         ############################################
         # Compare latent encodings of contrastive pairs
         if test_contrastive_pairs:
-            train_dataset = MyCustomDataset(root=os.path.join(train_dir, "train"),
-                                            transform=ContrastiveLearningViewGenerator(
-                                                ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
-                                                2)
-                                            )
-            train_loader = DataLoader(
-                                    dataset=train_dataset,
-                                    batch_size=min(len(train_dataset), 2),
-                                    collate_fn=collate_dataset_output,
-                                    )
+            c_data_loader_vec = []
+            n_total_samples = 0
+            for mode in mode_vec:
 
-            eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
-                                           transform=ContrastiveLearningViewGenerator(
-                                               ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
-                                               2)
-                                           )
-            eval_loader = DataLoader(
-                dataset=eval_dataset,
-                batch_size=min(len(eval_dataset), 2),
-                collate_fn=collate_dataset_output,
-            )
+                temp_dataset = MyCustomDataset(root=os.path.join(train_dir, mode),
+                                                transform=ContrastiveLearningViewGenerator(
+                                                    ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
+                                                    2)
+                                                )
+                data_loader = DataLoader(
+                                        dataset=temp_dataset,
+                                        batch_size=batch_size,
+                                        collate_fn=collate_dataset_output,
+                                        )
 
-            test_dataset = MyCustomDataset(root=os.path.join(train_dir, "test"),
-                                           transform=ContrastiveLearningViewGenerator(
-                                               ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
-                                               2)
-                                           )
-            test_loader = DataLoader(
-                dataset=test_dataset,
-                batch_size=min(len(test_dataset), 2),
-                collate_fn=collate_dataset_output,
-            )
+                c_data_loader_vec.append(data_loader)
+                n_total_samples += np.min([n_contrastive_samples, len(data_loader)])
 
-            for inputs in train_loader:
-                # inputs = self._set_inputs_to_device(inputs)
-                # latent_encodings = trained_model.encoder(inputs)
-                x = inputs.data
-                x0 = torch.reshape(x[:, 0, :, :, :],
-                                   (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
-                x1 = torch.reshape(x[:, 1, :, :, :], (
-                    x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
 
-                encoder_output0 = trained_model.encoder(x0)
-                encoder_output1 = trained_model.encoder(x1)
+            metric_df_list = []
+            zm_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
+            z_col_list = embryo_df.columns[zm_indices].to_list()
+            sample_iter = 0
 
-                mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
-                mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
-        # #########################################
+
+            # embryo_df = embryo_df.reset_index()
+            for m, mode in enumerate(mode_vec):
+                data_loader = c_data_loader_vec[m]
+
+                print(f"Calculating {mode} contrastive differences...")
+                for i, inputs in enumerate(tqdm(data_loader)):
+                    # inputs = self._set_inputs_to_device(inputs)
+                    x = inputs.data
+                    bs = x.shape[0]
+
+                    metric_df_temp = pd.DataFrame(np.empty((x.shape[0]*2, trained_model.latent_dim + 3 + 2)),
+                                     columns=["sample_id", "contrast_id", "train_cat", "euc_all", "cos_all"] + z_col_list)
+
+                    # latent_encodings = trained_model.encoder(inputs)
+                    x0 = torch.reshape(x[:, 0, :, :, :],
+                                       (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
+                    x1 = torch.reshape(x[:, 1, :, :, :], (
+                        x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
+
+                    encoder_output0 = trained_model.encoder(x0)
+                    encoder_output1 = trained_model.encoder(x1)
+
+                    mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
+                    mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
+
+                    # store
+                    metric_df_temp.loc[:x.shape[0]-1, "contrast_id"] = 0
+                    metric_df_temp.loc[:x.shape[0]-1, "sample_id"] = range(sample_iter, sample_iter+bs)
+
+                    metric_df_temp.loc[x.shape[0]:, "contrast_id"] = 1
+                    metric_df_temp.loc[x.shape[0]:, "sample_id"] = range(sample_iter, sample_iter + bs)
+
+                    metric_df_temp.loc[:, "train_cat"] = mode
+
+                    # calculate distance metrics
+                    cos_d_all = np.diag(cosine_similarity(mu0.detach(), mu1.detach()))
+                    metric_df_temp.loc[:x.shape[0] - 1, "cos_all"] = cos_d_all
+                    metric_df_temp.loc[x.shape[0]:, "cos_all"] = cos_d_all
+
+                    euc_d_all = np.diag(euclidean_distances(mu0.detach(), mu1.detach()))
+                    metric_df_temp.loc[:x.shape[0] - 1, "euc_all"] = euc_d_all
+                    metric_df_temp.loc[x.shape[0]:, "euc_all"] = euc_d_all
+
+                    if trained_model.model_name == "MetricVAE":
+
+                        bio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_b_" in z_col_list[i]])
+                        nbio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_n_" in z_col_list[i]])
+
+                        # biological partition
+                        cos_d_bio = np.diag(cosine_similarity(mu0.detach()[:, bio_indices], mu1.detach()[:, bio_indices]))
+                        metric_df_temp.loc[:x.shape[0] - 1, "cos_bio"] = cos_d_bio
+                        metric_df_temp.loc[x.shape[0]:, "cos_bio"] = cos_d_bio
+
+                        euc_d_bio = np.diag(euclidean_distances(mu0.detach()[:, bio_indices], mu1.detach()[:, bio_indices]))
+                        metric_df_temp.loc[:x.shape[0] - 1, "euc_bio"] = euc_d_bio
+                        metric_df_temp.loc[x.shape[0]:, "euc_bio"] = euc_d_bio
+
+                        # nuisance partition
+                        cos_d_nbio = np.diag(cosine_similarity(mu0.detach()[:, nbio_indices], mu1.detach()[:, nbio_indices]))
+                        metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio"] = cos_d_bio
+                        metric_df_temp.loc[x.shape[0]:, "cos_nbio"] = cos_d_bio
+
+                        euc_d_nbio = np.diag(euclidean_distances(mu0.detach()[:, nbio_indices], mu1.detach()[:, nbio_indices]))
+                        metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio"] = euc_d_nbio
+                        metric_df_temp.loc[x.shape[0]:, "euc_nbio"] = euc_d_nbio
+
+
+                    metric_df_temp.loc[:x.shape[0] - 1, z_col_list] = np.asarray(mu0.detach())
+                    metric_df_temp.loc[x.shape[0]:, z_col_list] = np.asarray(mu1.detach())
+
+                    metric_df_list.append(metric_df_temp)
+                    sample_iter += bs
+
+        metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
+        metric_df_out.to_csv(os.path.join(figure_path, "metric_df.csv"))
+
+                # #########################################
         # Test how predictive latent space is of developmental age
         print("Training basic classifiers to test latent space information content...")
         train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
