@@ -14,8 +14,11 @@ from _archive.functions_folder.utilities import path_leaf
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
+from pythae.trainers.base_trainer_verbose import base_trainer_verbose
 from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 from functions.view_generator import ContrastiveLearningViewGenerator
+from pythae.data.datasets import collate_dataset_output
+from torch.utils.data import DataLoader
 
 if __name__ == "__main__":
 
@@ -278,19 +281,48 @@ if __name__ == "__main__":
                                                 ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
                                                 2)
                                             )
+            train_loader = DataLoader(
+                                    dataset=train_dataset,
+                                    batch_size=min(len(train_dataset), 2),
+                                    collate_fn=collate_dataset_output,
+                                    )
 
             eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
                                            transform=ContrastiveLearningViewGenerator(
                                                ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
                                                2)
                                            )
+            eval_loader = DataLoader(
+                dataset=eval_dataset,
+                batch_size=min(len(eval_dataset), 2),
+                collate_fn=collate_dataset_output,
+            )
 
             test_dataset = MyCustomDataset(root=os.path.join(train_dir, "test"),
                                            transform=ContrastiveLearningViewGenerator(
                                                ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
                                                2)
                                            )
+            test_loader = DataLoader(
+                dataset=test_dataset,
+                batch_size=min(len(test_dataset), 2),
+                collate_fn=collate_dataset_output,
+            )
 
+            for inputs in train_loader:
+                # inputs = self._set_inputs_to_device(inputs)
+                # latent_encodings = trained_model.encoder(inputs)
+                x = inputs.data
+                x0 = torch.reshape(x[:, 0, :, :, :],
+                                   (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
+                x1 = torch.reshape(x[:, 1, :, :, :], (
+                    x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
+
+                encoder_output0 = trained_model.encoder(x0)
+                encoder_output1 = trained_model.encoder(x1)
+
+                mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
+                mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
         # #########################################
         # Test how predictive latent space is of developmental age
         print("Training basic classifiers to test latent space information content...")
