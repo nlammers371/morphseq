@@ -20,6 +20,7 @@ from functions.view_generator import ContrastiveLearningViewGenerator
 from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
+import json
 
 def get_embryo_age_predictions(embryo_df, mu_indices):
 
@@ -120,10 +121,13 @@ if __name__ == "__main__":
     n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
     test_contrastive_pairs = True
 
+    data_transform = make_dynamic_rs_transform(main_dims)
+    mode_vec = ["train", "eval", "test"]
+
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20230804_vae_test" #"20230915_vae"
+    train_name = "20230915_vae" #"20230915_vae"
     train_dir = os.path.join(root, "training_data", train_name, '')
     # get list of models in this folder
     model_name_list = sorted(glob.glob(train_dir + '*metric_test*'))
@@ -137,10 +141,6 @@ if __name__ == "__main__":
         embryo_df = embryo_df.reset_index()
 
         output_dir = os.path.join(train_dir, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
-
-
-        data_transform = make_dynamic_rs_transform(main_dims)
-        mode_vec = ["train", "eval", "test"]
         data_sampler_vec = []
         for mode in mode_vec:
             ds_temp = MyCustomDataset(
@@ -153,8 +153,14 @@ if __name__ == "__main__":
 
         last_training = sorted(os.listdir(output_dir))[-1]
         try:
-            trained_model = AutoModel.load_from_folder(
-                os.path.join(output_dir, last_training, 'final_model'))
+            trained_model = AutoModel.load_from_folder(os.path.join(output_dir, last_training, 'final_model'))
+
+            train_config_file = open(os.path.join(output_dir, last_training, 'final_model', 'training_config.json'))
+            train_config = json.load(train_config_file)
+
+            model_config_file = open(os.path.join(output_dir, last_training, 'final_model', 'model_config.json'))
+            model_config = json.load(model_config_file)
+
         except:
             try:
                 trained_model_list = glob.glob(os.path.join(output_dir, last_training, "*epoch*"))
@@ -164,10 +170,30 @@ if __name__ == "__main__":
 
                 # last_training = path_leaf(trained_model_list[last_ind])
                 trained_model = AutoModel.load_from_folder(trained_model_list[last_ind])
-                print("No final model found for " + output_dir + ". Using most recent saved training isntance.")
+
+                train_config_file = open(os.path.join(trained_model_list[last_ind], 'training_config.json'))
+                train_config = json.load(train_config_file)
+
+                model_config_file = open(os.path.join(trained_model_list[last_ind], 'model_config.json'))
+                model_config = json.load(model_config_file)
+
+                print("No final model found for " + output_dir + ". Using most recent saved training instance.")
             except:
                 print("No final model for " + output_dir + ". Still training?")
                 continue
+
+        training_key_list = list(train_config.keys())
+        meta_df = pd.DataFrame(np.empty((1, len(training_key_list))), columns=training_key_list)
+        for k in training_key_list:
+            meta_df[k] = train_config[k]
+
+        model_key_list = list(model_config.keys())
+        for k in model_key_list:
+            entry = model_config[k]
+            try:
+                meta_df[k] = entry
+            except:
+                meta_df[k] = [entry]
         ############
         # Question 1: how well does it reproduce train, eval, and test images?
         ############
@@ -468,6 +494,15 @@ if __name__ == "__main__":
         metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
         metric_df_out.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
+        meta_df["cos_all_mean"] = np.mean(metric_df_out["cos_all"])
+        meta_df["euc_all_mean"] = np.mean(metric_df_out["cos_all"])
+
+        if trained_model.model_name == "MetricVAE":
+            meta_df["cos_bio_mean"] = np.mean(metric_df_out["cos_bio"])
+            meta_df["euc_bio_mean"] = np.mean(metric_df_out["euc_bio"])
+            meta_df["cos_nbio_mean"] = np.mean(metric_df_out["cos_nbio"])
+            meta_df["euc_nbio_mean"] = np.mean(metric_df_out["euc_nbio"])
+
          # #########################################
         # Test how predictive latent space is of developmental age
         print("Training basic classifiers to test latent space information content...")
@@ -479,6 +514,9 @@ if __name__ == "__main__":
 
         age_df["stage_nonlinear_pd"] = y_pd_nonlin
         age_df["stage_linear_pd"] = y_pd_lin
+
+        meta_df["stage_R2_nonlin_all"] = y_score_nonlin
+        meta_df["stage_R2_lin_all"] = y_score_lin
 
         if trained_model.model_name == "MetricVAE":
             zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
@@ -494,7 +532,14 @@ if __name__ == "__main__":
             age_df["stage_nonlinear_pd_b"] = y_pd_nonlin_b
             age_df["stage_linear_pd_b"] = y_pd_lin_b
 
+            meta_df["stage_R2_nonlin_bio"] = y_score_nonlin_b
+            meta_df["stage_R2_lin_bio"] = y_score_lin_b
+            meta_df["stage_R2_nonlin_nbio"] = y_score_nonlin_n
+            meta_df["stage_R2_lin_nbio"] = y_score_lin_n
+
         accuracy_nonlin, accuracy_lin, gdf3_df = get_gdf3_class_predictions(embryo_df, mu_indices)
+        meta_df["gdf3_acc_nonlin_all"] = accuracy_nonlin
+        meta_df["gdf3_acc_lin_all"] = accuracy_lin
 
         if trained_model.model_name == "MetricVAE":
             accuracy_nonlin_n, accuracy_lin_n, gdf3_df_n = get_gdf3_class_predictions(embryo_df, zmn_indices)
@@ -502,17 +547,25 @@ if __name__ == "__main__":
 
             # subset
             gdf3_df_n = gdf3_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-            gdf3_df_n.rename({"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
+            gdf3_df_n = gdf3_df_n.rename(columns={"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
 
             gdf3_df_b = gdf3_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-            gdf3_df_b.rename({"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
+            gdf3_df_b = gdf3_df_b.rename(columns={"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
 
             gdf3_df = gdf3_df.merge(gdf3_df_n, how="left", on="snip_id")
             gdf3_df = gdf3_df.merge(gdf3_df_b, how="left", on="snip_id")
 
+            meta_df["gdf3_acc_nonlin_bio"] = accuracy_nonlin_b
+            meta_df["gdf3_acc_lin_bio"] = accuracy_lin_b
+
+            meta_df["gdf3_acc_nonlin_nbio"] = accuracy_nonlin_n
+            meta_df["gdf3_acc_lin_nbio"] = accuracy_lin_n
 
         age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
         gdf3_df.to_csv(os.path.join(figure_path, "gdf3_pd_df.csv"))
+
+        meta_df["model_name"] = model_name
+        meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
 
         print("Done.")
 
