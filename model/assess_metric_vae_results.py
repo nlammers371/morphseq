@@ -477,8 +477,8 @@ if __name__ == "__main__":
 
                         # nuisance partition
                         cos_d_nbio = np.diag(cosine_similarity(mu0.detach()[:, nbio_indices], mu1.detach()[:, nbio_indices]))
-                        metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio"] = cos_d_bio
-                        metric_df_temp.loc[x.shape[0]:, "cos_nbio"] = cos_d_bio
+                        metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio"] = cos_d_nbio
+                        metric_df_temp.loc[x.shape[0]:, "cos_nbio"] = cos_d_nbio
 
                         euc_d_nbio = np.diag(euclidean_distances(mu0.detach()[:, nbio_indices], mu1.detach()[:, nbio_indices]))
                         metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio"] = euc_d_nbio
@@ -495,7 +495,7 @@ if __name__ == "__main__":
         metric_df_out.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
         meta_df["cos_all_mean"] = np.mean(metric_df_out["cos_all"])
-        meta_df["euc_all_mean"] = np.mean(metric_df_out["cos_all"])
+        meta_df["euc_all_mean"] = np.mean(metric_df_out["euc_all"])
 
         if trained_model.model_name == "MetricVAE":
             meta_df["cos_bio_mean"] = np.mean(metric_df_out["cos_bio"])
