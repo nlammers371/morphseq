@@ -270,19 +270,21 @@ if __name__ == "__main__":
         ############
         # Question 2: what does latent space look like?
         ############
+        new_cols = []
         for n in range(trained_model.latent_dim):
-            if trained_model.model_name == "MetricVAE":
-                print("nice")
-                if n in trained_model.nuisance_indices:
-                    embryo_df[f"z_mu_n_{n:02}"] = np.nan
-                    embryo_df[f"z_sigma_n_{n:02}"] = np.nan
-                else:
-                    embryo_df[f"z_mu_b_{n:02}"] = np.nan
-                    embryo_df[f"z_sigma_b_{n:02}"] = np.nan
-            else:
-                embryo_df[f"z_mu_{n:02}"] = np.nan
-                embryo_df[f"z_sigma_{n:02}"] = np.nan
 
+            if trained_model.model_name == "MetricVAE":
+                if n in trained_model.nuisance_indices:
+                    new_cols.append(f"z_mu_n_{n:02}")
+                    new_cols.append(f"z_sigma_n_{n:02}")
+                else:
+                    new_cols.append(f"z_mu_b_{n:02}")
+                    new_cols.append(f"z_sigma_b_{n:02}")
+            else:
+                new_cols.append(f"z_mu_{n:02}")
+                new_cols.append(f"z_sigma_{n:02}")
+
+        embryo_df[new_cols] = np.nan
         print("Calculating latent embeddings...")
         # embryo_df = embryo_df.reset_index()
         for m, mode in enumerate(mode_vec):
