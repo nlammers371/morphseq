@@ -14,8 +14,10 @@ from functions.view_generator import ContrastiveLearningViewGenerator
 
 import argparse
 
-def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learning_rate=1e-3, n_out_channels=16,
-                      nt_xent_temperature=1.0, input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
+def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_epochs=100,
+                      learning_rate=1e-3, n_out_channels=16,
+                      nt_xent_temperature=1.0, distance_metric="cosine",
+                      input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
 
     if input_dim == None:
         input_dim = (1, 576, 256)
@@ -23,7 +25,7 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
     else:
         transform = make_dynamic_rs_transform(input_dim[1:])
 
-    model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}_metric_test'
+    model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}_' + train_suffix
 
 
     output_dir = os.path.join(train_dir, model_name)
@@ -74,7 +76,8 @@ def train_metric_vae(train_dir, n_latent=50, batch_size=32, n_epochs=100, learni
             orth_flag=orth_flag,
             temperature=nt_xent_temperature,
             n_conv_layers=depth,
-            n_out_channels=n_out_channels
+            n_out_channels=n_out_channels,
+            distance_metric=distance_metric
         )
     else:
         model_config = VAEConfig(
@@ -126,23 +129,22 @@ if __name__ == "__main__":
     # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230804_vae_test"
+    train_folder = "20230915_vae"
+    train_suffix = "temperature_sweep"
     contrastive_flag = True
-    temperature = 0.001
+    temperature_vec = [0.0001, 100, 0.001, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
-    n_epochs = 5
-    z_dim_vec = [50]
+    n_epochs = 250
+    z_dim_vec = [100]
     orth_flag = True
     depth_vec = [5]
-    n_out_channel_vec = [16]
+    distance_metric = "euclidean"
     max_tries = 3
-    # output_dir = train_vanilla_vae(train_dir, n_latent=10, batch_size=batch_size, n_epochs=n_epochs,
-    #                                learning_rate=1e-4, depth=7)
 
     for z in z_dim_vec:
         for d in depth_vec:
-            for n in n_out_channel_vec:
+            for t in temperature_vec:
                 iter_flag = 0
                 # while iter_flag < max_tries:
                     # try:
@@ -150,10 +152,9 @@ if __name__ == "__main__":
                     #     print(f"Latent dim: {z}")
                     #     print(f"Out channels: {n}")
                         # train model
-                output_dir = train_metric_vae(train_dir, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
-                                              nt_xent_temperature=temperature,
-                                              n_out_channels=n, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
-                                              orth_flag=orth_flag)
+                output_dir = train_metric_vae(train_dir, train_suffix=train_suffix, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
+                                              nt_xent_temperature=t, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
+                                              orth_flag=orth_flag, distance_metric=distance_metric)
                         # iter_flag = max_tries
                     # except:
                     #     iter_flag += 1
