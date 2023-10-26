@@ -14,7 +14,7 @@ from _archive.functions_folder.utilities import path_leaf
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
-from pythae.trainers.base_trainer_verbose import base_trainer_verbose
+# from pythae.trainers.base_trainer_verbose import base_trainer_verbose
 from functions.ContrastiveLearningDataset import ContrastiveLearningDataset
 from functions.view_generator import ContrastiveLearningViewGenerator
 from pythae.data.datasets import collate_dataset_output
@@ -217,7 +217,7 @@ def calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec, mode
             new_cols.append(f"z_mu_{n:02}")
             new_cols.append(f"z_sigma_{n:02}")
 
-    embryo_df[new_cols] = np.nan
+    embryo_df.loc[:, new_cols] = np.nan
     print("Calculating latent embeddings...")
     # embryo_df = embryo_df.reset_index()
     for m, mode in enumerate(mode_vec):
@@ -491,19 +491,18 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
         )
         data_sampler_vec.append(ds_temp)
 
-    last_training = sorted(os.listdir(output_dir))[-1]
     try:
-        trained_model = AutoModel.load_from_folder(os.path.join(output_dir, last_training, 'final_model'))
+        trained_model = AutoModel.load_from_folder(os.path.join(output_dir, 'final_model'))
 
-        train_config_file = open(os.path.join(output_dir, last_training, 'final_model', 'training_config.json'))
+        train_config_file = open(os.path.join(output_dir, 'final_model', 'training_config.json'))
         train_config = json.load(train_config_file)
 
-        model_config_file = open(os.path.join(output_dir, last_training, 'final_model', 'model_config.json'))
+        model_config_file = open(os.path.join(output_dir, 'final_model', 'model_config.json'))
         model_config = json.load(model_config_file)
 
     except:
         try:
-            trained_model_list = glob.glob(os.path.join(output_dir, last_training, "*epoch*"))
+            trained_model_list = glob.glob(os.path.join(output_dir, "*epoch*"))
             underscore_list = [s.rfind("_") for s in trained_model_list]
             epoch_num_list = [int(trained_model_list[s][underscore_list[s] + 1:]) for s in range(len(underscore_list))]
             last_ind = np.argmax(epoch_num_list)
@@ -542,7 +541,7 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
     # Question 1: how well does it reproduce train, eval, and test images?
     ############
 
-    figure_path = os.path.join(output_dir, last_training, "figures")
+    figure_path = os.path.join(output_dir, "figures")
     if not os.path.isdir(figure_path):
         os.makedirs(figure_path)
 
@@ -566,11 +565,17 @@ if __name__ == "__main__":
     metadata_path = os.path.join(root, 'metadata', '')
 
     train_name = "20230915_vae" #"20230915_vae"
+    architecture_name = "z50_bs032_ne250_depth05_out16_metric_test"
+    # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
-    # get list of models in this folder
-    model_name_list = sorted(glob.glob(train_dir + '*metric_test*'))
 
-    for m_iter, model_name in enumerate(model_name_list):
+    # get list of models in this folder
+    models_to_assess = ["MetricVAE_training_2023-10-20_09-44-11", "MetricVAE_training_2023-10-25_10-47-16"]
+
+    if models_to_assess is None:
+        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*metric_test*')))
+
+    for m_iter, model_name in enumerate(models_to_assess):
 
         embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
         embryo_df = embryo_metadata_df[
@@ -578,7 +583,7 @@ if __name__ == "__main__":
              "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
         embryo_df = embryo_df.reset_index()
 
-        output_dir = os.path.join(train_dir, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
+        output_dir = os.path.join(train_dir, architecture_name, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
 
         trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir)
         if continue_flag:
@@ -590,12 +595,14 @@ if __name__ == "__main__":
             print("Results already exist for: " + figure_path + ". Skipping.")
             continue
 
-        print("Evaluating model " + model_name + f'({m_iter:02} of ' + str(len(model_name_list)) + ')')
+        print("Evaluating model " + model_name + f'({m_iter+1:02} of ' + str(len(models_to_assess)) + ')')
         # print("Saving to: " + figure_path)
 
         np.random.seed(123)
 
-        embryo_df = assess_image_reconstructions(embryo_df, trained_model, data_sampler_vec, n_image_figures, batch_size)
+        embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
+                                                 data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
+                                                 batch_size=batch_size)
 
         ############
         # Question 2: what does latent space look like?
