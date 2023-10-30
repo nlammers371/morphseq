@@ -5,7 +5,7 @@ from functions.pythae_utils import *
 import os
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
-import umap
+import umap.umap_ as umap
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import torch.nn.functional as F
@@ -112,7 +112,7 @@ def get_gdf3_class_predictions(embryo_df, mu_indices):
 
 
 def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sampler_vec,
-                                 n_image_figures, batch_size, mode_vec=None):
+                                 n_image_figures, batch_size, mode_vec=None, skip_figures=False):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
@@ -177,21 +177,22 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
                 embryo_df.loc[snip_index_vec[b], "train_cat"] = mode
                 embryo_df.loc[snip_index_vec[b], "recon_mse"] = np.asarray(recon_loss)[b]
 
-                if batch_ids[b] in figure_indices:
-                    # show results with normal sampler
-                    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 10))
+                if not skip_figures:
+                    if batch_ids[b] in figure_indices:
+                        # show results with normal sampler
+                        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 10))
 
-                    axes[0].imshow(np.squeeze(im_test[b, :, :]), cmap='gray')
-                    axes[0].axis('off')
+                        axes[0].imshow(np.squeeze(im_test[b, :, :]), cmap='gray')
+                        axes[0].axis('off')
 
-                    axes[1].imshow(np.squeeze(im_recon[b, :, :]), cmap='gray')
-                    axes[1].axis('off')
+                        axes[1].imshow(np.squeeze(im_recon[b, :, :]), cmap='gray')
+                        axes[1].axis('off')
 
-                    plt.tight_layout(pad=0.)
+                        plt.tight_layout(pad=0.)
 
-                    plt.savefig(
-                        os.path.join(image_path, snip_name_vec[b] + f'_loss{int(np.round(recon_loss[b], 0)):05}.tiff'))
-                    plt.close()
+                        plt.savefig(
+                            os.path.join(image_path, snip_name_vec[b] + f'_loss{int(np.round(recon_loss[b], 0)):05}.tiff'))
+                        plt.close()
 
     embryo_df = embryo_df.dropna(ignore_index=True)
 
@@ -542,9 +543,6 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
     ############
 
     figure_path = os.path.join(output_dir, "figures")
-    if not os.path.isdir(figure_path):
-        os.makedirs(figure_path)
-
 
     return trained_model, meta_df, figure_path, data_sampler_vec, continue_flag
 
@@ -565,12 +563,12 @@ if __name__ == "__main__":
     metadata_path = os.path.join(root, 'metadata', '')
 
     train_name = "20230915_vae" #"20230915_vae"
-    architecture_name = "z50_bs032_ne250_depth05_out16_metric_test"
+    architecture_name = "z100_bs032_ne250_depth05_out16_temperature_sweep2"
     # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
 
     # get list of models in this folder
-    models_to_assess = ["MetricVAE_training_2023-10-20_09-44-11", "MetricVAE_training_2023-10-25_10-47-16"]
+    models_to_assess = ["MetricVAE_training_2023-10-27_09-29-34"]
 
     if models_to_assess is None:
         models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*metric_test*')))
@@ -586,8 +584,12 @@ if __name__ == "__main__":
         output_dir = os.path.join(train_dir, architecture_name, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
 
         trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir)
+
         if continue_flag:
             continue
+
+        if not os.path.isdir(figure_path):
+            os.makedirs(figure_path)
 
         prev_run_flag = os.path.isfile(os.path.join(figure_path, "embryo_stats_df.csv"))
 

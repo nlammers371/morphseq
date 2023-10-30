@@ -130,9 +130,9 @@ if __name__ == "__main__":
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20230915_vae"
-    train_suffix = "temperature_sweep"
+    train_suffix = "temperature_sweep2"
     contrastive_flag = True
-    temperature_vec = [0.0001, 100, 0.001, 0.01]
+    temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 32
     n_epochs = 250
