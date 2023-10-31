@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch
 from math import floor
 import numpy as np
+from io import BytesIO
 
 
 # define transforms
@@ -39,6 +40,24 @@ class MyCustomDataset(datasets.ImageFolder):
             )
         else:
             return DatasetOutput(data=X), self.samples[index]
+
+
+# class MyCustomDatasetIO(datasets.ImageFolder):
+#
+#     def __init__(self, root, return_name=False, transform=None, target_transform=None):
+#         self.return_name = return_name
+#         root = BytesIO(root)
+#         super().__init__(root=root, transform=transform, target_transform=target_transform)
+#
+#     def __getitem__(self, index):
+#         X, Y = super().__getitem__(index)
+#
+#         if not self.return_name:
+#             return DatasetOutput(
+#                 data=X
+#             )
+#         else:
+#             return DatasetOutput(data=X), self.samples[index]
 
 ##########
 # Define custom convolutional encoder that allows for variable input size
