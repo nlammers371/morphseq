@@ -16,7 +16,7 @@ def calculate_UMAPs(embryo_df, n_components=3):
     zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
     zmn_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_n" in embryo_df.columns[i]]
 
-    embryo_df = embryo_df.reset_index()
+    # embryo_df = embryo_df.reset_index()
 
     MetricFlag = len(zmb_indices) > 0
 
@@ -61,10 +61,13 @@ def calculate_UMAPs(embryo_df, n_components=3):
     return umap_df
 
 
-def initialize_assessment(train_dir, output_dir, mode_vec=None):
+def initialize_assessment(train_dir, output_dir, mode_vec=None, main_dims=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
+
+    if main_dims is None:
+        main_dims = (576, 256)
 
     continue_flag = False
 

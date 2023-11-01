@@ -15,17 +15,20 @@ import skimage
 from dash import Dash, dcc, html, callback_context
 import dash
 import dash_ag_grid as dag
+
+
 # Contains 100 images for each digit from MNIST
 # vae_data_path = 'datasets/mini-mnist-1000.pickle'
 
 # Helper functions
 def np_image_to_base64(im_matrix):
-    im = Image.fromarray((256*im_matrix.numpy()).astype(np.uint8))
+    im = Image.fromarray((256 * im_matrix.numpy()).astype(np.uint8))
     buffer = io.BytesIO()
     im.save(buffer, format="jpeg")
     encoded_image = base64.b64encode(buffer.getvalue()).decode()
     im_url = "data:image/jpeg;base64, " + encoded_image
     return im_url
+
 
 def get_image_sampler(train_dir, main_dims=None):
     mode_vec = ["train", "eval", "test"]
@@ -69,9 +72,7 @@ def get_image_sampler(train_dir, main_dims=None):
 # flattenend_images = np.array([i.flatten() for i in images])
 
 
-
 def visualize_latent_space(dataRoot, model_architecture, training_instance, preload_flag=False):
-
     global vae_df, image_dict
 
     # if preload_flag:
@@ -110,18 +111,18 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         #     model_data = pd.read_csv(modelDataPath)
 
         # df = vae_df.loc[vae_df["file"] == well_time_index, :]
-        df = pd.read_csv(os.path.join(dataRoot, model_architecture, training_instance, "figures", "umap_df.csv"), index_col=0)
+        df = pd.read_csv(os.path.join(dataRoot, model_architecture, training_instance, "figures", "umap_df.csv"),
+                         index_col=0)
         image_sampler_list = get_image_sampler(dataRoot)
-
 
         return {"df": df, "image_sampler_list": image_sampler_list}
 
-
     df_dict = load_nucleus_dataset(dataRoot, model_architecture, training_instance)
 
-    global plot_label_list, plot_partition_list#, image_sampler_list
+    global plot_label_list, plot_partition_list  # , image_sampler_list
 
-    plot_label_list = ["predicted_stage_hpf",  "master_perturbation"] #"experiment_date", "medium", "master_perturbation", "train_cat", "recon_mse"]
+    plot_label_list = ["predicted_stage_hpf",
+                       "master_perturbation"]  # "experiment_date", "medium", "master_perturbation", "train_cat", "recon_mse"]
     plot_partition_list = ["all", "biological", "non-biological"]
     df = df_dict["df"]
     perturbation_index = np.unique(df["master_perturbation"])
@@ -137,31 +138,55 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
         if plot_labels is None:
             plot_labels = "predicted_stage_hpf"
-        
-        cmap_plot = "ice"
-        marker_opacity = 0.75
+
+        if plot_labels == "predicted_stage_hpf":
+            cmap_plot = "ice"
+        elif plot_labels == "master_perturbation":
+            cmap_plot = "plotly"
+
+        marker_opacity = 0.5
 
         if plot_class_list is not None:
-            plot_indices = np.asarray([i for i in range(df.shape[0]) if df.loc[i, "master_perturbation"] in plot_class_list])
+            plot_indices = np.asarray(
+                [i for i in range(df.shape[0]) if df.loc[i, "master_perturbation"] in plot_class_list])
         else:
             plot_indices = np.arange(df.shape[0])
 
         plot_df = df.iloc[plot_indices]
 
+        global plot_variables
+
         if plot_dim == "3D UMAP":
             if plot_partition is None:
-                fig = px.scatter_3d(plot_df, x="UMAP_00_3", y="UMAP_01_3", z="UMAP_02_3", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
-            elif plot_partition == "all":
-                fig = px.scatter_3d(plot_df, x="UMAP_00_3", y="UMAP_01_3", z="UMAP_02_3", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
-            elif plot_partition == "biological":
-                fig = px.scatter_3d(plot_df, x="UMAP_00_bio_3", y="UMAP_01_bio_3", z="UMAP_02_bio_3", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
-            elif plot_partition == "non-biological":
-                fig = px.scatter_3d(plot_df, x="UMAP_00_n_3", y="UMAP_01_n_3", z="UMAP_02_n_3", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
+                plot_variables = ["UMAP_00_3", "UMAP_01_3", "UMAP_02_3"]
 
+            elif plot_partition == "all":
+                plot_variables = ["UMAP_00_3", "UMAP_01_3", "UMAP_02_3"]
+
+            elif plot_partition == "biological":
+                plot_variables = ["UMAP_00_bio_3", "UMAP_01_bio_3", "UMAP_02_bio_3"]
+
+            elif plot_partition == "non-biological":
+                plot_variables = ["UMAP_00_n_3", "UMAP_01_n_3", "UMAP_02_n_3"]
+
+            fig = px.scatter_3d(plot_df, x=plot_variables[0], y=plot_variables[1], z=plot_variables[2],
+                                opacity=marker_opacity,
+                                color=plot_labels,
+                                color_continuous_scale=cmap_plot)
+
+            # fig = go.Figure()
+
+            # if plot_labels == "predicted_stage_hpf":
+            #     plot_colors = plot_df[plot_labels]
+            # elif plot_labels == "master_perturbation":
+            #     plot_colors = plot_df[plot_labels].astype('category')
+            #
+            # fig.add_trace(go.Scatter3d(x=plot_df[plot_variables[0]],
+            #                            y=plot_df[plot_variables[1]],
+            #                            z=plot_df[plot_variables[2]],
+            #                            mode="markers",
+            #                            marker=dict(size=4, color=plot_colors, colorscale=cmap_plot,
+            #                                        opacity=marker_opacity, line=dict(color='rgba(0,0,0,0.1)', width=0.5))))
             fig.update_layout(scene=dict(
                 xaxis_title="UMAP 1",
                 yaxis_title="UMAP 2",
@@ -170,27 +195,28 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
         elif plot_dim == "2D UMAP":
             if plot_partition is None:
-                fig = px.scatter(plot_df, x="UMAP_00_2", y="UMAP_01_2", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
+                plot_variables = ["UMAP_00_2", "UMAP_01_2"]
+
             elif plot_partition == "all":
-                fig = px.scatter(plot_df, x="UMAP_00_2", y="UMAP_01_2", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
+                plot_variables = ["UMAP_00_2", "UMAP_01_2"]
+
             elif plot_partition == "biological":
-                fig = px.scatter(plot_df, x="UMAP_00_bio_2", y="UMAP_01_bio_2", opacity=marker_opacity,
-                                    color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
+                plot_variables = ["UMAP_00_bio_2", "UMAP_01_bio_2"]
+
             elif plot_partition == "non-biological":
-                fig = px.scatter(plot_df, x="UMAP_00_n_2", y="UMAP_01_n_2", opacity=marker_opacity, color=plot_labels,
-                                    color_continuous_scale=cmap_plot)
+                plot_variables = ["UMAP_00_n_2", "UMAP_01_n_2"]
+
+            fig = px.scatter(plot_df, x=plot_variables[0], y=plot_variables[1], opacity=marker_opacity, color=plot_labels,
+                             color_continuous_scale=cmap_plot)
 
             fig.update_layout(
                 xaxis_title="UMAP 1",
-                yaxis_title="UMAP 2",
-            clickmode='event+select')
+                yaxis_title="UMAP 2"
+                )
             # raise Exception("Plot partition options not yet implemented.")
 
-        fig.update_traces(marker=dict(size=4))#, line=dict(width=2, color='Black')),
-                          # selector=dict(mode='markers'))
+        fig.update_traces(marker=dict(size=4, line=dict(width=0.5, color='rgba(70,70,70,0.2)')))
+        # selector=dict(mode='markers'))
         fig.update_traces(
             hoverinfo="none",
             hovertemplate=None,
@@ -209,48 +235,48 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
     f = create_figure(df, plot_class_list=["wck-AB"])
 
     app.layout = html.Div([
-                        dcc.Graph(id='3d_scat', figure=f, clear_on_unhover=True),
-                        dcc.Tooltip(id="graph-tooltip-5", direction='bottom'),
-                        html.Div([dcc.Checklist(id="checklist",
-                            options=perturbation_list,
-                            inline=True,
-                            value=['wck-AB'],
-                            labelStyle={'display': 'block'},
-                            style={"height": 200, "width": 200, "overflow": "auto"}
-                        ),
-                                  html.Div(id='checklist-output-container', hidden=True)
-                                  ]),
-                        # html.Div(id='df_list', hidden=True),
-                        html.Div(id='label_list', hidden=True),
-                        html.Div(id='partition_list', hidden=True),
-                        html.Div(id='plot_dim_list', hidden=True),
-                        html.Div([
-                            dcc.Dropdown(plot_label_list, plot_label_list[0], id='label-dropdown'),
-                            html.Div(id='label-output-container', hidden=True)
-                        ],
-                            style={'width': '15%', 'display': 'inline-block'}),
-                        html.Div([
-                            dcc.Dropdown(plot_partition_list, plot_partition_list[0], id='partition-dropdown'),
-                            html.Div(id='partition-output-container', hidden=True)
-                        ],
-                            style={'width': '15%', 'display': 'inline-block'})
-                        ,
-                        html.Div([
-                            dcc.Dropdown(["2D UMAP", "3D UMAP"], "3D UMAP", id='dim-dropdown'),
-                            html.Div(id='dim-output-container', hidden=True)
-                        ],
-                            style={'width': '15%', 'display': 'inline-block'})
-                        # dcc.Markdown("This grid has multi-select rows with checkboxes."),
-                        # dag.AgGrid(
-                        #     id="selection-checkbox-grid",
-                        #     columnDefs=np.asarray(["Perturbation Type"]),
-                        #     rowData=dict(perturbation_list),
-                        #     defaultColDef=defaultColDef,
-                        #     dashGridOptions={"rowSelection": "multiple"},
-                        # ),
-                        # html.Div(id="selections-checkbox-output")
-                        ]
-                        )
+        dcc.Graph(id='3d_scat', figure=f), #, clear_on_unhover=True),
+        dcc.Tooltip(id="graph-tooltip-5", direction='bottom'),
+        html.Div([dcc.Checklist(id="checklist",
+                                options=perturbation_list,
+                                inline=True,
+                                value=['wck-AB'],
+                                labelStyle={'display': 'block'},
+                                style={"height": 200, "width": 200, "overflow": "auto"}
+                                ),
+                  html.Div(id='checklist-output-container', hidden=True)
+                  ]),
+        # html.Div(id='df_list', hidden=True),
+        html.Div(id='label_list', hidden=True),
+        html.Div(id='partition_list', hidden=True),
+        html.Div(id='plot_dim_list', hidden=True),
+        html.Div([
+            dcc.Dropdown(plot_label_list, plot_label_list[0], id='label-dropdown'),
+            html.Div(id='label-output-container', hidden=True)
+        ],
+            style={'width': '15%', 'display': 'inline-block'}),
+        html.Div([
+            dcc.Dropdown(plot_partition_list, plot_partition_list[0], id='partition-dropdown'),
+            html.Div(id='partition-output-container', hidden=True)
+        ],
+            style={'width': '15%', 'display': 'inline-block'})
+        ,
+        html.Div([
+            dcc.Dropdown(["2D UMAP", "3D UMAP"], "3D UMAP", id='dim-dropdown'),
+            html.Div(id='dim-output-container', hidden=True)
+        ],
+            style={'width': '15%', 'display': 'inline-block'})
+        # dcc.Markdown("This grid has multi-select rows with checkboxes."),
+        # dag.AgGrid(
+        #     id="selection-checkbox-grid",
+        #     columnDefs=np.asarray(["Perturbation Type"]),
+        #     rowData=dict(perturbation_list),
+        #     defaultColDef=defaultColDef,
+        #     dashGridOptions={"rowSelection": "multiple"},
+        # ),
+        # html.Div(id="selections-checkbox-output")
+    ]
+    )
 
     @app.callback(
         Output('label-output-container', 'children'),
@@ -260,8 +286,8 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         return value
 
     @app.callback(
-                  Output("checklist-output-container", "children"),
-                  Input("checklist", "value")
+        Output("checklist-output-container", "children"),
+        Input("checklist", "value")
     )
     def change_values(value):
         return value
@@ -281,11 +307,10 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         return value
 
     @app.callback(Output('3d_scat', 'figure'),
-                 [Input('partition-output-container', 'children'),
-                  Input('label-output-container', 'children'),
-                  Input('dim-output-container', 'children'),
-                  Input('checklist-output-container', 'children')])
-
+                  [Input('partition-output-container', 'children'),
+                   Input('label-output-container', 'children'),
+                   Input('dim-output-container', 'children'),
+                   Input('checklist-output-container', 'children')])
     def chart_3d(plot_partition, plot_labels, plot_dim, pert_class_values):
 
         global f
@@ -299,7 +324,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         f = create_figure(df, plot_labels=plot_labels, plot_partition=plot_partition, plot_dim=plot_dim,
                           plot_class_list=pert_class_values)
 
-        f.update_layout(uirevision="value")
+        # f.update_layout(uirevision="Don't change")
 
         return f
 
@@ -329,11 +354,12 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         Output("graph-tooltip-5", "show"),
         Output("graph-tooltip-5", "bbox"),
         Output("graph-tooltip-5", "children"),
-        Input("3d_scat", "clickData"),
-        # Input('3d_scat', 'relayoutData'),
+        Output("3d_scat", "clickData"),
+        Input("3d_scat", 'clickData'),
+        Input('3d_scat', 'relayoutData'),
         Input('checklist-output-container', 'children')
     )
-    def display_hover(hoverData,  plot_class_list): #relayoutData, ):
+    def display_hover(hoverData, relayoutData, plot_class_list):  # relayoutData, ):
         changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
 
         # if changed_id == '3d_scat.relayoutData':
@@ -341,11 +367,11 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         out_args = [False, no_update, no_update]
         #
         if hoverData is None:
-            return out_args[0], out_args[1], out_args[2]
-        ctx = dash.callback_context
-        ids = [c['prop_id'] for c in ctx.triggered]
+            return out_args[0], out_args[1], out_args[2], None
+        # ctx = dash.callback_context
+        # ids = [c['prop_id'] for c in ctx.triggered]
 
-        if True:#'3d_scat.clickData' in ids:
+        if hoverData is not None:
             # if hoverData is not None:
             #     print("check")
 
@@ -355,15 +381,23 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             df_dict = load_nucleus_dataset(dataRoot, model_architecture, training_instance)
             df = df_dict["df"]
 
-            plot_indices = np.asarray(
-                [i for i in range(df.shape[0]) if df.loc[i, "master_perturbation"] in plot_class_list])
+            if plot_class_list is not None:
+                plot_indices = np.asarray(
+                    [i for i in range(df.shape[0]) if df.loc[i, "master_perturbation"] in plot_class_list])
+            else:
+                plot_indices = np.arange(df.shape[0])
 
             image_sampler_list = df_dict["image_sampler_list"]
 
             # demo only shows the first point, but other points may also be available
             hover_data = hoverData["points"][0]
             bbox = hover_data["bbox"]
-            num = plot_indices[hover_data["pointNumber"]]
+
+            xyz_pt = np.asarray([hover_data["x"], hover_data["y"], hover_data["z"]])
+            xyz_array = df.loc[:, plot_variables]
+            dist_vec = np.sum((xyz_pt - xyz_array)**2, axis=1)
+            num = np.argmin(dist_vec)
+            # num = plot_indices[hover_data["pointNumber"]]
 
             # look the point up in the data frame
             snip_id = df["snip_id"].iloc[num]
@@ -393,7 +427,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
                 ])
             ]
 
-            return True, bbox, children
+            return True, bbox, children, None
         # else:
         #     if hoverData is None:
         #         return False, None, None
@@ -406,12 +440,13 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
         #         bbox["y1"] = -100
         #         children = []
         #         return True, bbox, children
+
     # return app
 
     app.run_server(debug=True, port=8053)
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     # set parameters
     dataRoot = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230915_vae/"
     model_architecture = "z100_bs032_ne250_depth05_out16_temperature_sweep2"
@@ -421,7 +456,6 @@ if __name__ == '__main__':
 
     # load image data
     visualize_latent_space(dataRoot, model_architecture, training_instance, preload_flag=preload_flag)
-
 
 # if __name__ == "__main__":
 #     app.run(debug=True)
