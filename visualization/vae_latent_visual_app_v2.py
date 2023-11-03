@@ -73,7 +73,10 @@ def get_image_sampler(train_dir, main_dims=None):
 
 
 def visualize_latent_space(dataRoot, model_architecture, training_instance, preload_flag=False):
-    global vae_df, image_dict
+
+    global vae_df, image_dict, figurePath
+
+    figurePath = os.path.join(dataRoot, model_architecture, training_instance, "figures", '')
 
     # if preload_flag:
     #     if "image_dict" not in globals():
@@ -89,13 +92,13 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
     # 
     #         print("Done.")
 
-    defaultColDef = {
-        "flex": 1,
-        "minWidth": 150,
-        "sortable": True,
-        "resizable": True,
-        "filter": True,
-    }
+    # defaultColDef = {
+    #     "flex": 1,
+    #     "minWidth": 150,
+    #     "sortable": True,
+    #     "resizable": True,
+    #     "filter": True,
+    # }
 
     def load_nucleus_dataset(dataRoot, model_architecture, training_instance):
 
@@ -140,7 +143,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             plot_labels = "predicted_stage_hpf"
 
         if plot_labels == "predicted_stage_hpf":
-            cmap_plot = "ice"
+            cmap_plot = "magma"
         elif plot_labels == "master_perturbation":
             cmap_plot = "plotly"
 
@@ -215,7 +218,10 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
                 )
             # raise Exception("Plot partition options not yet implemented.")
 
-        fig.update_traces(marker=dict(size=4, line=dict(width=0.5, color='rgba(70,70,70,0.2)')))
+        if plot_labels == "predicted_stage_hpf":
+            fig.update_traces(marker=dict(size=4))
+        elif plot_labels == "master_perturbation":
+            fig.update_traces(marker=dict(size=4, line=dict(width=0.5, color='rgba(70,70,70,0.2)')))
         # selector=dict(mode='markers'))
         fig.update_traces(
             hoverinfo="none",
@@ -235,6 +241,8 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
     f = create_figure(df, plot_class_list=["wck-AB"])
 
     app.layout = html.Div([
+        html.Button('Save', id='save-button'),
+        html.P(id='save-button-hidden', style={'display': 'none'}),
         dcc.Graph(id='3d_scat', figure=f), #, clear_on_unhover=True),
         dcc.Tooltip(id="graph-tooltip-5", direction='bottom'),
         html.Div([dcc.Checklist(id="checklist",
@@ -428,6 +436,20 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             ]
 
             return True, bbox, children, None
+
+    @app.callback(
+        Output('save-button-hidden', 'children'),
+        Input('save-button', 'n_clicks'))
+
+    def save_html(n_clicks):
+
+        changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+
+        if 'save-button' in changed_id:
+
+            f.write_html(os.path.join(figurePath, 'dynamic_plot_' + str(int(np.random.rand()*1e6)) + '.html'))
+        # fig = px.scatter(x=range(10), y=range(10))
+        # fig.write_html("path/to/file.html")
         # else:
         #     if hoverData is None:
         #         return False, None, None
