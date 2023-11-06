@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import glob as glob
 import pandas as pd
-from _archive.functions_folder.utilities import path_leaf
+from functions.utilities import path_leaf
 import imageio
 from tqdm import tqdm
 from skimage.transform import rescale
@@ -216,10 +216,11 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
 
 if __name__ == "__main__":
     # set path to data
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 
-    train_name = "20231106_ds_test"
+    train_name = "20231106_ds"
     label_var = "experiment_date"
 
     make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0, rs_factor=0.5)
