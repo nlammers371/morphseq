@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch
 from math import floor
 import numpy as np
+from functions.utilities import path_leaf
 from io import BytesIO
 
 
@@ -39,7 +40,10 @@ class MyCustomDataset(datasets.ImageFolder):
                 data=X
             )
         else:
-            return DatasetOutput(data=X), self.samples[index]
+            # path_str = path_leaf(self.samples[index])
+            # path_str = path_str[:-4]
+            return DatasetOutput(data=X, label=self.samples[index])
+
 
 
 # class MyCustomDatasetIO(datasets.ImageFolder):
