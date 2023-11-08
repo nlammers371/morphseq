@@ -36,7 +36,8 @@ def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_e
         train_dataset = MyCustomDataset(root=os.path.join(train_dir, "train"),
                                         transform=ContrastiveLearningViewGenerator(
                                                  ContrastiveLearningDataset.get_simclr_pipeline_transform(),#(96),
-                                                 2)
+                                                 2),
+                                        return_name=True
                                         )
 
         # eval_generator = ContrastiveLearningDataset(os.path.join(train_dir, "eval"))
@@ -45,18 +46,21 @@ def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_e
         eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
                                         transform=ContrastiveLearningViewGenerator(
                                             ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
-                                            2)
+                                            2),
+                                        return_name=True
                                         )
 
     else:
         train_dataset = MyCustomDataset(
             root=os.path.join(train_dir, "train"),
-            transform=transform
+            transform=transform,
+            return_name=True
         )
 
         eval_dataset = MyCustomDataset(
             root=os.path.join(train_dir, "eval"),
-            transform=transform
+            transform=transform,
+            return_name=True
         )
 
     config = BaseTrainerVerboseConfig(
