@@ -4,13 +4,13 @@ import torch
 import numpy as np
 import glob as glob
 import pandas as pd
-from _archive.functions_folder.utilities import path_leaf
+from functions.utilities import path_leaf
 import imageio
 from tqdm import tqdm
-
+from skimage.transform import rescale
 
 def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_date", train_eval_test=None,
-                            frac_to_use=1.0, test_ids=None, flip_dataset_path=None):
+                            frac_to_use=1.0, test_ids=None, flip_dataset_path=None, rs_factor=1.0):
 
     flip_flag = False
     if flip_dataset_path != None:
@@ -18,6 +18,8 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
         flip_df = pd.read_csv(flip_dataset_path, index_col=0)
         flip_snip_id_vec = flip_df["snip_id"]
         flip_flag_vec = flip_df["revision_labels"]
+
+    rs_flag = rs_factor != 1
 
     np.random.seed(r_seed)
     metadata_path = os.path.join(root, "metadata", '')
@@ -29,7 +31,7 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
     # get list of training files
     image_list = glob.glob(data_path + "*.tif")
     snip_id_list = [path_leaf(path) for path in image_list]
-    emb_id_list = [eid[0:16] for eid in snip_id_list]
+    # emb_id_list = [eid[0:16] for eid in snip_id_list]
     
     # randomly partition into train, eval, and test
     # this needs to be done at the level of embryos, not images
@@ -72,43 +74,6 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
         test_paths = []
         test_indices = []
 
-        # n_test = np.round(train_eval_test[2]*n_frames_total).astype(int)
-        # n_test_curr = 0
-        # iter_i = 0
-        # # mc_ids = np.where("MC" in embryo_metadata_df["medium"])[0]
-        # used_indices = []
-        #
-        # while n_test_curr < n_test:
-        #     eid = embryo_id_index_shuffle[iter_i]
-        #
-        #     # extract embryos that match current eid
-        #     df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (
-        #                 embryo_metadata_df["use_embryo_flag"].values == True))[0]
-        #     if len(df_ids) > 0:
-        #         medium = embryo_metadata_df["medium"].iloc[df_ids[0]]
-        #         if "MC" in medium:
-        #             used_indices.append(iter_i)
-        #             snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
-        #             e_list = [os.path.join(data_path, s + ".tif") for s in snip_list]
-        #             i_list = df_ids.tolist()
-        #
-        #             # remove frames that did not meet QC standards
-        #             test_paths += e_list
-        #             test_indices += i_list
-        #
-        #             n_test_curr += len(e_list)
-        #
-        #     iter_i += 1
-        #
-        # # reset fractions and avaialable eids
-        # n_rem = np.max([0, n_test - n_test_curr])
-        # test_frac_new = n_rem / n_frames_total
-        # train_eval_test[-1] = test_frac_new
-        #
-        # # train_eval_test = train_eval_test / np.sum(train_eval_test)
-        #
-        # embryo_id_index_shuffle = [embryo_id_index_shuffle[e] for e in range(len(embryo_id_index_shuffle)) if e not in used_indices]
-
     # itereate through shuffled IDs
     for eid in embryo_id_index_shuffle:
     
@@ -150,64 +115,77 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
     # Write snips to file
     
     # training snips
-    # print("Generating training snips...")
-    # for i in tqdm(range(len(train_paths))):
-    #     img = torch.from_numpy(imageio.imread(train_paths[i]))
-    #     img_name = path_leaf(train_paths[i])
-    #
-    #     if label_var != None:
-    #         lb_name = embryo_metadata_df[label_var].iloc[train_indices[i]].astype(str)
-    #         img_folder = os.path.join(train_dir, "train", lb_name)
-    #     else:
-    #         img_folder = os.path.join(train_dir, "train", "0")  # I'm assuming the code will expect a subfolder
-    #
-    #     if not os.path.exists(img_folder):
-    #         os.mkdir(img_folder)
-    #
-    #     write_flag = True
-    #     if flip_flag:
-    #         snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[train_indices[i]][:-4])[0][0]
-    #         flip_id = int(flip_flag_vec[snip_ind])
-    #         if flip_id == 1:
-    #             img = torch.fliplr(img)
-    #         elif flip_id == -1:
-    #             write_flag = False
-    #
-    #     if write_flag:
-    #         imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
-    #
-    # # eval
-    # print("Generating evalation snips...")
-    # for i in tqdm(range(len(eval_paths))):
-    #     img = torch.from_numpy(imageio.imread(eval_paths[i]))
-    #     img_name = path_leaf(eval_paths[i])
-    #
-    #     if label_var != None:
-    #         lb_name = embryo_metadata_df[label_var].iloc[eval_indices[i]].astype(str)
-    #         img_folder = os.path.join(train_dir, "eval", lb_name)
-    #     else:
-    #         img_folder = os.path.join(train_dir, "eval", "0")  # I'm assuming the code will expect a subfolder
-    #
-    #     if not os.path.exists(img_folder):
-    #         os.mkdir(img_folder)
-    #
-    #     write_flag = True
-    #     if flip_flag:
-    #         snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[eval_indices[i]][:-4])[0][0]
-    #         flip_id = int(flip_flag_vec[snip_ind])
-    #         if flip_id == 1:
-    #             img = torch.fliplr(img)
-    #         elif flip_id == -1:
-    #             write_flag = False
-    #
-    #     if write_flag:
-    #         imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"),
-    #                         np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+    print("Generating training snips...")
+    for i in tqdm(range(len(train_paths))):
+        img_raw = imageio.v2.imread(train_paths[i])
+        if rs_flag:
+            img = torch.from_numpy(rescale(img_raw.astype(np.float16), rs_factor, anti_aliasing=True))
+        else:
+            img = torch.from_numpy(img_raw)
+
+        img_name = path_leaf(train_paths[i])
+
+        if label_var != None:
+            lb_name = embryo_metadata_df[label_var].iloc[train_indices[i]].astype(str)
+            img_folder = os.path.join(train_dir, "train", lb_name)
+        else:
+            img_folder = os.path.join(train_dir, "train", "0")  # I'm assuming the code will expect a subfolder
+
+        if not os.path.exists(img_folder):
+            os.mkdir(img_folder)
+
+        write_flag = True
+        if flip_flag:
+            snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[train_indices[i]][:-4])[0][0]
+            flip_id = int(flip_flag_vec[snip_ind])
+            if flip_id == 1:
+                img = torch.fliplr(img)
+            elif flip_id == -1:
+                write_flag = False
+
+        if write_flag:
+            imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"), np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
+
+    # eval
+    print("Generating evalation snips...")
+    for i in tqdm(range(len(eval_paths))):
+        img_raw = imageio.v2.imread(eval_paths[i])
+        if rs_flag:
+            img = torch.from_numpy(rescale(img_raw.astype(np.float16), rs_factor, anti_aliasing=True))
+        else:
+            img = torch.from_numpy(img_raw)
+        img_name = path_leaf(eval_paths[i])
+
+        if label_var != None:
+            lb_name = embryo_metadata_df[label_var].iloc[eval_indices[i]].astype(str)
+            img_folder = os.path.join(train_dir, "eval", lb_name)
+        else:
+            img_folder = os.path.join(train_dir, "eval", "0")  # I'm assuming the code will expect a subfolder
+
+        if not os.path.exists(img_folder):
+            os.mkdir(img_folder)
+
+        write_flag = True
+        if flip_flag:
+            snip_ind = np.where(np.asarray(flip_snip_id_vec) == snip_id_list[eval_indices[i]][:-4])[0][0]
+            flip_id = int(flip_flag_vec[snip_ind])
+            if flip_id == 1:
+                img = torch.fliplr(img)
+            elif flip_id == -1:
+                write_flag = False
+
+        if write_flag:
+            imageio.imwrite(os.path.join(img_folder, img_name[:-4] + ".jpg"),
+                            np.repeat(img[:, :, np.newaxis], repeats=3, axis=2).type(torch.uint8))
     
     # test
     print("Generating testing snips...")
     for i in tqdm(range(len(test_paths))):
-        img = torch.from_numpy(imageio.imread(test_paths[i]))
+        img_raw = imageio.v2.imread(test_paths[i])
+        if rs_flag:
+            img = torch.from_numpy(rescale(img_raw.astype(np.float16), rs_factor, anti_aliasing=True))
+        else:
+            img = torch.from_numpy(img_raw)
         img_name = path_leaf(test_paths[i])
     
         if label_var != None:
@@ -239,10 +217,10 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
 if __name__ == "__main__":
     # set path to data
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 
-    train_name = "20230915_vae_flipped"
+    train_name = "20231106_ds"
     label_var = "experiment_date"
 
-    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0,
-                            flip_dataset_path="E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\training_data\\20230815_vae\\z50_bs032_ne100_depth05\\VAE_training_2023-08-17_05-00-08\\figures\\embryo_stats_df_rev1.csv")
+    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0, rs_factor=0.5)
