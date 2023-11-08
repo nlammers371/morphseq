@@ -19,9 +19,12 @@ def make_training_key(root, train_name):
     class_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "predicted_stage_hpf", "master_perturbation"]]
     pert_u = np.unique(class_key["master_perturbation"].to_numpy())
     pert_index = np.arange(len(pert_u))
-    pert_df = pd.Data
+    pert_df = pd.DataFrame(pert_u, columns=["master_perturbation"])
+    pert_df["perturbation_id"] = pert_index
+
+    class_key = class_key.merge(pert_df, how="left", on="master_perturbation")
         
-    print("Done.")
+    class_key.to_csv(os.path.join(metadata_path, "class_key.csv"))
 
 
 if __name__ == "__main__":
