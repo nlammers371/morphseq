@@ -2,6 +2,7 @@ import sys
 sys.path.append("/functions")
 # print("hello")
 # import functions
+import pandas as pd
 from functions.pythae_utils import make_dynamic_rs_transform, data_transform, MyCustomDataset
 import os
 from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig, MetricVAE, MetricVAEConfig
@@ -14,7 +15,7 @@ from functions.view_generator import ContrastiveLearningViewGenerator
 
 import argparse
 
-def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_epochs=100,
+def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_size=32, n_epochs=100,
                       learning_rate=1e-3, n_out_channels=16,
                       nt_xent_temperature=1.0, distance_metric="cosine",
                       input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
@@ -24,6 +25,12 @@ def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_e
         transform = data_transform
     else:
         transform = make_dynamic_rs_transform(input_dim[1:])
+
+    train_dir = os.path.join(root, "training_data", train_folder)
+    metadata_path = os.path.join(root, "metadata", '')
+
+    # read in metadata database
+    class_key = pd.read_csv(os.path.join(metadata_path, "class_key.csv"), index_col=0)
 
     model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}_' + train_suffix
 
@@ -65,7 +72,7 @@ def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_e
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         num_epochs=n_epochs,  # Change this to train the model a bit more
-        steps_saving=10
+        steps_saving=10,
     )
 
     if contrastive_flag:
@@ -77,7 +84,8 @@ def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_e
             temperature=nt_xent_temperature,
             n_conv_layers=depth,
             n_out_channels=n_out_channels,
-            distance_metric=distance_metric
+            distance_metric=distance_metric,
+            class_key=class_key
         )
     else:
         model_config = VAEConfig(
@@ -113,21 +121,6 @@ def train_metric_vae(train_dir, train_suffix='', n_latent=50, batch_size=32, n_e
 if __name__ == "__main__":
     # from functions.pythae_utils import *
 
-    # parser = argparse.ArgumentParser(description="Function to call VAE training in batch",
-    #                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    # # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # parser.add_argument("-rd", "--root", default="E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\", help="string path to folder contining 'training_data' subfolder")
-    # parser.add_argument("-nz", "--n_latent", default=25, help="Integer specifying number of latent dimensions")
-    # parser.add_argument("-ne", "--n_epochs", default=100, help="Integer specifying number of training epochs")
-    # parser.add_argument("-bs", "--batch_size", default=32, help="Integer specifying number of images per batch")
-    # parser.add_argument("-md", "--depth", default=5, help="Integer specifying number of convolutional layers")
-    # parser.add_argument("-tp", "--train_folder", default="20230815_vae", help="Folder containing training data to use")
-    # parser.add_argument("-lt", "--learning_rate", default=1e-4, help="float <<1 specifying learning rate for model training")
-    #
-    # args = vars(parser.parse_args())
-    #
-    # train_dir = os.path.join(args["root"], "training_data", args["train_folder"])
-
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20230915_vae"
     train_suffix = "temperature_sweep2"
@@ -146,19 +139,14 @@ if __name__ == "__main__":
         for d in depth_vec:
             for t in temperature_vec:
                 iter_flag = 0
-                # while iter_flag < max_tries:
-                    # try:
-                    #     print(f"Depth: {d}")
-                    #     print(f"Latent dim: {z}")
-                    #     print(f"Out channels: {n}")
-                        # train model
-                output_dir = train_metric_vae(train_dir, train_suffix=train_suffix, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
+
+                output_dir = train_metric_vae(root, train_folder, train_suffix=train_suffix, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
                                               nt_xent_temperature=t, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
                                               orth_flag=orth_flag, distance_metric=distance_metric)
                         # iter_flag = max_tries
                     # except:
                     #     iter_flag += 1
-                    #     print(iter_flag)
+
 
 
 
