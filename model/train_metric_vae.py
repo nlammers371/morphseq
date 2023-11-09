@@ -18,13 +18,14 @@ import argparse
 def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_size=32, n_epochs=100,
                       learning_rate=1e-3, n_out_channels=16,
                       nt_xent_temperature=1.0, distance_metric="cosine",
-                      input_dim=None, depth=5, contrastive_flag=False, orth_flag=False):
+                      input_dim=None, depth=5, contrastive_flag=False, orth_flag=False, class_ignorance_flag=False,
+                      time_ignorance_flag=False):
 
     if input_dim == None:
         input_dim = (1, 576, 256)
         transform = data_transform
-    else:
-        transform = make_dynamic_rs_transform(input_dim[1:])
+    # else:
+    #     transform = make_dynamic_rs_transform(input_dim[1:])
 
     train_dir = os.path.join(root, "training_data", train_folder)
     metadata_path = os.path.join(root, "metadata", '')
@@ -89,7 +90,9 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
             n_conv_layers=depth,
             n_out_channels=n_out_channels,
             distance_metric=distance_metric,
-            class_key=class_key
+            class_key_path=os.path.join(metadata_path, "class_key.csv"),
+            class_ignorance_flag=class_ignorance_flag,
+            time_ignorance_flag=time_ignorance_flag
         )
     else:
         model_config = VAEConfig(
@@ -126,18 +129,21 @@ if __name__ == "__main__":
     # from functions.pythae_utils import *
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20230915_vae"
-    train_suffix = "temperature_sweep2"
+    train_folder = "20231106_ds"
+    train_suffix = "ignorance_test"
     contrastive_flag = True
     temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
-    batch_size = 32
-    n_epochs = 250
+    batch_size = 64
+    n_epochs = 5
     z_dim_vec = [100]
     orth_flag = True
     depth_vec = [5]
     distance_metric = "euclidean"
     max_tries = 3
+    class_ignorance_flag = True
+    time_ignorance_flag = True
+    input_dim = (1, 288, 128)
 
     for z in z_dim_vec:
         for d in depth_vec:
@@ -146,7 +152,10 @@ if __name__ == "__main__":
 
                 output_dir = train_metric_vae(root, train_folder, train_suffix=train_suffix, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
                                               nt_xent_temperature=t, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
-                                              orth_flag=orth_flag, distance_metric=distance_metric)
+                                              orth_flag=orth_flag, distance_metric=distance_metric,
+                                              class_ignorance_flag=class_ignorance_flag, time_ignorance_flag=time_ignorance_flag,
+                                              input_dim=input_dim
+                                              )
                         # iter_flag = max_tries
                     # except:
                     #     iter_flag += 1
