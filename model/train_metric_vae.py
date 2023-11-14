@@ -31,7 +31,7 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
     metadata_path = os.path.join(root, "metadata", '')
 
     # read in metadata database
-    class_key = pd.read_csv(os.path.join(metadata_path, "class_key.csv"), index_col=0)
+    # class_key = pd.read_csv(os.path.join(metadata_path, "class_key.csv"), index_col=0)
 
     model_name = f'z{n_latent:02}_' + f'bs{batch_size:03}_' + f'ne{n_epochs:03}_' + f'depth{depth:02}_' + f'out{n_out_channels:02}_' + train_suffix
 
@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231106_ds"
-    train_suffix = "ignorance_test"
+    train_suffix = "testing"
     contrastive_flag = True
     temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
