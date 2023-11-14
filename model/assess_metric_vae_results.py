@@ -561,7 +561,7 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
-    overwrite_flag = False
+    overwrite_flag = True
     main_dims = (288, 128)
     n_image_figures = 100  # make qualitative side-by-side figures
     n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
