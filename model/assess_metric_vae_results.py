@@ -112,10 +112,13 @@ def get_gdf3_class_predictions(embryo_df, mu_indices):
 
 
 def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sampler_vec,
-                                 n_image_figures, batch_size, mode_vec=None, skip_figures=False):
+                                 n_image_figures, batch_size, main_dims=None, mode_vec=None, skip_figures=False):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
+
+    if main_dims is None:
+        main_dims = (288, 128)
 
     # initialize new columns
     embryo_df["train_cat"] = ''
@@ -198,7 +201,11 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
 
     return embryo_df
 
-def calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec, mode_vec=None):
+def calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec, mode_vec=None, main_dims=None):
+
+    if main_dims is None:
+        main_dims = (288, 128)
+
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
 
@@ -475,10 +482,13 @@ def bio_prediction_wrapper(embryo_df, meta_df, trained_model):
 
     return age_df, gdf3_df, meta_df
 
-def initialize_assessment(train_dir, output_dir, mode_vec=None):
+def initialize_assessment(train_dir, output_dir, main_dims=None, mode_vec=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
+
+    if main_dims is None:
+        main_dims = (288, 128)
 
     continue_flag = False
 
@@ -551,8 +561,8 @@ if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
-    overwrite_flag = True
-    main_dims = (576, 256)
+    overwrite_flag = False
+    main_dims = (288, 128)
     n_image_figures = 100  # make qualitative side-by-side figures
     n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
     test_contrastive_pairs = True
@@ -583,7 +593,7 @@ if __name__ == "__main__":
 
         output_dir = os.path.join(train_dir, architecture_name, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
 
-        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir)
+        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir, main_dims=main_dims)
 
         if continue_flag:
             continue
@@ -593,7 +603,7 @@ if __name__ == "__main__":
 
         prev_run_flag = os.path.isfile(os.path.join(figure_path, "embryo_stats_df.csv"))
 
-        if prev_run_flag and overwrite_flag == False:
+        if prev_run_flag and overwrite_flag is False:
             print("Results already exist for: " + figure_path + ". Skipping.")
             continue
 
@@ -609,7 +619,7 @@ if __name__ == "__main__":
         ############
         # Question 2: what does latent space look like?
         ############
-        embryo_df, z_mu_array = calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec)
+        embryo_df, z_mu_array = calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec, main_dims=main_dims)
 
         # Calculate UMAPs
         embryo_df = calculate_UMAPs(embryo_df, trained_model, z_mu_array)
