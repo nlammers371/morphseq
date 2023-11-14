@@ -130,19 +130,23 @@ if __name__ == "__main__":
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231106_ds"
-    train_suffix = "testing"
+    train_suffix = "class_ignorance_test_real"
+
     contrastive_flag = True
+    class_ignorance_flag = True
+    time_ignorance_flag = True
+    orth_flag = True
+
     temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 64
     n_epochs = 5
     z_dim_vec = [100]
-    orth_flag = True
+
     depth_vec = [5]
     distance_metric = "euclidean"
     max_tries = 3
-    class_ignorance_flag = True
-    time_ignorance_flag = True
+
     input_dim = (1, 288, 128)
 
     for z in z_dim_vec:
