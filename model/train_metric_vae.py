@@ -105,6 +105,8 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
     decoder = Decoder_Conv_VAE(encoder)
     # else:
     #     decoder = Decoder_Conv_AE_FLEX(encoder)
+    if model_config.class_key_path is not None:
+        model_config.load_dataset()
 
     model = MetricVAE(
         model_config=model_config,
@@ -129,18 +131,18 @@ if __name__ == "__main__":
     # from functions.pythae_utils import *
 
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20231106_ds"
-    train_suffix = "class_ignorance_test_real"
+    train_folder = "20231120_ds_small"
+    train_suffix = "class_ignorance_test"
 
     contrastive_flag = True
     class_ignorance_flag = True
     time_ignorance_flag = True
     orth_flag = True
 
-    temperature_vec = [0.0001, 0.001, 100, 0.01]
+    temperature_vec = [0.0001]#, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 64
-    n_epochs = 5
+    n_epochs = 1
     z_dim_vec = [100]
 
     depth_vec = [5]

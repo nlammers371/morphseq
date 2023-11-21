@@ -217,10 +217,10 @@ def make_pythae_image_snips(root, train_name, r_seed=371, label_var="experiment_
 if __name__ == "__main__":
     # set path to data
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 
-    train_name = "20231106_ds"
+    train_name = "20231120_ds_small"
     label_var = "experiment_date"
 
-    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=1.0, rs_factor=0.5)
+    make_pythae_image_snips(root, train_name, label_var="experiment_date", frac_to_use=0.1, rs_factor=0.5)

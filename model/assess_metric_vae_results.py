@@ -572,8 +572,8 @@ if __name__ == "__main__":
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20231106_ds" #"20230915_vae"
-    architecture_name = "z100_bs064_ne250_depth05_out16_class_ignorance_test"
+    train_name = "20231120_ds_small" #"20230915_vae"
+    architecture_name = "z100_bs064_ne001_depth05_out16_class_ignorance_test"
     # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
 
