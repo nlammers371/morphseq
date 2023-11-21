@@ -5,7 +5,7 @@ from functions.pythae_utils import *
 import os
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt
-import umap
+import umap.umap_ as umap
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
@@ -112,8 +112,8 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None, main_dims=None):
 
 if __name__ == "__main__":
 
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     # batch_size = 128  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = True
     # main_dims = (576, 256)
@@ -126,16 +126,16 @@ if __name__ == "__main__":
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20230915_vae" #"20230915_vae"
-    architecture_name = "z100_bs032_ne250_depth05_out16_temperature_sweep2"
+    train_name = "20231106_ds"  # "20230915_vae"
+    architecture_name = "z100_bs064_ne250_depth05_out16_class_ignorance_test"
     # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
 
     # get list of models in this folder
-    models_to_assess = ["MetricVAE_training_2023-10-27_09-29-34"]
+    models_to_assess = None
 
     if models_to_assess is None:
-        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*metric_test*')))
+        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, 'MetricVAE*')))
 
     for m_iter, model_name in enumerate(models_to_assess):
 
