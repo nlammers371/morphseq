@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/net/trapnell/vol1/home/nlammers/projects/repositories/morphseq")
+
 import glob as glob
 from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model
@@ -10,7 +13,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import torch.nn.functional as F
 import pandas as pd
-from _archive.functions_folder.utilities import path_leaf
+from functions.utilities import path_leaf
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
@@ -559,7 +562,7 @@ def initialize_assessment(train_dir, output_dir, main_dims=None, mode_vec=None):
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = True
     main_dims = (288, 128)
@@ -573,7 +576,7 @@ if __name__ == "__main__":
     metadata_path = os.path.join(root, 'metadata', '')
 
     train_name = "20231106_ds" #"20230915_vae"
-    architecture_name = "z100_bs064_ne250_depth05_out16_class_ignorance_test"
+    architecture_name = "z100_bs064_ne250_depth05_out16_class_nihilism_test"
     # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
 
@@ -581,7 +584,7 @@ if __name__ == "__main__":
     models_to_assess = None  #["MetricVAE_training_2023-10-27_09-29-34"]
 
     if models_to_assess is None:
-        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, 'MetricVAE*')))
+        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*VAE*')))
 
     for m_iter, model_name in enumerate(models_to_assess):
 
