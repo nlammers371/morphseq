@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
+
 from pythae.data.datasets import DatasetOutput
 from torchvision import datasets, transforms
 from pythae.models.nn import BaseEncoder, BaseDecoder

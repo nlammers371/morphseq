@@ -554,12 +554,20 @@ def initialize_assessment(train_dir, output_dir, main_dims=None, mode_vec=None):
 
     figure_path = os.path.join(output_dir, "figures")
 
+    # if "contrastive_learning_flag" in dir(trained_model):
+    #     trained_model.contrastive_flag = False
+    if "time_ignorance_flag" in dir(trained_model):
+        trained_model.time_ignorance_flag = False
+    if "class_ignorance_flag" in dir(trained_model):
+        trained_model.class_ignorance_flag = False
+    
     return trained_model, meta_df, figure_path, data_sampler_vec, continue_flag
 
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     batch_size = 128  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = True
     main_dims = (288, 128)
@@ -572,8 +580,8 @@ if __name__ == "__main__":
     # load metadata
     metadata_path = os.path.join(root, 'metadata', '')
 
-    train_name = "20231120_ds_small" #"20230915_vae"
-    architecture_name = "z100_bs064_ne001_depth05_out16_class_ignorance_test"
+    train_name = "20231106_ds" #"20230915_vae"
+    architecture_name = "z100_bs064_ne100_depth05_out16_class_ignorance_test"
     # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
 

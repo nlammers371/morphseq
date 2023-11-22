@@ -1,5 +1,7 @@
 import sys
 sys.path.append("/functions")
+sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
+
 # print("hello")
 # import functions
 import pandas as pd
@@ -130,8 +132,9 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
 if __name__ == "__main__":
     # from functions.pythae_utils import *
 
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20231120_ds_small"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    train_folder = "20231106_ds"
     train_suffix = "class_ignorance_test"
 
     contrastive_flag = True
@@ -139,10 +142,10 @@ if __name__ == "__main__":
     time_ignorance_flag = True
     orth_flag = True
 
-    temperature_vec = [0.0001]#, 0.001, 100, 0.01]
+    temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
     batch_size = 64
-    n_epochs = 1
+    n_epochs = 100
     z_dim_vec = [100]
 
     depth_vec = [5]

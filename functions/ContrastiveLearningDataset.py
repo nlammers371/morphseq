@@ -1,5 +1,7 @@
 # NL: this is borrowed from a pre-existing pytorch repo for simclr:
 # https://github.com/sthalles/SimCLR/blob/master/data_aug/contrastive_learning_dataset.py
+import sys
+sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 
 from torchvision.transforms import transforms
 from functions.gaussian_blur import GaussianBlur
