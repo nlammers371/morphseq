@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
+
 import ntpath
 
 def path_leaf(path):

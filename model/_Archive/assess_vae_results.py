@@ -10,7 +10,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import torch.nn.functional as F
 import pandas as pd
-from functions.utilities import path_leaf
+from _archive.functions_folder.utilities import path_leaf
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
@@ -18,7 +18,7 @@ from sklearn.linear_model import LogisticRegression
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     batch_size = 128
     overwrite_flag = False
     # load metadata
