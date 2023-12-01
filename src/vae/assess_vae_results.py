@@ -1,7 +1,7 @@
 import glob as glob
 from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model
-from src.functions.pythae_utils import *
+from src.functions.dataset_utils import *
 import os
 from pythae.models import AutoModel
 import matplotlib.pyplot as plt

@@ -1,5 +1,5 @@
 import glob as glob
-from src.functions.pythae_utils import *
+from src.functions.dataset_utils import *
 import os
 from pythae.models import AutoModel
 import umap.umap_ as umap
