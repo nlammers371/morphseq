@@ -2,9 +2,6 @@ import sys
 sys.path.append("/functions")
 sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 
-# print("hello")
-# import functions
-import pandas as pd
 from functions.pythae_utils import make_dynamic_rs_transform, data_transform, MyCustomDataset
 import os
 from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig, MetricVAE, MetricVAEConfig

@@ -2,19 +2,19 @@ import io
 import base64
 import pickle
 from dash import Dash, dcc, html, Input, Output, no_update, callback
-import plotly.graph_objects as go
+# import plotly.graph_objects as go
 from PIL import Image
 import os
-from sklearn.manifold import TSNE
+# from sklearn.manifold import TSNE
 import numpy as np
 from functions.pythae_utils import *
 import pandas as pd
 import plotly.express as px
-from _archive.functions_folder.utilities import path_leaf
-import skimage
+# from _archive.functions_folder.utilities import path_leaf
+# import skimage
 from dash import Dash, dcc, html, callback_context
 import dash
-import dash_ag_grid as dag
+# import dash_ag_grid as dag
 
 
 # Contains 100 images for each digit from MNIST
@@ -22,7 +22,7 @@ import dash_ag_grid as dag
 
 # Helper functions
 def np_image_to_base64(im_matrix):
-    im = Image.fromarray((256 * im_matrix.numpy()).astype(np.uint8))
+    im = Image.fromarray((256 * np.asarray(im_matrix)).astype(np.uint8))
     buffer = io.BytesIO()
     im.save(buffer, format="jpeg")
     encoded_image = base64.b64encode(buffer.getvalue()).decode()
@@ -48,72 +48,14 @@ def get_image_sampler(train_dir, main_dims=None):
     return data_sampler_vec
 
 
-# dataRoot = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230915_vae/"
-# image_sampler_list = get_image_sampler(dataRoot)
-# image_dict = dict({})
-# print("Preloading training images...")
-# for m, image_sampler in enumerate(image_sampler_list):
-#     for samp_num in range(10): #len(image_sampler)):
-#         im_samp = image_sampler[samp_num]
-#         im_temp = np.squeeze(np.asarray(im_samp[0]).tolist()[0])
-#         snip_id = path_leaf(im_samp[1][0]).replace(".jpg", "")
-#         image_dict[snip_id] = im_temp
-# def load_vae_data(vae_data_path):
-#     vae_df = pd.read_csv(vae_data_path, index_col=0)
-#     return vae_df
-#
-# # Load the data
-# vae_df = load_vae_data(vae_data_path)
-# # images = data['images']
-# labels = vae_df['snip_id']
-# umap_array = vae_df['snip_id']
-
-# Flatten image matrices from (28,28) to (784,)
-# flattenend_images = np.array([i.flatten() for i in images])
-
-
 def visualize_latent_space(dataRoot, model_architecture, training_instance, preload_flag=False):
 
     global vae_df, image_dict, figurePath
 
     figurePath = os.path.join(dataRoot, model_architecture, training_instance, "figures", '')
 
-    # if preload_flag:
-    #     if "image_dict" not in globals():
-    #         image_sampler_list = get_image_sampler(dataRoot)
-    #         image_dict = dict({})
-    #         print("Preloading training images...")
-    #         for m, image_sampler in enumerate(image_sampler_list):
-    #             for samp_num in range(len(image_sampler)):
-    #                 im_samp = image_sampler[samp_num]
-    #                 im_temp = np.squeeze(np.asarray(im_samp[0]).tolist()[0])
-    #                 snip_id = path_leaf(im_samp[1][0]).replace(".jpg", "")
-    #                 image_dict[snip_id] = im_temp
-    # 
-    #         print("Done.")
-
-    # defaultColDef = {
-    #     "flex": 1,
-    #     "minWidth": 150,
-    #     "sortable": True,
-    #     "resizable": True,
-    #     "filter": True,
-    # }
-
     def load_nucleus_dataset(dataRoot, model_architecture, training_instance):
 
-        # modelPath = dataRoot + 'model.sav'
-        # modelDataPath = dataRoot + 'model_data.csv'
-        #
-        # model = []
-        # if os.path.isfile(modelPath):
-        #     model = pickle.load(open(modelPath, 'rb'))
-        #
-        # model_data = []
-        # if os.path.isfile(modelDataPath):
-        #     model_data = pd.read_csv(modelDataPath)
-
-        # df = vae_df.loc[vae_df["file"] == well_time_index, :]
         df = pd.read_csv(os.path.join(dataRoot, model_architecture, training_instance, "figures", "umap_df.csv"),
                          index_col=0)
         image_sampler_list = get_image_sampler(dataRoot)
@@ -470,7 +412,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
 if __name__ == '__main__':
     # set parameters
-    dataRoot = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230915_vae/"
+    dataRoot = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20230915_vae/"
     model_architecture = "z100_bs032_ne250_depth05_out16_temperature_sweep2"
     training_instance = "MetricVAE_training_2023-10-27_09-29-34"
 
