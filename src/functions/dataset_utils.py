@@ -1,15 +1,61 @@
-# NL: this is borrowed from a pre-existing pytorch repo for simclr:
-# https://github.com/sthalles/SimCLR/blob/master/data_aug/contrastive_learning_dataset.py
-import sys
-sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
+from pythae.data.datasets import DatasetOutput
+from torchvision import datasets, transforms
+import torch
 
-from torchvision.transforms import transforms
-from torchvision import transforms, datasets
-from src.functions.view_generator import ContrastiveLearningViewGenerator
-from src.functions.pythae_utils import MyCustomDataset
-# from exceptions.exceptions import InvalidDatasetSelection
+# define transforms
+# data_transform = transforms.Compose([
+#     transforms.Grayscale(num_output_channels=1),
+#     transforms.ToTensor() # the data must be tensors
+# ])
 
+def make_dynamic_rs_transform(im_dims):
+    data_transform = transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),
+        transforms.Resize((im_dims[0], im_dims[1])),
+        transforms.ToTensor(),
+    ])
+    return data_transform
 
+#########3
+# Define a custom dataset class
+class MyCustomDataset(datasets.ImageFolder):
+
+    def __init__(self, root, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+    def __getitem__(self, index):
+        X, Y = super().__getitem__(index)
+
+        if not self.return_name:
+            return DatasetOutput(
+                data=X
+            )
+        else:
+            # path_str = path_leaf(self.samples[index])
+            # path_str = path_str[:-4]
+            return DatasetOutput(data=X, label=self.samples[index])
+
+# View generation class used for contrastive training
+class ContrastiveLearningViewGenerator(object):
+    """Take two random crops of one image as the query and key."""
+
+    def __init__(self, base_transform, n_views=2):
+        self.base_transform = base_transform
+        self.n_views = n_views
+
+    # def __call__(self, x):
+    #     return [self.base_transform(x) for i in range(self.n_views)]
+
+    def __call__(self, x):
+        temp_list = []
+        for n in range(self.n_views):
+            data_tr = self.base_transform(x)
+            temp_list.append(torch.reshape(data_tr, (1, data_tr.shape[0], data_tr.shape[1], data_tr.shape[2])))
+
+        return torch.cat(temp_list, dim=0)
+
+# define custom class for contrastive data loading
 class ContrastiveLearningDataset:
     def __init__(self, root_folder):
         self.root_folder = root_folder
@@ -53,3 +99,5 @@ class ContrastiveLearningDataset:
             raise Exception("Invalid data selection")
         else:
             return dataset_fn()
+
+

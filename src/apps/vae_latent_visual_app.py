@@ -5,7 +5,7 @@ from dash import Input, Output, no_update, callback
 from PIL import Image
 import os
 # from sklearn.manifold import TSNE
-from src.functions.pythae_utils import *
+from src.functions.dataset_utils import *
 import pandas as pd
 import plotly.express as px
 # from _archive.functions_folder.utilities import path_leaf

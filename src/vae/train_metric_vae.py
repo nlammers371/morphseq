@@ -2,7 +2,7 @@ import sys
 sys.path.append("/functions")
 sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 
-from src.functions.pythae_utils import data_transform, MyCustomDataset
+from src.functions.dataset_utils import data_transform, MyCustomDataset
 import os
 from pythae.models import VAEConfig, MetricVAE, MetricVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE

@@ -2,7 +2,7 @@ import sys
 sys.path.append("/functions")
 # print("hello")
 # import functions
-from src.functions.pythae_utils import *
+from src.functions.dataset_utils import *
 import os
 from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig
 from pythae.trainers import BaseTrainerConfig

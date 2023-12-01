@@ -2,7 +2,7 @@ import sys
 sys.path.append("/functions")
 # print("hello")
 # import functions
-from src.functions.pythae_utils import make_dynamic_rs_transform, data_transform, MyCustomDataset
+from src.functions.dataset_utils import make_dynamic_rs_transform, data_transform, MyCustomDataset
 import os
 from pythae.models import VAE, VAEConfig, BetaTCVAE, BetaTCVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
