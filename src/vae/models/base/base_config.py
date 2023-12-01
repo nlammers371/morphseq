@@ -23,4 +23,4 @@ class BaseAEConfig(BaseConfig):
 
 @dataclass
 class EnvironmentConfig(BaseConfig):
-    python_version: str = "3.8"
+    python_version: str = "3.10"

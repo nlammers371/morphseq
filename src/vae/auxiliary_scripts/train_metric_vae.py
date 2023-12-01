@@ -2,15 +2,12 @@ import sys
 sys.path.append("/functions")
 sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 
-from src.functions.dataset_utils import data_transform, MyCustomDataset
+from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, ContrastiveLearningViewGenerator
 import os
 from pythae.models import VAEConfig, MetricVAE, MetricVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
 from pythae.trainers import BaseTrainerVerboseConfig
 from pythae.pipelines.training import TrainingPipeline
-from src.functions.ContrastiveLearningDataset import ContrastiveLearningDataset
-from src.functions.view_generator import ContrastiveLearningViewGenerator
-# from custom_classes.base_trainer_metric import BaseTrainerMetric
 
 def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_size=32, n_epochs=100,
                       learning_rate=1e-3, n_out_channels=16,
@@ -20,7 +17,7 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
 
     if input_dim == None:
         input_dim = (1, 576, 256)
-        transform = data_transform
+        transform = make_dynamic_rs_transform((input_dim[1:]))
     # else:
     #     transform = make_dynamic_rs_transform(input_dim[1:])
 
