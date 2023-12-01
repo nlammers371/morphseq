@@ -42,24 +42,6 @@ class MyCustomDataset(datasets.ImageFolder):
             return DatasetOutput(data=X, label=self.samples[index])
 
 
-
-# class MyCustomDatasetIO(datasets.ImageFolder):
-#
-#     def __init__(self, root, return_name=False, transform=None, target_transform=None):
-#         self.return_name = return_name
-#         root = BytesIO(root)
-#         super().__init__(root=root, transform=transform, target_transform=target_transform)
-#
-#     def __getitem__(self, index):
-#         X, Y = super().__getitem__(index)
-#
-#         if not self.return_name:
-#             return DatasetOutput(
-#                 data=X
-#             )
-#         else:
-#             return DatasetOutput(data=X), self.samples[index]
-
 ##########
 # Define custom convolutional encoder that allows for variable input size
 def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):
