@@ -56,38 +56,38 @@ class MetricVAEConfig(VAEConfig):
         self.reconstruction_loss = reconstruction_loss
         self.latent_dim = latent_dim
         self.input_dim = input_dim
-        self.class_key_path = class_key_path
+        # self.class_key_path = class_key_path
         self.temperature = temperature
         self.zn_frac = zn_frac
         self.orth_flag = orth_flag
         self.n_conv_layers = n_conv_layers
         self.n_out_channels = n_out_channels
         self.distance_metric = distance_metric
-        self.class_ignorance_flag = class_ignorance_flag
-        self.time_ignorance_flag = time_ignorance_flag
-        self.time_similarity_threshold = time_similarity_threshold
-        self.gamma = gamma  # NL: is this used?
+        # self.class_ignorance_flag = class_ignorance_flag
+        # self.time_ignorance_flag = time_ignorance_flag
+        # self.time_similarity_threshold = time_similarity_threshold
+        # self.gamma = gamma  # NL: is this used?
         self.name = name
 
-        if self.class_key_path is not None:
-            self.load_dataset()
-
-    def load_dataset(self):
-        """
-        Load the dataset from the specified file path using pandas.
-        """
-        class_key = pd.read_csv(self.class_key_path)
-
-        if self.class_ignorance_flag & self.time_ignorance_flag:
-            class_key = class_key.loc[:, ["snip_id", "predicted_stage_hpf", "perturbation_id"]]
-        elif self.class_ignorance_flag:
-            class_key = class_key.loc[:, ["snip_id", "perturbation_id"]]
-        elif self.time_ignorance_flag:
-            class_key = class_key.loc[:, ["snip_id", "predicted_stage_hpf"]]
-        else:
-            class_key = None
-
-        self.class_key = class_key
+    #     if self.class_key_path is not None:
+    #         self.load_dataset()
+    #
+    # def load_dataset(self):
+    #     """
+    #     Load the dataset from the specified file path using pandas.
+    #     """
+    #     class_key = pd.read_csv(self.class_key_path)
+    #
+    #     if self.class_ignorance_flag & self.time_ignorance_flag:
+    #         class_key = class_key.loc[:, ["snip_id", "predicted_stage_hpf", "perturbation_id"]]
+    #     elif self.class_ignorance_flag:
+    #         class_key = class_key.loc[:, ["snip_id", "perturbation_id"]]
+    #     elif self.time_ignorance_flag:
+    #         class_key = class_key.loc[:, ["snip_id", "predicted_stage_hpf"]]
+    #     else:
+    #         class_key = None
+    #
+    #     self.class_key = class_key
 
 
 

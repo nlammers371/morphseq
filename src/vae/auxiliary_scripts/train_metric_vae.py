@@ -76,14 +76,8 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
             input_dim=input_dim,
             latent_dim=n_latent,
             zn_frac=0.1,
-            orth_flag=orth_flag,
             temperature=nt_xent_temperature,
-            n_conv_layers=depth,
-            n_out_channels=n_out_channels,
-            distance_metric=distance_metric,
-            class_key_path=os.path.join(metadata_path, "class_key.csv"),
-            class_ignorance_flag=class_ignorance_flag,
-            time_ignorance_flag=time_ignorance_flag
+            n_conv_layers=depth
         )
     else:
         model_config = VAEConfig(
@@ -96,8 +90,8 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
     decoder = Decoder_Conv_VAE(encoder)
     # else:
     #     decoder = Decoder_Conv_AE_FLEX(encoder)
-    if model_config.class_key_path is not None:
-        model_config.load_dataset()
+    # if model_config.class_key_path is not None:
+    #     model_config.load_dataset()
 
     model = MetricVAE(
         model_config=model_config,
@@ -123,13 +117,11 @@ if __name__ == "__main__":
 
     # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20231106_ds"
+    train_folder = "20231120_ds_small"
     train_suffix = "class_ignorance_test"
 
     contrastive_flag = True
-    class_ignorance_flag = True
-    time_ignorance_flag = True
-    orth_flag = True
+
 
     temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
@@ -150,9 +142,7 @@ if __name__ == "__main__":
 
                 output_dir = train_metric_vae(root, train_folder, train_suffix=train_suffix, n_latent=z, batch_size=batch_size, n_epochs=n_epochs,
                                               nt_xent_temperature=t, learning_rate=1e-4, depth=d, contrastive_flag=contrastive_flag,
-                                              orth_flag=orth_flag, distance_metric=distance_metric,
-                                              class_ignorance_flag=class_ignorance_flag, time_ignorance_flag=time_ignorance_flag,
-                                              input_dim=input_dim
+                                              distance_metric=distance_metric, input_dim=input_dim
                                               )
                         # iter_flag = max_tries
                     # except:
