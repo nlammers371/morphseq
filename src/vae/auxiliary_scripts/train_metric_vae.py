@@ -1,13 +1,15 @@
 import sys
 sys.path.append("/functions")
 sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
+sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
+# sys.path.append("../src/")
 
 from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, ContrastiveLearningViewGenerator
 import os
-from pythae.models import VAEConfig, MetricVAE, MetricVAEConfig
+from src.vae.models import VAEConfig, MetricVAE, MetricVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
-from pythae.trainers import BaseTrainerVerboseConfig
-from pythae.pipelines.training import TrainingPipeline
+from src.vae.trainers import BaseTrainerConfig
+from src.vae.pipelines.training import TrainingPipeline
 
 def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_size=32, n_epochs=100,
                       learning_rate=1e-3, n_out_channels=16,
@@ -18,8 +20,6 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
     if input_dim == None:
         input_dim = (1, 576, 256)
         transform = make_dynamic_rs_transform((input_dim[1:]))
-    # else:
-    #     transform = make_dynamic_rs_transform(input_dim[1:])
 
     train_dir = os.path.join(root, "training_data", train_folder)
     metadata_path = os.path.join(root, "metadata", '')
@@ -42,9 +42,6 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
                                         return_name=True
                                         )
 
-        # eval_generator = ContrastiveLearningDataset(os.path.join(train_dir, "eval"))
-        # eval_dataset = eval_generator.get_dataset('custom', 2)
-
         eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
                                         transform=ContrastiveLearningViewGenerator(
                                             ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
@@ -65,7 +62,7 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
             return_name=True
         )
 
-    config = BaseTrainerVerboseConfig(
+    config = BaseTrainerConfig(
         output_dir=output_dir,
         learning_rate=learning_rate,
         per_device_train_batch_size=batch_size,
@@ -124,8 +121,8 @@ def train_metric_vae(root, train_folder, train_suffix='', n_latent=50, batch_siz
 if __name__ == "__main__":
     # from functions.pythae_utils import *
 
-    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231106_ds"
     train_suffix = "class_ignorance_test"
 
