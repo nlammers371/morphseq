@@ -58,11 +58,11 @@ class MetricVAE(BaseAE):
         self.nuisance_indices = torch.arange(self.latent_dim_nuisance, dtype=torch.int)
         self.biological_indices = torch.arange(self.latent_dim_nuisance, self.latent_dim, dtype=torch.int)
         self.model_config = model_config
-        self.class_key = model_config.class_key
-        self.class_ignorance_flag = model_config.class_ignorance_flag
-        self.time_ignorance_flag = model_config.time_ignorance_flag
-        self.time_similarity_threshold = model_config.time_similarity_threshold
-        self.class_key_path = model_config.class_key_path
+        # self.class_key = model_config.class_key
+        # self.class_ignorance_flag = model_config.class_ignorance_flag
+        # self.time_ignorance_flag = model_config.time_ignorance_flag
+        # self.time_similarity_threshold = model_config.time_similarity_threshold
+        # self.class_key_path = model_config.class_key_path
         # self.class_key = pd.read_csv(self.class_key_path)
 
         if encoder is None:
@@ -95,9 +95,9 @@ class MetricVAE(BaseAE):
         """
 
         x = inputs["data"]
-        y = None
-        if "label" in inputs:
-            y = list(inputs["label"][0])
+        # y = None
+        # if "label" in inputs:
+        #     y = list(inputs["label"][0])
 
         # Check input to see if it is 5 dmensional, if so, then the model is being
         if (len(x.shape) != 5) or (x.shape[1] != 2):
@@ -135,11 +135,10 @@ class MetricVAE(BaseAE):
             mu_out = torch.cat([mu0, mu1], axis=0)
             log_var_out = torch.cat([log_var0, log_var1], axis=0)
             z_out = torch.cat([z0, z1], axis=0)
-            if y is not None:
-                y = y * 2
+            # if y is not None:
+            #     y = y * 2
 
-            loss, recon_loss, kld, nt_xent, nt_xent_nuisance = self.loss_function(recon_x_out, x_out, mu_out,
-                                                                                  log_var_out, labels=y)
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out)#, labels=y)
 
         else:
             encoder_output = self.encoder(x)
@@ -151,16 +150,13 @@ class MetricVAE(BaseAE):
             z_out, eps = self._sample_gauss(mu, std)
             recon_x_out = self.decoder(z_out)["reconstruction"]
 
-            loss, recon_loss, kld, nt_xent, nt_xent_nuisance = self.loss_function(recon_x_out, x, mu, log_var,
-                                                                                  labels=y)  # , z_out,
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x, mu, log_var) #labels=y)  # , z_out,
             # weight_matrix)
 
         output = ModelOutput(
             recon_loss=recon_loss,
             reg_loss=kld,
             ntxent_loss=nt_xent,
-            ignorance_loss=nt_xent_nuisance,
-            # orth_loss=orth_loss,
             loss=loss,
             recon_x=recon_x_out,
             z=z_out,
@@ -168,10 +164,10 @@ class MetricVAE(BaseAE):
 
         return output
 
-    def loss_function(self, recon_x, x, mu, log_var, labels=None):  # , z, weight_matrix):
+    def loss_function(self, recon_x, x, mu, log_var): #, labels=None):
 
-        if labels is not None:
-            labels = self.clean_path_names(labels)
+        # if labels is not None:
+        #     labels = self.clean_path_names(labels)
 
         # calculate reconstruction error
         if self.model_config.reconstruction_loss == "mse":
@@ -206,18 +202,18 @@ class MetricVAE(BaseAE):
         else:
             nt_xent_loss = torch.tensor(0)
 
-        if self.class_ignorance_flag:
-            ntx_knowledge_loss = self.calculate_knowledge_loss(features=mu, labels=labels)
-        else:
-            ntx_knowledge_loss = torch.tensor(0)
+        # if self.class_ignorance_flag:
+        #     ntx_knowledge_loss = self.calculate_knowledge_loss(features=mu, labels=labels)
+        # else:
+        #     ntx_knowledge_loss = torch.tensor(0)
 
         # orth_loss = 0
         # if weight_matrix != None:
         #     orth_loss = self.subspace_overlap(U=weight_matrix)
 
-        return torch.mean(recon_loss) + torch.mean(KLD) + nt_xent_loss + ntx_knowledge_loss, recon_loss.mean(
+        return torch.mean(recon_loss) + torch.mean(KLD) + nt_xent_loss, recon_loss.mean(
             dim=0), KLD.mean(
-            dim=0), nt_xent_loss, ntx_knowledge_loss  # , orth_loss
+            dim=0), nt_xent_loss
 
     def nt_xent_loss(self, features, n_views=2):
 
@@ -314,83 +310,83 @@ class MetricVAE(BaseAE):
 
         return loss_euc
 
-    def calculate_knowledge_loss(self, features, labels, n_views=2, dt_thresh=1.5):
+    # def calculate_knowledge_loss(self, features, labels, n_views=2, dt_thresh=1.5):
+    #
+    #     if self.class_key is None:
+    #         raise Exception("Nuisance metric learning requested, but not class information was passed to model.")
+    #     else:
+    #         class_key = self.class_key
+    #
+    #     if self.time_ignorance_flag:
+    #         dt_thresh = self.time_similarity_threshold
+    #         assert dt_thresh >= 0
+    #
+    #     features = features[:, self.nuisance_indices]
+    #
+    #     # calculate euclidean distances
+    #     # temperature = self.temperature
+    #     dist_matrix = torch.cdist(features, features, p=2)
+    #     # logits = dist_matrix / temperature
+    #
+    #     # use class key to calculate embryos that are close enough wrpt time and perturbation to count as positive
+    #     # examples
+    #     class_key_batch = pd.DataFrame(labels, columns=["snip_id"])
+    #     class_key_batch = class_key_batch.merge(class_key, how="left", on="snip_id")
+    #
+    #     if self.time_ignorance_flag:
+    #         # calculate time pairs
+    #         time_tensor = torch.tensor(class_key_batch["predicted_stage_hpf"].values).to(self.device)
+    #         tdist_matrix = torch.cdist(time_tensor[:, np.newaxis], time_tensor[:, np.newaxis], p=2)
+    #         tbool_matrix = tdist_matrix <= dt_thresh
+    #     else:
+    #         tbool_matrix = torch.ones((dist_matrix.shape))
+    #
+    #     if self.class_ignorance_flag:
+    #         # calculate class pairs
+    #         class_tensor = torch.tensor(class_key_batch["perturbation_id"].values).to(self.device)
+    #         cbool_matrix = (class_tensor.unsqueeze(0) == class_tensor.unsqueeze(1)).float()
+    #     else:
+    #         cbool_matrix = torch.ones((dist_matrix.shape))
+    #
+    #     # construct master target matrix
+    #     # batch_size = int(features.shape[0] / n_views)
+    #
+    #     # EUCLIDEAN
+    #     # batch_labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0).to(self.device)
+    #     # target_matrix = (batch_labels.unsqueeze(0) == batch_labels.unsqueeze(1)).float()
+    #     # labels = labels.to(self.device)
+    #
+    #     target_matrix = (torch.multiply(cbool_matrix, tbool_matrix) == 0).type(torch.float32)
+    #     # target_matrix = (torch.multiply(cbool_matrix, tbool_matrix) > 0).type(torch.float32)
+    #
+    #     mask = torch.eye(features.shape[0], dtype=torch.bool)  # .to(self.device)
+    #     target_matrix[mask == 1] = -1  # this excludes self-pairs from all calculations
+    #
+    #     # call multiclass nt_xent loss
+    #     loss = self.nt_xent_loss_multiclass(dist_matrix, target_matrix, repel_flag=False)
+    #
+    #     return loss
 
-        if self.class_key is None:
-            raise Exception("Nuisance metric learning requested, but not class information was passed to model.")
-        else:
-            class_key = self.class_key
-
-        if self.time_ignorance_flag:
-            dt_thresh = self.time_similarity_threshold
-            assert dt_thresh >= 0
-
-        features = features[:, self.nuisance_indices]
-
-        # calculate euclidean distances
-        # temperature = self.temperature
-        dist_matrix = torch.cdist(features, features, p=2)
-        # logits = dist_matrix / temperature
-
-        # use class key to calculate embryos that are close enough wrpt time and perturbation to count as positive
-        # examples
-        class_key_batch = pd.DataFrame(labels, columns=["snip_id"])
-        class_key_batch = class_key_batch.merge(class_key, how="left", on="snip_id")
-
-        if self.time_ignorance_flag:
-            # calculate time pairs
-            time_tensor = torch.tensor(class_key_batch["predicted_stage_hpf"].values).to(self.device)
-            tdist_matrix = torch.cdist(time_tensor[:, np.newaxis], time_tensor[:, np.newaxis], p=2)
-            tbool_matrix = tdist_matrix <= dt_thresh
-        else:
-            tbool_matrix = torch.ones((dist_matrix.shape))
-
-        if self.class_ignorance_flag:
-            # calculate class pairs
-            class_tensor = torch.tensor(class_key_batch["perturbation_id"].values).to(self.device)
-            cbool_matrix = (class_tensor.unsqueeze(0) == class_tensor.unsqueeze(1)).float()
-        else:
-            cbool_matrix = torch.ones((dist_matrix.shape))
-
-        # construct master target matrix
-        # batch_size = int(features.shape[0] / n_views)
-
-        # EUCLIDEAN
-        # batch_labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0).to(self.device)
-        # target_matrix = (batch_labels.unsqueeze(0) == batch_labels.unsqueeze(1)).float()
-        # labels = labels.to(self.device)
-
-        target_matrix = (torch.multiply(cbool_matrix, tbool_matrix) == 0).type(torch.float32)
-        # target_matrix = (torch.multiply(cbool_matrix, tbool_matrix) > 0).type(torch.float32)
-
-        mask = torch.eye(features.shape[0], dtype=torch.bool)  # .to(self.device)
-        target_matrix[mask == 1] = -1  # this excludes self-pairs from all calculations
-
-        # call multiclass nt_xent loss
-        loss = self.nt_xent_loss_multiclass(dist_matrix, target_matrix, repel_flag=False)
-
-        return loss
-
-    def nt_xent_loss_multiclass(self, logits, target, repel_flag=False):
-        # a multiclass version of the NT-Xent loss function
-        logit_sign = -1
-        if repel_flag:
-            logit_sign = 1
-
-        temperature = self.temperature
-
-        # Apply temperature parameter
-        logits_tempered = logit_sign * logits / temperature
-        logits_tempered[target == -1] = -torch.inf
-        logits_num = logits_tempered.clone()
-        logits_num[target == 0] = -torch.inf
-
-        # calculate loss for each entry in the batch
-        numerator = -torch.logsumexp(logits_num, axis=1)
-        denominator = torch.logsumexp(logits_tempered, axis=1)
-        loss = numerator + denominator
-
-        return torch.mean(loss)
+    # def nt_xent_loss_multiclass(self, logits, target, repel_flag=False):
+    #     # a multiclass version of the NT-Xent loss function
+    #     logit_sign = -1
+    #     if repel_flag:
+    #         logit_sign = 1
+    #
+    #     temperature = self.temperature
+    #
+    #     # Apply temperature parameter
+    #     logits_tempered = logit_sign * logits / temperature
+    #     logits_tempered[target == -1] = -torch.inf
+    #     logits_num = logits_tempered.clone()
+    #     logits_num[target == 0] = -torch.inf
+    #
+    #     # calculate loss for each entry in the batch
+    #     numerator = -torch.logsumexp(logits_num, axis=1)
+    #     denominator = torch.logsumexp(logits_tempered, axis=1)
+    #     loss = numerator + denominator
+    #
+    #     return torch.mean(loss)
 
     def _sample_gauss(self, mu, std):
         # Reparametrization trick
