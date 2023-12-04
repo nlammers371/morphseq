@@ -62,7 +62,7 @@ class BaseTrainerConfig(BaseConfig):
     scheduler_cls: Union[str, None] = None
     scheduler_params: Union[dict, None] = None
     learning_rate: float = 1e-4
-    steps_saving: Union[int, None] = 10
+    steps_saving: Union[int, None] = 25
     save_optimizer = False
     steps_predict: Union[int, None] = None
     keep_best_on_train: bool = False

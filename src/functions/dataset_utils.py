@@ -8,10 +8,10 @@ import torch
 #     transforms.ToTensor() # the data must be tensors
 # ])
 
-def make_dynamic_rs_transform(im_dims):
+def make_dynamic_rs_transform():#im_dims):
     data_transform = transforms.Compose([
         transforms.Grayscale(num_output_channels=1),
-        transforms.Resize((im_dims[0], im_dims[1])),
+        # transforms.Resize((im_dims[0], im_dims[1])),
         transforms.ToTensor(),
     ])
     return data_transform

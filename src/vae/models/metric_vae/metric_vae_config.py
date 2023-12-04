@@ -20,7 +20,7 @@ class MetricVAEConfig(VAEConfig):
 
     temperature: float = 1.0
     zn_frac: float = 0.1
-    orth_flag: bool = False
+    orth_flag: bool = True
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16  # number of layers to convolutional kernel
     distance_metric: str = "cosine"
@@ -34,39 +34,29 @@ class MetricVAEConfig(VAEConfig):
 
     def __init__(self, class_key_path=None,
                  input_dim=(1, 288, 128),
-                 latent_dim=10,
+                 latent_dim=100,
                  temperature=1.0,
-                 zn_frac=0.1,
-                 orth_flag=False,
+                 zn_frac=0.2,
+                 orth_flag=True,
                  n_conv_layers=5,  # number of convolutional layers
                  n_out_channels=16,  # number of layers to convolutional kernel
-                 distance_metric="cosine",
-                 class_key=None,
-                 class_ignorance_flag=False,
-                 time_ignorance_flag=False,  # if true, we squeeze class info out of the nuisance partition
-                 time_similarity_threshold=3,
-                 # specifies how close in age different observations need to be to be counted as positive pairs
-                 gamma=1.0,
+                 distance_metric="euclidean",
                  name="MetricVAEConfig",
-                 uses_default_encoder=True, uses_default_decoder=True, reconstruction_loss='mse'):
+                 uses_default_encoder=True, uses_default_decoder=True, reconstruction_loss='mse', **kwargs):
 
-        # self.__dict__.update(kwargs)
+        self.__dict__.update(kwargs)
+
         self.uses_default_encoder = uses_default_encoder
         self.uses_default_decoder = uses_default_decoder
         self.reconstruction_loss = reconstruction_loss
         self.latent_dim = latent_dim
         self.input_dim = input_dim
-        # self.class_key_path = class_key_path
         self.temperature = temperature
         self.zn_frac = zn_frac
         self.orth_flag = orth_flag
         self.n_conv_layers = n_conv_layers
         self.n_out_channels = n_out_channels
         self.distance_metric = distance_metric
-        # self.class_ignorance_flag = class_ignorance_flag
-        # self.time_ignorance_flag = time_ignorance_flag
-        # self.time_similarity_threshold = time_similarity_threshold
-        # self.gamma = gamma  # NL: is this used?
         self.name = name
 
     #     if self.class_key_path is not None:
