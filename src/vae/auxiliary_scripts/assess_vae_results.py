@@ -79,12 +79,12 @@ def get_embryo_age_predictions(embryo_df, mu_indices):
 
     return y_pd_lin, y_score_lin, y_pd_nonlin, y_score_nonlin
 
-def get_gdf3_class_predictions(embryo_df, mu_indices):
+def get_pert_class_predictions(embryo_df, mu_indices):
 
-    train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
-    test_indices = np.where(embryo_df["train_cat"] == "test")[0]
+    train_indices = np.where((embryo_df["train_cat"] == "train"))[0]
+    test_indices = np.where((embryo_df["train_cat"] == "test") | (embryo_df["train_cat"] == "eval"))[0]
 
-    gdf3_df = embryo_df.loc[:, ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]].copy()
+    pert_df = embryo_df.loc[:, ["snip_id", "predicted_stage_hpf", "train_cat", "master_perturbation"]].copy()
 
     ########################
     # How well does latent space predict perturbation type?
@@ -287,27 +287,7 @@ def calculate_UMAPs(embryo_df):
                 embryo_df.loc[:, f"UMAP_{n:02}_n_" + dim_str] = embedding_n[:, n]
 
     return embryo_df
-    # # calculate 2D morphology UMAPS
-    # reducer = umap.UMAP()
-    # scaled_z_mu = StandardScaler().fit_transform(z_mu_array)
-    # embedding2d = reducer.fit_transform(scaled_z_mu)
-    # embryo_df.loc[:, "UMAP_00"] = embedding2d[:, 0]
-    # embryo_df.loc[:, "UMAP_01"] = embedding2d[:, 1]
-    #
-    # if trained_model.model_name == "MetricVAE":
-    #     reducer_bio = umap.UMAP()
-    #     scaled_z_mu_bio = StandardScaler().fit_transform(z_mu_array[:, trained_model.biological_indices])
-    #     embedding2d_bio = reducer_bio.fit_transform(scaled_z_mu_bio)
-    #     embryo_df.loc[:, "UMAP_00_bio"] = embedding2d_bio[:, 0]
-    #     embryo_df.loc[:, "UMAP_01_bio"] = embedding2d_bio[:, 1]
-    #
-    #     reducer_n = umap.UMAP()
-    #     scaled_z_mu_n = StandardScaler().fit_transform(z_mu_array[:, trained_model.nuisance_indices])
-    #     embedding2d_n = reducer_n.fit_transform(scaled_z_mu_n)
-    #     embryo_df.loc[:, "UMAP_00_n"] = embedding2d_n[:, 0]
-    #     embryo_df.loc[:, "UMAP_01_n"] = embedding2d_n[:, 1]
-    #
-    # return embryo_df
+
 
 def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, device, mode_vec=None):
 
@@ -461,7 +441,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
 
     return metric_df_out, meta_df
 
-def bio_prediction_wrapper(embryo_df, meta_df, trained_model):
+def bio_prediction_wrapper(embryo_df, meta_df):
 
     print("Training basic classifiers to test latent space information content...")
     mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
@@ -476,10 +456,9 @@ def bio_prediction_wrapper(embryo_df, meta_df, trained_model):
     meta_df["stage_R2_nonlin_all"] = y_score_nonlin
     meta_df["stage_R2_lin_all"] = y_score_lin
 
-    if trained_model.model_name == "MetricVAE":
-        zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
-        zmn_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_n" in embryo_df.columns[i]]
-
+    zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
+    zmn_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_n" in embryo_df.columns[i]]
+    if len(zmb_indices) > 0:
         y_pd_lin_n, y_score_lin_n, y_pd_nonlin_n, y_score_nonlin_n = get_embryo_age_predictions(embryo_df,
                                                                                                 zmn_indices)
         y_pd_lin_b, y_score_lin_b, y_pd_nonlin_b, y_score_nonlin_b = get_embryo_age_predictions(embryo_df,
@@ -495,7 +474,7 @@ def bio_prediction_wrapper(embryo_df, meta_df, trained_model):
         meta_df["stage_R2_nonlin_nbio"] = y_score_nonlin_n
         meta_df["stage_R2_lin_nbio"] = y_score_lin_n
 
-    accuracy_nonlin, accuracy_lin, gdf3_df = get_gdf3_class_predictions(embryo_df, mu_indices)
+    accuracy_nonlin, accuracy_lin, perturbation_df = get_pert_class_predictions(embryo_df, mu_indices)
     meta_df["gdf3_acc_nonlin_all"] = accuracy_nonlin
     meta_df["gdf3_acc_lin_all"] = accuracy_lin
 
