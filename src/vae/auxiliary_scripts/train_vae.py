@@ -19,7 +19,11 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     model_args = dict({})
     for key, value in kwargs.items():
         if key in training_keys:
-            training_args[key] = value
+            if key == "batch_size":
+                training_args["per_device_train_batch_size"] = value
+                training_args["per_device_eval_batch_size"] = value
+            else:
+                training_args[key] = value
         else:
             model_args[key] = value
 
@@ -71,8 +75,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     # initialize training configuration
     config = BaseTrainerConfig(
         output_dir=output_dir,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
         num_epochs=n_epochs,
         **training_args
     )
@@ -113,37 +115,31 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
 if __name__ == "__main__":
     # from functions.pythae_utils import *
 
-    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    #####################
+    # Required arguments
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231120_ds_small"
-    train_suffix = "refactor_test"
-
-    contrastive_flag = True
-
-    temperature_vec = [0.0001, 0.001, 100, 0.01]
     train_dir = os.path.join(root, "training_data", train_folder)
+    model_type = "MetricVAE"
+
+    #####################
+    # Optional arguments
+    train_suffix = "refactor_test"
+    temperature = 0.0001
     batch_size = 64
     n_epochs = 100
-    z_dim_vec = [102]
-
-    model_type = "VAE"
-    depth_vec = [5]
+    latent_dim = 100
+    n_conv_layers = 5
     distance_metric = "euclidean"
-    max_tries = 3
-
     input_dim = (1, 288, 128)
 
-    for z in z_dim_vec:
-        for d in depth_vec:
-            for t in temperature_vec:
-                iter_flag = 0
+    # for z in z_dim_vec:
+    #     for d in depth_vec:
+    #         for t in temperature_vec:
 
-                output_dir = train_vae(root, train_folder, train_suffix=train_suffix,
-                                       model_type=model_type, latent_dim=z, batch_size=batch_size,
-                                       n_epochs=n_epochs, temperature=t, learning_rate=1e-4, n_conv_layers=d)
-                        # iter_flag = max_tries
-                    # except:
-                    #     iter_flag += 1
+    output_dir = train_vae(root, train_folder, train_suffix=train_suffix, model_type=model_type,
+                           latent_dim=latent_dim, batch_size=batch_size,
+                           n_epochs=n_epochs, temperature=temperature, learning_rate=1e-4, n_conv_layers=n_conv_layers)
 
 
 

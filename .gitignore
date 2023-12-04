@@ -11,7 +11,9 @@ src/vae/models/__pycache__/
 src/vae/models/base/__pycache__/
 src/vae/models/metric_vae/__pycache__/
 src/vae/models/nn/__pycache__/
+src/vae/__pycache__/
 src/vae/models/vae/__pycache__/
 src/vae/pipelines/__pycache__/
 src/vae/trainers/__pycache__/
+src/vae/auxiliary_scripts/__pycache__/
 src/vae/trainers/base_trainer/__pycache__/

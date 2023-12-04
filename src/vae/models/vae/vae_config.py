@@ -16,5 +16,5 @@ class VAEConfig(BaseAEConfig):
     orth_flag: bool = False
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16
-
+    beta: float = 1.0  # tunes the weight of the KL normalization term
     reconstruction_loss: Literal["bce", "mse"] = "mse"
