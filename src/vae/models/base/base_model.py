@@ -15,7 +15,7 @@ import torch.nn as nn
 
 from ...customexception import BadInheritanceError
 from pythae.data.datasets import BaseDataset, DatasetOutput
-from pythae.models.auto_model import AutoConfig
+from ..auto_model import AutoConfig
 from ..nn import BaseDecoder, BaseEncoder
 from ..nn.default_architectures import Decoder_AE_MLP
 from .base_config import BaseAEConfig, EnvironmentConfig
