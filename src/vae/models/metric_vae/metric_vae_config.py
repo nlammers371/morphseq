@@ -23,13 +23,8 @@ class MetricVAEConfig(VAEConfig):
     orth_flag: bool = True
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16  # number of layers to convolutional kernel
-    distance_metric: str = "cosine"
-    class_key_path: str = ''
-    class_key = None
-    class_ignorance_flag: bool = False
-    time_ignorance_flag: bool = False  # if true, we squeeze class info out of the nuisance partition
-    time_similarity_threshold: float = 3  # specifies how close in age different observations need to be to be counted as positive pairs
-    gamma: float = 1.0
+    distance_metric: str = "euclidean"
+    beta: float = 1.0  # tunes the weight of the Gaussian prior term
     name: str = "MetricVAEConfig"
 
     def __init__(self, class_key_path=None,
@@ -38,6 +33,7 @@ class MetricVAEConfig(VAEConfig):
                  temperature=1.0,
                  zn_frac=0.2,
                  orth_flag=True,
+                 beta=1.0,
                  n_conv_layers=5,  # number of convolutional layers
                  n_out_channels=16,  # number of layers to convolutional kernel
                  distance_metric="euclidean",
@@ -58,6 +54,7 @@ class MetricVAEConfig(VAEConfig):
         self.n_out_channels = n_out_channels
         self.distance_metric = distance_metric
         self.name = name
+        self.beta = beta
 
     #     if self.class_key_path is not None:
     #         self.load_dataset()

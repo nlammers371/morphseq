@@ -52,6 +52,7 @@ class MetricVAE(BaseAE):
         # self.gamma = model_config.gamma # weight factor for orth weight
         self.orth_flag = model_config.orth_flag  # indicates whether or not to impose orthogonality constraint
         self.contrastive_flag = True
+        self.beta = model_config.beta
         # calculate number of "biological" and "nuisance" latent variables
         self.latent_dim_nuisance = torch.tensor(np.floor(self.latent_dim * self.zn_frac))
         self.latent_dim_biological = self.latent_dim - self.latent_dim_nuisance
@@ -207,11 +208,8 @@ class MetricVAE(BaseAE):
         # else:
         #     ntx_knowledge_loss = torch.tensor(0)
 
-        # orth_loss = 0
-        # if weight_matrix != None:
-        #     orth_loss = self.subspace_overlap(U=weight_matrix)
 
-        return torch.mean(recon_loss) + torch.mean(KLD) + nt_xent_loss, recon_loss.mean(
+        return recon_loss.mean(dim=0) + self.beta*KLD.mean(dim=0) + nt_xent_loss, recon_loss.mean(
             dim=0), KLD.mean(
             dim=0), nt_xent_loss
 
