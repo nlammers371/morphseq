@@ -145,7 +145,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
     # initialize new columns
     embryo_df["train_cat"] = ''
     embryo_df["recon_mse"] = np.nan
-    snip_id_vec = embryo_df["snip_id"]
+    snip_id_vec = list(embryo_df["snip_id"])
 
     # initialize latent variable columns
     new_cols = []
@@ -199,9 +199,9 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
                 x.reshape(x.shape[0], -1),
                 reduction="none",
             ).sum(dim=-1).detach().cpu()
-            x = x.detach.detach().cpu()
+            x = x.detach().cpu()
             recon_x_out = recon_x_out.detach().cpu()
-            encoder_output = encoder_output.detach().cpu()
+            # encoder_output = encoder_output.detach().cpu()
             ###
             # Add recon loss and latent encodings to the dataframe
             df_ind_vec = np.asarray([snip_id_vec.index(snip_id) for snip_id in y])
@@ -209,8 +209,8 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             embryo_df.loc[df_ind_vec, "recon_mse"] = np.asarray(recon_loss)
 
             # add latent encodings
-            zm_array = np.asarray(encoder_output[0].detach())
-            zs_array = np.asarray(encoder_output[1].detach())
+            zm_array = np.asarray(encoder_output[0].detach().cpu())
+            zs_array = np.asarray(encoder_output[1].detach().cpu())
             for z in range(trained_model.latent_dim):
                 if trained_model.model_name == "MetricVAE":
                     if z in trained_model.nuisance_indices:
@@ -251,7 +251,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
 
 def calculate_UMAPs(embryo_df):
 
-    print(f"Calculating UMAP...")
+    print(f"Calculating UMAPs...")
     zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
     zmn_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_n" in embryo_df.columns[i]]
     mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
@@ -309,13 +309,13 @@ def calculate_UMAPs(embryo_df):
     #
     # return embryo_df
 
-def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, batch_size, n_contrastive_samples, mode_vec=None):
+def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, device, mode_vec=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
 
     c_data_loader_vec = []
-    n_total_samples = 0
+    # n_total_samples = 0
     for mode in mode_vec:
         temp_dataset = MyCustomDataset(root=os.path.join(train_dir, mode),
                                        transform=ContrastiveLearningViewGenerator(
@@ -329,7 +329,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
         )
 
         c_data_loader_vec.append(data_loader)
-        n_total_samples += np.min([n_contrastive_samples, len(data_loader)])
+        # n_total_samples += np.min([n_contrastive_samples, len(data_loader)])
 
     metric_df_list = []
     zm_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
@@ -342,10 +342,11 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
 
         print(f"Calculating {mode} contrastive differences...")
         for i, inputs in enumerate(tqdm(data_loader)):
-            # inputs = self._set_inputs_to_device(inputs)
-            x = inputs.data
+            inputs = set_inputs_to_device(device, inputs)
+            x = inputs["data"]
             bs = x.shape[0]
 
+            # initialize temporary DF
             metric_df_temp = pd.DataFrame(np.empty((x.shape[0] * 2, trained_model.latent_dim + 3 + 2)),
                                           columns=["sample_id", "contrast_id", "train_cat", "euc_all",
                                                    "cos_all"] + z_col_list)
@@ -362,6 +363,12 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
             mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
             mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
 
+            mu0 = mu0.detach().cpu()
+            mu1 = mu1.detach().cpu()
+
+            # draw vector to randomly shuffle
+            shuffle_array = np.random.choice(range(x.shape[0]), x.shape[0], replace=False)
+
             # store
             metric_df_temp.loc[:x.shape[0] - 1, "contrast_id"] = 0
             metric_df_temp.loc[:x.shape[0] - 1, "sample_id"] = range(sample_iter, sample_iter + bs)
@@ -372,53 +379,85 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
             metric_df_temp.loc[:, "train_cat"] = mode
 
             # calculate distance metrics
-            cos_d_all = np.diag(cosine_similarity(mu0.detach(), mu1.detach()))
+            latent_norm_factor = np.sqrt(mu0.shape[1])
+            cos_d_all = np.diag(cosine_similarity(mu0, mu1))
             metric_df_temp.loc[:x.shape[0] - 1, "cos_all"] = cos_d_all
             metric_df_temp.loc[x.shape[0]:, "cos_all"] = cos_d_all
 
-            euc_d_all = np.diag(euclidean_distances(mu0.detach(), mu1.detach()))
-            metric_df_temp.loc[:x.shape[0] - 1, "euc_all"] = euc_d_all
-            metric_df_temp.loc[x.shape[0]:, "euc_all"] = euc_d_all
+            euc_d_all = np.diag(euclidean_distances(mu0, mu1))
+            metric_df_temp.loc[:x.shape[0] - 1, "euc_all"] = euc_d_all / latent_norm_factor
+            metric_df_temp.loc[x.shape[0]:, "euc_all"] = euc_d_all / latent_norm_factor
 
-            if trained_model.model_name == "MetricVAE":
-                bio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_b_" in z_col_list[i]])
-                nbio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_n_" in z_col_list[i]])
+            # compare to shuffled pairwise distances
+            cos_d_all_sh = np.diag(cosine_similarity(mu0, mu1[shuffle_array, :]))
+            metric_df_temp.loc[:x.shape[0] - 1, "cos_all_rand"] = cos_d_all_sh
+            metric_df_temp.loc[x.shape[0]:, "cos_all_rand"] = cos_d_all_sh
 
+            euc_d_all_sh = np.diag(euclidean_distances(mu0, mu1[shuffle_array, :]))
+            metric_df_temp.loc[:x.shape[0] - 1, "euc_all)rand"] = euc_d_all_sh / latent_norm_factor
+            metric_df_temp.loc[x.shape[0]:, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
+
+            bio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_b_" in z_col_list[i]])
+            nbio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_n_" in z_col_list[i]])
+            if len(bio_indices) > 0:
+                n_bio = np.sqrt(len(bio_indices))
+                n_nbio = np.sqrt(len(nbio_indices))
                 # biological partition
-                cos_d_bio = np.diag(cosine_similarity(mu0.detach()[:, bio_indices], mu1.detach()[:, bio_indices]))
+                cos_d_bio = np.diag(cosine_similarity(mu0[:, bio_indices], mu1[:, bio_indices]))
                 metric_df_temp.loc[:x.shape[0] - 1, "cos_bio"] = cos_d_bio
                 metric_df_temp.loc[x.shape[0]:, "cos_bio"] = cos_d_bio
 
-                euc_d_bio = np.diag(euclidean_distances(mu0.detach()[:, bio_indices], mu1.detach()[:, bio_indices]))
-                metric_df_temp.loc[:x.shape[0] - 1, "euc_bio"] = euc_d_bio
-                metric_df_temp.loc[x.shape[0]:, "euc_bio"] = euc_d_bio
+                euc_d_bio = np.diag(euclidean_distances(mu0[:, bio_indices], mu1[:, bio_indices]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_bio"] = euc_d_bio / n_bio
+                metric_df_temp.loc[x.shape[0]:, "euc_bio"] = euc_d_bio / n_bio
+
+                cos_d_bio_sh = np.diag(cosine_similarity(mu0[:, bio_indices], mu1[:, bio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "cos_bio_rand"] = cos_d_bio_sh
+                metric_df_temp.loc[x.shape[0]:, "cos_bio_rand"] = cos_d_bio_sh
+
+                euc_d_bio_sh = np.diag(euclidean_distances(mu0[:, bio_indices], mu1[:, bio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_bio_rand"] = euc_d_bio_sh / n_bio
+                metric_df_temp.loc[x.shape[0]:, "euc_bio_rand"] = euc_d_bio_sh / n_bio
 
                 # nuisance partition
-                cos_d_nbio = np.diag(cosine_similarity(mu0.detach()[:, nbio_indices], mu1.detach()[:, nbio_indices]))
+                cos_d_nbio = np.diag(cosine_similarity(mu0[:, nbio_indices], mu1[:, nbio_indices]))
                 metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio"] = cos_d_nbio
                 metric_df_temp.loc[x.shape[0]:, "cos_nbio"] = cos_d_nbio
 
-                euc_d_nbio = np.diag(euclidean_distances(mu0.detach()[:, nbio_indices], mu1.detach()[:, nbio_indices]))
-                metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio"] = euc_d_nbio
-                metric_df_temp.loc[x.shape[0]:, "euc_nbio"] = euc_d_nbio
+                euc_d_nbio = np.diag(euclidean_distances(mu0[:, nbio_indices], mu1[:, nbio_indices]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio"] = euc_d_nbio / n_nbio
+                metric_df_temp.loc[x.shape[0]:, "euc_nbio"] = euc_d_nbio / n_nbio
 
-            metric_df_temp.loc[:x.shape[0] - 1, z_col_list] = np.asarray(mu0.detach())
-            metric_df_temp.loc[x.shape[0]:, z_col_list] = np.asarray(mu1.detach())
+                cos_d_nbio_sh = np.diag(cosine_similarity(mu0[:, nbio_indices], mu1[:, nbio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio_rand"] = cos_d_nbio_sh
+                metric_df_temp.loc[x.shape[0]:, "cos_nbio_rand"] = cos_d_nbio_sh
+
+                euc_d_nbio_sh = np.diag(euclidean_distances(mu0[:, nbio_indices], mu1[:, nbio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio_rand"] = euc_d_nbio_sh / n_nbio
+                metric_df_temp.loc[x.shape[0]:, "euc_nbio_rand"] = euc_d_nbio_sh / n_nbio
+
+            metric_df_temp.loc[:x.shape[0] - 1, z_col_list] = np.asarray(mu0)
+            metric_df_temp.loc[x.shape[0]:, z_col_list] = np.asarray(mu1)
 
             metric_df_list.append(metric_df_temp)
             sample_iter += bs
-
 
     metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
 
     meta_df["cos_all_mean"] = np.mean(metric_df_out["cos_all"])
     meta_df["euc_all_mean"] = np.mean(metric_df_out["euc_all"])
+    meta_df["cos_all_mean_rand"] = np.mean(metric_df_out["cos_all_rand"])
+    meta_df["euc_all_mean_rand"] = np.mean(metric_df_out["euc_all_rand"])
 
     if trained_model.model_name == "MetricVAE":
         meta_df["cos_bio_mean"] = np.mean(metric_df_out["cos_bio"])
         meta_df["euc_bio_mean"] = np.mean(metric_df_out["euc_bio"])
+        meta_df["cos_bio_mean_rand"] = np.mean(metric_df_out["cos_bio_rand"])
+        meta_df["euc_bio_mean_rand"] = np.mean(metric_df_out["euc_bio_rand"])
         meta_df["cos_nbio_mean"] = np.mean(metric_df_out["cos_nbio"])
         meta_df["euc_nbio_mean"] = np.mean(metric_df_out["euc_nbio"])
+        meta_df["cos_nbio_mean_rand"] = np.mean(metric_df_out["cos_nbio_rand"])
+        meta_df["euc_nbio_mean_rand"] = np.mean(metric_df_out["euc_nbio_rand"])
 
     return metric_df_out, meta_df
 
@@ -594,7 +633,7 @@ if __name__ == "__main__":
     overwrite_flag = True
     n_image_figures = 100  # make qualitative side-by-side reconstruction figures
     n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
-    test_contrastive_pairs = True
+    skip_figures_flag = True
     train_name = "20231120_ds_small"
     architecture_name = "MetricVAE_z100_ne003_refactor_test"
     mode_vec = ["train", "eval", "test"]
@@ -644,28 +683,30 @@ if __name__ == "__main__":
 
         embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
                                                  data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
-                                                 device=device)
+                                                 device=device, skip_figures=skip_figures_flag)
 
 
-        # Calculate UMAPs
-        embryo_df = calculate_UMAPs(embryo_df)
-        print(f"Saving data...")
-        #save latent arrays and UMAP
-        embryo_df = embryo_df.iloc[:, 1:]
-        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
-
-        # make a narrower DF with just the UMAP cols and key metadata
-        emb_cols = embryo_df.columns
-        umap_cols = [col for col in emb_cols if "UMAP" in col]
-        umap_df = embryo_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
-             "recon_mse"] + umap_cols].copy()
-        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
+        # # Calculate UMAPs
+        # embryo_df = calculate_UMAPs(embryo_df)
+        # print(f"Saving data...")
+        # #save latent arrays and UMAP
+        # embryo_df = embryo_df.iloc[:, 1:]
+        # embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+        #
+        # # make a narrower DF with just the UMAP cols and key metadata
+        # emb_cols = embryo_df.columns
+        # umap_cols = [col for col in emb_cols if "UMAP" in col]
+        # umap_df = embryo_df[
+        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
+        #      "recon_mse"] + umap_cols].copy()
+        # umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
 
         ############################################
         # Compare latent encodings of contrastive pairs
-        if test_contrastive_pairs:
-            metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, batch_size, n_contrastive_samples)
+        if "z_mu_n_00" in embryo_df.columns:
+            metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
+                                                                 device=device)#,
+                                                                 # n_contrastive_samples=n_contrastive_samples)
             metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
         # #########################################
