@@ -3,7 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model
 from src.functions.dataset_utils import *
 import os
-from pythae.models import AutoModel
+from src.vae.models.auto_model import AutoModel
 import matplotlib.pyplot as plt
 import umap.umap_ as umap
 import numpy as np
@@ -481,17 +481,14 @@ def bio_prediction_wrapper(embryo_df, meta_df, trained_model):
 
     return age_df, gdf3_df, meta_df
 
-def initialize_assessment(train_dir, output_dir, main_dims=None, mode_vec=None):
+def initialize_assessment(train_dir, output_dir, mode_vec=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
 
-    if main_dims is None:
-        main_dims = (288, 128)
-
     continue_flag = False
 
-    data_transform = make_dynamic_rs_transform(main_dims)
+    data_transform = make_dynamic_rs_transform() # use standard dataloader
     data_sampler_vec = []
     for mode in mode_vec:
         ds_temp = MyCustomDataset(
@@ -528,24 +525,30 @@ def initialize_assessment(train_dir, output_dir, main_dims=None, mode_vec=None):
 
             print("No final model found for " + output_dir + ". Using most recent saved training instance.")
         except:
-            print("No final model for " + output_dir + ". Still training?")
+            print("No final model loaded for " + output_dir + ". \nEither there are no saved model directories, or an error occurred during loading")
             continue_flag = True
             trained_model = []
 
     meta_df = []
     if not continue_flag:
+        training_keys_to_keep = ['name', 'output_dir', 'per_device_train_batch_size', 'per_device_eval_batch_size',
+                                 'num_epochs', 'learning_rate']
         training_key_list = list(train_config.keys())
         meta_df = pd.DataFrame(np.empty((1, len(training_key_list))), columns=training_key_list)
         for k in training_key_list:
-            meta_df[k] = train_config[k]
+            if k in training_keys_to_keep:
+                meta_df[k] = train_config[k]
 
         model_key_list = list(model_config.keys())
+        model_keys_to_keep = ['input_dim', 'latent_dim', 'orth_flag', 'n_conv_layers', 'n_out_channels',
+                              'reconstruction_loss', 'temperature', 'zn_frac', 'distance_metric', 'beta']
         for k in model_key_list:
-            entry = model_config[k]
-            try:
-                meta_df[k] = entry
-            except:
-                meta_df[k] = [entry]
+            if k in model_keys_to_keep:
+                entry = model_config[k]
+                try:
+                    meta_df[k] = entry
+                except:
+                    meta_df[k] = [entry]
 
     ############
     # Question 1: how well does it reproduce train, eval, and test images?
@@ -564,44 +567,45 @@ def initialize_assessment(train_dir, output_dir, main_dims=None, mode_vec=None):
 
 if __name__ == "__main__":
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    batch_size = 128  # batch size to use generating latent encodings and image reconstructions
+    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    root = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\"
+
+    batch_size = 64  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = True
-    main_dims = (288, 128)
-    n_image_figures = 100  # make qualitative side-by-side figures
+    n_image_figures = 100  # make qualitative side-by-side reconstruction figures
     n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
     test_contrastive_pairs = True
-
+    train_name = "20231120_ds_small"
+    architecture_name = "MetricVAE_z100_ne003_refactor_test"
     mode_vec = ["train", "eval", "test"]
 
-    # load metadata
+    # set paths
     metadata_path = os.path.join(root, 'metadata', '')
-
-    train_name = "20231106_ds" #"20230915_vae"
-    architecture_name = "z100_bs064_ne100_depth05_out16_class_ignorance_test"
-    # architecture_name = "z50_bs032_ne010_depth05_out16_metric_test"
     train_dir = os.path.join(root, "training_data", train_name, '')
 
     # get list of models in this folder
     models_to_assess = None  #["MetricVAE_training_2023-10-27_09-29-34"]
 
     if models_to_assess is None:
-        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, 'MetricVAE*')))
+        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*VAE*')))
 
     for m_iter, model_name in enumerate(models_to_assess):
 
         embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+        # strip down the full dataset
         embryo_df = embryo_metadata_df[
             ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
              "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
         embryo_df = embryo_df.reset_index()
 
-        output_dir = os.path.join(train_dir, architecture_name, model_name) #"/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/training_data/20230807_vae_test/"
+        # set path to output dir
+        output_dir = os.path.join(train_dir, architecture_name, model_name)
 
-        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir, main_dims=main_dims)
+        # initialize model assessment
+        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir)
 
+        ########
+        #  Skip if no model data or a previous assessment output exists and overwrite_flag==False
         if continue_flag:
             continue
 
@@ -615,7 +619,6 @@ if __name__ == "__main__":
             continue
 
         print("Evaluating model " + model_name + f'({m_iter+1:02} of ' + str(len(models_to_assess)) + ')')
-        # print("Saving to: " + figure_path)
 
         np.random.seed(123)
 
@@ -626,7 +629,7 @@ if __name__ == "__main__":
         ############
         # Question 2: what does latent space look like?
         ############
-        embryo_df, z_mu_array = calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec, main_dims=main_dims)
+        embryo_df, z_mu_array = calculate_latent_embeddings(embryo_df, trained_model, data_sampler_vec)
 
         # Calculate UMAPs
         embryo_df = calculate_UMAPs(embryo_df, trained_model, z_mu_array)
