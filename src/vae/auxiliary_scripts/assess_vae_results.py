@@ -89,14 +89,8 @@ def get_pert_class_predictions(embryo_df, mu_indices):
     ########################
     # How well does latent space predict perturbation type?
     pert_class_train = np.asarray(embryo_df["master_perturbation"].iloc[train_indices])
-    train_gdf3_sub_indices = np.where(pert_class_train == "gdf3")[0]
-    # train_shh_sub_indices = np.where((pert_class_train == "shh_100") | (pert_class_train == "shh_75") | (pert_class_train == "shh_50"))[0]
-    train_wik_sub_indices = np.random.choice(np.where(pert_class_train == "wck-AB")[0], len(train_gdf3_sub_indices),
-                                             replace=False)
-    train_sub_indices = np.asarray(train_gdf3_sub_indices.tolist() + train_wik_sub_indices.tolist())
-
     pert_class_test = np.asarray(embryo_df["master_perturbation"].iloc[test_indices])
-    test_sub_indices = np.where((pert_class_test == "wck-AB") | (pert_class_test == "gdf3"))[0]
+
 
     # extract predictor variables
     X_train = embryo_df.iloc[train_indices, mu_indices].to_numpy().astype(float)
@@ -105,35 +99,32 @@ def get_pert_class_predictions(embryo_df, mu_indices):
     ###################
     # run MLP classifier
     ###################
-    clf = MLPClassifier(random_state=1, max_iter=5000).fit(X_train[train_sub_indices],
-                                                           pert_class_train[train_sub_indices])
-    accuracy_nonlin = clf.score(X_test[test_sub_indices], pert_class_test[test_sub_indices])
+    clf = MLPClassifier(random_state=1, max_iter=5000).fit(X_train, pert_class_train)
+    accuracy_nonlin = clf.score(X_test, pert_class_test)
 
     ###################
     # Run multivariate logistic classifier
     ###################
-    clf_lin = LogisticRegression(random_state=0).fit(X_train[train_sub_indices],
-                                                     pert_class_train[train_sub_indices])
-    accuracy_lin = clf_lin.score(X_test[test_sub_indices], pert_class_test[test_sub_indices])
+    clf_lin = LogisticRegression(random_state=0).fit(X_train, pert_class_train)
+    accuracy_lin = clf_lin.score(X_test, pert_class_test)
 
-    class_pd_nonlin_train = clf.predict(X_train[train_sub_indices, :])
-    class_pd_nonlin_test = clf.predict(X_test[test_sub_indices, :])
+    class_pd_nonlin_train = clf.predict(X_train)
+    class_pd_nonlin_test = clf.predict(X_test)
 
-    class_pd_lin_train = clf_lin.predict(X_train[train_sub_indices, :])
-    class_pd_lin_test = clf_lin.predict(X_test[test_sub_indices, :])
+    class_pd_lin_train = clf_lin.predict(X_train)
+    class_pd_lin_test = clf_lin.predict(X_test)
 
-    gdf3_df_train = gdf3_df.iloc[train_indices[train_sub_indices]]
-    gdf3_df_test = gdf3_df.iloc[test_indices[test_sub_indices]]
+    # pert_df_train = pert_df.iloc[train_indices]
+    # pert_df_test = pert_df.iloc[test_indices]
 
-    gdf3_df_train.loc[:, "class_nonlinear_pd"] = class_pd_nonlin_train
-    gdf3_df_train.loc[:, "class_linear_pd"] = class_pd_lin_train
+    pert_df.loc[train_indices, "class_nonlinear_pd"] = class_pd_nonlin_train
+    pert_df.loc[train_indices, "class_linear_pd"] = class_pd_lin_train
 
-    gdf3_df_test.loc[:, "class_nonlinear_pd"] = class_pd_nonlin_test
-    gdf3_df_test.loc[:, "class_linear_pd"] = class_pd_lin_test
+    pert_df.loc[test_indices, "class_nonlinear_pd"] = class_pd_nonlin_test
+    pert_df.loc[test_indices, "class_linear_pd"] = class_pd_lin_test
 
-    gdf3_df = pd.concat([gdf3_df_train, gdf3_df_test], axis=0, ignore_index=True)
 
-    return accuracy_nonlin, accuracy_lin, gdf3_df
+    return accuracy_nonlin, accuracy_lin, perturbation_df
 
 
 def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sampler_vec,
@@ -475,32 +466,32 @@ def bio_prediction_wrapper(embryo_df, meta_df):
         meta_df["stage_R2_lin_nbio"] = y_score_lin_n
 
     accuracy_nonlin, accuracy_lin, perturbation_df = get_pert_class_predictions(embryo_df, mu_indices)
-    meta_df["gdf3_acc_nonlin_all"] = accuracy_nonlin
-    meta_df["gdf3_acc_lin_all"] = accuracy_lin
+    meta_df["perturbation_acc_nonlin_all"] = accuracy_nonlin
+    meta_df["perturbation_acc_lin_all"] = accuracy_lin
 
-    if trained_model.model_name == "MetricVAE":
-        accuracy_nonlin_n, accuracy_lin_n, gdf3_df_n = get_gdf3_class_predictions(embryo_df, zmn_indices)
-        accuracy_nonlin_b, accuracy_lin_b, gdf3_df_b = get_gdf3_class_predictions(embryo_df, zmb_indices)
+    if len(zmb_indices) > 0:
+        accuracy_nonlin_n, accuracy_lin_n, perturbation_df_n = get_pert_class_predictions(embryo_df, zmn_indices)
+        accuracy_nonlin_b, accuracy_lin_b, perturbation_df_b = get_pert_class_predictions(embryo_df, zmb_indices)
 
         # subset
-        gdf3_df_n = gdf3_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-        gdf3_df_n = gdf3_df_n.rename(
+        perturbation_df_n = perturbation_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+        perturbation_df_n = perturbation_df_n.rename(
             columns={"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
 
-        gdf3_df_b = gdf3_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-        gdf3_df_b = gdf3_df_b.rename(
+        perturbation_df_b = perturbation_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+        perturbation_df_b = perturbation_df_b.rename(
             columns={"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
 
-        gdf3_df = gdf3_df.merge(gdf3_df_n, how="left", on="snip_id")
-        gdf3_df = gdf3_df.merge(gdf3_df_b, how="left", on="snip_id")
+        perturbation_df = perturbation_df.merge(perturbation_df_n, how="left", on="snip_id")
+        perturbation_df = perturbation_df.merge(perturbation_df_b, how="left", on="snip_id")
 
-        meta_df["gdf3_acc_nonlin_bio"] = accuracy_nonlin_b
-        meta_df["gdf3_acc_lin_bio"] = accuracy_lin_b
+        meta_df["perturbation_acc_nonlin_bio"] = accuracy_nonlin_b
+        meta_df["perturbation_acc_lin_bio"] = accuracy_lin_b
 
-        meta_df["gdf3_acc_nonlin_nbio"] = accuracy_nonlin_n
-        meta_df["gdf3_acc_lin_nbio"] = accuracy_lin_n
+        meta_df["perturbation_acc_nonlin_nbio"] = accuracy_nonlin_n
+        meta_df["perturbation_acc_lin_nbio"] = accuracy_lin_n
 
-    return age_df, gdf3_df, meta_df
+    return age_df, perturbation_df, meta_df
 
 def initialize_assessment(train_dir, output_dir, mode_vec=None):
 
@@ -690,10 +681,10 @@ if __name__ == "__main__":
 
         # #########################################
         # Test how predictive latent space is of developmental age
-        age_df, gdf3_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df, trained_model)
+        age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df, trained_model)
 
         age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
-        gdf3_df.to_csv(os.path.join(figure_path, "gdf3_pd_df.csv"))
+        perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
 
         meta_df["model_name"] = model_name
         meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
