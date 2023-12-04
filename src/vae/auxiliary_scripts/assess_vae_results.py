@@ -10,13 +10,12 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import torch.nn.functional as F
 import pandas as pd
-from _archive.functions_folder.utilities import path_leaf
+from src.functions.utilities import path_leaf
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
 # from pythae.trainers.base_trainer_verbose import base_trainer_verbose
-from src.functions.ContrastiveLearningDataset import ContrastiveLearningDataset
-from src.functions.view_generator import ContrastiveLearningViewGenerator
+from src.functions.dataset_utils import ContrastiveLearningDataset, ContrastiveLearningViewGenerator
 from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances

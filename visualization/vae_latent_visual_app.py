@@ -11,6 +11,7 @@ import plotly.express as px
 # from _archive.functions_folder.utilities import path_leaf
 # import skimage
 from dash import dcc, html
+import numpy as np
 import dash
 # import dash_ag_grid as dag
 
@@ -28,12 +29,12 @@ def np_image_to_base64(im_matrix):
     return im_url
 
 
-def get_image_sampler(train_dir, main_dims=None):
+def get_image_sampler(train_dir):   #, main_dims=None):
     mode_vec = ["train", "eval", "test"]
-    if main_dims is None:
-        main_dims = (576, 256)
+    # if main_dims is None:
+    #     main_dims = (576, 256)
 
-    data_transform = make_dynamic_rs_transform(main_dims)
+    data_transform = make_dynamic_rs_transform()
     data_sampler_vec = []
     for mode in mode_vec:
         ds_temp = MyCustomDataset(
