@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import torch.nn.functional as F
 import pandas as pd
 from src.functions.utilities import path_leaf
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
@@ -20,6 +21,31 @@ from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import json
+from typing import Any, Dict, List, Optional, Union
+import ntpath
+
+def clean_path_names(path_list):
+    path_list_out = []
+    for path in path_list:
+        head, tail = ntpath.split(path)
+        path_list_out.append(tail[:-4])
+
+    return path_list_out
+def set_inputs_to_device(device, inputs: Dict[str, Any]):
+    inputs_on_device = inputs
+
+    if device == "cuda":
+        cuda_inputs = dict.fromkeys(inputs)
+
+        for key in inputs.keys():
+            if torch.is_tensor(inputs[key]):
+                cuda_inputs[key] = inputs[key].cuda()
+
+            else:
+                cuda_inputs[key] = inputs[key]
+        inputs_on_device = cuda_inputs
+
+    return inputs_on_device
 
 def get_embryo_age_predictions(embryo_df, mu_indices):
 
@@ -111,13 +137,10 @@ def get_gdf3_class_predictions(embryo_df, mu_indices):
 
 
 def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sampler_vec,
-                                 n_image_figures, batch_size, main_dims=None, mode_vec=None, skip_figures=False):
+                                 n_image_figures, device, mode_vec=None, skip_figures=False):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
-
-    if main_dims is None:
-        main_dims = (288, 128)
 
     # initialize new columns
     embryo_df["train_cat"] = ''
@@ -132,51 +155,48 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
         if not os.path.isdir(image_path):
             os.makedirs(image_path)
 
-        data_sampler = data_sampler_vec[m]
-        n_images = len(data_sampler)
+        data_loader = data_sampler_vec[m]
+        n_images = len(data_loader.dataset)
         n_image_figs = np.min([n_images, n_image_figures])
-        # n_recon_samples = n_images #np.min([n_images, n_images_to_sample])
-
-        # draw random samples
-        sample_indices = np.random.choice(range(n_images), n_images, replace=False)
-        figure_indices = np.random.choice(range(n_images), n_image_figs, replace=False)
-        batch_id_vec = []
-        n_batches = np.ceil(len(sample_indices) / batch_size).astype(int)
-        for n in range(n_batches):
-            ind1 = n * batch_size
-            ind2 = (n + 1) * batch_size
-            batch_id_vec.append(sample_indices[ind1:ind2])
+        #
+        # # draw random samples
+        # sample_indices = np.random.choice(range(n_images), n_images, replace=False)
+        # figure_indices = np.random.choice(range(n_images), n_image_figs, replace=False)
+        # batch_id_vec = []
+        # n_batches = np.ceil(len(sample_indices) / batch_size).astype(int)
+        # for n in range(n_batches):
+        #     ind1 = n * batch_size
+        #     ind2 = (n + 1) * batch_size
+        #     batch_id_vec.append(sample_indices[ind1:ind2])
 
         # recon_loss_array = np.empty((n_recon_samples,))
 
         print("Scoring image reconstructions for " + mode + " images...")
-        for n in tqdm(range(n_batches)):
+        for n, inputs in enumerate(tqdm(data_loader)):
 
-            batch_ids = batch_id_vec[n]
-            im_stack = np.empty((len(batch_ids), main_dims[0], main_dims[1])).astype(np.float32)
+            inputs = set_inputs_to_device(device, inputs)
+            x = inputs["data"]
+            y = list(inputs["label"][0])
+            y = clean_path_names(y)
 
-            snip_index_vec = []
-            snip_name_vec = []
-            for b in range(len(batch_ids)):
-                im_raw = np.asarray(data_sampler[batch_ids[b]][0]).tolist()[0]
-                path_data = data_sampler[batch_ids[b]][1]
-                snip_name = path_leaf(path_data[0]).replace(".jpg", "")
-                snip_name_vec.append(snip_name)
-                snip_index_vec.append(np.where(snip_name == snip_id_vec)[0][0])
+            encoder_output = trained_model.encoder(x)
+            mu, log_var = encoder_output.embedding, encoder_output.log_covariance
+            std = torch.exp(0.5 * log_var)
 
-                im_stack[b, :, :] = im_raw
-
-            im_test = torch.reshape(torch.from_numpy(im_stack), (len(batch_ids), 1, main_dims[0], main_dims[1]))
-            im_recon = trained_model.reconstruct(im_test).detach().cpu()
+            z_out, eps = trained_model._sample_gauss(mu, std)
+            recon_x_out = trained_model.decoder(z_out)["reconstruction"]
+            # .detach().cpu()
 
             recon_loss = F.mse_loss(
-                im_recon.reshape(im_test.shape[0], -1),
-                im_test.reshape(im_test.shape[0], -1),
+                recon_x_out.reshape(recon_x_out.shape[0], -1),
+                x.reshape(x.shape[0], -1),
                 reduction="none",
-            ).sum(dim=-1)
+            ).sum(dim=-1).detach().cpu()
             # recon_loss_array[i] = recon_loss
-            for b in range(len(batch_ids)):
-                embryo_df.loc[snip_index_vec[b], "train_cat"] = mode
+            for b in range(len(y)):
+                snip_id = y[b]
+                df_ind = np.where(embryo_df["snip_id"]==snip_id)[0]
+                embryo_df.loc[, "train_cat"] = mode
                 embryo_df.loc[snip_index_vec[b], "recon_mse"] = np.asarray(recon_loss)[b]
 
                 if not skip_figures:
@@ -488,6 +508,13 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
 
     continue_flag = False
 
+    # check device
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "cpu"
+        )
+
     data_transform = make_dynamic_rs_transform() # use standard dataloader
     data_sampler_vec = []
     for mode in mode_vec:
@@ -496,7 +523,13 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
             transform=data_transform,
             return_name=True
         )
-        data_sampler_vec.append(ds_temp)
+        temp_loader = DataLoader(
+                        dataset=ds_temp,
+                        batch_size=batch_size,
+                        shuffle=True,
+                        collate_fn=collate_dataset_output,
+                    )
+        data_sampler_vec.append(temp_loader)
 
     try:
         trained_model = AutoModel.load_from_folder(os.path.join(output_dir, 'final_model'))
@@ -531,6 +564,10 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
 
     meta_df = []
     if not continue_flag:
+
+        # pass model to device
+        trained_model = trained_model.to(device)
+
         training_keys_to_keep = ['name', 'output_dir', 'per_device_train_batch_size', 'per_device_eval_batch_size',
                                  'num_epochs', 'learning_rate']
         training_key_list = list(train_config.keys())
@@ -563,7 +600,7 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
     if "class_ignorance_flag" in dir(trained_model):
         trained_model.class_ignorance_flag = False
     
-    return trained_model, meta_df, figure_path, data_sampler_vec, continue_flag
+    return trained_model, meta_df, figure_path, data_sampler_vec, continue_flag, device
 
 if __name__ == "__main__":
 
@@ -602,7 +639,7 @@ if __name__ == "__main__":
         output_dir = os.path.join(train_dir, architecture_name, model_name)
 
         # initialize model assessment
-        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag = initialize_assessment(train_dir, output_dir)
+        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag, device = initialize_assessment(train_dir, output_dir)
 
         ########
         #  Skip if no model data or a previous assessment output exists and overwrite_flag==False
@@ -624,7 +661,7 @@ if __name__ == "__main__":
 
         embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
                                                  data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
-                                                 batch_size=batch_size)
+                                                 device=device)
 
         ############
         # Question 2: what does latent space look like?
