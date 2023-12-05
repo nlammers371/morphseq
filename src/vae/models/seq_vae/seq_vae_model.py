@@ -51,7 +51,6 @@ class SeqVAE(BaseAE):
         self.distance_metric = model_config.distance_metric
         # self.gamma = model_config.gamma # weight factor for orth weight
         self.orth_flag = model_config.orth_flag  # indicates whether or not to impose orthogonality constraint
-        self.contrastive_flag = True
         self.beta = model_config.beta
         # calculate number of "biological" and "nuisance" latent variables
         self.latent_dim_nuisance = torch.tensor(np.floor(self.latent_dim * self.zn_frac))
@@ -59,6 +58,7 @@ class SeqVAE(BaseAE):
         self.nuisance_indices = torch.arange(self.latent_dim_nuisance, dtype=torch.int)
         self.biological_indices = torch.arange(self.latent_dim_nuisance, self.latent_dim, dtype=torch.int)
         self.model_config = model_config
+        self.contrastive_flag = True
         # self.class_key = model_config.class_key
         # self.class_ignorance_flag = model_config.class_ignorance_flag
         # self.time_ignorance_flag = model_config.time_ignorance_flag
@@ -96,11 +96,8 @@ class SeqVAE(BaseAE):
         """
 
         x = inputs["data"]
-        # y = None
-        # if "label" in inputs:
-        #     y = list(inputs["label"][0])
-
         # Check input to see if it is 5 dmensional, if so, then the model is being
+        self.contrastive_flag = True
         if (len(x.shape) != 5) or (x.shape[1] != 2):
             # raise Warning("Model did not receive contrastive pairs. No contrastive loss will be calculated.")
             self.contrastive_flag = False
@@ -136,10 +133,8 @@ class SeqVAE(BaseAE):
             mu_out = torch.cat([mu0, mu1], axis=0)
             log_var_out = torch.cat([log_var0, log_var1], axis=0)
             z_out = torch.cat([z0, z1], axis=0)
-            # if y is not None:
-            #     y = y * 2
 
-            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out)#, labels=y)
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out, inputs["hpf_deltas"])#, labels=y)
 
         else:
             encoder_output = self.encoder(x)
@@ -151,7 +146,7 @@ class SeqVAE(BaseAE):
             z_out, eps = self._sample_gauss(mu, std)
             recon_x_out = self.decoder(z_out)["reconstruction"]
 
-            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x, mu, log_var) #labels=y)  # , z_out,
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x, mu, log_var, torch.ones(x.shape[0])) #labels=y)  # , z_out,
             # weight_matrix)
 
         output = ModelOutput(
@@ -165,7 +160,7 @@ class SeqVAE(BaseAE):
 
         return output
 
-    def loss_function(self, recon_x, x, mu, log_var): #, labels=None):
+    def loss_function(self, recon_x, x, mu, log_var, hpf_deltas): #, labels=None):
 
         # if labels is not None:
         #     labels = self.clean_path_names(labels)
@@ -195,25 +190,19 @@ class SeqVAE(BaseAE):
         if self.contrastive_flag:
 
             if self.distance_metric == "cosine":
-                nt_xent_loss = self.nt_xent_loss(features=mu)
+                nt_xent_loss = self.nt_xent_loss(features=mu, temp_weights=hpf_deltas)
             elif self.distance_metric == "euclidean":
-                nt_xent_loss = self.nt_xent_loss_euclidean(features=mu)
+                nt_xent_loss = self.nt_xent_loss_euclidean(features=mu, temp_weights=hpf_deltas)
             else:
                 raise Exception("Invalid distance metric was passed to model.")
         else:
             nt_xent_loss = torch.tensor(0)
 
-        # if self.class_ignorance_flag:
-        #     ntx_knowledge_loss = self.calculate_knowledge_loss(features=mu, labels=labels)
-        # else:
-        #     ntx_knowledge_loss = torch.tensor(0)
-
-
         return recon_loss.mean(dim=0) + self.beta*KLD.mean(dim=0) + nt_xent_loss, recon_loss.mean(
             dim=0), KLD.mean(
             dim=0), nt_xent_loss
 
-    def nt_xent_loss(self, features, n_views=2):
+    def nt_xent_loss(self, features, temp_weights, n_views=2):
 
         temperature = self.temperature
 

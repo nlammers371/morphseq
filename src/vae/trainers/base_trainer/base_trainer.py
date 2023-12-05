@@ -819,12 +819,16 @@ class BaseTrainer:
                 pair_time_deltas.append(option_age_deltas[seq_pair_ind[0]] + other_age_penalty)
 
         # load input pairs into memory
-        input_pairs = torch.empty(inputs["data"].shape)
+        input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
+                                                    inputs["data"].shape[2], inputs["data"].shape[3]))
+        input_pairs = torch.empty(input_init.shape)
         for i, ind in enumerate(indices_to_load):
-            input_pairs[i, 0, :, :] = self.train_loader.dataset[ind]["data"]
+            input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
 
-        inputs["data"] = torch.cat([inputs["data"], input_pairs], dim=1)
+        inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
         inputs["hpf_deltas"] = torch.FloatTensor(pair_time_deltas)
+
+        return inputs
 
     def predict(self, model: BaseAE):
 
