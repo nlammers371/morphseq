@@ -53,20 +53,25 @@ def make_seq_key(root, train_name, time_window=3, self_target=0.5):
         # find valid self comparisons
         seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
         self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
-        valid_self_ids = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "snip_id"].to_numpy()
+        valid_self_indices = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], :].index.to_numpy()
 
         # find valid "other" comparisons (same class different embryo)
         seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner", on=["perturbation_id", "train_cat"])
         other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
-        valid_other_ids = seq_key_other.loc[np.where(other_age_deltas <= time_window)[0], "snip_id"].to_numpy()
+        valid_all_indices = seq_key_other.loc[np.where(other_age_deltas <= time_window)[0], :].index.to_numpy()
 
         # get overall and class-specific indices for each option. Assign weights
         other_target = 1 - self_target
-        self_frac = len(valid_self_ids) / (len(valid_other_ids) + len(valid_self_ids))
+        self_frac = len(valid_self_indices) / (len(valid_all_indices))
         self_weight = self_target / self_frac
         other_weight = other_target / (1-self_frac)
 
-        option_ind_vec = []
+        option_weights = [self_weight if (i in valid_self_indices) else other_weight for i in valid_all_indices]
+        option_time_deltas = other_age_deltas[np.where(other_age_deltas <= time_window)[0]]
+        seq_key["option_indices"].iloc[i] = {valid_all_indices}
+        seq_key.loc[i, "option_weights"] = option_weights
+        seq_key.loc[i, "option_hpf_deltas"] = option_time_deltas
+
     seq_key.to_csv(os.path.join(metadata_path, "seq_key.csv"))
 
 
