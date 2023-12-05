@@ -124,7 +124,7 @@ def get_pert_class_predictions(embryo_df, mu_indices):
     pert_df.loc[test_indices, "class_linear_pd"] = class_pd_lin_test
 
 
-    return accuracy_nonlin, accuracy_lin, perturbation_df
+    return accuracy_nonlin, accuracy_lin, pert_df
 
 
 def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sampler_vec,
@@ -603,7 +603,7 @@ if __name__ == "__main__":
     overwrite_flag = True
     n_image_figures = 100  # make qualitative side-by-side reconstruction figures
     n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
-    skip_figures_flag = True
+    skip_figures_flag = False
     train_name = "20231120_ds_small"
     architecture_name = "MetricVAE_z100_ne003_refactor_test"
     mode_vec = ["train", "eval", "test"]
@@ -656,20 +656,20 @@ if __name__ == "__main__":
                                                  device=device, skip_figures=skip_figures_flag)
 
 
-        # # Calculate UMAPs
-        # embryo_df = calculate_UMAPs(embryo_df)
-        # print(f"Saving data...")
-        # #save latent arrays and UMAP
-        # embryo_df = embryo_df.iloc[:, 1:]
-        # embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
-        #
-        # # make a narrower DF with just the UMAP cols and key metadata
-        # emb_cols = embryo_df.columns
-        # umap_cols = [col for col in emb_cols if "UMAP" in col]
-        # umap_df = embryo_df[
-        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
-        #      "recon_mse"] + umap_cols].copy()
-        # umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
+        # Calculate UMAPs
+        embryo_df = calculate_UMAPs(embryo_df)
+        print(f"Saving data...")
+        #save latent arrays and UMAP
+        embryo_df = embryo_df.iloc[:, 1:]
+        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+
+        # make a narrower DF with just the UMAP cols and key metadata
+        emb_cols = embryo_df.columns
+        umap_cols = [col for col in emb_cols if "UMAP" in col]
+        umap_df = embryo_df[
+            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
+             "recon_mse"] + umap_cols].copy()
+        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
 
         ############################################
         # Compare latent encodings of contrastive pairs
@@ -681,7 +681,7 @@ if __name__ == "__main__":
 
         # #########################################
         # Test how predictive latent space is of developmental age
-        age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df, trained_model)
+        age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
 
         age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
         perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
