@@ -9,7 +9,7 @@ import imageio
 from tqdm import tqdm
 from skimage.transform import rescale
 
-def make_seq_key(root, train_name, time_window=3, self_weight=0.5):
+def make_seq_key(root, train_name, time_window=3, self_target=0.5):
 
     metadata_path = os.path.join(root, "metadata", '')
     training_path = os.path.join(root, "training_data", train_name, '')
@@ -48,18 +48,25 @@ def make_seq_key(root, train_name, time_window=3, self_weight=0.5):
     # to be a valid comparison, an image needs to be of the same perturbation type and within 3 hpf
     for i in range(seq_key.shape[0]):
         self_entry = pd.DataFrame(seq_key.iloc[i, :]).transpose()
-        snip_id = seq_key.loc[i, "snip_id"]
         age_hpf = seq_key.loc[i, "predicted_stage_hpf"]
-        pert_id = seq_key.loc[i, "perturbation_id"]
-        train_cat_id = seq_key.loc[i, "train_cat"]
 
+        # find valid self comparisons
         seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
         self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
         valid_self_ids = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "snip_id"].to_numpy()
 
+        # find valid "other" comparisons (same class different embryo)
         seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner", on=["perturbation_id", "train_cat"])
         other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
         valid_other_ids = seq_key_other.loc[np.where(other_age_deltas <= time_window)[0], "snip_id"].to_numpy()
+
+        # get overall and class-specific indices for each option. Assign weights
+        other_target = 1 - self_target
+        self_frac = len(valid_self_ids) / (len(valid_other_ids) + len(valid_self_ids))
+        self_weight = self_target / self_frac
+        other_weight = other_target / (1-self_frac)
+
+        option_ind_vec = []
     seq_key.to_csv(os.path.join(metadata_path, "seq_key.csv"))
 
 
