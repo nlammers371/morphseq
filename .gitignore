@@ -10,6 +10,7 @@ src/functions/__pycache__/
 src/vae/models/__pycache__/
 src/vae/models/base/__pycache__/
 src/vae/models/metric_vae/__pycache__/
+src/vae/models/seq_vae/__pycache__/
 src/vae/models/nn/__pycache__/
 src/vae/__pycache__/
 src/vae/models/vae/__pycache__/
