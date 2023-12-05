@@ -6,7 +6,7 @@ import glob as glob
 import pandas as pd
 from src.functions.utilities import path_leaf
 
-def make_seq_key(root, train_name, instance_dir): #, time_window=3, self_target=0.5, other_age_penalty=2):
+def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age_penalty=2):
 
     metadata_path = os.path.join(root, "metadata", '')
     training_path = os.path.join(root, "training_data", train_name, '')
@@ -46,6 +46,9 @@ def make_seq_key(root, train_name, instance_dir): #, time_window=3, self_target=
 
     emb_id_list = [snip_id[:-6] for snip_id in list(seq_key["snip_id"])]
     seq_key["embryo_id"] = emb_id_list
+    seq_key["Index"] = seq_key.index
+
+    return seq_key
     # seq_key["Index"] = seq_key.index
     # # now, for each image compile a list of valid comparisons and corresponding delta T's
     # seq_key_dict = dict({})
@@ -81,7 +84,7 @@ def make_seq_key(root, train_name, instance_dir): #, time_window=3, self_target=
     #     frame_dict["option_hpf_deltas"] = option_time_deltas
     #     seq_key_dict[self_entry.loc[0, "snip_id"]] = frame_dict
 
-    seq_key.to_csv(os.path.join(instance_dir, "seq_key.csv"))
+    # seq_key.to_csv(os.path.join(instance_dir, "seq_key.csv"))
 
 
 if __name__ == "__main__":

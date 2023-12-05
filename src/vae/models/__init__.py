@@ -17,6 +17,7 @@ and named likewise the model. The following modules can be found in this folder:
 from .base import BaseAE, BaseAEConfig
 from .metric_vae import MetricVAE, MetricVAEConfig
 from .vae import VAE, VAEConfig
+from .seq_vae import SeqVAE, SeqVAEConfig
 
 __all__ = [
     "BaseAE",
@@ -25,4 +26,6 @@ __all__ = [
     "VAEConfig",
     "MetricVAE",
     "MetricVAEConfig",
+    "SeqVAE",
+    "SeqVAEConfig"
 ]
