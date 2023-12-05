@@ -11,18 +11,19 @@ if __name__ == "__main__":
 
     #####################
     # Required arguments
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20231120_ds_small"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    train_folder = "20231106_ds"
     train_dir = os.path.join(root, "training_data", train_folder)
     model_type = "MetricVAE"
 
     #####################
     # Optional arguments
-    train_suffix = "refactor_test"
+    train_suffix = "beta_temp_sweep"
     temperature_vec = [0.0001, 0.01, 1]
     batch_size = 64
-    n_epochs = 3
-    beta_vec = [0.01, 0.1]
+    n_epochs = 100
+    beta_vec = [0.01, 0.1, 1]
     latent_dim = 100
     n_conv_layers = 5
     distance_metric = "euclidean"
