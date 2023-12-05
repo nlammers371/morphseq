@@ -10,8 +10,6 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 import torch.nn.functional as F
 import pandas as pd
-from src.functions.utilities import path_leaf
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
@@ -278,7 +276,6 @@ def calculate_UMAPs(embryo_df):
                 embryo_df.loc[:, f"UMAP_{n:02}_n_" + dim_str] = embedding_n[:, n]
 
     return embryo_df
-
 
 def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, device, mode_vec=None):
 
