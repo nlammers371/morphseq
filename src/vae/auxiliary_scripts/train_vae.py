@@ -6,7 +6,7 @@ sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 
 from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, ContrastiveLearningViewGenerator
 import os
-from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig
+from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
 from src.vae.trainers import BaseTrainerConfig
 from src.vae.pipelines.training import TrainingPipeline
@@ -50,6 +50,20 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
         )
         # Standard data transform
         data_transform = make_dynamic_rs_transform()
+
+    elif model_type == "SeqVAE":
+        # initialize model configuration
+        model_config = SeqVAEConfig(
+            input_dim=input_dim,
+            data_root=root,
+            train_folder=train_folder,
+            **model_args
+        )
+        # initialize reference dataset
+        model_config.make_dataset()
+
+        # initialize contrastive data loader
+        data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
     else:
         raise Exception("Unrecognized model type: " + model_type)
 
@@ -96,6 +110,12 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             encoder=encoder,
             decoder=decoder
         )
+    elif model_type == "SeqVAE":
+        model = SeqVAE(
+            model_config=model_config,
+            encoder=encoder,
+            decoder=decoder
+        )
     else:
         raise Exception("Unrecognized model type: " + model_type)
 
@@ -120,7 +140,7 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231120_ds_small"
     train_dir = os.path.join(root, "training_data", train_folder)
-    model_type = "MetricVAE"
+    model_type = "SeqVAE"
 
     #####################
     # Optional arguments

@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 from ..vae import VAEConfig
 import pandas as pd
-
+from src.build.make_training_key import make_seq_key
 
 @dataclass
 class SeqVAEConfig(VAEConfig):
@@ -26,9 +26,17 @@ class SeqVAEConfig(VAEConfig):
     distance_metric: str = "euclidean"
     beta: float = 1.0  # tunes the weight of the Gaussian prior term
     name: str = "SeqVAEConfig"
-    class_key_path: None
+    data_root: str = ''
+    train_folder: str = ''
 
-    def __init__(self, class_key_path=None,
+    # set sequential hyperparameters
+    time_window: float = 2.0  # max permitted age difference between sequential pairs
+    self_target_prob: float = 0.5  # fraction of time to load self-pair vs. alternative comparison
+    other_age_penalty: float = 1.0  # added similarity delta for cross-embryo comparisons
+
+    def __init__(self,
+                 data_root=None,
+                 train_folder=None,
                  input_dim=(1, 288, 128),
                  latent_dim=100,
                  temperature=1.0,
@@ -39,7 +47,8 @@ class SeqVAEConfig(VAEConfig):
                  n_out_channels=16,  # number of layers to convolutional kernel
                  distance_metric="euclidean",
                  name="SeqVAEConfig",
-                 uses_default_encoder=True, uses_default_decoder=True, reconstruction_loss='mse', **kwargs):
+                 uses_default_encoder=True, uses_default_decoder=True, reconstruction_loss='mse',
+                 time_window=2.0, self_target_prob=0.5, other_age_penalty=2.0, **kwargs):
 
         self.__dict__.update(kwargs)
 
@@ -56,19 +65,20 @@ class SeqVAEConfig(VAEConfig):
         self.distance_metric = distance_metric
         self.name = name
         self.beta = beta
-        self.class_key_path = class_key_path
-        
-        if self.class_key_path is not None:
-            self.load_dataset()
+        self.data_root = data_root
+        self.train_folder = train_folder
+        self.time_window = time_window
+        self.self_target_prob = self_target_prob
+        self.other_age_penalty = other_age_penalty
 
-    def load_dataset(self):
+
+    def make_dataset(self):
         """
         Load the dataset from the specified file path using pandas.
         """
-        class_key = pd.read_csv(self.class_key_path)
-        class_key = class_key.loc[:, ["snip_id", "predicted_stage_hpf", "perturbation_id"]]
+        seq_key = make_seq_key(self.data_root, self.train_folder)
 
-        self.class_key = class_key
+        self.seq_key = seq_key
 
 
 

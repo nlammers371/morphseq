@@ -4,9 +4,9 @@ import logging
 import os
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Union
-
+import numpy as np
 import pandas as pd
-
+from src.functions.utilities import path_leaf
 import torch
 import torch.distributed as dist
 import torch.optim as optim
@@ -15,7 +15,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 
-from ...customexception import ModelError
+from src.vae.customexception import ModelError
 from pythae.data.datasets import BaseDataset, collate_dataset_output
 from pythae.models import BaseAE
 from ..trainer_utils import set_seed
@@ -582,6 +582,9 @@ class BaseTrainer:
             input_i = 0
             for inputs in self.eval_loader:
 
+                if self.model_name == "SeqVAE":
+                    inputs = self.get_sequential_pairs(inputs, "evaln")
+
                 inputs = self._set_inputs_to_device(inputs)
 
                 try:
@@ -651,6 +654,9 @@ class BaseTrainer:
         epoch_loss = 0
         input_i = 0
         for inputs in self.train_loader:
+
+            if self.model_name == "SeqVAE":
+                inputs = self.get_sequential_pairs(inputs, "train")
 
             inputs = self._set_inputs_to_device(inputs)
 
@@ -754,6 +760,71 @@ class BaseTrainer:
 
         # save training config
         self.training_config.save_json(checkpoint_dir, "training_config")
+
+    def get_sequential_pairs(self, inputs, mode):
+        # Strip paths to get data snip_ids
+        input_paths = list(inputs["label"][0])
+        snip_id_list = [path_leaf(pth)[:-4] for pth in input_paths]
+
+        time_window = self.model_config.time_window
+        self_target = self.model_config.self_target_prob
+        other_age_penalty = self.model_config.other_age_penalty
+
+        seq_key = self.model_config.seq_key
+        seq_key = seq_key.loc[seq_key["train_cat"] == mode]
+        seq_key = seq_key.reset_index()
+        seq_key["Index"] = seq_key.index
+
+        indices_to_load = []
+        pair_time_deltas = []
+        for s in range(len(snip_id_list)):
+            snip_i = np.where(seq_key["snip_id"] == snip_id_list[s])[0][0]
+            self_entry = pd.DataFrame(seq_key.iloc[snip_i, :]).transpose().reset_index()
+            age_hpf = seq_key.loc[snip_i, "predicted_stage_hpf"]
+
+            # find valid self comparisons
+            seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
+            self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
+            valid_self_indices = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "Index"].to_numpy()
+
+            # find valid "other" comparisons (same class different embryo)
+            seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner",
+                                          on=["perturbation_id", "train_cat"])
+            other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
+            valid_all_indices = seq_key_other.loc[np.where(other_age_deltas <= time_window)[0], "Index"].to_numpy()
+
+            # get overall and class-specific indices for each option. Assign weights
+            other_target = 1 - self_target
+            self_frac = len(valid_self_indices) / (len(valid_all_indices))
+            self_weight = self_target / self_frac
+            if self_frac < 1.0:
+                other_weight = other_target / (1 - self_frac)
+            else:
+                other_weight = np.Inf
+
+            option_weights = np.asarray(
+                [self_weight if (i in valid_self_indices) else other_weight for i in valid_all_indices])
+            option_weights = option_weights / np.sum(option_weights)
+            option_age_deltas = other_age_deltas[np.where(other_age_deltas <= time_window)[0]] + 1
+            # option_time_deltas = [option_time_deltas[i] if (valid_all_indices[i] in valid_self_indices) else
+            #                       option_time_deltas[i] + other_age_penalty for i in range(len(valid_all_indices))]
+
+            # randomly select an index for comparison
+            seq_pair_ind = np.random.choice(range(len(valid_all_indices)), 1, replace=False, p=option_weights)
+            load_index = valid_all_indices[seq_pair_ind[0]]
+            indices_to_load.append(load_index)
+            if load_index in valid_self_indices:
+                pair_time_deltas.append(option_age_deltas[seq_pair_ind[0]])
+            else:
+                pair_time_deltas.append(option_age_deltas[seq_pair_ind[0]] + other_age_penalty)
+
+        # load input pairs into memory
+        input_pairs = torch.empty(inputs["data"].shape)
+        for i, ind in enumerate(indices_to_load):
+            input_pairs[i, 0, :, :] = self.train_loader.dataset[ind]["data"]
+
+        inputs["data"] = torch.cat([inputs["data"], input_pairs], dim=1)
+        inputs["hpf_deltas"] = torch.FloatTensor(pair_time_deltas)
 
     def predict(self, model: BaseAE):
 
