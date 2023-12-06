@@ -762,7 +762,7 @@ class BaseTrainer:
         self.training_config.save_json(checkpoint_dir, "training_config")
 
     def get_sequential_pairs(self, inputs, mode):
-        # Strip paths to get data snip_ids
+        # # Strip paths to get data snip_ids
         input_paths = list(inputs["label"][0])
         snip_id_list = [path_leaf(pth)[:-4] for pth in input_paths]
 
@@ -777,23 +777,31 @@ class BaseTrainer:
         seq_key = seq_key.reset_index()
         seq_key["Index"] = seq_key.index
 
+        pert_id_vec = seq_key["perturbation_id"].to_numpy()
+        e_id_vec = seq_key["embryo_id"].to_numpy()
+
         indices_to_load = []
         pair_time_deltas = []
         for s in range(len(snip_id_list)):
             snip_i = np.where(seq_key["snip_id"] == snip_id_list[s])[0][0]
             self_entry = pd.DataFrame(seq_key.iloc[snip_i, :]).transpose().reset_index()
             age_hpf = seq_key.loc[snip_i, "predicted_stage_hpf"]
+            embryo_id = seq_key.loc[snip_i, "embryo_id"]
+            pert_id = seq_key.loc["perturbation_id"]
 
-            # find valid self comparisons
-            seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
-            self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
-            valid_self_indices = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "Index"].to_numpy()
+
+            #
+            # # find valid self comparisons
+            # seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
+            # self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
+            # valid_self_indices = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "Index"].to_numpy()
 
             # find valid "other" comparisons (same class different embryo)
-            seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner",
-                                          on=["perturbation_id", "train_cat"])
-            other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
-            valid_all_indices = seq_key_other.loc[np.where(other_age_deltas <= time_window)[0], "Index"].to_numpy()
+            # seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner",
+            #                               on=["perturbation_id", "train_cat"])
+            # other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
+            valid_all_indices = np.where(pert_id_vec == pert_id)[0]
+            valid_self_indices = np.where(e_id_vec == embryo_id)[0]
 
             # get overall and class-specific indices for each option. Assign weights
             other_target = 1 - self_target
@@ -824,11 +832,11 @@ class BaseTrainer:
         input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
                                                     inputs["data"].shape[2], inputs["data"].shape[3]))
         input_pairs = torch.empty(input_init.shape)
-        for i, ind in enumerate(indices_to_load):
-            input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
+        # for i, ind in enumerate(indices_to_load):
+        #     input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
 
         inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
-        inputs["hpf_deltas"] = torch.FloatTensor(pair_time_deltas) / max_val
+        inputs["hpf_deltas"] = torch.ones((input_pairs.shape[0],)) #torch.FloatTensor(pair_time_deltas) / max_val
 
         return inputs
 
