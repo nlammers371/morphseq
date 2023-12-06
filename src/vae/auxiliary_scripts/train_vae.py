@@ -144,10 +144,10 @@ if __name__ == "__main__":
 
     #####################
     # Optional arguments
-    train_suffix = "refactor_test"
+    train_suffix = "run_test"
     temperature = 0.0001
     batch_size = 64
-    n_epochs = 100
+    n_epochs = 5
     latent_dim = 100
     n_conv_layers = 5
     distance_metric = "euclidean"
