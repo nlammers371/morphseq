@@ -236,6 +236,12 @@ class SeqVAE(BaseAE):
         # select and combine multiple positives
         positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
 
+        # Apply dt-based temp adjustments
+        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
+                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
+
+        positives = torch.divide(positives, temp_weights)
+
         # select only the negatives the negatives
         negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
 
@@ -247,10 +253,6 @@ class SeqVAE(BaseAE):
 
         # Apply temperature parameter
         logits = logits / temperature
-
-        # Apply dt-based temp adjustments
-        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
-                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
 
         logits = torch.multiply(temp_weights, logits)
 
@@ -285,6 +287,12 @@ class SeqVAE(BaseAE):
         # select and combine multiple positives
         positives_euc = dist_matrix[labels.bool()].view(labels.shape[0], -1)
 
+        # Apply dt-based temp adjustments
+        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
+                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
+
+        positives_euc = torch.divide(positives_euc, temp_weights)
+
         # select only the negatives the negatives
         negatives_euc = dist_matrix[~labels.bool()].view(dist_matrix.shape[0], -1)
 
@@ -296,11 +304,6 @@ class SeqVAE(BaseAE):
 
         # Apply temperature parameter
         distances_euc = -distances_euc / temperature
-
-        # Apply dt-based temp adjustments
-        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
-                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
-        distances_euc = torch.multiply(temp_weights, distances_euc)
 
         # initialize cross entropy loss
         loss_fun = torch.nn.CrossEntropyLoss()
