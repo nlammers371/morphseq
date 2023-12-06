@@ -19,7 +19,7 @@ class SeqVAEConfig(VAEConfig):
     """
 
     temperature: float = 1.0
-    zn_frac: float = 0.1
+    zn_frac: float = 0.2
     orth_flag: bool = True
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16  # number of layers to convolutional kernel
