@@ -583,7 +583,7 @@ class BaseTrainer:
             for inputs in self.eval_loader:
 
                 if self.model_name == "SeqVAE":
-                    inputs = self.get_sequential_pairs(inputs, "evaln")
+                    inputs = self.get_sequential_pairs(inputs, "eval")
 
                 inputs = self._set_inputs_to_device(inputs)
 
