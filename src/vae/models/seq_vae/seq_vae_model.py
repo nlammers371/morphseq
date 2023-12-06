@@ -248,6 +248,12 @@ class SeqVAE(BaseAE):
         # Apply temperature parameter
         logits = logits / temperature
 
+        # Apply dt-based temp adjustments
+        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
+                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
+
+        logits = torch.multiply(temp_weights, logits)
+
         # initialize cross entropy loss
         loss_fun = torch.nn.CrossEntropyLoss()
 
@@ -255,7 +261,7 @@ class SeqVAE(BaseAE):
 
         return loss
 
-    def nt_xent_loss_euclidean(self, features, n_views=2):
+    def nt_xent_loss_euclidean(self, features, temp_weights, n_views=2):
 
         temperature = self.temperature
 
@@ -290,6 +296,11 @@ class SeqVAE(BaseAE):
 
         # Apply temperature parameter
         distances_euc = -distances_euc / temperature
+
+        # Apply dt-based temp adjustments
+        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
+                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
+        distances_euc = torch.multiply(temp_weights, distances_euc)
 
         # initialize cross entropy loss
         loss_fun = torch.nn.CrossEntropyLoss()
