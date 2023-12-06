@@ -22,6 +22,93 @@ import json
 from typing import Any, Dict, List, Optional, Union
 import ntpath
 
+def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False, skip_figures_flag=False, batch_size=64):
+    mode_vec = ["train", "eval", "test"]
+
+    # set paths
+    metadata_path = os.path.join(root, 'metadata', '')
+    train_dir = os.path.join(root, "training_data", train_name, '')
+
+    # get list of models in this folder
+    models_to_assess = None  #["MetricVAE_training_2023-10-27_09-29-34"]
+
+    if models_to_assess is None:
+        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*VAE*')))
+
+    for m_iter, model_name in enumerate(models_to_assess):
+
+        embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+        # strip down the full dataset
+        embryo_df = embryo_metadata_df[
+            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
+             "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
+        embryo_df = embryo_df.reset_index()
+
+        # set path to output dir
+        output_dir = os.path.join(train_dir, architecture_name, model_name)
+
+        # initialize model assessment
+        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag, device = initialize_assessment(train_dir, output_dir, batch_size=batch_size)
+
+        ########
+        #  Skip if no model data or a previous assessment output exists and overwrite_flag==False
+        if continue_flag:
+            continue
+
+        if not os.path.isdir(figure_path):
+            os.makedirs(figure_path)
+
+        prev_run_flag = os.path.isfile(os.path.join(figure_path, "embryo_stats_df.csv"))
+
+        if prev_run_flag and overwrite_flag is False:
+            print("Results already exist for: " + figure_path + ". Skipping.")
+            continue
+
+        print("Evaluating model " + model_name + f'({m_iter+1:02} of ' + str(len(models_to_assess)) + ')')
+
+        np.random.seed(123)
+
+        embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
+                                                 data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
+                                                 device=device, skip_figures=skip_figures_flag)
+
+
+        # Calculate UMAPs
+        embryo_df = calculate_UMAPs(embryo_df)
+        print(f"Saving data...")
+        #save latent arrays and UMAP
+        embryo_df = embryo_df.iloc[:, 1:]
+        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+
+        # make a narrower DF with just the UMAP cols and key metadata
+        emb_cols = embryo_df.columns
+        umap_cols = [col for col in emb_cols if "UMAP" in col]
+        umap_df = embryo_df[
+            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
+             "recon_mse"] + umap_cols].copy()
+        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
+
+        ############################################
+        # Compare latent encodings of contrastive pairs
+        if "z_mu_n_00" in embryo_df.columns:
+            metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
+                                                                 device=device, batch_size=batch_size)#,
+                                                                 # n_contrastive_samples=n_contrastive_samples)
+            metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
+
+        # #########################################
+        # Test how predictive latent space is of developmental age
+        age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
+
+        age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
+        perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
+
+        meta_df["model_name"] = model_name
+        meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
+
+        print("Done.")
+
+
 def clean_path_names(path_list):
     path_list_out = []
     for path in path_list:
@@ -229,7 +316,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
                         plt.tight_layout(pad=0.)
 
                         plt.savefig(
-                            os.path.join(image_path, y[b] + f'_loss{int(np.round(recon_loss[b], 0)):05}.tiff'))
+                            os.path.join(image_path, y[b] + f'_loss{int(np.round(recon_loss[b], 0)):05}.jpg'))
                         plt.close()
 
                         fig_counter += 1
@@ -277,7 +364,7 @@ def calculate_UMAPs(embryo_df):
 
     return embryo_df
 
-def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, device, mode_vec=None):
+def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, device, batch_size, mode_vec=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
@@ -490,7 +577,7 @@ def bio_prediction_wrapper(embryo_df, meta_df):
 
     return age_df, perturbation_df, meta_df
 
-def initialize_assessment(train_dir, output_dir, mode_vec=None):
+def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
@@ -591,101 +678,22 @@ def initialize_assessment(train_dir, output_dir, mode_vec=None):
     
     return trained_model, meta_df, figure_path, data_sampler_vec, continue_flag, device
 
+
+
 if __name__ == "__main__":
 
-    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    root = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    # root = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\"
 
     batch_size = 64  # batch size to use generating latent encodings and image reconstructions
     overwrite_flag = True
     n_image_figures = 100  # make qualitative side-by-side reconstruction figures
-    n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
+    # n_contrastive_samples = 1000  # number of images to reconstruct for loss calc
     skip_figures_flag = False
-    train_name = "20231120_ds_small"
-    architecture_name = "MetricVAE_z100_ne003_refactor_test"
+    train_name = "20231106_ds"
+    architecture_name = "MetricVAE_z100_ne100_beta_temp_sweep"
     mode_vec = ["train", "eval", "test"]
 
-    # set paths
-    metadata_path = os.path.join(root, 'metadata', '')
-    train_dir = os.path.join(root, "training_data", train_name, '')
-
-    # get list of models in this folder
-    models_to_assess = None  #["MetricVAE_training_2023-10-27_09-29-34"]
-
-    if models_to_assess is None:
-        models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*VAE*')))
-
-    for m_iter, model_name in enumerate(models_to_assess):
-
-        embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
-        # strip down the full dataset
-        embryo_df = embryo_metadata_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
-             "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        embryo_df = embryo_df.reset_index()
-
-        # set path to output dir
-        output_dir = os.path.join(train_dir, architecture_name, model_name)
-
-        # initialize model assessment
-        trained_model, meta_df, figure_path, data_sampler_vec, continue_flag, device = initialize_assessment(train_dir, output_dir)
-
-        ########
-        #  Skip if no model data or a previous assessment output exists and overwrite_flag==False
-        if continue_flag:
-            continue
-
-        if not os.path.isdir(figure_path):
-            os.makedirs(figure_path)
-
-        prev_run_flag = os.path.isfile(os.path.join(figure_path, "embryo_stats_df.csv"))
-
-        if prev_run_flag and overwrite_flag is False:
-            print("Results already exist for: " + figure_path + ". Skipping.")
-            continue
-
-        print("Evaluating model " + model_name + f'({m_iter+1:02} of ' + str(len(models_to_assess)) + ')')
-
-        np.random.seed(123)
-
-        embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
-                                                 data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
-                                                 device=device, skip_figures=skip_figures_flag)
-
-
-        # Calculate UMAPs
-        embryo_df = calculate_UMAPs(embryo_df)
-        print(f"Saving data...")
-        #save latent arrays and UMAP
-        embryo_df = embryo_df.iloc[:, 1:]
-        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
-
-        # make a narrower DF with just the UMAP cols and key metadata
-        emb_cols = embryo_df.columns
-        umap_cols = [col for col in emb_cols if "UMAP" in col]
-        umap_df = embryo_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
-             "recon_mse"] + umap_cols].copy()
-        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
-
-        ############################################
-        # Compare latent encodings of contrastive pairs
-        if "z_mu_n_00" in embryo_df.columns:
-            metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
-                                                                 device=device)#,
-                                                                 # n_contrastive_samples=n_contrastive_samples)
-            metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
-
-        # #########################################
-        # Test how predictive latent space is of developmental age
-        age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
-
-        age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
-        perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
-
-        meta_df["model_name"] = model_name
-        meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
-
-        print("Done.")
+    
 
 
