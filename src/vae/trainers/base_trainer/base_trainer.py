@@ -583,7 +583,7 @@ class BaseTrainer:
             for inputs in self.eval_loader:
 
                 if self.model_name == "SeqVAE":
-                    inputs = self.get_sequential_pairs(inputs, "evaln")
+                    inputs = self.get_sequential_pairs(inputs, "eval")
 
                 inputs = self._set_inputs_to_device(inputs)
 
@@ -770,6 +770,8 @@ class BaseTrainer:
         self_target = self.model_config.self_target_prob
         other_age_penalty = self.model_config.other_age_penalty
 
+        max_val = 1 + other_age_penalty + time_window
+
         seq_key = self.model_config.seq_key
         seq_key = seq_key.loc[seq_key["train_cat"] == mode]
         seq_key = seq_key.reset_index()
@@ -826,7 +828,7 @@ class BaseTrainer:
             input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
 
         inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
-        inputs["hpf_deltas"] = torch.FloatTensor(pair_time_deltas)
+        inputs["hpf_deltas"] = torch.FloatTensor(pair_time_deltas) / max_val
 
         return inputs
 
