@@ -60,6 +60,7 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             **model_args
         )
         # initialize reference dataset
+        print("Making lookup dictionary for sequential pairs...")
         model_config.make_dataset()
 
         # initialize contrastive data loader
