@@ -60,6 +60,7 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             **model_args
         )
         # initialize reference dataset
+        print("Making lookup dictionary for sequential pairs...")
         model_config.make_dataset()
 
         # initialize contrastive data loader
@@ -138,24 +139,20 @@ if __name__ == "__main__":
     #####################
     # Required arguments
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
-    train_folder = "20231120_ds_small"
+    train_folder = "20231106_ds"
     train_dir = os.path.join(root, "training_data", train_folder)
     model_type = "SeqVAE"
 
     #####################
     # Optional arguments
-    train_suffix = "run_test"
+    train_suffix = "speed_test"
     temperature = 0.0001
     batch_size = 64
-    n_epochs = 5
+    n_epochs = 2
     latent_dim = 100
     n_conv_layers = 5
     distance_metric = "euclidean"
     input_dim = (1, 288, 128)
-
-    # for z in z_dim_vec:
-    #     for d in depth_vec:
-    #         for t in temperature_vec:
 
     output_dir = train_vae(root, train_folder, train_suffix=train_suffix, model_type=model_type,
                            latent_dim=latent_dim, batch_size=batch_size,
