@@ -49,6 +49,118 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
     seq_key["Index"] = seq_key.index
 
     return seq_key
+
+def get_sequential_pairs(seq_key, time_window, self_target, other_age_penalty, mode_vec=None):
+
+    if mode_vec is None:
+        mode_vec = ["train", "eval", "test"]
+
+    seq_pair_dict = dict({})
+
+    for m, mode in enumerate(mode_vec):
+
+        seq_key_mode = seq_key.loc[seq_key["train_cat"] == mode].copy()
+        seq_key_mode = seq_key_mode.reset_index()
+        # Strip paths to get data snip_ids
+        # input_paths = list(inputs["label"][0])
+        snip_id_list = seq_key_mode["snip_id"].to_numpy()
+
+        # time_window = self.model_config.time_window
+        # self_target = self.model_config.self_target_prob
+        # other_age_penalty = self.model_config.other_age_penalty
+
+        # max_val = 1 + other_age_penalty + time_window
+
+        # seq_key = self.model_config.seq_key
+
+        # seq_key = seq_key.reset_index()
+        # seq_key["Index"] = seq_key.index
+
+        pert_id_vec = seq_key_mode["perturbation_id"].to_numpy()
+        e_id_vec = seq_key_mode["embryo_id"].to_numpy()
+        age_hpf_vec = seq_key_mode["predicted_stage_hpf"].to_numpy()
+
+        # indices_to_load = []
+        # pair_time_deltas = []
+        seq_key_dict_mode = dict({})
+        for s in range(len(snip_id_list)):
+            snip_i = np.where(seq_key_mode["snip_id"] == snip_id_list[s])[0][0]
+            # self_entry = pd.DataFrame(seq_key.iloc[snip_i, :]).transpose().reset_index()
+            age_hpf = seq_key_mode.loc[snip_i, "predicted_stage_hpf"]
+            embryo_id = seq_key_mode.loc[snip_i, "embryo_id"]
+            pert_id = seq_key_mode.loc[snip_i, "perturbation_id"]
+
+            #
+            # # find valid self comparisons
+            # seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
+            # self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
+            # valid_self_indices = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "Index"].to_numpy()
+
+            # find valid "other" comparisons (same class different embryo)
+            # seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner",
+            #                               on=["perturbation_id", "train_cat"])
+            # other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
+            age_deltas = np.abs(age_hpf_vec - age_hpf)
+            valid_all_indices = np.where((pert_id_vec == pert_id) & (age_deltas <= time_window))[0]
+            valid_self_sub_indices = np.where((e_id_vec[valid_all_indices] == embryo_id))[0]
+
+            # get overall and class-specific indices for each option. Assign weights
+            other_target = 1 - self_target
+            self_frac = len(valid_self_sub_indices) / (len(valid_all_indices))
+            self_weight = self_target / self_frac
+            if self_frac < 1.0:
+                other_weight = other_target / (1 - self_frac)
+            else:
+                other_weight = np.Inf
+
+            # generate weight vector
+            option_weights = np.ones(valid_all_indices.shape)*other_weight
+            option_weights[valid_self_sub_indices] = self_weight
+            option_weights = option_weights / np.sum(option_weights)
+
+            # generate time delta vector
+            age_delta_vec = age_deltas[valid_all_indices] + 1 + other_age_penalty
+            age_delta_vec[valid_self_sub_indices] = age_delta_vec[valid_self_sub_indices] - other_age_penalty
+
+            # option_weights = np.ones(valid_all_indices.shape) #np.asarray(
+            #     # [self_weight if (i in valid_self_indices) else other_weight for i in valid_all_indices])
+            # option_weights = option_weights / np.sum(option_weights)
+            # age_weight_factors = age_deltas[valid_all_indices] + 1
+            # extra_weight = 1
+            # if (np.random.rand() <= self_target) or (len(valid_other_indices) == 0):
+            #     seq_pair_index = np.random.choice(range(len(valid_self_indices)), 1, replace=False)[0]
+            # else:
+            #     seq_pair_index = np.random.choice(range(len(valid_other_indices)), 1, replace=False)[0]
+            #     extra_weight += other_age_penalty
+            # randomly select an index for comparison
+            # seq_pair_ind = np.random.choice(range(len(valid_all_indices)), 1, replace=False, p=option_weights)
+            # load_index = valid_all_indices[seq_pair_ind[0]]
+            snip_dict = dict({})
+            snip_dict["seq_pair_indices"] = valid_all_indices
+            snip_dict["seq_pair_weights"] = option_weights
+            snip_dict["seq_pair_deltas"] = age_delta_vec
+
+            seq_key_dict_mode[snip_id_list[s]] = snip_dict
+            # indices_to_load.append(seq_pair_index)
+            # pair_time_deltas.append(age_deltas[seq_pair_index] + extra_weight)
+            # if load_index in valid_self_indices:
+            #     pair_time_deltas.append(age_weight_factors[seq_pair_ind[0]])
+            # else:
+            #     pair_time_deltas.append(age_weight_factors[seq_pair_ind[0]] + other_age_penalty)
+
+        seq_pair_dict[mode] = seq_key_dict_mode
+
+        # # load input pairs into memory
+        # input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
+        #                                             inputs["data"].shape[2], inputs["data"].shape[3]))
+        # input_pairs = torch.empty(input_init.shape)
+        # # for i, ind in enumerate(indices_to_load):
+        # #     input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
+        #
+        # inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
+        # inputs["hpf_deltas"] = torch.ones((input_pairs.shape[0],)) #torch.FloatTensor(pair_time_deltas) / max_val
+
+    return seq_pair_dict
     # seq_key["Index"] = seq_key.index
     # # now, for each image compile a list of valid comparisons and corresponding delta T's
     # seq_key_dict = dict({})

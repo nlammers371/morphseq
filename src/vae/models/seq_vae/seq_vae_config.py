@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 from ..vae import VAEConfig
 import pandas as pd
-from src.build.make_training_key import make_seq_key
+from src.build.make_training_key import make_seq_key, get_sequential_pairs
 
 @dataclass
 class SeqVAEConfig(VAEConfig):
@@ -76,9 +76,16 @@ class SeqVAEConfig(VAEConfig):
         """
         Load the dataset from the specified file path using pandas.
         """
+        # get seq key
         seq_key = make_seq_key(self.data_root, self.train_folder)
 
+        # use this to get dictionaries for valid pairs for each snip ID
+        # seq_key_dict = get_sequential_pairs(seq_key, time_window=self.time_window,
+        #                               self_target=self.self_target_prob,
+        #                               other_age_penalty=self.other_age_penalty)
+
         self.seq_key = seq_key
+        # self.seq_key_dict = seq_key_dict
 
 
 
