@@ -19,8 +19,8 @@ if __name__ == "__main__":
 
     #####################
     # Optional arguments
-    train_suffix = "quick_test"
-    temperature_vec = [0.0001, 0.01, 1]
+    train_suffix = "temperature_sweep"
+    temperature_vec = [0.0001, 0.001, 0.01, 0.1, 1]
     batch_size = 64
     n_epochs = 250
     beta_vec = [1] #[0.01, 0.1, 1]
@@ -31,7 +31,6 @@ if __name__ == "__main__":
 
     for beta in beta_vec:
         for temperature in temperature_vec:
-
 
             output_dir = train_vae(root, train_folder, train_suffix=train_suffix, model_type=model_type,
                                    latent_dim=latent_dim, batch_size=batch_size, beta=beta,
