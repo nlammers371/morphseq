@@ -185,6 +185,11 @@ class AutoConfig(BaseConfig):
 
             model_config = MetricVAEConfig.from_json_file(json_path)
 
+        elif config_name == "SeqVAEConfig":
+            from ..seq_vae import SeqVAEConfig
+
+            model_config = SeqVAEConfig.from_json_file(json_path)
+
         else:
             raise NameError(
                 "Cannot reload automatically the model configuration... "

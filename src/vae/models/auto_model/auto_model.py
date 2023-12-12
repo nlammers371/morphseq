@@ -4,7 +4,7 @@ import os
 
 import torch.nn as nn
 
-from ..base.base_utils import hf_hub_is_available
+from src.vae.models.base.base_utils import hf_hub_is_available
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -198,6 +198,11 @@ class AutoModel(nn.Module):
             from ..metric_vae import MetricVAE
 
             model = MetricVAE.load_from_folder(dir_path=dir_path)
+
+        elif model_name == "SeqVAEConfig":
+            from ..seq_vae import SeqVAE
+
+            model = SeqVAE.load_from_folder(dir_path=dir_path)
 
         else:
             raise NameError(
