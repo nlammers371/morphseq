@@ -821,7 +821,6 @@ class BaseTrainer:
             pert_id = seq_key.loc[snip_i, "perturbation_id"]
 
 
-            #
             # # find valid self comparisons
             # seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
             # self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
