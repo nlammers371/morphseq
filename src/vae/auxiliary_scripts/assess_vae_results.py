@@ -288,7 +288,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             zm_array = np.asarray(encoder_output[0].detach().cpu())
             zs_array = np.asarray(encoder_output[1].detach().cpu())
             for z in range(trained_model.latent_dim):
-                if trained_model.model_name == "MetricVAE":
+                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
                     if z in trained_model.nuisance_indices:
                         embryo_df.loc[df_ind_vec, f"z_mu_n_{z:02}"] = zm_array[:, z]
                         embryo_df.loc[df_ind_vec, f"z_sigma_n_{z:02}"] = zs_array[:, z]
@@ -504,7 +504,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
     meta_df["cos_all_mean_rand"] = np.mean(metric_df_out["cos_all_rand"])
     meta_df["euc_all_mean_rand"] = np.mean(metric_df_out["euc_all_rand"])
 
-    if trained_model.model_name == "MetricVAE":
+    if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
         meta_df["cos_bio_mean"] = np.mean(metric_df_out["cos_bio"])
         meta_df["euc_bio_mean"] = np.mean(metric_df_out["euc_bio"])
         meta_df["cos_bio_mean_rand"] = np.mean(metric_df_out["cos_bio_rand"])
