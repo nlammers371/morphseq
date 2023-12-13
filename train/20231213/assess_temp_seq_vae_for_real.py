@@ -11,4 +11,8 @@ train_name = "20231106_ds"
 architecture_name = "SeqVAE_z100_ne250_temperature_sweep_v2"
 # mode_vec = ["train", "eval", "test"]
 
-assess_vae_results(root, train_name, architecture_name, n_image_figures=n_image_figures, overwrite_flag=True, batch_size=64)
+models_to_assess = ["SeqVAE_training_2023-12-12_23-56-02"]
+
+assess_vae_results(root, train_name, architecture_name, n_image_figures=n_image_figures,
+                   overwrite_flag=True, batch_size=64, models_to_assess=models_to_assess)
+
