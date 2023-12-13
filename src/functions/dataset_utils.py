@@ -32,9 +32,7 @@ class MyCustomDataset(datasets.ImageFolder):
                 data=X
             )
         else:
-            # path_str = path_leaf(self.samples[index])
-            # path_str = path_str[:-4]
-            return DatasetOutput(data=X, label=self.samples[index])
+            return DatasetOutput(data=X, label=self.samples[index], index=index)
 
 # View generation class used for contrastive training
 class ContrastiveLearningViewGenerator(object):
@@ -43,9 +41,6 @@ class ContrastiveLearningViewGenerator(object):
     def __init__(self, base_transform, n_views=2):
         self.base_transform = base_transform
         self.n_views = n_views
-
-    # def __call__(self, x):
-    #     return [self.base_transform(x) for i in range(self.n_views)]
 
     def __call__(self, x):
         temp_list = []

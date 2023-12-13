@@ -22,7 +22,8 @@ import json
 from typing import Any, Dict, List, Optional, Union
 import ntpath
 
-def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False, skip_figures_flag=False, batch_size=64):
+def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
+                       skip_figures_flag=False, batch_size=64, models_to_assess=None):
     mode_vec = ["train", "eval", "test"]
 
     # set paths
@@ -30,8 +31,6 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
     train_dir = os.path.join(root, "training_data", train_name, '')
 
     # get list of models in this folder
-    models_to_assess = None  #["MetricVAE_training_2023-10-27_09-29-34"]
-
     if models_to_assess is None:
         models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*VAE*')))
 
@@ -101,7 +100,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
 
         age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
-        perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
+        # perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
 
         meta_df["model_name"] = model_name
         meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
@@ -227,7 +226,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
     new_cols = []
     for n in range(trained_model.latent_dim):
 
-        if trained_model.model_name == "MetricVAE":
+        if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
             if n in trained_model.nuisance_indices:
                 new_cols.append(f"z_mu_n_{n:02}")
                 new_cols.append(f"z_sigma_n_{n:02}")
@@ -288,7 +287,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             zm_array = np.asarray(encoder_output[0].detach().cpu())
             zs_array = np.asarray(encoder_output[1].detach().cpu())
             for z in range(trained_model.latent_dim):
-                if trained_model.model_name == "MetricVAE":
+                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
                     if z in trained_model.nuisance_indices:
                         embryo_df.loc[df_ind_vec, f"z_mu_n_{z:02}"] = zm_array[:, z]
                         embryo_df.loc[df_ind_vec, f"z_sigma_n_{z:02}"] = zs_array[:, z]
@@ -449,7 +448,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
             metric_df_temp.loc[x.shape[0]:, "cos_all_rand"] = cos_d_all_sh
 
             euc_d_all_sh = np.diag(euclidean_distances(mu0, mu1[shuffle_array, :]))
-            metric_df_temp.loc[:x.shape[0] - 1, "euc_all)rand"] = euc_d_all_sh / latent_norm_factor
+            metric_df_temp.loc[:x.shape[0] - 1, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
             metric_df_temp.loc[x.shape[0]:, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
 
             bio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_b_" in z_col_list[i]])
@@ -457,6 +456,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
             if len(bio_indices) > 0:
                 n_bio = np.sqrt(len(bio_indices))
                 n_nbio = np.sqrt(len(nbio_indices))
+
                 # biological partition
                 cos_d_bio = np.diag(cosine_similarity(mu0[:, bio_indices], mu1[:, bio_indices]))
                 metric_df_temp.loc[:x.shape[0] - 1, "cos_bio"] = cos_d_bio
@@ -504,7 +504,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
     meta_df["cos_all_mean_rand"] = np.mean(metric_df_out["cos_all_rand"])
     meta_df["euc_all_mean_rand"] = np.mean(metric_df_out["euc_all_rand"])
 
-    if trained_model.model_name == "MetricVAE":
+    if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
         meta_df["cos_bio_mean"] = np.mean(metric_df_out["cos_bio"])
         meta_df["euc_bio_mean"] = np.mean(metric_df_out["euc_bio"])
         meta_df["cos_bio_mean_rand"] = np.mean(metric_df_out["cos_bio_rand"])
@@ -549,31 +549,32 @@ def bio_prediction_wrapper(embryo_df, meta_df):
         meta_df["stage_R2_nonlin_nbio"] = y_score_nonlin_n
         meta_df["stage_R2_lin_nbio"] = y_score_lin_n
 
-    accuracy_nonlin, accuracy_lin, perturbation_df = get_pert_class_predictions(embryo_df, mu_indices)
-    meta_df["perturbation_acc_nonlin_all"] = accuracy_nonlin
-    meta_df["perturbation_acc_lin_all"] = accuracy_lin
+    # accuracy_nonlin, accuracy_lin, perturbation_df = get_pert_class_predictions(embryo_df, mu_indices)
+    # meta_df["perturbation_acc_nonlin_all"] = accuracy_nonlin
+    # meta_df["perturbation_acc_lin_all"] = accuracy_lin
 
-    if len(zmb_indices) > 0:
-        accuracy_nonlin_n, accuracy_lin_n, perturbation_df_n = get_pert_class_predictions(embryo_df, zmn_indices)
-        accuracy_nonlin_b, accuracy_lin_b, perturbation_df_b = get_pert_class_predictions(embryo_df, zmb_indices)
-
-        # subset
-        perturbation_df_n = perturbation_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-        perturbation_df_n = perturbation_df_n.rename(
-            columns={"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
-
-        perturbation_df_b = perturbation_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-        perturbation_df_b = perturbation_df_b.rename(
-            columns={"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
-
-        perturbation_df = perturbation_df.merge(perturbation_df_n, how="left", on="snip_id")
-        perturbation_df = perturbation_df.merge(perturbation_df_b, how="left", on="snip_id")
-
-        meta_df["perturbation_acc_nonlin_bio"] = accuracy_nonlin_b
-        meta_df["perturbation_acc_lin_bio"] = accuracy_lin_b
-
-        meta_df["perturbation_acc_nonlin_nbio"] = accuracy_nonlin_n
-        meta_df["perturbation_acc_lin_nbio"] = accuracy_lin_n
+    # if len(zmb_indices) > 0:
+        # accuracy_nonlin_n, accuracy_lin_n, perturbation_df_n = get_pert_class_predictions(embryo_df, zmn_indices)
+        # accuracy_nonlin_b, accuracy_lin_b, perturbation_df_b = get_pert_class_predictions(embryo_df, zmb_indices)
+        #
+        # # subset
+        # perturbation_df_n = perturbation_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+        # perturbation_df_n = perturbation_df_n.rename(
+        #     columns={"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
+        #
+        # perturbation_df_b = perturbation_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+        # perturbation_df_b = perturbation_df_b.rename(
+        #     columns={"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
+        #
+        # perturbation_df = perturbation_df.merge(perturbation_df_n, how="left", on="snip_id")
+        # perturbation_df = perturbation_df.merge(perturbation_df_b, how="left", on="snip_id")
+        #
+        # meta_df["perturbation_acc_nonlin_bio"] = accuracy_nonlin_b
+        # meta_df["perturbation_acc_lin_bio"] = accuracy_lin_b
+        #
+        # meta_df["perturbation_acc_nonlin_nbio"] = accuracy_nonlin_n
+        # meta_df["perturbation_acc_lin_nbio"] = accuracy_lin_n
+    perturbation_df = None
 
     return age_df, perturbation_df, meta_df
 

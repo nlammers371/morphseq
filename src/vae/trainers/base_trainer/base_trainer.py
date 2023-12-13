@@ -792,80 +792,53 @@ class BaseTrainer:
         return inputs
 
     def get_sequential_pairs(self, inputs, mode):
-        # # Strip paths to get data snip_ids
-        input_paths = list(inputs["label"][0])
-        snip_id_list = [path_leaf(pth)[:-4] for pth in input_paths]
+        import time
+
+        # get image indices
+        input_indices = np.asarray(inputs["index"])
+
+        seq_key = self.model_config.seq_key
+        seq_key = seq_key.loc[seq_key["train_cat"] == mode]
+        seq_key = seq_key.reset_index()
 
         time_window = self.model_config.time_window
         self_target = self.model_config.self_target_prob
         other_age_penalty = self.model_config.other_age_penalty
 
-        # max_val = 1 + other_age_penalty + time_window
+        pert_id_vec = seq_key["perturbation_id"].to_numpy()[:, np.newaxis]
+        pert_id_input = pert_id_vec[input_indices]
+        e_id_vec = seq_key["embryo_id_num"].to_numpy()[:, np.newaxis]
+        e_id_input = e_id_vec[input_indices]
+        age_hpf_vec = seq_key["predicted_stage_hpf"].to_numpy()[:, np.newaxis]
+        age_hpf_input = age_hpf_vec[input_indices]
 
-        seq_key = self.model_config.seq_key
-        seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-        seq_key = seq_key.reset_index()
-        seq_key["Index"] = seq_key.index
+        pert_match_array = pert_id_vec == pert_id_input.T
+        e_match_array = e_id_vec == e_id_input.T
+        age_delta_array = age_hpf_vec - age_hpf_input.T
+        age_match_array = np.abs(age_delta_array) <= time_window
 
-        pert_id_vec = seq_key["perturbation_id"].to_numpy()
-        e_id_vec = seq_key["embryo_id"].to_numpy()
-        age_hpf_vec = seq_key["predicted_stage_hpf"].to_numpy()
+        self_option_array = e_match_array & age_match_array
+        other_option_array = ~e_match_array & age_match_array & pert_match_array
 
         indices_to_load = []
         pair_time_deltas = []
-        for s in range(len(snip_id_list)):
-            snip_i = np.where(seq_key["snip_id"] == snip_id_list[s])[0][0]
-            # self_entry = pd.DataFrame(seq_key.iloc[snip_i, :]).transpose().reset_index()
-            age_hpf = seq_key.loc[snip_i, "predicted_stage_hpf"]
-            embryo_id = seq_key.loc[snip_i, "embryo_id"]
-            pert_id = seq_key.loc[snip_i, "perturbation_id"]
-
-
-            # # find valid self comparisons
-            # seq_key_self = seq_key.merge(self_entry["embryo_id"], how="inner", on=["embryo_id"])
-            # self_age_deltas = np.abs(seq_key_self["predicted_stage_hpf"].to_numpy() - age_hpf)
-            # valid_self_indices = seq_key_self.loc[np.where(self_age_deltas <= time_window)[0], "Index"].to_numpy()
-
-            # find valid "other" comparisons (same class different embryo)
-            # seq_key_other = seq_key.merge(self_entry[["perturbation_id", "train_cat"]], how="inner",
-            #                               on=["perturbation_id", "train_cat"])
-            # other_age_deltas = np.abs(seq_key_other["predicted_stage_hpf"].to_numpy() - age_hpf)
-            age_deltas = np.abs(age_hpf_vec - age_hpf)
-            valid_other_indices = np.where((pert_id_vec == pert_id) & (age_deltas <= time_window) & (e_id_vec != embryo_id))[0]
-            valid_self_indices = np.where((e_id_vec == embryo_id) & (age_deltas <= time_window))[0]
-
-            # get overall and class-specific indices for each option. Assign weights
-            # other_target = 1 - self_target
-            # self_frac = len(valid_self_indices) / (len(valid_all_indices))
-            # self_weight = self_target / self_frac
-            # if self_frac < 1.0:
-            #     other_weight = other_target / (1 - self_frac)
-            # else:
-            #     other_weight = np.Inf
-
-            # option_weights = np.ones(valid_all_indices.shape) #np.asarray(
-            #     # [self_weight if (i in valid_self_indices) else other_weight for i in valid_all_indices])
-            # option_weights = option_weights / np.sum(option_weights)
-            # age_weight_factors = age_deltas[valid_all_indices] + 1
+        for i in range(len(input_indices)):
             extra_weight = 1
-            if (np.random.rand() <= self_target) or (len(valid_other_indices) == 0):
-                seq_pair_index = np.random.choice(range(len(valid_self_indices)), 1, replace=False)[0]
+            if (np.random.rand() <= self_target) or (np.sum(other_option_array[:, i]) == 0):
+                options = np.nonzero(self_option_array[:, i])[0]
+                seq_pair_index = np.random.choice(options, 1, replace=False)[0]
             else:
-                seq_pair_index = np.random.choice(range(len(valid_other_indices)), 1, replace=False)[0]
+                options = np.nonzero(other_option_array[:, i])[0]
+                seq_pair_index = np.random.choice(options, 1, replace=False)[0]
                 extra_weight += other_age_penalty
-            # randomly select an index for comparison
-            # seq_pair_ind = np.random.choice(range(len(valid_all_indices)), 1, replace=False, p=option_weights)
-            # load_index = valid_all_indices[seq_pair_ind[0]]
+
             indices_to_load.append(seq_pair_index)
-            pair_time_deltas.append(age_deltas[seq_pair_index] + extra_weight)
-            # if load_index in valid_self_indices:
-            #     pair_time_deltas.append(age_weight_factors[seq_pair_ind[0]])
-            # else:
-            #     pair_time_deltas.append(age_weight_factors[seq_pair_ind[0]] + other_age_penalty)
+            pair_time_deltas.append(age_delta_array[seq_pair_index, i] + extra_weight)
 
         # load input pairs into memory
         input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
                                                     inputs["data"].shape[2], inputs["data"].shape[3]))
+
         input_pairs = torch.empty(input_init.shape)
         for i, ind in enumerate(indices_to_load):
             input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
