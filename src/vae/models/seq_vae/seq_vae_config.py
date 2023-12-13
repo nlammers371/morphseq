@@ -19,7 +19,7 @@ class SeqVAEConfig(VAEConfig):
     """
 
     temperature: float = 1.0
-    zn_frac: float = 0.2
+    zn_frac: float = 0.1
     orth_flag: bool = True
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16  # number of layers to convolutional kernel
@@ -30,7 +30,7 @@ class SeqVAEConfig(VAEConfig):
     train_folder: str = ''
 
     # set sequential hyperparameters
-    time_window: float = 2.0  # max permitted age difference between sequential pairs
+    time_window: float = 1.5  # max permitted age difference between sequential pairs
     self_target_prob: float = 0.5  # fraction of time to load self-pair vs. alternative comparison
     other_age_penalty: float = 1.0  # added similarity delta for cross-embryo comparisons
 
