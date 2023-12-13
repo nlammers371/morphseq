@@ -813,6 +813,10 @@ class BaseTrainer:
 
         indices_to_load = []
         pair_time_deltas = []
+
+
+
+        start_loop = time.time()
         for s in range(len(snip_id_list)):
             snip_i = np.where(seq_key["snip_id"] == snip_id_list[s])[0][0]
             # self_entry = pd.DataFrame(seq_key.iloc[snip_i, :]).transpose().reset_index()
@@ -850,19 +854,27 @@ class BaseTrainer:
             extra_weight = 1
             if (np.random.rand() <= self_target) or (len(valid_other_indices) == 0):
                 seq_pair_index = np.random.choice(range(len(valid_self_indices)), 1, replace=False)[0]
+
+                indices_to_load.append(valid_self_indices[seq_pair_index])
+
             else:
                 seq_pair_index = np.random.choice(range(len(valid_other_indices)), 1, replace=False)[0]
                 extra_weight += other_age_penalty
+
+                indices_to_load.append(valid_other_indices[seq_pair_index])
             # randomly select an index for comparison
             # seq_pair_ind = np.random.choice(range(len(valid_all_indices)), 1, replace=False, p=option_weights)
             # load_index = valid_all_indices[seq_pair_ind[0]]
-            indices_to_load.append(seq_pair_index)
+
             pair_time_deltas.append(age_deltas[seq_pair_index] + extra_weight)
             # if load_index in valid_self_indices:
             #     pair_time_deltas.append(age_weight_factors[seq_pair_ind[0]])
             # else:
             #     pair_time_deltas.append(age_weight_factors[seq_pair_ind[0]] + other_age_penalty)
 
+
+        end_loop = time.time()
+        print(end_loop - start_loop)
         # load input pairs into memory
         input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
                                                     inputs["data"].shape[2], inputs["data"].shape[3]))

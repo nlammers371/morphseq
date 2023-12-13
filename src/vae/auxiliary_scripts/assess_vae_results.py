@@ -22,7 +22,8 @@ import json
 from typing import Any, Dict, List, Optional, Union
 import ntpath
 
-def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False, skip_figures_flag=False, batch_size=64):
+def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
+                       skip_figures_flag=False, batch_size=64, models_to_assess=None):
     mode_vec = ["train", "eval", "test"]
 
     # set paths
@@ -30,8 +31,6 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
     train_dir = os.path.join(root, "training_data", train_name, '')
 
     # get list of models in this folder
-    models_to_assess = None  #["MetricVAE_training_2023-10-27_09-29-34"]
-
     if models_to_assess is None:
         models_to_assess = sorted(glob.glob(os.path.join(train_dir, architecture_name, '*VAE*')))
 
@@ -449,7 +448,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
             metric_df_temp.loc[x.shape[0]:, "cos_all_rand"] = cos_d_all_sh
 
             euc_d_all_sh = np.diag(euclidean_distances(mu0, mu1[shuffle_array, :]))
-            metric_df_temp.loc[:x.shape[0] - 1, "euc_all)rand"] = euc_d_all_sh / latent_norm_factor
+            metric_df_temp.loc[:x.shape[0] - 1, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
             metric_df_temp.loc[x.shape[0]:, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
 
             bio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_b_" in z_col_list[i]])
@@ -457,6 +456,7 @@ def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir
             if len(bio_indices) > 0:
                 n_bio = np.sqrt(len(bio_indices))
                 n_nbio = np.sqrt(len(nbio_indices))
+
                 # biological partition
                 cos_d_bio = np.diag(cosine_similarity(mu0[:, bio_indices], mu1[:, bio_indices]))
                 metric_df_temp.loc[:x.shape[0] - 1, "cos_bio"] = cos_d_bio
