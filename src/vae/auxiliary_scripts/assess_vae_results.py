@@ -101,7 +101,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
 
         age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
-        perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
+        # perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
 
         meta_df["model_name"] = model_name
         meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
@@ -227,7 +227,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
     new_cols = []
     for n in range(trained_model.latent_dim):
 
-        if trained_model.model_name == "MetricVAE":
+        if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
             if n in trained_model.nuisance_indices:
                 new_cols.append(f"z_mu_n_{n:02}")
                 new_cols.append(f"z_sigma_n_{n:02}")
@@ -549,31 +549,32 @@ def bio_prediction_wrapper(embryo_df, meta_df):
         meta_df["stage_R2_nonlin_nbio"] = y_score_nonlin_n
         meta_df["stage_R2_lin_nbio"] = y_score_lin_n
 
-    accuracy_nonlin, accuracy_lin, perturbation_df = get_pert_class_predictions(embryo_df, mu_indices)
-    meta_df["perturbation_acc_nonlin_all"] = accuracy_nonlin
-    meta_df["perturbation_acc_lin_all"] = accuracy_lin
+    # accuracy_nonlin, accuracy_lin, perturbation_df = get_pert_class_predictions(embryo_df, mu_indices)
+    # meta_df["perturbation_acc_nonlin_all"] = accuracy_nonlin
+    # meta_df["perturbation_acc_lin_all"] = accuracy_lin
 
-    if len(zmb_indices) > 0:
-        accuracy_nonlin_n, accuracy_lin_n, perturbation_df_n = get_pert_class_predictions(embryo_df, zmn_indices)
-        accuracy_nonlin_b, accuracy_lin_b, perturbation_df_b = get_pert_class_predictions(embryo_df, zmb_indices)
-
-        # subset
-        perturbation_df_n = perturbation_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-        perturbation_df_n = perturbation_df_n.rename(
-            columns={"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
-
-        perturbation_df_b = perturbation_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
-        perturbation_df_b = perturbation_df_b.rename(
-            columns={"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
-
-        perturbation_df = perturbation_df.merge(perturbation_df_n, how="left", on="snip_id")
-        perturbation_df = perturbation_df.merge(perturbation_df_b, how="left", on="snip_id")
-
-        meta_df["perturbation_acc_nonlin_bio"] = accuracy_nonlin_b
-        meta_df["perturbation_acc_lin_bio"] = accuracy_lin_b
-
-        meta_df["perturbation_acc_nonlin_nbio"] = accuracy_nonlin_n
-        meta_df["perturbation_acc_lin_nbio"] = accuracy_lin_n
+    # if len(zmb_indices) > 0:
+        # accuracy_nonlin_n, accuracy_lin_n, perturbation_df_n = get_pert_class_predictions(embryo_df, zmn_indices)
+        # accuracy_nonlin_b, accuracy_lin_b, perturbation_df_b = get_pert_class_predictions(embryo_df, zmb_indices)
+        #
+        # # subset
+        # perturbation_df_n = perturbation_df_n.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+        # perturbation_df_n = perturbation_df_n.rename(
+        #     columns={"class_linear_pd": "class_linear_pd_n", "class_nonlinear_pd": "class_nonlinear_pd_n"})
+        #
+        # perturbation_df_b = perturbation_df_b.loc[:, ["snip_id", "class_linear_pd", "class_nonlinear_pd"]]
+        # perturbation_df_b = perturbation_df_b.rename(
+        #     columns={"class_linear_pd": "class_linear_pd_b", "class_nonlinear_pd": "class_nonlinear_pd_b"})
+        #
+        # perturbation_df = perturbation_df.merge(perturbation_df_n, how="left", on="snip_id")
+        # perturbation_df = perturbation_df.merge(perturbation_df_b, how="left", on="snip_id")
+        #
+        # meta_df["perturbation_acc_nonlin_bio"] = accuracy_nonlin_b
+        # meta_df["perturbation_acc_lin_bio"] = accuracy_lin_b
+        #
+        # meta_df["perturbation_acc_nonlin_nbio"] = accuracy_nonlin_n
+        # meta_df["perturbation_acc_lin_nbio"] = accuracy_lin_n
+    perturbation_df = None
 
     return age_df, perturbation_df, meta_df
 
