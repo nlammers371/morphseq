@@ -46,7 +46,13 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
     emb_id_list = [snip_id[:-6] for snip_id in list(seq_key["snip_id"])]
     seq_key["embryo_id"] = emb_id_list
-    seq_key["Index"] = seq_key.index
+
+    # join on embryo ID variable for convenience
+    emb_u = np.unique(seq_key["embryo_id"].to_numpy())
+    emb_index = np.arange(len(emb_u))
+    emb_df = pd.DataFrame(emb_u, columns=["embryo_id"])
+    emb_df["embryo_id_num"] = emb_index
+    seq_key = seq_key.merge(emb_df, how="left", on="embryo_id")
 
     return seq_key
 
