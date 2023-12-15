@@ -13,7 +13,7 @@ from src.vae.pipelines.training import TrainingPipeline
 
 def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_suffix='', **kwargs):
 
-    training_keys = ["batch_size", "learning_rate"] # optional training config kywords
+    training_keys = ["batch_size", "learning_rate", "n_load_workers"]# optional training config kywords
     # model_keys = ["n_latent", "n_out_channels", "zn_frac", "depth", "nt_xent_temperature"]
     training_args = dict({})
     model_args = dict({})
@@ -22,6 +22,9 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             if key == "batch_size":
                 training_args["per_device_train_batch_size"] = value
                 training_args["per_device_eval_batch_size"] = value
+            elif key == "n_load_workers":
+                training_args["train_dataloader_num_workers"] = value
+                training_args["eval_dataloader_num_workers"] = value
             else:
                 training_args[key] = value
         else:
@@ -90,7 +93,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     # initialize training configuration
     config = BaseTrainerConfig(
         output_dir=output_dir,
-        num_epochs=n_epochs,
         **training_args
     )
 
