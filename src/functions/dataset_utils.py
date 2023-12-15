@@ -1,7 +1,7 @@
 from pythae.data.datasets import DatasetOutput
 from torchvision import datasets, transforms
 import torch
-
+from PIL import Image
 # define transforms
 # data_transform = transforms.Compose([
 #     transforms.Grayscale(num_output_channels=1),
@@ -26,6 +26,24 @@ class MyCustomDataset(datasets.ImageFolder):
 
     def __getitem__(self, index):
         X, Y = super().__getitem__(index)
+
+        if not self.return_name:
+            return DatasetOutput(
+                data=X
+            )
+        else:
+            return DatasetOutput(data=X, label=self.samples[index], index=index)
+
+class SeqPairDataset(datasets.ImageFolder):
+
+    def __init__(self, root, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+    def __getitem__(self, index):
+        X = Image.open(self.samples[index])
+        if self.transform:
+            X = self.transform(X)
 
         if not self.return_name:
             return DatasetOutput(
