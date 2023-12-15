@@ -761,35 +761,6 @@ class BaseTrainer:
         # save training config
         self.training_config.save_json(checkpoint_dir, "training_config")
 
-    def get_sequential_pairs_dict(self, inputs, mode):
-
-        # # Strip paths to get data snip_ids
-        input_paths = list(inputs["label"][0])
-        snip_id_list = [path_leaf(pth)[:-4] for pth in input_paths]
-
-        key_dict = self.model_config.seq_key_dict[mode]
-        indices_to_load = []
-        pair_time_deltas = []
-        for snip_id in snip_id_list:
-            seq_pair_indices = key_dict[snip_id]["seq_pair_indices"]
-            seq_pair_deltas = key_dict[snip_id]["seq_pair_deltas"]
-            seq_pair_weights = key_dict[snip_id]["seq_pair_weights"]
-
-            seq_pair_ind = np.random.choice(range(len(seq_pair_indices)), 1, replace=False, p=seq_pair_weights)[0]
-
-            indices_to_load.append(seq_pair_indices[seq_pair_ind])
-            pair_time_deltas.append(seq_pair_deltas[seq_pair_ind])
-
-        input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
-                                                    inputs["data"].shape[2], inputs["data"].shape[3]))
-        input_pairs = torch.empty(input_init.shape)
-        for i, ind in enumerate(indices_to_load):
-            input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
-
-        inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
-        inputs["hpf_deltas"] = torch.ones((input_pairs.shape[0],))  # torch.FloatTensor(pair_time_deltas) / max_val
-
-        return inputs
 
     def get_sequential_pairs(self, inputs, mode):
         import time
