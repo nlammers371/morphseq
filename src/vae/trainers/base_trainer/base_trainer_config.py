@@ -55,8 +55,8 @@ class BaseTrainerConfig(BaseConfig):
     per_device_train_batch_size: int = 64
     per_device_eval_batch_size: int = 64
     num_epochs: int = 100
-    train_dataloader_num_workers: int = 0
-    eval_dataloader_num_workers: int = 0
+    train_dataloader_num_workers: int = 4
+    eval_dataloader_num_workers: int = 4
     optimizer_cls: str = "Adam"
     optimizer_params: Union[dict, None] = None
     scheduler_cls: Union[str, None] = None
@@ -68,6 +68,7 @@ class BaseTrainerConfig(BaseConfig):
     keep_best_on_train: bool = False
     seed: int = 8
     no_cuda: bool = False
+    pin_memory: bool = True
     world_size: int = field(default=-1)
     local_rank: int = field(default=-1)
     rank: int = field(default=-1)
