@@ -584,8 +584,8 @@ class BaseTrainer:
             input_i = 0
             for inputs in self.eval_loader:
 
-                if self.model_name == "SeqVAE":
-                    inputs = self.get_sequential_pairs(inputs, "eval")
+                # if self.model_name == "SeqVAE":
+                #     inputs = self.get_sequential_pairs(inputs, "eval")
 
                 inputs = self._set_inputs_to_device(inputs)
 
@@ -657,8 +657,8 @@ class BaseTrainer:
         input_i = 0
         for inputs in self.train_loader:
 
-            if self.model_name == "SeqVAE":
-                inputs = self.get_sequential_pairs(inputs, "train")
+            # if self.model_name == "SeqVAE":
+            #     inputs = self.get_sequential_pairs(inputs, "train")
 
             inputs = self._set_inputs_to_device(inputs)
 
@@ -764,62 +764,62 @@ class BaseTrainer:
         self.training_config.save_json(checkpoint_dir, "training_config")
 
 
-    def get_sequential_pairs(self, inputs, mode):
-        import time
-
-        # get image indices
-        input_indices = np.asarray(inputs["index"])
-
-        seq_key = self.model_config.seq_key
-        seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-        seq_key = seq_key.reset_index()
-
-        time_window = self.model_config.time_window
-        self_target = self.model_config.self_target_prob
-        other_age_penalty = self.model_config.other_age_penalty
-
-        pert_id_vec = seq_key["perturbation_id"].to_numpy()[:, np.newaxis]
-        pert_id_input = pert_id_vec[input_indices]
-        e_id_vec = seq_key["embryo_id_num"].to_numpy()[:, np.newaxis]
-        e_id_input = e_id_vec[input_indices]
-        age_hpf_vec = seq_key["predicted_stage_hpf"].to_numpy()[:, np.newaxis]
-        age_hpf_input = age_hpf_vec[input_indices]
-
-        pert_match_array = pert_id_vec == pert_id_input.T
-        e_match_array = e_id_vec == e_id_input.T
-        age_delta_array = age_hpf_vec - age_hpf_input.T
-        age_match_array = np.abs(age_delta_array) <= time_window
-
-        self_option_array = e_match_array & age_match_array
-        other_option_array = ~e_match_array & age_match_array & pert_match_array
-
-        indices_to_load = []
-        pair_time_deltas = []
-        for i in range(len(input_indices)):
-            extra_weight = 1
-            if (np.random.rand() <= self_target) or (np.sum(other_option_array[:, i]) == 0):
-                options = np.nonzero(self_option_array[:, i])[0]
-                seq_pair_index = np.random.choice(options, 1, replace=False)[0]
-            else:
-                options = np.nonzero(other_option_array[:, i])[0]
-                seq_pair_index = np.random.choice(options, 1, replace=False)[0]
-                extra_weight += other_age_penalty
-
-            indices_to_load.append(seq_pair_index)
-            pair_time_deltas.append(age_delta_array[seq_pair_index, i] + extra_weight)
-
-        # load input pairs into memory
-        input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
-                                                    inputs["data"].shape[2], inputs["data"].shape[3]))
-
-        input_pairs = torch.empty(input_init.shape)
-        for i, ind in enumerate(indices_to_load):
-            input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
-
-        inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
-        inputs["hpf_deltas"] = torch.ones((input_pairs.shape[0],)) #torch.FloatTensor(pair_time_deltas) / max_val
-
-        return inputs
+    # def get_sequential_pairs(self, inputs, mode):
+    #     import time
+    #
+    #     # get image indices
+    #     input_indices = np.asarray(inputs["index"])
+    #
+    #     seq_key = self.model_config.seq_key
+    #     seq_key = seq_key.loc[seq_key["train_cat"] == mode]
+    #     seq_key = seq_key.reset_index()
+    #
+    #     time_window = self.model_config.time_window
+    #     self_target = self.model_config.self_target_prob
+    #     other_age_penalty = self.model_config.other_age_penalty
+    #
+    #     pert_id_vec = seq_key["perturbation_id"].to_numpy()[:, np.newaxis]
+    #     pert_id_input = pert_id_vec[input_indices]
+    #     e_id_vec = seq_key["embryo_id_num"].to_numpy()[:, np.newaxis]
+    #     e_id_input = e_id_vec[input_indices]
+    #     age_hpf_vec = seq_key["predicted_stage_hpf"].to_numpy()[:, np.newaxis]
+    #     age_hpf_input = age_hpf_vec[input_indices]
+    #
+    #     pert_match_array = pert_id_vec == pert_id_input.T
+    #     e_match_array = e_id_vec == e_id_input.T
+    #     age_delta_array = age_hpf_vec - age_hpf_input.T
+    #     age_match_array = np.abs(age_delta_array) <= time_window
+    #
+    #     self_option_array = e_match_array & age_match_array
+    #     other_option_array = ~e_match_array & age_match_array & pert_match_array
+    #
+    #     indices_to_load = []
+    #     pair_time_deltas = []
+    #     for i in range(len(input_indices)):
+    #         extra_weight = 1
+    #         if (np.random.rand() <= self_target) or (np.sum(other_option_array[:, i]) == 0):
+    #             options = np.nonzero(self_option_array[:, i])[0]
+    #             seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+    #         else:
+    #             options = np.nonzero(other_option_array[:, i])[0]
+    #             seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+    #             extra_weight += other_age_penalty
+    #
+    #         indices_to_load.append(seq_pair_index)
+    #         pair_time_deltas.append(age_delta_array[seq_pair_index, i] + extra_weight)
+    #
+    #     # load input pairs into memory
+    #     input_init = torch.reshape(inputs["data"], (inputs["data"].shape[0], 1, inputs["data"].shape[1],
+    #                                                 inputs["data"].shape[2], inputs["data"].shape[3]))
+    #
+    #     input_pairs = torch.empty(input_init.shape)
+    #     for i, ind in enumerate(indices_to_load):
+    #         input_pairs[i, 0, 0, :, :] = self.train_loader.dataset[ind]["data"]
+    #
+    #     inputs["data"] = torch.cat([input_init, input_pairs], dim=1)
+    #     inputs["hpf_deltas"] = torch.ones((input_pairs.shape[0],)) #torch.FloatTensor(pair_time_deltas) / max_val
+    #
+    #     return inputs
 
     def predict(self, model: BaseAE):
 
