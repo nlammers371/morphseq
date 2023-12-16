@@ -1,7 +1,8 @@
 from pythae.data.datasets import DatasetOutput
 from torchvision import datasets, transforms
 import torch
-
+from PIL import Image
+import numpy as np
 # define transforms
 # data_transform = transforms.Compose([
 #     transforms.Grayscale(num_output_channels=1),
@@ -33,6 +34,71 @@ class MyCustomDataset(datasets.ImageFolder):
             )
         else:
             return DatasetOutput(data=X, label=self.samples[index], index=index)
+
+class SeqPairDataset(datasets.ImageFolder):
+
+    def __init__(self, root, model_config, mode, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
+        self.model_config = model_config
+        self.mode = mode
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+    def __getitem__(self, index):
+        X = Image.open(self.samples[index][0])
+        if self.transform:
+            X = self.transform(X)
+
+
+        key_dict = self.model_config.seq_key_dict[self.mode]
+
+        pert_id_vec = key_dict["pert_id_vec"]
+        e_id_vec = key_dict["e_id_vec"]
+        age_hpf_vec = key_dict["age_hpf_vec"]
+
+        time_window = self.model_config.time_window
+        self_target = self.model_config.self_target_prob
+        other_age_penalty = self.model_config.other_age_penalty
+
+        #############3
+        # Select sequential pair
+        pert_id_input = pert_id_vec[index]
+        e_id_input = e_id_vec[index]
+        age_hpf_input = age_hpf_vec[index]
+
+        pert_match_array = pert_id_vec == pert_id_input
+        e_match_array = e_id_vec == e_id_input
+        age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
+        age_match_array = age_delta_array <= time_window
+
+        self_option_array = e_match_array & age_match_array
+        other_option_array = ~e_match_array & age_match_array & pert_match_array
+
+        if (np.random.rand() <= self_target) or (np.sum(other_option_array) == 0):
+            options = np.nonzero(self_option_array)[0]
+            seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+            weight_hpf = age_delta_array[seq_pair_index] + 1
+        else:
+            options = np.nonzero(other_option_array)[0]
+            seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+            weight_hpf = age_delta_array[seq_pair_index] + 1 + other_age_penalty
+
+        #########
+        # load sequential pair
+        Y = Image.open(self.samples[seq_pair_index][0])
+        if self.transform:
+            Y = self.transform(Y)
+
+        X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
+        Y = torch.reshape(Y, (1, Y.shape[0], Y.shape[1], Y.shape[2]))
+        XY = torch.cat([X, Y], axis=0)
+
+        weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
+        # if not self.return_name:
+        #     return DatasetOutput(
+        #         data=X
+        #     )
+        # else:
+        return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index], weight_hpf=weight_hpf)
 
 # View generation class used for contrastive training
 class ContrastiveLearningViewGenerator(object):
