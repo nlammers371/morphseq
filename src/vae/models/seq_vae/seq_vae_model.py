@@ -134,7 +134,7 @@ class SeqVAE(BaseAE):
             log_var_out = torch.cat([log_var0, log_var1], axis=0)
             z_out = torch.cat([z0, z1], axis=0)
 
-            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out, inputs["hpf_deltas"])#, labels=y)
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out, inputs["weight_hpf"])#, labels=y)
 
         else:
             encoder_output = self.encoder(x)
