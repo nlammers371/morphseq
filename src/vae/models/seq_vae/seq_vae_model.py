@@ -52,6 +52,7 @@ class SeqVAE(BaseAE):
         # self.gamma = model_config.gamma # weight factor for orth weight
         self.orth_flag = model_config.orth_flag  # indicates whether or not to impose orthogonality constraint
         self.beta = model_config.beta
+        self.gamma = model_config.gamma
         # calculate number of "biological" and "nuisance" latent variables
         self.latent_dim_nuisance = torch.tensor(np.floor(self.latent_dim * self.zn_frac))
         self.latent_dim_biological = self.latent_dim - self.latent_dim_nuisance
@@ -205,9 +206,9 @@ class SeqVAE(BaseAE):
         else:
             nt_xent_loss = torch.tensor(0)
 
-        return recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + nt_xent_loss, recon_loss.mean(
-            dim=0), KLD.mean(
-            dim=0), nt_xent_loss
+        return recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + self.gamma * nt_xent_loss, recon_loss.mean(
+            dim=0), self.beta * KLD.mean(
+            dim=0), self.gamma * nt_xent_loss
 
     def nt_xent_loss(self, features, self_stats, other_stats, n_views=2):
 
@@ -264,7 +265,7 @@ class SeqVAE(BaseAE):
             age_vec = torch.cat([self_stats[1], other_stats[1]], axis=0)
 
             age_deltas = torch.abs(age_vec.unsqueeze(-1) - age_vec.unsqueeze(0))
-            age_bool = age_deltas <= self.model_config.time_window
+            age_bool = age_deltas <= (self.model_config.time_window + 1.5)  # note extra buffer
             if self.model_config.self_target_prob < 1.0:
                 pert_vec = torch.cat([self_stats[2], other_stats[2]], axis=0)
                 pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
@@ -310,7 +311,7 @@ class SeqVAE(BaseAE):
             age_vec = torch.cat([self_stats[1], other_stats[1]], axis=0)
 
             age_deltas = torch.abs(age_vec.unsqueeze(-1) - age_vec.unsqueeze(0))
-            age_bool = age_deltas <= self.model_config.time_window
+            age_bool = age_deltas <= (self.model_config.time_window + 1.5)  # add an extra neutral "buffer" of 1.5 hrs
             if self.model_config.self_target_prob < 1.0:
                 pert_vec = torch.cat([self_stats[2], other_stats[2]], axis=0)
                 pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
