@@ -120,6 +120,7 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     # initialize training configuration
     config = BaseTrainerConfig(
         output_dir=output_dir,
+        num_epochs=n_epochs,
         **training_args
     )
 

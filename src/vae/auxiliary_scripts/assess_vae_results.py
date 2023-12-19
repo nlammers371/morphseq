@@ -97,9 +97,9 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
         # #########################################
         # Test how predictive latent space is of developmental age
-        age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
+        # age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
 
-        age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
+        # age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
         # perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
 
         meta_df["model_name"] = model_name
