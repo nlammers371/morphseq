@@ -13,7 +13,7 @@ from src.vae.pipelines.training import TrainingPipeline
 
 def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_suffix='', **kwargs):
 
-    training_keys = ["batch_size", "learning_rate", "n_load_workers"]# optional training config kywords
+    training_keys = ["batch_size", "learning_rate", "n_load_workers"] # optional training config kywords
     # model_keys = ["n_latent", "n_out_channels", "zn_frac", "depth", "nt_xent_temperature"]
     training_args = dict({})
     model_args = dict({})
@@ -112,9 +112,9 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
 
     # make output directory to save training results
     if train_suffix == '':
-        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}'
+        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}_' + f'beta{int(100*model_config.beta):05}_' + f'temp{int(10000*model_config.temperature):05}'
     else:
-        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}' + '_' + train_suffix
+        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}_' + f'beta{int(100*model_config.beta):05}_' + f'temp{int(10000*model_config.temperature):05}'  + '_' + train_suffix
     output_dir = os.path.join(train_dir, model_name)
 
     # initialize training configuration
