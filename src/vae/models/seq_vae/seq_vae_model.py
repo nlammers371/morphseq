@@ -134,7 +134,9 @@ class SeqVAE(BaseAE):
             log_var_out = torch.cat([log_var0, log_var1], axis=0)
             z_out = torch.cat([z0, z1], axis=0)
 
-            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out, inputs["weight_hpf"])#, labels=y)
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out,
+                                                                inputs["weight_hpf"], inputs["self_stats"],
+                                                                inputs["other_stats"])  # , labels=y)
 
         else:
             encoder_output = self.encoder(x)
@@ -146,7 +148,8 @@ class SeqVAE(BaseAE):
             z_out, eps = self._sample_gauss(mu, std)
             recon_x_out = self.decoder(z_out)["reconstruction"]
 
-            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x, mu, log_var, torch.ones(x.shape[0])) #labels=y)  # , z_out,
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x, mu, log_var, torch.ones(x.shape[0]),
+                                                                None, None)  # labels=y)  # , z_out,
             # weight_matrix)
 
         output = ModelOutput(
@@ -160,7 +163,7 @@ class SeqVAE(BaseAE):
 
         return output
 
-    def loss_function(self, recon_x, x, mu, log_var, hpf_deltas): #, labels=None):
+    def loss_function(self, recon_x, x, mu, log_var, hpf_deltas, self_stats, other_stats):  # , labels=None):
 
         # if labels is not None:
         #     labels = self.clean_path_names(labels)
@@ -190,19 +193,23 @@ class SeqVAE(BaseAE):
         if self.contrastive_flag:
 
             if self.distance_metric == "cosine":
-                nt_xent_loss = self.nt_xent_loss(features=mu, temp_weights=hpf_deltas)
+                nt_xent_loss = self.nt_xent_loss(features=mu, self_stats=self_stats, other_stats=other_stats)
+
+                # og_loss = self.nt_xent_loss_cosine_og(features=mu)
+
             elif self.distance_metric == "euclidean":
-                nt_xent_loss = self.nt_xent_loss_euclidean(features=mu, temp_weights=hpf_deltas)
+                nt_xent_loss = self.nt_xent_loss_euclidean(features=mu, self_stats=self_stats,
+                                                           other_stats=other_stats, temp_weights=hpf_deltas)
             else:
                 raise Exception("Invalid distance metric was passed to model.")
         else:
             nt_xent_loss = torch.tensor(0)
 
-        return recon_loss.mean(dim=0) + self.beta*KLD.mean(dim=0) + nt_xent_loss, recon_loss.mean(
+        return recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + nt_xent_loss, recon_loss.mean(
             dim=0), KLD.mean(
             dim=0), nt_xent_loss
 
-    def nt_xent_loss(self, features, temp_weights, n_views=2):
+    def nt_xent_loss(self, features, self_stats, other_stats, n_views=2):
 
         temperature = self.temperature
 
@@ -223,47 +230,60 @@ class SeqVAE(BaseAE):
 
         # Due to above normalization, sim matrix entries are same as cosine differences
         similarity_matrix = torch.matmul(features_norm, features_norm.T)
-        # assert similarity_matrix.shape == (
-        #     n_views * batch_size, n_views * batch_size)
-        # assert similarity_matrix.shape == labels.shape
 
-        # discard the main diagonal, since this is the comparison of image with itself
-        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.device)
-        labels = labels[~mask].view(labels.shape[0], -1)
-        similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
-        # assert similarity_matrix.shape == labels.shape
+          # discard the main diagonal, since this is the comparison of image with itself
+        # mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.device)
+        # labels = labels[~mask].view(labels.shape[0], -1)
+        # similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
+
+        # EUCLIDEAN
+        pair_matrix = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
+        pair_matrix = (pair_matrix.unsqueeze(0) == pair_matrix.unsqueeze(1)).float()
+        mask = torch.eye(pair_matrix.shape[0], dtype=torch.bool).to(self.device)
+        pair_matrix[mask] = -1  # exclude self comparisons
+        # target_matrix = target_matrix.to(self.device)
 
         # select and combine multiple positives
-        positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
-
-        # Apply dt-based temp adjustments
-        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
-                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
-
-        positives = torch.divide(positives, temp_weights)
+        # positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
+        # positives = torch.divide(positives, temp_weights)
 
         # select only the negatives the negatives
-        negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+        # negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
 
         # Construct logits matrix with positive examples as firs column
-        logits = torch.cat([positives, negatives], dim=1)
+        # logits = torch.cat([positives, negatives], dim=1)
 
         # These labels tell the cross-entropy function that the positive example for each row is in the first column (col=0)
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.device)
+        # labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.device)
 
         # Apply temperature parameter
-        logits = logits / temperature
+        logits = similarity_matrix / temperature
 
-        logits = torch.multiply(temp_weights, logits)
+        target_matrix = torch.zeros(pair_matrix.shape, dtype=torch.float32)
+        if self_stats is not None:
+            age_vec = torch.cat([self_stats[1], other_stats[1]], axis=0)
 
-        # initialize cross entropy loss
-        loss_fun = torch.nn.CrossEntropyLoss()
+            age_deltas = torch.abs(age_vec.unsqueeze(-1) - age_vec.unsqueeze(0))
+            age_bool = age_deltas <= self.model_config.time_window
+            if self.model_config.self_target_prob < 1.0:
+                pert_vec = torch.cat([self_stats[2], other_stats[2]], axis=0)
+                pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
+            else:
+                pert_vec = torch.cat([self_stats[0], other_stats[0]], axis=0)
+                pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid same embryo
 
-        loss = loss_fun(logits, labels)
+            cross_match_flags = age_bool & pert_bool
+            target_matrix[cross_match_flags] = -1
+
+        target_matrix[pair_matrix == 1] = 1
+        target_matrix[pair_matrix == -1] = -1
+        target_matrix = target_matrix.to(self.device)
+
+        loss = self.nt_xent_loss_multiclass(logits, target_matrix)
 
         return loss
 
-    def nt_xent_loss_euclidean(self, features, temp_weights, n_views=2):
+    def nt_xent_loss_euclidean(self, features, temp_weights, self_stats=None, other_stats=None, n_views=2):
 
         temperature = self.temperature
 
@@ -275,119 +295,62 @@ class SeqVAE(BaseAE):
         batch_size = int(features.shape[0] / n_views)
 
         # EUCLIDEAN
-        labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
-        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
-        labels = labels.to(self.device)
+        pair_matrix = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
+        pair_matrix = (pair_matrix.unsqueeze(0) == pair_matrix.unsqueeze(1)).float()
+        mask = torch.eye(pair_matrix.shape[0], dtype=torch.bool).to(self.device)
+        pair_matrix[mask] = -1  # exclude self comparisons
+        # target_matrix = target_matrix.to(self.device)
 
-        dist_matrix = torch.cdist(features, features, p=2)
-        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.device)
-        labels = labels[~mask].view(labels.shape[0], -1)
-        dist_matrix = dist_matrix[~mask].view(dist_matrix.shape[0], -1).pow(2)
-
-        # select and combine multiple positives
-        positives_euc = dist_matrix[labels.bool()].view(labels.shape[0], -1)
-
-        # Apply dt-based temp adjustments
-        temp_weights = torch.cat([torch.reshape(temp_weights, (batch_size, 1)),
-                                  torch.reshape(temp_weights, (batch_size, 1))], axis=0)
-
-        positives_euc = torch.divide(positives_euc, temp_weights)
-
-        # select only the negatives the negatives
-        negatives_euc = dist_matrix[~labels.bool()].view(dist_matrix.shape[0], -1)
-
-        # Construct logits matrix with positive examples as firs column
-        distances_euc = torch.cat([positives_euc, negatives_euc], dim=1)
-
-        # These labels tell the cross-entropy function that the positive example for each row is in the first column (col=0)
-        labels = torch.zeros(distances_euc.shape[0], dtype=torch.long).to(self.device)
+        dist_matrix = torch.cdist(features, features, p=2).pow(2)
 
         # Apply temperature parameter
-        distances_euc = -distances_euc / temperature
+        distances_euc = -dist_matrix / temperature
+        target_matrix = torch.zeros(pair_matrix.shape, dtype=torch.float32)
+        if self_stats is not None:
+            age_vec = torch.cat([self_stats[1], other_stats[1]], axis=0)
 
-        # initialize cross entropy loss
-        loss_fun = torch.nn.CrossEntropyLoss()
-        loss_euc = loss_fun(distances_euc, labels)
+            age_deltas = torch.abs(age_vec.unsqueeze(-1) - age_vec.unsqueeze(0))
+            age_bool = age_deltas <= self.model_config.time_window
+            if self.model_config.self_target_prob < 1.0:
+                pert_vec = torch.cat([self_stats[2], other_stats[2]], axis=0)
+                pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
+            else:
+                pert_vec = torch.cat([self_stats[0], other_stats[0]], axis=0)
+                pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid same embryo
+
+            cross_match_flags = age_bool & pert_bool
+            target_matrix[cross_match_flags] = -1
+
+        target_matrix[pair_matrix == 1] = 1
+        target_matrix[pair_matrix == -1] = -1
+        target_matrix = target_matrix.to(self.device)
+
+        # call multiclass nt_xent loss
+        loss_euc = self.nt_xent_loss_multiclass(distances_euc, target_matrix)
 
         return loss_euc
 
-    # def calculate_knowledge_loss(self, features, labels, n_views=2, dt_thresh=1.5):
-    #
-    #     if self.class_key is None:
-    #         raise Exception("Nuisance metric learning requested, but not class information was passed to model.")
-    #     else:
-    #         class_key = self.class_key
-    #
-    #     if self.time_ignorance_flag:
-    #         dt_thresh = self.time_similarity_threshold
-    #         assert dt_thresh >= 0
-    #
-    #     features = features[:, self.nuisance_indices]
-    #
-    #     # calculate euclidean distances
-    #     # temperature = self.temperature
-    #     dist_matrix = torch.cdist(features, features, p=2)
-    #     # logits = dist_matrix / temperature
-    #
-    #     # use class key to calculate embryos that are close enough wrpt time and perturbation to count as positive
-    #     # examples
-    #     class_key_batch = pd.DataFrame(labels, columns=["snip_id"])
-    #     class_key_batch = class_key_batch.merge(class_key, how="left", on="snip_id")
-    #
-    #     if self.time_ignorance_flag:
-    #         # calculate time pairs
-    #         time_tensor = torch.tensor(class_key_batch["predicted_stage_hpf"].values).to(self.device)
-    #         tdist_matrix = torch.cdist(time_tensor[:, np.newaxis], time_tensor[:, np.newaxis], p=2)
-    #         tbool_matrix = tdist_matrix <= dt_thresh
-    #     else:
-    #         tbool_matrix = torch.ones((dist_matrix.shape))
-    #
-    #     if self.class_ignorance_flag:
-    #         # calculate class pairs
-    #         class_tensor = torch.tensor(class_key_batch["perturbation_id"].values).to(self.device)
-    #         cbool_matrix = (class_tensor.unsqueeze(0) == class_tensor.unsqueeze(1)).float()
-    #     else:
-    #         cbool_matrix = torch.ones((dist_matrix.shape))
-    #
-    #     # construct master target matrix
-    #     # batch_size = int(features.shape[0] / n_views)
-    #
-    #     # EUCLIDEAN
-    #     # batch_labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0).to(self.device)
-    #     # target_matrix = (batch_labels.unsqueeze(0) == batch_labels.unsqueeze(1)).float()
-    #     # labels = labels.to(self.device)
-    #
-    #     target_matrix = (torch.multiply(cbool_matrix, tbool_matrix) == 0).type(torch.float32)
-    #     # target_matrix = (torch.multiply(cbool_matrix, tbool_matrix) > 0).type(torch.float32)
-    #
-    #     mask = torch.eye(features.shape[0], dtype=torch.bool)  # .to(self.device)
-    #     target_matrix[mask == 1] = -1  # this excludes self-pairs from all calculations
-    #
-    #     # call multiclass nt_xent loss
-    #     loss = self.nt_xent_loss_multiclass(dist_matrix, target_matrix, repel_flag=False)
-    #
-    #     return loss
 
-    # def nt_xent_loss_multiclass(self, logits, target, repel_flag=False):
-    #     # a multiclass version of the NT-Xent loss function
-    #     logit_sign = -1
-    #     if repel_flag:
-    #         logit_sign = 1
-    #
-    #     temperature = self.temperature
-    #
-    #     # Apply temperature parameter
-    #     logits_tempered = logit_sign * logits / temperature
-    #     logits_tempered[target == -1] = -torch.inf
-    #     logits_num = logits_tempered.clone()
-    #     logits_num[target == 0] = -torch.inf
-    #
-    #     # calculate loss for each entry in the batch
-    #     numerator = -torch.logsumexp(logits_num, axis=1)
-    #     denominator = torch.logsumexp(logits_tempered, axis=1)
-    #     loss = numerator + denominator
-    #
-    #     return torch.mean(loss)
+    def nt_xent_loss_multiclass(self, logits_tempered, target, repel_flag=False):
+        # a multiclass version of the NT-Xent loss function
+        # logit_sign = -1
+        # if repel_flag:
+        #     logit_sign = 1
+
+        # temperature = self.temperature
+
+        # Apply temperature parameter
+        # logits_tempered = logits
+        logits_tempered[target == -1] = -torch.inf # exclude flagged instances from denominator
+        logits_num = logits_tempered.clone()
+        logits_num[target == 0] = -torch.inf # exclude all negative pairs from denominator
+
+        # calculate loss for each entry in the batch
+        numerator = -torch.logsumexp(logits_num, axis=1)
+        denominator = torch.logsumexp(logits_tempered, axis=1)
+        loss = numerator + denominator
+
+        return torch.mean(loss)
 
     def _sample_gauss(self, mu, std):
         # Reparametrization trick
@@ -472,3 +435,122 @@ class SeqVAE(BaseAE):
 
             log_p.append((torch.logsumexp(log_p_x, 0) - np.log(len(log_p_x))).item())
         return np.mean(log_p)
+
+    def nt_xent_loss_euclidean_orig(self, features, n_views=2):
+
+        temperature = self.temperature
+
+        # remove latent dimensions that are intended to capture nuisance variability--these should not factor
+        # into the contrastive loss
+        features = features[:, self.biological_indices]
+
+        # infer batch size
+        batch_size = int(features.shape[0] / n_views)
+
+        # EUCLIDEAN
+        labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
+        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+        labels = labels.to(self.device)
+
+        dist_matrix = torch.cdist(features, features, p=2)
+        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.device)
+        labels = labels[~mask].view(labels.shape[0], -1)
+        dist_matrix = dist_matrix[~mask].view(dist_matrix.shape[0], -1).pow(2)
+
+        # select and combine multiple positives
+        positives_euc = dist_matrix[labels.bool()].view(labels.shape[0], -1)
+
+        # select only the negatives the negatives
+        negatives_euc = dist_matrix[~labels.bool()].view(dist_matrix.shape[0], -1)
+
+        # Construct logits matrix with positive examples as firs column
+        distances_euc = torch.cat([positives_euc, negatives_euc], dim=1)
+
+        # These labels tell the cross-entropy function that the positive example for each row is in the first column (col=0)
+        labels = torch.zeros(distances_euc.shape[0], dtype=torch.long).to(self.device)
+
+        # Apply temperature parameter
+        distances_euc = -distances_euc / temperature
+
+        # initialize cross entropy loss
+        loss_fun = torch.nn.CrossEntropyLoss()
+        loss_euc = loss_fun(distances_euc, labels)
+
+        # target_matrix = torch.zeros(distances_euc.shape)
+        # target_matrix[:, 0] = 1
+        # loss_new = self.nt_xent_loss_multiclass(distances_euc, target_matrix)
+
+        # Now from alternative direction
+        # EUCLIDEAN
+        # pair_matrix = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
+        # pair_matrix = (pair_matrix.unsqueeze(0) == pair_matrix.unsqueeze(1)).float()
+        # mask = torch.eye(pair_matrix.shape[0], dtype=torch.bool).to(self.device)
+        # pair_matrix[mask] = -1  # exclude self comparisons
+        # # target_matrix = target_matrix.to(self.device)
+        #
+        # dist_matrix2 = torch.cdist(features, features, p=2).pow(2)
+        #
+        # # Apply temperature parameter
+        # distances_euc2 = -dist_matrix2 / temperature
+        # target_matrix2 = torch.zeros(pair_matrix.shape, dtype=torch.float32)
+        #
+        # target_matrix2[pair_matrix == 1] = 1
+        # target_matrix2[pair_matrix == -1] = -1
+        # target_matrix2 = target_matrix2.to(self.device)
+        #
+        # loss_new2 = self.nt_xent_loss_multiclass(distances_euc2, target_matrix2)
+
+        return loss_euc
+
+    def nt_xent_loss_cosine_og(self, features, n_views=2):
+
+        temperature = self.temperature
+
+        # remove latent dimensions that are intended to capture nuisance variability--these should not factor
+        # into the contrastive loss
+        features = features[:, self.biological_indices]
+
+        # infer batch size
+        batch_size = int(features.shape[0] / n_views)
+
+        labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
+        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+        labels = labels.to(self.device)
+
+        # COS approach
+        # Normalize each latent vector. This simplifies the process of calculating cosie differences
+        features_norm = F.normalize(features, dim=1)
+
+        # Due to above normalization, sim matrix entries are same as cosine differences
+        similarity_matrix = torch.matmul(features_norm, features_norm.T)
+        # assert similarity_matrix.shape == (
+        #     n_views * batch_size, n_views * batch_size)
+        # assert similarity_matrix.shape == labels.shape
+
+        # discard the main diagonal, since this is the comparison of image with itself
+        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.device)
+        labels = labels[~mask].view(labels.shape[0], -1)
+        similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
+        # assert similarity_matrix.shape == labels.shape
+
+        # select and combine multiple positives
+        positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
+
+        # select only the negatives the negatives
+        negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+
+        # Construct logits matrix with positive examples as firs column
+        logits = torch.cat([positives, negatives], dim=1)
+
+        # These labels tell the cross-entropy function that the positive example for each row is in the first column (col=0)
+        labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.device)
+
+        # Apply temperature parameter
+        logits = logits / temperature
+
+        # initialize cross entropy loss
+        loss_fun = torch.nn.CrossEntropyLoss()
+
+        loss = loss_fun(logits, labels)
+
+        return loss
