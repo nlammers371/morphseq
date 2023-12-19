@@ -20,13 +20,13 @@ if __name__ == "__main__":
     #####################
     # Optional arguments
     train_suffix = "speed_test"
-    temperature = 1  #[0.0001, 0.001, 0.01, 0.1, 1]
+    temperature = 1e-4  #[0.0001, 0.001, 0.01, 0.1, 1]
     batch_size = 64
     n_epochs = 250
     beta = 1 #[0.01, 0.1, 1]
     latent_dim = 100
     n_conv_layers = 5
-    distance_metric = "cosine"
+    distance_metric = "euclidean"
     input_dim = (1, 288, 128)
 
 
