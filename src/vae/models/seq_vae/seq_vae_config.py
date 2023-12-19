@@ -21,12 +21,13 @@ class SeqVAEConfig(VAEConfig):
     """
 
     temperature: float = 1.0
+    gamma: float = 1.0  # tunes weight of contastive loss within the loss function
+    beta: float = 1.0  # tunes the weight of the Gaussian prior term
     zn_frac: float = 0.1
     orth_flag: bool = True
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16  # number of layers to convolutional kernel
     distance_metric: str = "euclidean"
-    beta: float = 1.0  # tunes the weight of the Gaussian prior term
     name: str = "SeqVAEConfig"
     data_root: str = ''
     train_folder: str = ''
@@ -47,6 +48,7 @@ class SeqVAEConfig(VAEConfig):
                  zn_frac=0.2,
                  orth_flag=True,
                  beta=1.0,
+                 gamma=1.0,
                  n_conv_layers=5,  # number of convolutional layers
                  n_out_channels=16,  # number of layers to convolutional kernel
                  distance_metric="euclidean",
@@ -69,6 +71,7 @@ class SeqVAEConfig(VAEConfig):
         self.distance_metric = distance_metric
         self.name = name
         self.beta = beta
+        self.gamma = gamma
         self.data_root = data_root
         self.train_folder = train_folder
         self.time_window = time_window
