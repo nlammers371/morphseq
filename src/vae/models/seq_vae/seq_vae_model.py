@@ -301,7 +301,7 @@ class SeqVAE(BaseAE):
         pair_matrix[mask] = -1  # exclude self comparisons
         # target_matrix = target_matrix.to(self.device)
 
-        dist_matrix = torch.cdist(features, features, p=2)
+        dist_matrix = torch.cdist(features, features, p=2).pow(2)
 
         # Apply temperature parameter
         distances_euc = -dist_matrix / temperature
