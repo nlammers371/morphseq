@@ -30,6 +30,7 @@ class SeqVAEConfig(VAEConfig):
     name: str = "SeqVAEConfig"
     data_root: str = ''
     train_folder: str = ''
+    age_key_path: str = ''
 
     # set sequential hyperparameters
     time_window: float = 1.5  # max permitted age difference between sequential pairs
@@ -39,6 +40,7 @@ class SeqVAEConfig(VAEConfig):
     def __init__(self,
                  data_root=None,
                  train_folder=None,
+                 age_key_path=None,
                  input_dim=(1, 288, 128),
                  latent_dim=100,
                  temperature=1.0,
@@ -70,6 +72,7 @@ class SeqVAEConfig(VAEConfig):
         self.data_root = data_root
         self.train_folder = train_folder
         self.time_window = time_window
+        self.age_key_path = age_key_path
         self.self_target_prob = self_target_prob
         self.other_age_penalty = other_age_penalty
 
@@ -86,6 +89,13 @@ class SeqVAEConfig(VAEConfig):
         #                               self_target=self.self_target_prob,
         #                               other_age_penalty=self.other_age_penalty)
 
+        if self.age_key_path != '':
+            age_key_df = pd.read_csv(self.age_key_path, index_col=0)
+            age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
+            seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
+        else:
+            seq_key["inferred_stage_hpf_reg"] = seq_key["predicted_stage_hpf"].copy()
+
         self.seq_key = seq_key
 
         mode_vec = ["train", "eval", "test"]
@@ -97,7 +107,7 @@ class SeqVAEConfig(VAEConfig):
 
             pert_id_vec = seq_key["perturbation_id"].to_numpy()
             e_id_vec = seq_key["embryo_id_num"].to_numpy()
-            age_hpf_vec = seq_key["predicted_stage_hpf"].to_numpy()
+            age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
 
             dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
             seq_key_dict[mode] = dict_entry
