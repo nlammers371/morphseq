@@ -98,7 +98,10 @@ class SeqPairDataset(datasets.ImageFolder):
         #         data=X
         #     )
         # else:
-        return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index], weight_hpf=weight_hpf)
+        return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index],
+                             weight_hpf=weight_hpf,
+                             self_stats=[e_id_input, age_hpf_input, pert_id_input],
+                             other_stats=[e_id_vec[seq_pair_index], age_hpf_vec[seq_pair_index], pert_id_vec[seq_pair_index]])
 
 # View generation class used for contrastive training
 class ContrastiveLearningViewGenerator(object):
