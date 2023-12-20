@@ -19,8 +19,8 @@ if __name__ == "__main__":
 
     #####################
     # Optional arguments
-    train_suffix = "gamma_temp_self_and_other"
-    temperature_vec = [10] #[1, 5]
+    train_suffix = "gamma_temp_SELF_ONLY"
+    temperature_vec = [1, 5, 10]
     gamma_vec = [1, 10, 100, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
     batch_size = 64
     n_epochs = 250
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     latent_dim = 100
     n_conv_layers = 5
     distance_metric = "euclidean"
-    self_target_prob = 0.5
+    self_target_prob = 1.0
     input_dim = (1, 288, 128)
 
     for gamma in gamma_vec:
