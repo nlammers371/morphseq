@@ -29,6 +29,7 @@ class SeqVAEConfig(VAEConfig):
     n_out_channels: int = 16  # number of layers to convolutional kernel
     distance_metric: str = "euclidean"
     name: str = "SeqVAEConfig"
+    metric_loss_type: str = "NT-Xent"
     data_root: str = ''
     train_folder: str = ''
     age_key_path: str = ''
@@ -42,6 +43,7 @@ class SeqVAEConfig(VAEConfig):
                  data_root=None,
                  train_folder=None,
                  age_key_path=None,
+                 metric_loss_type="NT-Xent",
                  input_dim=(1, 288, 128),
                  latent_dim=100,
                  temperature=1.0,
@@ -70,6 +72,7 @@ class SeqVAEConfig(VAEConfig):
         self.n_out_channels = n_out_channels
         self.distance_metric = distance_metric
         self.name = name
+        self.metric_loss_type = metric_loss_type
         self.beta = beta
         self.gamma = gamma
         self.data_root = data_root
@@ -117,75 +120,4 @@ class SeqVAEConfig(VAEConfig):
 
         self.seq_key_dict = seq_key_dict
         # self.write_seq_pair_data()
-
-
-    # def get_seq_pair_dict(self):
-    #     mode_vec = ["train", "eval", "test"]
-    #     batch_size = 128
-    #     # self.seq_key_dict = seq_key_dict
-    #     train_dir = os.path.join(self.data_root, self.train_folder, '')
-    #
-    #     for m, mode in enumerate(mode_vec):
-    #         seq_key = self.seq_key
-    #         seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-    #         seq_key = seq_key.reset_index()
-    #
-    #         time_window = self.time_window
-    #         # self_target = self.self_target_prob
-    #         other_age_penalty = self.other_age_penalty
-    #
-    #         pert_id_vec = seq_key["perturbation_id"].to_numpy()[:, np.newaxis]
-    #         e_id_vec = seq_key["embryo_id_num"].to_numpy()[:, np.newaxis]
-    #         age_hpf_vec = seq_key["predicted_stage_hpf"].to_numpy()[:, np.newaxis]
-    #
-    #         n_images = seq_key.shape[0]
-    #         n_batches = np.ceil(n_images / batch_size)
-    #         batch_start = 0
-    #
-    #         for n in range(n_batches):
-    #
-    #             if n < n_batches-1:
-    #                 input_indices = np.arange(batch_start, batch_start+batch_size)
-    #             else:
-    #                 input_indices = np.arange(batch_start, n_images)
-    #
-    #             pert_id_input = pert_id_vec[input_indices]
-    #             e_id_input = e_id_vec[input_indices]
-    #             age_hpf_input = age_hpf_vec[input_indices]
-    #
-    #             pert_match_array = pert_id_vec == pert_id_input.T
-    #             e_match_array = e_id_vec == e_id_input.T
-    #             age_delta_array = age_hpf_vec - age_hpf_input.T
-    #             age_match_array = np.abs(age_delta_array) <= time_window
-    #
-    #             self_option_array = e_match_array & age_match_array
-    #             other_option_array = ~e_match_array & age_match_array & pert_match_array
-    #
-    #             indices_to_load = []
-    #             pair_time_deltas = []
-    #             for i, ind in enumerate(input_indices):
-    #
-    #                 out_dir_self = os.path.join(train_dir, mode, str(ind), "self")
-    #                 if not os.path.isdir(out_dir_self):
-    #                     os.makedirs(out_dir_self)
-    #                 out_dir_other = os.path.join(train_dir, mode, str(ind), "other")
-    #                 if not os.path.isdir(out_dir_other):
-    #                     os.makedirs(out_dir_other)
-    #
-    #                 # if (np.random.rand() <= self_target) or (np.sum(other_option_array[:, i]) == 0):
-    #                 self_options = np.nonzero(self_option_array[:, i])[0]
-    #                 np.save(os.path.join(os.path.join(out_dir_self, "self_options.npy", self_options)))
-    #                 np.save(os.path.join(os.path.join(out_dir_self, "self_weights.npy", age_delta_array[self_options, i].flatten())))
-    #
-    #                 # else:
-    #                 other_options = np.nonzero(other_option_array[:, i])[0]
-    #                 np.save(os.path.join(os.path.join(out_dir_other, "other_options.npy", other_options)))
-    #                 np.save(os.path.join(
-    #                     os.path.join(out_dir_other, "self_weights.npy", age_delta_array[other_options, i].flatten())))
-
-
-
-
-
-
 
