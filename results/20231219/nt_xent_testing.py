@@ -21,7 +21,7 @@ if __name__ == "__main__":
     # Optional arguments
     train_suffix = "speed_test"
     temperature = 1
-    gamma = 100 #[0.0001, 0.001, 0.01, 0.1, 1]
+    gamma_vec = 100 #[0.0001, 0.001, 0.01, 0.1, 1]
     batch_size = 64
     n_epochs = 250
     beta = 1 #[0.01, 0.1, 1]
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     self_target_prob = 1.0
     input_dim = (1, 288, 128)
 
-
+    for gamma in gamma_vec
     output_dir = train_vae(root, train_folder, train_suffix=train_suffix, model_type=model_type,
                            latent_dim=latent_dim, batch_size=batch_size, beta=beta, n_load_workers=0,
                            distance_metric=distance_metric, n_epochs=n_epochs, temperature=temperature, gamma=gamma,
