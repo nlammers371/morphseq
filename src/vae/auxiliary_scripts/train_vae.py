@@ -112,9 +112,9 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
 
     # make output directory to save training results
     if train_suffix == '':
-        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}_' + f'beta{int(100*model_config.beta):05}_' + f'temp{int(10000*model_config.temperature):05}'
+        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}' #+ f'gamma{int(model_config.gamme):04}_' + f'temp{int(model_config.temperature):04}'
     else:
-        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}_' + f'beta{int(100*model_config.beta):05}_' + f'temp{int(10000*model_config.temperature):05}'  + '_' + train_suffix
+        model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}_' + train_suffix #+ f'gamma{int(model_config.gamma):04}_' + f'temp{int(model_config.temperature):04}'  + '_'
     output_dir = os.path.join(train_dir, model_name)
 
     # initialize training configuration
