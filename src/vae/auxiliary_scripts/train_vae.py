@@ -4,7 +4,8 @@ sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 # sys.path.append("../src/")
 
-from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, ContrastiveLearningViewGenerator, SeqPairDataset
+from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, \
+    ContrastiveLearningViewGenerator, SeqPairDataset, TripletPairDataset
 import os
 from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
@@ -92,20 +93,36 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
         # initialize contrastive data loader
         data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
 
-        # Make datasets
-        train_dataset = SeqPairDataset(root=os.path.join(train_dir, "train"),
-                                       model_config=model_config,
-                                       mode="train",
-                                       transform=data_transform,
-                                       return_name=True
-                                        )
+        if model_config.metric_loss_type == "NT-Xent":
+            # Make datasets
+            train_dataset = SeqPairDataset(root=os.path.join(train_dir, "train"),
+                                           model_config=model_config,
+                                           mode="train",
+                                           transform=data_transform,
+                                           return_name=True
+                                            )
 
-        eval_dataset = SeqPairDataset(root=os.path.join(train_dir, "eval"),
-                                      model_config=model_config,
-                                      mode="eval",
-                                      transform=data_transform,
-                                      return_name=True
-                                       )
+            eval_dataset = SeqPairDataset(root=os.path.join(train_dir, "eval"),
+                                          model_config=model_config,
+                                          mode="eval",
+                                          transform=data_transform,
+                                          return_name=True
+                                           )
+        elif model_config.metric_loss_type == "triplet":
+            # Make datasets
+            train_dataset = TripletPairDataset(root=os.path.join(train_dir, "train"),
+                                           model_config=model_config,
+                                           mode="train",
+                                           transform=data_transform,
+                                           return_name=True
+                                            )
+
+            eval_dataset = TripletPairDataset(root=os.path.join(train_dir, "eval"),
+                                          model_config=model_config,
+                                          mode="eval",
+                                          transform=data_transform,
+                                          return_name=True
+                                           )
     else:
         raise Exception("Unrecognized model type: " + model_type)
 

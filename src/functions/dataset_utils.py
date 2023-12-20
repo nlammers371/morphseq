@@ -152,7 +152,8 @@ class TripletPairDataset(datasets.ImageFolder):
             pos_pair_index = np.random.choice(options, 1, replace=False)[0]
 
         # Select negative comparison
-        negative_option_array = (~age_match_array) & (~pert_match_array)
+        age_mismatch_array = age_delta_array >= (time_window + 1.5)
+        negative_option_array = age_mismatch_array | (~pert_match_array)
         neg_options = np.nonzero(negative_option_array)[0]
         neg_pair_index = np.random.choice(neg_options, 1, replace=False)[0]
 
@@ -167,16 +168,18 @@ class TripletPairDataset(datasets.ImageFolder):
             YN = self.transform(YN)
 
         X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
-        Y = torch.reshape(Y, (1, Y.shape[0], Y.shape[1], Y.shape[2]))
-        XY = torch.cat([X, Y], axis=0)
+        YP = torch.reshape(YP, (1, YP.shape[0], YP.shape[1], YP.shape[2]))
+        YN = torch.reshape(YN, (1, YN.shape[0], YN.shape[1], YN.shape[2]))
+        XY = torch.cat([X, YP, YN], axis=0)
 
-        weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
+        # weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
         # if not self.return_name:
         #     return DatasetOutput(
         #         data=X
         #     )
         # else:
-        return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index])
+        return DatasetOutput(data=XY, label=[self.samples[index][0], self.samples[pos_pair_index][0], self.samples[neg_pair_index][0]],
+                             index=[index, pos_pair_index, neg_pair_index])
 
 # View generation class used for contrastive training
 class ContrastiveLearningViewGenerator(object):
