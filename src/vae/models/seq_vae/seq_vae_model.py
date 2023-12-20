@@ -4,6 +4,7 @@ import ntpath
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.nn import TripletMarginLoss
 import pandas as pd
 from pythae.data.datasets import BaseDataset
 from ..base import BaseAE
@@ -45,6 +46,7 @@ class SeqVAE(BaseAE):
         BaseAE.__init__(self, model_config=model_config, decoder=decoder)
 
         self.model_name = "SeqVAE"
+        self.metric_loss_type = model_config.metric_loss_type
         self.latent_dim = model_config.latent_dim
         self.zn_frac = model_config.zn_frac  # number of nuisance latent dimensions
         self.temperature = model_config.temperature
@@ -60,12 +62,7 @@ class SeqVAE(BaseAE):
         self.biological_indices = torch.arange(self.latent_dim_nuisance, self.latent_dim, dtype=torch.int)
         self.model_config = model_config
         self.contrastive_flag = True
-        # self.class_key = model_config.class_key
-        # self.class_ignorance_flag = model_config.class_ignorance_flag
-        # self.time_ignorance_flag = model_config.time_ignorance_flag
-        # self.time_similarity_threshold = model_config.time_similarity_threshold
-        # self.class_key_path = model_config.class_key_path
-        # self.class_key = pd.read_csv(self.class_key_path)
+
 
         if encoder is None:
             if model_config.input_dim is None:
@@ -99,9 +96,13 @@ class SeqVAE(BaseAE):
         x = inputs["data"]
         # Check input to see if it is 5 dmensional, if so, then the model is being
         self.contrastive_flag = True
-        if (len(x.shape) != 5) or (x.shape[1] != 2):
+        self.triplet_flag = False
+        if (len(x.shape) != 5): # This pertains to post-training runs
             # raise Warning("Model did not receive contrastive pairs. No contrastive loss will be calculated.")
             self.contrastive_flag = False
+        elif (x.shape[1] == 3):
+            self.contrastive_flag = False
+            self.triplet_flag = True
 
         if self.contrastive_flag:
             x0 = torch.reshape(x[:, 0, :, :, :],
@@ -138,6 +139,46 @@ class SeqVAE(BaseAE):
             loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out,
                                                                 inputs["weight_hpf"], inputs["self_stats"],
                                                                 inputs["other_stats"])  # , labels=y)
+
+        elif self.triplet_flag:
+            xa = torch.reshape(x[:, 0, :, :, :],
+                               (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
+            xp = torch.reshape(x[:, 1, :, :, :], (
+                                x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
+            xn = torch.reshape(x[:, 2, :, :, :], (
+                                x.shape[0], x.shape[2], x.shape[3], x.shape[4]))
+
+            encoder_output_a = self.encoder(xa)
+            encoder_output_p = self.encoder(xp)
+            encoder_output_n = self.encoder(xn)
+
+            mua, log_vara = encoder_output_a.embedding, encoder_output_a.log_covariance
+            mup, log_varp = encoder_output_p.embedding, encoder_output_p.log_covariance
+            mun, log_varn = encoder_output_n.embedding, encoder_output_n.log_covariance
+
+
+            stda = torch.exp(0.5 * log_vara)
+            stdp = torch.exp(0.5 * log_varp)
+            stdn = torch.exp(0.5 * log_varn)
+
+            za, epsa = self._sample_gauss(mua, stda)
+            recon_xa = self.decoder(za)["reconstruction"]
+
+            zp, epsp = self._sample_gauss(mup, stdp)
+            recon_xp = self.decoder(zp)["reconstruction"]
+
+            zn, epsn = self._sample_gauss(mun, stdn)
+            recon_xn = self.decoder(zn)["reconstruction"]
+
+            # combine
+            x_out = torch.cat([xa, xp, xn], axis=0)
+            recon_x_out = torch.cat([recon_xa, recon_xp, recon_xn], axis=0)
+            mu_out = torch.cat([mua, mup, mun], axis=0)
+            log_var_out = torch.cat([log_vara, log_varp, log_varn], axis=0)
+            z_out = torch.cat([za, zp, zn], axis=0)
+
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out,
+                                                                None, None, None)  # , labels=y)
 
         else:
             encoder_output = self.encoder(x)
@@ -194,21 +235,23 @@ class SeqVAE(BaseAE):
         if self.contrastive_flag:
 
             if self.distance_metric == "cosine":
-                nt_xent_loss = self.nt_xent_loss(features=mu, self_stats=self_stats, other_stats=other_stats)
+                metric_loss = self.nt_xent_loss(features=mu, self_stats=self_stats, other_stats=other_stats)
 
-                # og_loss = self.nt_xent_loss_cosine_og(features=mu)
 
             elif self.distance_metric == "euclidean":
-                nt_xent_loss = self.nt_xent_loss_euclidean(features=mu, self_stats=self_stats,
+                metric_loss = self.nt_xent_loss_euclidean(features=mu, self_stats=self_stats,
                                                            other_stats=other_stats, temp_weights=hpf_deltas)
             else:
                 raise Exception("Invalid distance metric was passed to model.")
-        else:
-            nt_xent_loss = torch.tensor(0)
 
-        return recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + self.gamma * nt_xent_loss, recon_loss.mean(
+        elif self.triplet_flag:
+            metric_loss = self.triplet_loss(features=mu)
+        else:
+            metric_loss = torch.tensor(0)
+
+        return recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + self.gamma * metric_loss, recon_loss.mean(
             dim=0), self.beta * KLD.mean(
-            dim=0), self.gamma * nt_xent_loss
+            dim=0), self.gamma * metric_loss
 
     def nt_xent_loss(self, features, self_stats, other_stats, n_views=2):
 
@@ -221,21 +264,12 @@ class SeqVAE(BaseAE):
         # infer batch size
         batch_size = int(features.shape[0] / n_views)
 
-        labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
-        labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
-        labels = labels.to(self.device)
-
         # COS approach
         # Normalize each latent vector. This simplifies the process of calculating cosie differences
         features_norm = F.normalize(features, dim=1)
 
         # Due to above normalization, sim matrix entries are same as cosine differences
         similarity_matrix = torch.matmul(features_norm, features_norm.T)
-
-          # discard the main diagonal, since this is the comparison of image with itself
-        # mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.device)
-        # labels = labels[~mask].view(labels.shape[0], -1)
-        # similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
 
         # EUCLIDEAN
         pair_matrix = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
@@ -244,18 +278,6 @@ class SeqVAE(BaseAE):
         pair_matrix[mask] = -1  # exclude self comparisons
         # target_matrix = target_matrix.to(self.device)
 
-        # select and combine multiple positives
-        # positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
-        # positives = torch.divide(positives, temp_weights)
-
-        # select only the negatives the negatives
-        # negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
-
-        # Construct logits matrix with positive examples as firs column
-        # logits = torch.cat([positives, negatives], dim=1)
-
-        # These labels tell the cross-entropy function that the positive example for each row is in the first column (col=0)
-        # labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.device)
 
         # Apply temperature parameter
         logits = similarity_matrix / temperature
@@ -352,6 +374,34 @@ class SeqVAE(BaseAE):
         loss = numerator + denominator
 
         return torch.mean(loss)
+
+    def triplet_loss(self, features):
+
+        # subset to just the biological partition
+        features = features[:, self.biological_indices]
+        temperature = self.temperature
+
+        # infer batch size
+        batch_size = int(features.shape[0] / 3)
+        #
+        # trip_matrix = torch.cat([torch.arange(batch_size) for i in range(3)], dim=0)
+        # trip_matrix = (trip_matrix.unsqueeze(0) == trip_matrix.unsqueeze(1)).float()
+        # mask = torch.eye(trip_matrix.shape[0], dtype=torch.bool).to(self.device)
+        # trip_matrix[mask == 1] = 0
+        # trip_matrix = trip_matrix.to(self.device)
+        #
+        # dist_matrix = torch.cdist(features, features, p=2) # this feels inefficient, but leave it for now
+        # trip_distances = dist_matrix[trip_matrix == 1].view(dist_matrix.shape[0], -1)
+
+        # trip_deltas = trip_distances[:, 0] - trip_distances[:, 1] + temperature
+        # trip_deltas[trip_deltas < 0] = 0
+        triplet_loss = TripletMarginLoss(margin=temperature, p=2, eps=1e-7)
+        trip_loss = triplet_loss(features[0:batch_size, :],
+                                 features[batch_size:2*batch_size, :],
+                                 features[2*batch_size:, :])
+
+        return trip_loss
+        # pair_matrix[mask] = -1  # exclude self comparisons
 
     def _sample_gauss(self, mu, std):
         # Reparametrization trick
