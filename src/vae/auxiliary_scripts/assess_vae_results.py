@@ -655,7 +655,7 @@ def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
 
         model_key_list = list(model_config.keys())
         model_keys_to_keep = ['input_dim', 'latent_dim', 'orth_flag', 'n_conv_layers', 'n_out_channels',
-                              'reconstruction_loss', 'temperature', 'zn_frac', 'distance_metric', 'beta']
+                              'reconstruction_loss', 'temperature', 'zn_frac', 'distance_metric', 'beta', 'gamma']
         for k in model_key_list:
             if k in model_keys_to_keep:
                 entry = model_config[k]
