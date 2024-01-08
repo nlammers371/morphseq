@@ -25,7 +25,7 @@ import ntpath
 
 def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
                        skip_figures_flag=False, batch_size=64, models_to_assess=None):
-    mode_vec = ["train", "eval", "test"]
+    # mode_vec = ["train", "eval", "test"]
 
     # set paths
     metadata_path = os.path.join(root, 'metadata', '')
@@ -95,7 +95,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
             ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
         contrastive_df = contrastive_df.reset_index()
 
-        latent_df = calculate_contrastive_distances(contrastive_df, trained_model, train_dir, device=device, batch_size=batch_size)#,
+        latent_df = calculate_contrastive_distances(trained_model, train_dir, device=device, batch_size=batch_size)#,
 
         # duplicate base contrastive DF and join on latent dimensions
         cdf0 = contrastive_df
@@ -145,7 +145,7 @@ def set_inputs_to_device(device, inputs: Dict[str, Any]):
     return inputs_on_device
 
 
-def calculate_contrastive_distances(contrastive_df, trained_model, train_dir, device, batch_size, mode_vec=None):
+def calculate_contrastive_distances(trained_model, train_dir, device, batch_size, mode_vec=None):
 
     if mode_vec is None:
         mode_vec = ["train", "eval", "test"]
@@ -203,20 +203,20 @@ def calculate_contrastive_distances(contrastive_df, trained_model, train_dir, de
                     else:
                         new_cols.append(f"z_mu_b_{n:02}")
 
-                elif (trained_model.model_name == "VAE") : # generate fake partitions
+                elif trained_model.model_name == "VAE":   # generate fake partitions
                     if n in trained_model.nuisance_indices:
                         new_cols.append(f"z_mu_n_{n:02}")
                     else:
                         new_cols.append(f"z_mu_b_{n:02}")
                 else:
-                    raise Exceptionf("Incompatible model type found ({trained_model.model_name})")
+                    raise Exception("Incompatible model type found ({trained_model.model_name})")
 
             metric_df_temp.loc[:, new_cols] = np.nan
 
             # latent_encodings = trained_model.encoder(inputs)
             x0 = torch.reshape(x[:, 0, :, :, :],
                                (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
-            x1 = torch.reshape(x[:, 1, :, :, :], 
+            x1 = torch.reshape(x[:, 1, :, :, :],
                                (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
 
             encoder_output0 = trained_model.encoder(x0)
