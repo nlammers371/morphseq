@@ -22,7 +22,6 @@ import json
 from typing import Any, Dict, List, Optional, Union
 import ntpath
 
-
 def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
                        skip_figures_flag=False, batch_size=64, models_to_assess=None):
     mode_vec = ["train", "eval", "test"]
@@ -90,23 +89,11 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
         ############################################
         # Compare latent encodings of contrastive pairs
-        # strip down the full dataset
-        contrastive_df = embryo_metadata_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        contrastive_df = contrastive_df.reset_index()
-
-        latent_df = calculate_contrastive_distances(contrastive_df, trained_model, train_dir, device=device, batch_size=batch_size)#,
-
-        # duplicate base contrastive DF and join on latent dimensions
-        cdf0 = contrastive_df
-        cdf1 = cdf0.copy()
-        cdf0["contrast_id"] = 0
-        cdf1["contrast_id"] = 1
-
-        contrastive_df_final = pd.concat([cdf0, cdf1], axis=0, ignore_index=True)
-        contrastive_df_final = contrastive_df_final.merge(latent_df, how="left", on=["snip_id", "contrast_id"])
-        
-        contrastive_df_final.to_csv(os.path.join(figure_path, "contrastive_df.csv"))
+        # if "z_mu_n_00" in embryo_df.columns:
+        #     metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
+        #                                                          device=device, batch_size=batch_size)#,
+        #                                                          # n_contrastive_samples=n_contrastive_samples)
+        #     metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
         # #########################################
         # Test how predictive latent space is of developmental age
@@ -144,105 +131,6 @@ def set_inputs_to_device(device, inputs: Dict[str, Any]):
 
     return inputs_on_device
 
-
-def calculate_contrastive_distances(contrastive_df, trained_model, train_dir, device, batch_size, mode_vec=None):
-
-    if mode_vec is None:
-        mode_vec = ["train", "eval", "test"]
-
-    c_data_loader_vec = []
-    # n_total_samples = 0
-    for mode in mode_vec:
-        temp_dataset = MyCustomDataset(root=os.path.join(train_dir, mode),
-                                       transform=ContrastiveLearningViewGenerator(
-                                           ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
-                                           2),
-                                        return_name=True
-                                       )
-        data_loader = DataLoader(
-            dataset=temp_dataset,
-            batch_size=batch_size,
-            collate_fn=collate_dataset_output,
-        )
-
-        c_data_loader_vec.append(data_loader)
-        # n_total_samples += np.min([n_contrastive_samples, len(data_loader)])
-
-    metric_df_list = []
-
-    sample_iter = 0
-
-    # contrastive_df = contrastive_df.reset_index()
-    for m, mode in enumerate(mode_vec):
-        data_loader = c_data_loader_vec[m]
-
-        print(f"Calculating {mode} contrastive differences...")
-        for i, inputs in enumerate(tqdm(data_loader)):
-            inputs = set_inputs_to_device(device, inputs)
-            x = inputs["data"]
-            bs = x.shape[0]
-
-            labels = list(inputs["label"][0])
-            labels = labels * 2
-            snip_id_list = clean_path_names(labels)
-
-            # initialize temporary DF
-            metric_df_temp = pd.DataFrame(np.empty((x.shape[0] * 2, 2)),
-                                          columns=["snip_id", "contrast_id"])
-            metric_df_temp["snip_id"] = snip_id_list
-
-            if trained_model.model_name == "VAE":
-                trained_model.nuisance_indices = np.random.choice(range(trained_model.latent_dim), 10, replace=False)
-            # generate columns to store latent encodings
-            new_cols = []
-            for n in range(trained_model.latent_dim):
-
-                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
-                    if n in trained_model.nuisance_indices:
-                        new_cols.append(f"z_mu_n_{n:02}")
-                    else:
-                        new_cols.append(f"z_mu_b_{n:02}")
-
-                elif (trained_model.model_name == "VAE") : # generate fake partitions
-                    if n in trained_model.nuisance_indices:
-                        new_cols.append(f"z_mu_n_{n:02}")
-                    else:
-                        new_cols.append(f"z_mu_b_{n:02}")
-                else:
-                    raise Exceptionf("Incompatible model type found ({trained_model.model_name})")
-
-            metric_df_temp.loc[:, new_cols] = np.nan
-
-            # latent_encodings = trained_model.encoder(inputs)
-            x0 = torch.reshape(x[:, 0, :, :, :],
-                               (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
-            x1 = torch.reshape(x[:, 1, :, :, :], 
-                               (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
-
-            encoder_output0 = trained_model.encoder(x0)
-            encoder_output1 = trained_model.encoder(x1)
-
-            mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
-            mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
-
-            mu0 = mu0.detach().cpu()
-            mu1 = mu1.detach().cpu()
-
-            # store
-            metric_df_temp.loc[:x.shape[0] - 1, "contrast_id"] = 0
-            metric_df_temp.loc[x.shape[0]:, "contrast_id"] = 1
-
-            metric_df_temp.loc[:x.shape[0] - 1, new_cols] = np.asarray(mu0)
-            metric_df_temp.loc[x.shape[0]:, new_cols] = np.asarray(mu1)
-
-            metric_df_list.append(metric_df_temp)
-            # sample_iter += bs
-
-    metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
-
-    return metric_df_out
-
-    
 def get_embryo_age_predictions(embryo_df, mu_indices):
 
     train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
@@ -474,6 +362,159 @@ def calculate_UMAPs(embryo_df):
                 embryo_df.loc[:, f"UMAP_{n:02}_n_" + dim_str] = embedding_n[:, n]
 
     return embryo_df
+
+def calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir, device, batch_size, mode_vec=None):
+
+    if mode_vec is None:
+        mode_vec = ["train", "eval", "test"]
+
+    c_data_loader_vec = []
+    # n_total_samples = 0
+    for mode in mode_vec:
+        temp_dataset = MyCustomDataset(root=os.path.join(train_dir, mode),
+                                       transform=ContrastiveLearningViewGenerator(
+                                           ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
+                                           2)
+                                       )
+        data_loader = DataLoader(
+            dataset=temp_dataset,
+            batch_size=batch_size,
+            collate_fn=collate_dataset_output,
+        )
+
+        c_data_loader_vec.append(data_loader)
+        # n_total_samples += np.min([n_contrastive_samples, len(data_loader)])
+
+    metric_df_list = []
+    zm_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
+    z_col_list = embryo_df.columns[zm_indices].to_list()
+    sample_iter = 0
+
+    # embryo_df = embryo_df.reset_index()
+    for m, mode in enumerate(mode_vec):
+        data_loader = c_data_loader_vec[m]
+
+        print(f"Calculating {mode} contrastive differences...")
+        for i, inputs in enumerate(tqdm(data_loader)):
+            inputs = set_inputs_to_device(device, inputs)
+            x = inputs["data"]
+            bs = x.shape[0]
+
+            # initialize temporary DF
+            metric_df_temp = pd.DataFrame(np.empty((x.shape[0] * 2, trained_model.latent_dim + 3 + 2)),
+                                          columns=["sample_id", "contrast_id", "train_cat", "euc_all",
+                                                   "cos_all"] + z_col_list)
+
+            # latent_encodings = trained_model.encoder(inputs)
+            x0 = torch.reshape(x[:, 0, :, :, :],
+                               (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
+            x1 = torch.reshape(x[:, 1, :, :, :], (
+                x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
+
+            encoder_output0 = trained_model.encoder(x0)
+            encoder_output1 = trained_model.encoder(x1)
+
+            mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
+            mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
+
+            mu0 = mu0.detach().cpu()
+            mu1 = mu1.detach().cpu()
+
+            # draw vector to randomly shuffle
+            shuffle_array = np.random.choice(range(x.shape[0]), x.shape[0], replace=False)
+
+            # store
+            metric_df_temp.loc[:x.shape[0] - 1, "contrast_id"] = 0
+            metric_df_temp.loc[:x.shape[0] - 1, "sample_id"] = range(sample_iter, sample_iter + bs)
+
+            metric_df_temp.loc[x.shape[0]:, "contrast_id"] = 1
+            metric_df_temp.loc[x.shape[0]:, "sample_id"] = range(sample_iter, sample_iter + bs)
+
+            metric_df_temp.loc[:, "train_cat"] = mode
+
+            # calculate distance metrics
+            latent_norm_factor = np.sqrt(mu0.shape[1])
+            cos_d_all = np.diag(cosine_similarity(mu0, mu1))
+            metric_df_temp.loc[:x.shape[0] - 1, "cos_all"] = cos_d_all
+            metric_df_temp.loc[x.shape[0]:, "cos_all"] = cos_d_all
+
+            euc_d_all = np.diag(euclidean_distances(mu0, mu1))
+            metric_df_temp.loc[:x.shape[0] - 1, "euc_all"] = euc_d_all / latent_norm_factor
+            metric_df_temp.loc[x.shape[0]:, "euc_all"] = euc_d_all / latent_norm_factor
+
+            # compare to shuffled pairwise distances
+            cos_d_all_sh = np.diag(cosine_similarity(mu0, mu1[shuffle_array, :]))
+            metric_df_temp.loc[:x.shape[0] - 1, "cos_all_rand"] = cos_d_all_sh
+            metric_df_temp.loc[x.shape[0]:, "cos_all_rand"] = cos_d_all_sh
+
+            euc_d_all_sh = np.diag(euclidean_distances(mu0, mu1[shuffle_array, :]))
+            metric_df_temp.loc[:x.shape[0] - 1, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
+            metric_df_temp.loc[x.shape[0]:, "euc_all_rand"] = euc_d_all_sh / latent_norm_factor
+
+            bio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_b_" in z_col_list[i]])
+            nbio_indices = np.asarray([i for i in range(len(z_col_list)) if "z_mu_n_" in z_col_list[i]])
+            if len(bio_indices) > 0:
+                n_bio = np.sqrt(len(bio_indices))
+                n_nbio = np.sqrt(len(nbio_indices))
+
+                # biological partition
+                cos_d_bio = np.diag(cosine_similarity(mu0[:, bio_indices], mu1[:, bio_indices]))
+                metric_df_temp.loc[:x.shape[0] - 1, "cos_bio"] = cos_d_bio
+                metric_df_temp.loc[x.shape[0]:, "cos_bio"] = cos_d_bio
+
+                euc_d_bio = np.diag(euclidean_distances(mu0[:, bio_indices], mu1[:, bio_indices]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_bio"] = euc_d_bio / n_bio
+                metric_df_temp.loc[x.shape[0]:, "euc_bio"] = euc_d_bio / n_bio
+
+                cos_d_bio_sh = np.diag(cosine_similarity(mu0[:, bio_indices], mu1[:, bio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "cos_bio_rand"] = cos_d_bio_sh
+                metric_df_temp.loc[x.shape[0]:, "cos_bio_rand"] = cos_d_bio_sh
+
+                euc_d_bio_sh = np.diag(euclidean_distances(mu0[:, bio_indices], mu1[:, bio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_bio_rand"] = euc_d_bio_sh / n_bio
+                metric_df_temp.loc[x.shape[0]:, "euc_bio_rand"] = euc_d_bio_sh / n_bio
+
+                # nuisance partition
+                cos_d_nbio = np.diag(cosine_similarity(mu0[:, nbio_indices], mu1[:, nbio_indices]))
+                metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio"] = cos_d_nbio
+                metric_df_temp.loc[x.shape[0]:, "cos_nbio"] = cos_d_nbio
+
+                euc_d_nbio = np.diag(euclidean_distances(mu0[:, nbio_indices], mu1[:, nbio_indices]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio"] = euc_d_nbio / n_nbio
+                metric_df_temp.loc[x.shape[0]:, "euc_nbio"] = euc_d_nbio / n_nbio
+
+                cos_d_nbio_sh = np.diag(cosine_similarity(mu0[:, nbio_indices], mu1[:, nbio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "cos_nbio_rand"] = cos_d_nbio_sh
+                metric_df_temp.loc[x.shape[0]:, "cos_nbio_rand"] = cos_d_nbio_sh
+
+                euc_d_nbio_sh = np.diag(euclidean_distances(mu0[:, nbio_indices], mu1[:, nbio_indices][shuffle_array, :]))
+                metric_df_temp.loc[:x.shape[0] - 1, "euc_nbio_rand"] = euc_d_nbio_sh / n_nbio
+                metric_df_temp.loc[x.shape[0]:, "euc_nbio_rand"] = euc_d_nbio_sh / n_nbio
+
+            metric_df_temp.loc[:x.shape[0] - 1, z_col_list] = np.asarray(mu0)
+            metric_df_temp.loc[x.shape[0]:, z_col_list] = np.asarray(mu1)
+
+            metric_df_list.append(metric_df_temp)
+            sample_iter += bs
+
+    metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
+
+    meta_df["cos_all_mean"] = np.mean(metric_df_out["cos_all"])
+    meta_df["euc_all_mean"] = np.mean(metric_df_out["euc_all"])
+    meta_df["cos_all_mean_rand"] = np.mean(metric_df_out["cos_all_rand"])
+    meta_df["euc_all_mean_rand"] = np.mean(metric_df_out["euc_all_rand"])
+
+    if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
+        meta_df["cos_bio_mean"] = np.mean(metric_df_out["cos_bio"])
+        meta_df["euc_bio_mean"] = np.mean(metric_df_out["euc_bio"])
+        meta_df["cos_bio_mean_rand"] = np.mean(metric_df_out["cos_bio_rand"])
+        meta_df["euc_bio_mean_rand"] = np.mean(metric_df_out["euc_bio_rand"])
+        meta_df["cos_nbio_mean"] = np.mean(metric_df_out["cos_nbio"])
+        meta_df["euc_nbio_mean"] = np.mean(metric_df_out["euc_nbio"])
+        meta_df["cos_nbio_mean_rand"] = np.mean(metric_df_out["cos_nbio_rand"])
+        meta_df["euc_nbio_mean_rand"] = np.mean(metric_df_out["euc_nbio_rand"])
+
+    return metric_df_out, meta_df
 
 def bio_prediction_wrapper(embryo_df, meta_df):
 
