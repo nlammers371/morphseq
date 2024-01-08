@@ -28,6 +28,7 @@ def clean_path_names(path_list):
         path_list_out.append(tail[:-4])
 
     return path_list_out
+
 def set_inputs_to_device(device, inputs: Dict[str, Any]):
     inputs_on_device = inputs
 
@@ -43,14 +44,6 @@ def set_inputs_to_device(device, inputs: Dict[str, Any]):
         inputs_on_device = cuda_inputs
 
     return inputs_on_device
-
-def clean_path_names(path_list):
-        path_list_out = []
-        for path in path_list:
-            head, tail = ntpath.split(path)
-            path_list_out.append(tail[:-4])
-
-        return path_list_out
 
 def generate_contrastive_dataframe(root, train_name, architecture_name, overwrite_flag=False, batch_size=64, models_to_assess=None):
     mode_vec = ["train", "eval", "test"]
@@ -253,12 +246,6 @@ def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
 
     figure_path = os.path.join(output_dir, "figures")
 
-    # if "contrastive_learning_flag" in dir(trained_model):
-    #     trained_model.contrastive_flag = False
-    if "time_ignorance_flag" in dir(trained_model):
-        trained_model.time_ignorance_flag = False
-    if "class_ignorance_flag" in dir(trained_model):
-        trained_model.class_ignorance_flag = False
     
     return trained_model, figure_path, continue_flag, device
 
