@@ -89,11 +89,11 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
         ############################################
         # Compare latent encodings of contrastive pairs
-        if "z_mu_n_00" in embryo_df.columns:
-            metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
-                                                                 device=device, batch_size=batch_size)#,
-                                                                 # n_contrastive_samples=n_contrastive_samples)
-            metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
+        # if "z_mu_n_00" in embryo_df.columns:
+        #     metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
+        #                                                          device=device, batch_size=batch_size)#,
+        #                                                          # n_contrastive_samples=n_contrastive_samples)
+        #     metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
         # #########################################
         # Test how predictive latent space is of developmental age
