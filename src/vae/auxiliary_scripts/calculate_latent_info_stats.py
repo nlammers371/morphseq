@@ -13,6 +13,8 @@ def calculate_latent_info_stats(root, train_name, model_name):
     train_dir = os.path.join(root, "training_data", train_name)
     output_dir = os.path.join(train_dir, model_name) 
 
+    print("Evaluating models from: " + output_dir)
+
     # get list of models to load
     model_list = sorted(glob(os.path.join(output_dir, "*VAE*")))
 
@@ -20,6 +22,7 @@ def calculate_latent_info_stats(root, train_name, model_name):
     embryo_df_list = []
     mdl_path_list = []
     meta_df_list = []
+    print("Loading trained models...")
     for m, mdl in enumerate(tqdm(model_list)):
         
         # get path to output dataframes
@@ -31,8 +34,15 @@ def calculate_latent_info_stats(root, train_name, model_name):
             meta_df = pd.read_csv(os.path.join(mdl_path, "meta_summary_df.csv"), index_col=0)
             meta_df_list.append(meta_df)
 
-            temperature = meta_df["temperature"].values
-            gamma = meta_df["gamma"].values
+            if "temperature" in meta_df.columns:
+                temperature = meta_df["temperature"].values
+            else: 
+                temperature = [np.nan]
+
+            if "gamma" in meta_df.columns:
+                gamma = meta_df["gamma"].values
+            else: 
+                gamma = [np.nan]
 
             # load contrastive DF
             contrastive_df = pd.read_csv(os.path.join(mdl_path, "contrastive_df.csv"), index_col=0)
@@ -66,7 +76,6 @@ def calculate_latent_info_stats(root, train_name, model_name):
     model_index = np.unique(cdf_master["mdl_id"])
     var_df_list = []
     mse_df_list = []
-    keep_vars = ["mdl_id", "temperature", "gamma", "medium"]
 
     # calculate distance between random pairs to estimate overall entropy
     for m, mdi in enumerate(tqdm(model_index)):
@@ -197,7 +206,7 @@ if __name__ == "__main__":
     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_name = "20231106_ds"
-    model_name = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other" #"SeqVAE_z100_ne250_gamma_temp_SELF_ONLY"
+    # model_name = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other" #"SeqVAE_z100_ne250_gamma_temp_SELF_ONLY"
     architecture_name_vec = ["SeqVAE_z100_ne250_gamma_temp_self_and_other", "SeqVAE_z100_ne250_gamma_temp_SELF_ONLY", "SeqVAE_z100_ne250_triplet_loss_test_self_and_other"]
     # mode_vec = ["train", "eval", "test"]
 
