@@ -1,7 +1,7 @@
 from src.vae.auxiliary_scripts.calculate_latent_info_stats import calculate_latent_info_stats
 
-# root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
+# root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
 train_name = "20231106_ds"
 architecture_name_vec = ["VAE_z100_ne250_vanilla"]

@@ -66,8 +66,8 @@ def calculate_latent_info_stats(root, train_name, model_name):
 
     # concatenate lists to form one large master set
     cdf_master = pd.concat(contrastive_df_list, axis=0, ignore_index=True)
-    mdf_master = pd.concat(meta_df_list, axis=0, ignore_index=True)
-    edf_master = pd.concat(embryo_df_list, axis=0, ignore_index=True)
+    # mdf_master = pd.concat(meta_df_list, axis=0, ignore_index=True)
+    # edf_master = pd.concat(embryo_df_list, axis=0, ignore_index=True)
 
     # get column names for latent variables in bio and nbio partitions
     zm_bio_cols = [col for col in cdf_master.columns if "z_mu_b" in col]
