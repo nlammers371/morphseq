@@ -22,7 +22,6 @@ import json
 from typing import Any, Dict, List, Optional, Union
 import ntpath
 
-
 def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
                        skip_figures_flag=False, batch_size=64, models_to_assess=None):
     mode_vec = ["train", "eval", "test"]
@@ -90,23 +89,11 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
         ############################################
         # Compare latent encodings of contrastive pairs
-        # strip down the full dataset
-        contrastive_df = embryo_metadata_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        contrastive_df = contrastive_df.reset_index()
-
-        latent_df = calculate_contrastive_distances(contrastive_df, trained_model, train_dir, device=device, batch_size=batch_size)#,
-
-        # duplicate base contrastive DF and join on latent dimensions
-        cdf0 = contrastive_df
-        cdf1 = cdf0.copy()
-        cdf0["contrast_id"] = 0
-        cdf1["contrast_id"] = 1
-
-        contrastive_df_final = pd.concat([cdf0, cdf1], axis=0, ignore_index=True)
-        contrastive_df_final = contrastive_df_final.merge(latent_df, how="left", on=["snip_id", "contrast_id"])
-        
-        contrastive_df_final.to_csv(os.path.join(figure_path, "contrastive_df.csv"))
+        # if "z_mu_n_00" in embryo_df.columns:
+        #     metric_df, meta_df = calculate_contrastive_distances(embryo_df, meta_df, trained_model, train_dir,
+        #                                                          device=device, batch_size=batch_size)#,
+        #                                                          # n_contrastive_samples=n_contrastive_samples)
+        #     metric_df.to_csv(os.path.join(figure_path, "metric_df.csv"))
 
         # #########################################
         # Test how predictive latent space is of developmental age
@@ -144,103 +131,6 @@ def set_inputs_to_device(device, inputs: Dict[str, Any]):
 
     return inputs_on_device
 
-
-def calculate_contrastive_distances(contrastive_df, trained_model, train_dir, device, batch_size, mode_vec=None):
-
-    if mode_vec is None:
-        mode_vec = ["train", "eval", "test"]
-
-    c_data_loader_vec = []
-    # n_total_samples = 0
-    for mode in mode_vec:
-        temp_dataset = MyCustomDataset(root=os.path.join(train_dir, mode),
-                                       transform=ContrastiveLearningViewGenerator(
-                                           ContrastiveLearningDataset.get_simclr_pipeline_transform(),  # (96),
-                                           2),
-                                        return_name=True
-                                       )
-        data_loader = DataLoader(
-            dataset=temp_dataset,
-            batch_size=batch_size,
-            collate_fn=collate_dataset_output,
-        )
-
-        c_data_loader_vec.append(data_loader)
-        # n_total_samples += np.min([n_contrastive_samples, len(data_loader)])
-
-    metric_df_list = []
-
-    sample_iter = 0
-
-    # contrastive_df = contrastive_df.reset_index()
-    for m, mode in enumerate(mode_vec):
-        data_loader = c_data_loader_vec[m]
-
-        print(f"Calculating {mode} contrastive differences...")
-        for i, inputs in enumerate(tqdm(data_loader)):
-            inputs = set_inputs_to_device(device, inputs)
-            x = inputs["data"]
-            bs = x.shape[0]
-
-            labels = list(inputs["label"][0])
-            labels = labels * 2
-            snip_id_list = clean_path_names(labels)
-
-            # initialize temporary DF
-            metric_df_temp = pd.DataFrame(np.empty((x.shape[0] * 2, 2)),
-                                          columns=["snip_id", "contrast_id"])
-            metric_df_temp["snip_id"] = snip_id_list
-
-            # generate columns to store latent encodings
-            new_cols = []
-            for n in range(trained_model.latent_dim):
-
-                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
-                    if n in trained_model.nuisance_indices:
-                        new_cols.append(f"z_mu_n_{n:02}")
-                    else:
-                        new_cols.append(f"z_mu_b_{n:02}")
-
-                elif (trained_model.model_name == "VAE") : # generate fake partitions
-                    if n in range(0, 10):
-                        new_cols.append(f"z_mu_n_{n:02}")
-                    else:
-                        new_cols.append(f"z_mu_b_{n:02}")
-                else:
-                    raise Exceptionf("Incompatible model type found ({trained_model.model_name})")
-
-            metric_df_temp.loc[:, new_cols] = np.nan
-
-            # latent_encodings = trained_model.encoder(inputs)
-            x0 = torch.reshape(x[:, 0, :, :, :],
-                               (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # first set of images
-            x1 = torch.reshape(x[:, 1, :, :, :], 
-                               (x.shape[0], x.shape[2], x.shape[3], x.shape[4]))  # second set with matched contrastive pairs
-
-            encoder_output0 = trained_model.encoder(x0)
-            encoder_output1 = trained_model.encoder(x1)
-
-            mu0, log_var0 = encoder_output0.embedding, encoder_output0.log_covariance
-            mu1, log_var1 = encoder_output1.embedding, encoder_output1.log_covariance
-
-            mu0 = mu0.detach().cpu()
-            mu1 = mu1.detach().cpu()
-
-            # store
-            metric_df_temp.loc[:x.shape[0] - 1, "contrast_id"] = 0
-            metric_df_temp.loc[x.shape[0]:, "contrast_id"] = 1
-
-            metric_df_temp.loc[:x.shape[0] - 1, new_cols] = np.asarray(mu0)
-            metric_df_temp.loc[x.shape[0]:, new_cols] = np.asarray(mu1)
-
-            metric_df_list.append(metric_df_temp)
-            # sample_iter += bs
-
-    metric_df_out = pd.concat(metric_df_list, axis=0, ignore_index=True)
-
-    return metric_df_out
-
-    
 def get_embryo_age_predictions(embryo_df, mu_indices):
 
     train_indices = np.where((embryo_df["train_cat"] == "train") | (embryo_df["train_cat"] == "eval"))[0]
