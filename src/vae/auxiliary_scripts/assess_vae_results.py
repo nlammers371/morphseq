@@ -68,25 +68,25 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
         np.random.seed(123)
 
-        embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
-                                                 data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
-                                                 device=device, skip_figures=skip_figures_flag)
+        # embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
+        #                                          data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
+        #                                          device=device, skip_figures=skip_figures_flag)
 
 
-        # Calculate UMAPs
-        embryo_df = calculate_UMAPs(embryo_df)
-        print(f"Saving data...")
-        #save latent arrays and UMAP
-        embryo_df = embryo_df.iloc[:, 1:]
-        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+        # # Calculate UMAPs
+        # embryo_df = calculate_UMAPs(embryo_df)
+        # print(f"Saving data...")
+        # #save latent arrays and UMAP
+        # embryo_df = embryo_df.iloc[:, 1:]
+        # embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
 
-        # make a narrower DF with just the UMAP cols and key metadata
-        emb_cols = embryo_df.columns
-        umap_cols = [col for col in emb_cols if "UMAP" in col]
-        umap_df = embryo_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
-             "recon_mse"] + umap_cols].copy()
-        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
+        # # make a narrower DF with just the UMAP cols and key metadata
+        # emb_cols = embryo_df.columns
+        # umap_cols = [col for col in emb_cols if "UMAP" in col]
+        # umap_df = embryo_df[
+        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
+        #      "recon_mse"] + umap_cols].copy()
+        # umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
 
         ############################################
         # Compare latent encodings of contrastive pairs
@@ -173,6 +173,9 @@ def calculate_contrastive_distances(trained_model, train_dir, device, batch_size
     sample_iter = 0
 
     # contrastive_df = contrastive_df.reset_index()
+    if trained_model.model_name == "VAE":
+        trained_model.nuisance_indices = np.random.choice(range(trained_model.latent_dim), 10, replace=False)
+
     for m, mode in enumerate(mode_vec):
         data_loader = c_data_loader_vec[m]
 
@@ -191,8 +194,7 @@ def calculate_contrastive_distances(trained_model, train_dir, device, batch_size
                                           columns=["snip_id", "contrast_id"])
             metric_df_temp["snip_id"] = snip_id_list
 
-            if trained_model.model_name == "VAE":
-                trained_model.nuisance_indices = np.random.choice(range(trained_model.latent_dim), 10, replace=False)
+            
             # generate columns to store latent encodings
             new_cols = []
             for n in range(trained_model.latent_dim):

@@ -126,6 +126,8 @@ def calculate_latent_info_stats(root, train_name, model_name):
         metric_df_temp02.loc[:, zm_n_cols] = n_array00 - n_array01[shift_vec, :]
         metric_df_temp02.loc[:, zm_bio_cols] = bio_array00 - bio_array01[shift_vec, :]
         
+        # filter for only same-embryo comparisons
+        metric_df_temp02 = metric_df_temp02.loc[same_embryo_indices, :]
         seq_var_df = metric_df_temp02.groupby(by="medium").agg(["var"])
         
         seq_var_df.loc[:, "class"] = "seq"
