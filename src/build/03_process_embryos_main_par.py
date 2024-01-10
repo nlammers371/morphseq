@@ -4,7 +4,7 @@ from tqdm import tqdm
 from skimage.measure import label, regionprops
 import cv2
 import pandas as pd
-from _archive.functions_folder.utilities import path_leaf
+from functions.utilities import path_leaf
 import scipy
 from parfor import pmap
 from scipy.optimize import linear_sum_assignment
