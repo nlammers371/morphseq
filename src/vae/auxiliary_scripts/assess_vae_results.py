@@ -68,25 +68,25 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
         np.random.seed(123)
 
-        # embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
-        #                                          data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
-        #                                          device=device, skip_figures=skip_figures_flag)
+        embryo_df = assess_image_reconstructions(embryo_df=embryo_df, trained_model=trained_model, figure_path=figure_path,
+                                                 data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
+                                                 device=device, skip_figures=skip_figures_flag)
 
 
-        # # Calculate UMAPs
-        # embryo_df = calculate_UMAPs(embryo_df)
-        # print(f"Saving data...")
-        # #save latent arrays and UMAP
-        # embryo_df = embryo_df.iloc[:, 1:]
-        # embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
+        # Calculate UMAPs
+        embryo_df = calculate_UMAPs(embryo_df)
+        print(f"Saving data...")
+        #save latent arrays and UMAP
+        embryo_df = embryo_df.iloc[:, 1:]
+        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
 
-        # # make a narrower DF with just the UMAP cols and key metadata
-        # emb_cols = embryo_df.columns
-        # umap_cols = [col for col in emb_cols if "UMAP" in col]
-        # umap_df = embryo_df[
-        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
-        #      "recon_mse"] + umap_cols].copy()
-        # umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
+        # make a narrower DF with just the UMAP cols and key metadata
+        emb_cols = embryo_df.columns
+        umap_cols = [col for col in emb_cols if "UMAP" in col]
+        umap_df = embryo_df[
+            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
+             "recon_mse"] + umap_cols].copy()
+        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
 
         ############################################
         # Compare latent encodings of contrastive pairs

@@ -19,7 +19,7 @@ if __name__ == "__main__":
 
     train_suffix = "triplet_loss_SELF_ONLY"
     temperature_vec = [1, 5, 10]
-    gamma_vec = [1, 2, 5, 10, 50, 100, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
+    gamma_vec = [10, 50, 100, 1000] #[1, 2, 5, 10, 50, 100, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
     batch_size = 64
     n_epochs = 250
     beta = 1 #[0.01, 0.1, 1]
