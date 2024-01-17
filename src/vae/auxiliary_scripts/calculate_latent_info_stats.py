@@ -7,6 +7,7 @@ import plotly.offline as pyo
 import time 
 from glob2 import glob
 from tqdm import tqdm
+from src.functions.utilities import path_leaf
 
 
 def calculate_latent_info_stats(root, train_name, model_name):
@@ -26,7 +27,8 @@ def calculate_latent_info_stats(root, train_name, model_name):
     for m, mdl in enumerate(tqdm(model_list)):
         
         # get path to output dataframes
-        mdl_path = os.path.join(output_dir, mdl, "figures")
+        mdl_path = os.path.join(mdl, "figures")
+        mdl_name = path_leaf(mdl)
         mdl_path_list.append(mdl_path)
         
         # load metadata 
@@ -49,7 +51,7 @@ def calculate_latent_info_stats(root, train_name, model_name):
             contrastive_df["mdl_id"] = m
             contrastive_df["temperature"] = temperature[0]
             contrastive_df["gamma"] = gamma[0]
-
+            contrastive_df["training_name"] = mdl_name
             contrastive_df_list.append(contrastive_df)
             
             # load embryo df
@@ -81,7 +83,7 @@ def calculate_latent_info_stats(root, train_name, model_name):
     for m, mdi in enumerate(tqdm(model_index)):
         temp_df = cdf_master.loc[cdf_master["mdl_id"] == mdi, :]
         temp_df = temp_df.reset_index()
-        
+        training_name = temp_df.loc[0, "training_name"]
         # extract arrays for comparison
         c0_indices = np.where(temp_df["contrast_id"] == 0)[0]
         c1_indices = np.where(temp_df["contrast_id"] == 1)[0]
@@ -140,6 +142,7 @@ def calculate_latent_info_stats(root, train_name, model_name):
         var_df.loc[:, "temperature"] = temp_df.loc[0, "temperature"]
         var_df.loc[:, "gamma"] = temp_df.loc[0, "gamma"]
         var_df.loc[:, "mdl_id"] = mdi
+        var_df.loc[:, "training_name"] = training_name
 
         var_df_list.append(var_df)
 
@@ -160,7 +163,7 @@ def calculate_latent_info_stats(root, train_name, model_name):
     mse_df_master = pd.concat(mse_df_list, axis=0, ignore_index=True)
 
     # calculate the entropy for each class
-    entropy_df_master = var_df_master.loc[:, ['class', 'medium', 'temperature', 'gamma', 'mdl_id']]
+    entropy_df_master = var_df_master.loc[:, ['class', 'medium', 'temperature', 'gamma', 'mdl_id', 'training_name']]
     entropy_df_master["n_entropy"] = len(zm_n_cols)* 0.5 * np.log(2*np.pi*np.exp(1)) + \
                 0.5 * np.log(np.prod(var_df_master.loc[:, zm_n_cols].to_numpy(), axis=1).astype(float))
     entropy_df_master["bio_entropy"] = len(zm_bio_cols)* 0.5 * np.log(2*np.pi*np.exp(1)) + \
