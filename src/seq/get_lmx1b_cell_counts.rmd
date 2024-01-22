@@ -1,0 +1,6 @@
+library(monocle3)
+#library(BPCells)
+
+cds_path <- "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/sci-PLEX/processed_sci_data/231205_lmx1b_crispant_run2/lmx1b_projected_comb_cds/cds_object.rds"
+
+cds <- load_monocle_objects(directory_path=cds_path)

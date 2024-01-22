@@ -19,3 +19,4 @@ src/vae/trainers/__pycache__/
 src/vae/auxiliary_scripts/__pycache__/
 src/vae/trainers/base_trainer/__pycache__/
 train/20231204/beta_temp_sweep.py
+.Rproj.user
