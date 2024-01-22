@@ -11,8 +11,10 @@ import plotly.express as px
 # from _archive.functions_folder.utilities import path_leaf
 # import skimage
 from dash import dcc, html
+import glob2 as glob
 import numpy as np
 import dash
+from src.functions.utilities import path_leaf
 # import dash_ag_grid as dag
 
 
@@ -28,6 +30,33 @@ def np_image_to_base64(im_matrix):
     im_url = "data:image/jpeg;base64, " + encoded_image
     return im_url
 
+def parse_model_options(dataRoot):
+    # get list of model architectures
+    model_list_raw = glob.glob(dataRoot + "*VAE*")
+    model_list_raw = [path_leaf(m) for m in model_list_raw if os.path.isdir(m)]
+    # model_name = "SeqVAE_z100_ne250_gamma_temp_self_and_other"
+
+    # get list of training intances
+    model_list = []
+    for model_name in model_list_raw:
+        training_list_raw = [path_leaf(fn) for fn in glob.glob(os.path.join(dataRoot, model_name, "*VAE*"))]
+        training_list_raw = [tr for tr in training_list_raw if
+                             os.path.isdir(os.path.join(dataRoot, model_name, tr, "figures"))]
+
+        # keep only folders with readable umap_df files
+        training_list = []
+        for tr in training_list_raw:
+            read_path = os.path.join(dataRoot, model_name, tr, "figures", "umap_df.csv")
+            try:
+                pd.read_csv(read_path)
+                training_list.append(tr)
+            except:
+                pass
+
+        if len(training_list) > 0:
+            model_list.append(model_name)
+
+    return model_list
 
 def get_image_sampler(train_dir):   #, main_dims=None):
     mode_vec = ["train", "eval", "test"]
@@ -66,12 +95,37 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
     global plot_label_list, plot_partition_list  # , image_sampler_list
 
     plot_label_list = ["predicted_stage_hpf",
-                       "master_perturbation"]  # "experiment_date", "medium", "master_perturbation", "train_cat", "recon_mse"]
+                       "master_perturbation"]
+
+
+    model_list = parse_model_options(dataRoot)
+    key_training_dict = {"SeqVAE_z100_ne250_triplet_loss_test_self_and_other":"SeqVAE_training_2024-01-06_03-55-23",
+                         }
+    model_name = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other"
+
+
+    # now select initial values to display
+    model_name = model_list[0]
+    training_list_raw = [path_leaf(fn) for fn in glob.glob(os.path.join(dataRoot, model_name, "*VAE*"))]
+    training_list_raw = [tr for tr in training_list_raw if
+                         os.path.isdir(os.path.join(dataRoot, model_name, tr, "figures"))]
+
+    # keep only folders with readable umap_df files
+    training_list = []
+    for tr in training_list_raw:
+        read_path = os.path.join(dataRoot, model_name, tr, "figures", "umap_df.csv")
+        try:
+            pd.read_csv(read_path)
+            training_list.append(tr)
+        except:
+            pass
+
     plot_partition_list = ["all", "biological", "non-biological"]
     df = df_dict["df"]
     perturbation_index = np.unique(df["master_perturbation"])
     perturbation_list = perturbation_index.tolist()
-    wt_ind = np.where(perturbation_index == 'wck-AB')[0][0]
+
+    # wt_ind = np.where(perturbation_index == 'wck-AB')[0][0]
     # image_sampler_list = df_dict["image_sampler_list"]
 
     ########################
@@ -118,19 +172,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
                                 color=plot_labels,
                                 color_continuous_scale=cmap_plot)
 
-            # fig = go.Figure()
 
-            # if plot_labels == "predicted_stage_hpf":
-            #     plot_colors = plot_df[plot_labels]
-            # elif plot_labels == "master_perturbation":
-            #     plot_colors = plot_df[plot_labels].astype('category')
-            #
-            # fig.add_trace(go.Scatter3d(x=plot_df[plot_variables[0]],
-            #                            y=plot_df[plot_variables[1]],
-            #                            z=plot_df[plot_variables[2]],
-            #                            mode="markers",
-            #                            marker=dict(size=4, color=plot_colors, colorscale=cmap_plot,
-            #                                        opacity=marker_opacity, line=dict(color='rgba(0,0,0,0.1)', width=0.5))))
             fig.update_layout(scene=dict(
                 xaxis_title="UMAP 1",
                 yaxis_title="UMAP 2",
@@ -169,14 +211,6 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             hovertemplate=None,
         )
 
-        # fig.update_coloraxes(showscale=False)
-        # fig.update_layout(
-        #     scene=dict(
-        #         xaxis=dict(range=[xmin, xmax], ),
-        #         yaxis=dict(range=[ymin, ymax], ),
-        #         zaxis=dict(range=[zmin, zmax], autorange="reversed"),
-        #         aspectratio=dict(x=1, y=1, z=0.5)))
-
         return fig
 
     f = create_figure(df, plot_class_list=["wck-AB"])
@@ -208,24 +242,55 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             dcc.Dropdown(plot_partition_list, plot_partition_list[0], id='partition-dropdown'),
             html.Div(id='partition-output-container', hidden=True)
         ],
-            style={'width': '15%', 'display': 'inline-block'})
+            style={'width': '10%', 'display': 'inline-block'})
         ,
         html.Div([
             dcc.Dropdown(["2D UMAP", "3D UMAP"], "3D UMAP", id='dim-dropdown'),
             html.Div(id='dim-output-container', hidden=True)
         ],
-            style={'width': '15%', 'display': 'inline-block'})
-        # dcc.Markdown("This grid has multi-select rows with checkboxes."),
-        # dag.AgGrid(
-        #     id="selection-checkbox-grid",
-        #     columnDefs=np.asarray(["Perturbation Type"]),
-        #     rowData=dict(perturbation_list),
-        #     defaultColDef=defaultColDef,
-        #     dashGridOptions={"rowSelection": "multiple"},
-        # ),
-        # html.Div(id="selections-checkbox-output")
+            style={'width': '10%', 'display': 'inline-block'}),
+        html.Div([
+            dcc.Dropdown(model_list, model_name, id='model-dropdown'),
+            html.Div(id='model-output-container', hidden=True)
+        ],
+            style={'width': '25%', 'display': 'inline-block'}),
+        html.Div([
+            dcc.Dropdown(training_list, training_list[0], id='training-dropdown'),
+            html.Div(id='training-output-container', hidden=True)
+        ],
+            style={'width': '25%', 'display': 'inline-block'})
+
     ]
     )
+    @app.callback(
+        Output('model-output-container', 'children'),
+        Input('model-dropdown', 'value')
+    )
+    def load_wrapper(value):
+        return value
+    @app.callback(
+        dash.dependencies.Output('training-dropdown', 'options'),
+        [dash.dependencies.Input('model-dropdown', 'value')]
+    )
+    def update_date_dropdown(name):
+        training_list_raw = [path_leaf(fn) for fn in glob.glob(os.path.join(dataRoot, name, "*VAE*"))]
+        training_list = []
+        for tr in training_list_raw:
+            read_path = os.path.join(dataRoot, model_name, tr, "figures", "umap_df.csv")
+            try:
+                pd.read_csv(read_path)
+                training_list.append(tr)
+            except:
+                pass
+
+        return training_list
+
+    @app.callback(
+        Output('training-output-container', 'children'),
+        Input('training-dropdown', 'value')
+    )
+    def load_wrapper(value):
+        return value
 
     @app.callback(
         Output('label-output-container', 'children'),
@@ -259,13 +324,13 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
                   [Input('partition-output-container', 'children'),
                    Input('label-output-container', 'children'),
                    Input('dim-output-container', 'children'),
-                   Input('checklist-output-container', 'children')])
-    def chart_3d(plot_partition, plot_labels, plot_dim, pert_class_values):
+                   Input('checklist-output-container', 'children'),
+                   Input("model-output-container", "children"),
+                   Input("training-output-container", "children")])
+
+    def chart_3d(plot_partition, plot_labels, plot_dim, pert_class_values, model_architecture, training_instance):
 
         global f
-
-        # check to see which values have changed
-        # changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
 
         df_dict = load_nucleus_dataset(dataRoot, model_architecture, training_instance)
         df = df_dict["df"]
@@ -406,14 +471,14 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
     # return app
 
-    app.run_server(debug=True, port=8053)
+    app.run_server(debug=True, port=np.random.randint(1000, 9999, 1))
 
 
 if __name__ == '__main__':
     # set parameters
-    dataRoot = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20230915_vae/"
-    model_architecture = "z100_bs032_ne250_depth05_out16_temperature_sweep2"
-    training_instance = "MetricVAE_training_2023-10-27_09-29-34"
+    dataRoot = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20231106_ds/"
+    model_architecture = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other"
+    training_instance = "SeqVAE_training_2024-01-06_03-55-23"
 
     preload_flag = False
 
