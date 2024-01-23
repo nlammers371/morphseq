@@ -12,6 +12,7 @@ import pandas as pd
 import time
 import nd2
 import cv2
+from sklearn.cluster import KMeans
 
 def set_inputs_to_device(input_tensor, device):
 
@@ -160,7 +161,7 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
     return {}
 
 
-def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, rs_res=None):
+def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, rs_res=None, metadata_only_flag=False):
 
     read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
     if write_dir is None:
@@ -263,17 +264,51 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
         si = np.argsort(well_ind_list)
         well_name_list_sorted = np.asarray(well_name_list)[si].tolist()
-
+        
         # generate longform vectors
         well_name_list_long = np.repeat(well_name_list_sorted, n_time_points)
-        well_ind_list_long = np.repeat(well_ind_list, n_time_points)
+        well_ind_list_long = np.repeat(np.asarray(well_ind_list)[si], n_time_points)
+
+        # check that assigned well IDs match recorded stage positions
+        stage_xyz_array = np.empty((n_wells*n_time_points, 3))
+        well_id_array = np.empty((n_wells*n_time_points,))
+        time_id_array = np.empty((n_wells*n_time_points,))
+        iter_i = 0
+        for w in range(n_wells):
+            for t in range(n_time_points):
+                base_ind = t*n_wells + w
+                slice_ind = base_ind*n_z_slices
+                
+                stage_xyz_array[iter_i, :] = np.asarray(imObject.frame_metadata(slice_ind).channels[0].position.stagePositionUm)
+                well_id_array[iter_i] = w
+                time_id_array[iter_i] = t
+                iter_i += 1
+
+
+        # use clustering to double check well assignments
+        row_letter_vec = np.asarray([id[0] for id in well_name_list_long])
+        col_num_vec = np.asarray([int(id[1:]) for id in well_name_list_long])
+        row_index = np.unique(row_letter_vec)
+        col_index = np.unique(col_num_vec)
+
+        # Check rows
+        row_clusters = KMeans(n_init="auto", n_clusters=len(row_index)).fit(stage_xyz_array[:, 1].reshape(-1, 1))
+        row_si = np.argsort(np.argsort(row_clusters.cluster_centers_.ravel()))
+        row_ind_pd = row_si[row_clusters.labels_]
+        row_letter_pd = row_index[row_ind_pd]
+        assert np.all(row_letter_pd==row_letter_vec)
+
+        col_clusters = KMeans(n_init="auto", n_clusters=len(col_index)).fit(stage_xyz_array[:, 0].reshape(-1, 1))
+        col_si = np.argsort(np.argsort(col_clusters.cluster_centers_.ravel()))
+        col_ind_pd = col_si[col_clusters.labels_]
+        col_num_pd = col_index[len(col_index)-col_ind_pd-1]
+        assert np.all(col_num_pd==col_num_vec)
 
         # generate metadata dataframe
         well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
         well_df["nd2_series_num"] = well_ind_list_long
         well_df["microscope"] = "YX1"
         time_int_list = np.tile(np.arange(0, n_time_points), n_wells)
-        well_int_list = np.repeat(np.arange(0, n_wells), n_time_points)
         well_df["time_int"] = time_int_list
         well_df["Height (um)"] = im_shape[3]*voxel_size[1]
         well_df["Width (um)"] = im_shape[4]*voxel_size[0]
@@ -297,9 +332,14 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
                 else "cpu"
             )
 
-        for w in tqdm(range(n_wells*n_time_points)):
-            process_frame(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
-                            overwrite_flag=overwrite_flag, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
+        # for indexing dask array
+        well_int_list = np.repeat(np.arange(0, n_wells), n_time_points)
+
+        # call FF function
+        if not metadata_only_flag:
+            for w in tqdm(range(n_wells*n_time_points)):
+                process_frame(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
+                                overwrite_flag=overwrite_flag, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
         
         
         first_time = np.min(well_df['Time (s)'].copy())
