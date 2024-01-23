@@ -285,8 +285,8 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
         well_df["nd2_series_num"] = well_ind_list_long
         well_df["microscope"] = "YX1"
-        time_int_list = np.tile(np.arange(1, n_time_points+1), n_wells)
-        well_int_list = np.repeat(np.arange(1, n_wells+1), n_time_points)
+        time_int_list = np.tile(np.arange(0, n_time_points), n_wells)
+        well_int_list = np.repeat(np.arange(0, n_wells), n_time_points)
         well_df["time_int"] = time_int_list
         well_df["Height (um)"] = im_shape[3]*voxel_size[1]
         well_df["Width (um)"] = im_shape[4]*voxel_size[0]
