@@ -246,7 +246,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # well_df = pd.DataFrame([], columns=['well', 'nd2_series_num', 'microscope', 'time_int', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Objective', 'Time (s)'])
 
         # read in plate map
-        plate_map_xl = pd.ExcelFile(dir_path + "plate_map.xlsx")
+        plate_map_xl = pd.ExcelFile(dir_path + sub_name + "_plate_map.xlsx")
         series_map = plate_map_xl.parse("series_number_map").iloc[:8, 1:13]
 
         well_name_list = []
@@ -286,7 +286,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
             time_ind_vec += np.arange(n, n_wells*n_time_points, n_wells).tolist()
         well_df["Time (s)"] = frame_time_vec[time_ind_vec]
 
-        print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+        # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # temp = pmap(process_frame, range(n_wells*n_time_points), 
         #                         (im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, depth_dir, overwrite_flag))
 
