@@ -1,30 +1,17 @@
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
-from PIL import Image
-from skimage import (exposure, feature, filters, io, measure,
-                      morphology, restoration, segmentation, transform,
-                      util)
-import matplotlib
-from tqdm import tqdm
-from PIL import Image
+from skimage import io
 import glob2 as glob
 import torchvision
 import torch
 import torch.nn.functional as F
-from src.functions.image_utils import doLap
 from src.functions.utilities import path_leaf
-from skimage.transform import resize
-from aicsimageio import AICSImage
-import json
 from tqdm import tqdm
-import pickle
-from parfor import pmap
 import pandas as pd
 import time
 import nd2
 import cv2
-from typing import Any, Dict, List, Optional, Union
 
 def set_inputs_to_device(input_tensor, device):
 
@@ -259,7 +246,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # well_df = pd.DataFrame([], columns=['well', 'nd2_series_num', 'microscope', 'time_int', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Objective', 'Time (s)'])
 
         # read in plate map
-        plate_map_xl = pd.ExcelFile(dir_path + "plate_map.xlsx")
+        plate_map_xl = pd.ExcelFile(dir_path + sub_name + "_plate_map.xlsx")
         series_map = plate_map_xl.parse("series_number_map").iloc[:8, 1:13]
 
         well_name_list = []
@@ -299,7 +286,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
             time_ind_vec += np.arange(n, n_wells*n_time_points, n_wells).tolist()
         well_df["Time (s)"] = frame_time_vec[time_ind_vec]
 
-        print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+        # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # temp = pmap(process_frame, range(n_wells*n_time_points), 
         #                         (im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, depth_dir, overwrite_flag))
 
