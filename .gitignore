@@ -28,3 +28,5 @@ src/seq/.RDataTemp
 
 train/20231204/beta_temp_sweep.py
 .Rproj.user
+
+src/build/__pychache__/
