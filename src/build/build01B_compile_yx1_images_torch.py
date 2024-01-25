@@ -73,11 +73,11 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
         data_tensor_raw = set_inputs_to_device(data_tensor_raw, device)
 
         # resize image
-        if rs_dims_yx is not None:
-            # print("Resizing...")
-            data_zyx_rs = torchvision.transforms.functional.resize(data_tensor_raw, tuple([int(rs_dims_yx[0]), int(rs_dims_yx[1])]), antialias=True)
-        else:
-            data_zyx_rs = data_tensor_raw
+        # if rs_dims_yx is not None:
+        #     # print("Resizing...")
+        #     data_zyx_rs = torchvision.transforms.functional.resize(data_tensor_raw, tuple([int(rs_dims_yx[0]), int(rs_dims_yx[1])]), antialias=True)
+        # else:
+        data_zyx_rs = data_tensor_raw
 
         px99 = torch.tensor(np.percentile(data_zyx, 99))
         data_zyx_rs = data_zyx_rs / px99
@@ -272,7 +272,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
         # call FF function
         if not metadata_only_flag:
-            for w in tqdm(range(0, 2000,100)): #n_wells*n_time_points)):
+            for w in tqdm(range(n_wells*n_time_points)):
                 process_frame(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
                                 overwrite_flag=overwrite_flag)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
         
