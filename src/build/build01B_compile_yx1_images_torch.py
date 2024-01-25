@@ -7,6 +7,7 @@ import torchvision
 import torch
 import torch.nn.functional as F
 from src.functions.utilities import path_leaf
+from src.functions.dataset_utils import set_inputs_to_device
 from tqdm import tqdm
 import pandas as pd
 import time
@@ -14,23 +15,7 @@ import nd2
 import cv2
 from sklearn.cluster import KMeans
 
-def set_inputs_to_device(input_tensor, device):
 
-    inputs_on_device = input_tensor
-
-    if device == "cuda":
-        cuda_inputs = input_tensor
-
-        # for key in inputs.keys():
-        #     if torch.is_tensor(inputs[key]):
-        #         cuda_inputs[key] = inputs[key].cuda()
-
-        #     else:
-        #         cuda_inputs[key] = inputs[key]
-        cuda_inputs = input_tensor.cuda()
-        inputs_on_device = cuda_inputs
-
-    return inputs_on_device
 
 
 def findnth(haystack, needle, n):
