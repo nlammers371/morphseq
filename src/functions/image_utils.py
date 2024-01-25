@@ -15,7 +15,8 @@ def doLap(image, lap_size=3, blur_size=3):
     blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
     return cv2.Laplacian(blurred, cv2.CV_64F, ksize=lap_size)
 
-
+# Based off of a focus-stacking package in FIJI:
+# https://github.com/fiji/Time_Lapse/blob/Time_Lapse-2.1.1/src/main/java/sc/fiji/timelapse/Gaussian_Stack_Focuser.java
 def gaussian_focus_stacker(data_zyx, filter_size, device):
 
     # dummy indexer
