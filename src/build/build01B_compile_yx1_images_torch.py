@@ -189,7 +189,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         dir_path = os.path.join(read_dir_root, sub_name, "")
 
         # depth_dir = os.path.join(write_dir, "stitched_depth_images", sub_name)
-        ff_dir = os.path.join(write_dir, "stitched_FF_images",  sub_name)
+        ff_dir = os.path.join(write_dir, "stitched_FF_images",  sub_name + "_test")
 
         # if not os.path.isdir(depth_dir):
         #     os.makedirs(depth_dir)
@@ -237,9 +237,9 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # get image resolution
         voxel_size = imObject.voxel_size()
         voxel_yx = np.asarray([voxel_size[1], voxel_size[0]])
-        rs_factor = np.divide(voxel_yx, rs_res)
+        # rs_factor = np.divide(voxel_yx, rs_res)
 
-        rs_dims_yx = np.round(np.multiply(np.asarray(im_shape[3:]), rs_factor)).astype(int)
+        # rs_dims_yx = np.round(np.multiply(np.asarray(im_shape[3:]), rs_factor)).astype(int)
         # resample images to a standardized resolution
 
 
@@ -337,9 +337,9 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
         # call FF function
         if not metadata_only_flag:
-            for w in tqdm(range(n_wells*n_time_points)):
+            for w in tqdm(range(0, 2000,100)): #n_wells*n_time_points)):
                 process_frame(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
-                                overwrite_flag=overwrite_flag, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
+                                overwrite_flag=overwrite_flag)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
         
         
         first_time = np.min(well_df['Time (s)'].copy())
