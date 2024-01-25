@@ -1,14 +1,15 @@
 import os
 import torch
 import numpy as np
-from _archive.functions_folder.core_utils_segmentation import Dataset, FishModel
+from src.functions.core_utils_segmentation import Dataset, FishModel
 from torch.utils.data import DataLoader
 import glob
 import ntpath
 from tqdm import tqdm
-import cv2
+import skimage.io as io
 
-def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
+def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None, batch_size=64, n_workers=4):
+
     # extract key info about computational resources
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # n_cpu = os.cpu_count()
@@ -55,7 +56,10 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
 
     # generate data loader object
     im_dataset = Dataset(root, image_path_list, im_dims, num_classes=n_classes, predict_only_flag=True)
-    im_dataloader = DataLoader(im_dataset, batch_size=1, shuffle=False)
+    im_dataloader = DataLoader(im_dataset,
+                               batch_size=batch_size,
+                               shuffle=False,
+                               num_workers=n_workers)
 
     # initialize instance of model
     model = FishModel("FPN",
@@ -90,10 +94,8 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, im_dims=None):
             lb_predicted = lb_predicted.astype(np.uint8)  # convert to integer
 
             # write to file
-            # AICSImage(lb_predicted).save(label_path_list[idx])
-            # cv2.imwrite(labeZl_path_list[idx], lb_predicted)
-            cv2.imwrite(label_path_list[idx], lb_predicted)
-            # np.save(label_path_list[idx], lb_predicted)
+            io.imsave(label_path_list[idx], lb_predicted)
+
 
 
 if __name__ == "__main__":
