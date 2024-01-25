@@ -7,7 +7,7 @@ import torchvision
 import torch
 import torch.nn.functional as F
 from src.functions.utilities import path_leaf
-from src.functions.image_utils import gaussian_focus_stacker
+from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
 from src.functions.dataset_utils import set_inputs_to_device
 from tqdm import tqdm
 import pandas as pd
@@ -46,7 +46,7 @@ def trim_image(im, out_shape):
 
 
 
-def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, rs_dims_yx=None, rs_res_yx=None, overwrite_flag=False, n_z_keep=10, ch_to_use=0):
+def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False, n_z_keep=16, ch_to_use=0, LoG_flag=True):
 
     # set scene
     well_name_conv = well_name_list[w]
@@ -83,63 +83,16 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
         data_zyx_rs = data_zyx_rs / px99
         data_zyx_rs[data_zyx_rs > 1] = 1
         data_zyx_rs = data_zyx_rs * 65535
-        # data_zyx_rs = data_zyx_rs.astype(data_zyx.dtype)
 
-        # get laplacian and gaussian filters
-        # ind = filter_size // 2 + 1
-        # lpf = np.zeros((2*filter_size+1, 2*filter_size+1))
-        # lpf[filter_size,filter_size] = 1
-        # lpf = cv2.Laplacian(lpf, cv2.CV_64F, ksize=filter_size)
-        # lpf = lpf[ind:-ind, ind:-ind]
-        # lpf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(lpf), (1, 1, filter_size, filter_size)), device)
-        #
-        # # get Gaussian filter
-        # gf = np.zeros((2*filter_size+1, 2*filter_size+1))
-        # gf[filter_size, filter_size] = 1
-        # gf = cv2.GaussianBlur(gf, (filter_size, filter_size), 0)
-        # gf = gf[ind:-ind, ind:-ind]
-        # gf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(gf), (1, 1, filter_size, filter_size)), device)
-
-        # convert image to tensor 
-        # data_tensor = torch.reshape(data_zyx_rs, (data_zyx_rs.shape[0], 1, data_zyx_rs.shape[1], data_zyx_rs.shape[2]))
-
-        # get Gaussian Blur
-        # GB = F.conv2d(input=data_tensor, weight=gf_tensor, padding="same")
-        # LoG = F.conv2d(input=GB, weight=lpf_tensor, padding="same")
-
-        # calculate FF image
-        # laps = np.zeros(data_zyx_rs.shape, dtype=np.float64)
-        # for i in range(data_zyx_rs.shape[0]):
-        #     laps[i, :, :] = doLap(data_zyx_rs[i, :, :], lap_size=filter_size, blur_size=filter_size)
-            # laps_d.append(doLap(data_zyx_rs[i, :, :], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
-
-        # laps = np.asarray(laps)
-        # abs_laps = torch.abs(torch.squeeze(LoG))
-
-        # laps_d = np.asarray(laps_d)
-        # abs_laps_d = np.absolute(laps_d)
-
-        # calculate full-focus and depth images
-        # ff_image = np.zeros(shape=data_zyx_rs[0].shape, dtype=data_zyx[0].dtype)
-        # depth_image = np.argmax(abs_laps, axis=0)
-        # maxima = torch.max(abs_laps, axis=0)
-        # bool_mask = abs_laps == maxima.values
-        # mask = bool_mask.astype(np.uint8)
-        # for i in range(len(data_zyx_rs)):
-        #     ff_image[np.where(mask[i] == 1)] = data_zyx_rs[i][np.where(mask[i] == 1)]
-        # ff_image = np.asarray(torch.max(torch.multiply(bool_mask, data_zyx_rs), axis=0).values.cpu()).astype(np.uint16)
-
-        ff_tensor = gaussian_focus_stacker(data_zyx_rs, filter_size, device)
+        if LoG_flag:
+            ff_tensor = LoG_focus_stacker(data_zyx_rs, filter_size, device)
+        else:
+            ff_tensor = gaussian_focus_stacker(data_zyx_rs, filter_size, device)
         # take the negative
-        ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16)
+        ff_image = np.asarray(ff_tensor.cpu()).astype(np.uint16) #65535 - 
 
         # save images
         ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
-        # depth_out_name = 'depth_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
-
-        # convet depth image to 8 bit
-        # max_z = abs_laps.shape[0]
-        # depth_image_int8 = np.round(depth_image / max_z * 255).astype('uint8')
 
         io.imsave(os.path.join(ff_dir, ff_out_name + ".png"), ff_image)
         # io.imsave(os.path.join(depth_dir, depth_out_name + ".png"), depth_image_int8)
@@ -149,7 +102,7 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
     return {}
 
 
-def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, rs_res=None, metadata_only_flag=False):
+def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, metadata_only_flag=False):
 
     read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
     if write_dir is None:
@@ -164,8 +117,8 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
             if os.path.isdir(dd):
                 dir_list.append(path_leaf(dd))
 
-    if rs_res is None:
-        rs_res = np.asarray([3.2, 3.2])
+    # if rs_res is None:
+    #     rs_res = np.asarray([3.2, 3.2])
 
     # filter for desired directories
     dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
@@ -177,7 +130,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         dir_path = os.path.join(read_dir_root, sub_name, "")
 
         # depth_dir = os.path.join(write_dir, "stitched_depth_images", sub_name)
-        ff_dir = os.path.join(write_dir, "stitched_FF_images",  sub_name + "_test")
+        ff_dir = os.path.join(write_dir, "stitched_FF_images")
 
         # if not os.path.isdir(depth_dir):
         #     os.makedirs(depth_dir)
@@ -229,10 +182,6 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
         # rs_dims_yx = np.round(np.multiply(np.asarray(im_shape[3:]), rs_factor)).astype(int)
         # resample images to a standardized resolution
-
-
-        # # initialize metadata data frame
-        # well_df = pd.DataFrame([], columns=['well', 'nd2_series_num', 'microscope', 'time_int', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Objective', 'Time (s)'])
 
         # read in plate map
         plate_map_xl = pd.ExcelFile(dir_path + sub_name + "_plate_map.xlsx")
