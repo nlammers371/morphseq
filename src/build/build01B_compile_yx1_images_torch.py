@@ -7,6 +7,7 @@ import torchvision
 import torch
 import torch.nn.functional as F
 from src.functions.utilities import path_leaf
+from src.functions.image_utils import gaussian_focus_stacker
 from src.functions.dataset_utils import set_inputs_to_device
 from tqdm import tqdm
 import pandas as pd
@@ -34,11 +35,11 @@ def trim_image(im, out_shape):
 
     im_diffs[np.where(im_diffs < 0)] = 0
     sv = np.floor(im_diffs / 2).astype(int)
-    if np.all(sv>0):
+    if np.all(sv > 0):
         im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
-    elif sv[0]==0:
+    elif sv[0] == 0:
         im_out = im_out[:, sv[1]:-(im_diffs[1] - sv[1])]
-    elif sv[1]==0:
+    elif sv[1] == 0:
         im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
 
     return im_out
@@ -80,31 +81,31 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
 
         px99 = torch.tensor(np.percentile(data_zyx, 99))
         data_zyx_rs = data_zyx_rs / px99
-        data_zyx_rs[data_zyx_rs>1] = 1
+        data_zyx_rs[data_zyx_rs > 1] = 1
         data_zyx_rs = data_zyx_rs * 65535
         # data_zyx_rs = data_zyx_rs.astype(data_zyx.dtype)
 
         # get laplacian and gaussian filters
-        ind = filter_size // 2 + 1
-        lpf = np.zeros((2*filter_size+1, 2*filter_size+1))
-        lpf[filter_size,filter_size] = 1
-        lpf = cv2.Laplacian(lpf, cv2.CV_64F, ksize=filter_size)
-        lpf = lpf[ind:-ind, ind:-ind]
-        lpf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(lpf), (1, 1, filter_size, filter_size)), device)
-
-        # get Gaussian filter
-        gf = np.zeros((2*filter_size+1, 2*filter_size+1))
-        gf[filter_size, filter_size] = 1
-        gf = cv2.GaussianBlur(gf, (filter_size, filter_size), 0)
-        gf = gf[ind:-ind, ind:-ind]
-        gf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(gf), (1, 1, filter_size, filter_size)), device)
+        # ind = filter_size // 2 + 1
+        # lpf = np.zeros((2*filter_size+1, 2*filter_size+1))
+        # lpf[filter_size,filter_size] = 1
+        # lpf = cv2.Laplacian(lpf, cv2.CV_64F, ksize=filter_size)
+        # lpf = lpf[ind:-ind, ind:-ind]
+        # lpf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(lpf), (1, 1, filter_size, filter_size)), device)
+        #
+        # # get Gaussian filter
+        # gf = np.zeros((2*filter_size+1, 2*filter_size+1))
+        # gf[filter_size, filter_size] = 1
+        # gf = cv2.GaussianBlur(gf, (filter_size, filter_size), 0)
+        # gf = gf[ind:-ind, ind:-ind]
+        # gf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(gf), (1, 1, filter_size, filter_size)), device)
 
         # convert image to tensor 
-        data_tensor = torch.reshape(data_zyx_rs, (data_zyx_rs.shape[0], 1, data_zyx_rs.shape[1], data_zyx_rs.shape[2]))
+        # data_tensor = torch.reshape(data_zyx_rs, (data_zyx_rs.shape[0], 1, data_zyx_rs.shape[1], data_zyx_rs.shape[2]))
 
         # get Gaussian Blur
-        GB = F.conv2d(input=data_tensor, weight=gf_tensor, padding="same")
-        LoG = F.conv2d(input=GB, weight=lpf_tensor, padding="same")
+        # GB = F.conv2d(input=data_tensor, weight=gf_tensor, padding="same")
+        # LoG = F.conv2d(input=GB, weight=lpf_tensor, padding="same")
 
         # calculate FF image
         # laps = np.zeros(data_zyx_rs.shape, dtype=np.float64)
@@ -113,7 +114,7 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
             # laps_d.append(doLap(data_zyx_rs[i, :, :], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
 
         # laps = np.asarray(laps)
-        abs_laps = torch.abs(torch.squeeze(LoG))
+        # abs_laps = torch.abs(torch.squeeze(LoG))
 
         # laps_d = np.asarray(laps_d)
         # abs_laps_d = np.absolute(laps_d)
@@ -121,14 +122,16 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
         # calculate full-focus and depth images
         # ff_image = np.zeros(shape=data_zyx_rs[0].shape, dtype=data_zyx[0].dtype)
         # depth_image = np.argmax(abs_laps, axis=0)
-        maxima = torch.max(abs_laps, axis=0)
-        bool_mask = abs_laps == maxima.values
+        # maxima = torch.max(abs_laps, axis=0)
+        # bool_mask = abs_laps == maxima.values
         # mask = bool_mask.astype(np.uint8)
         # for i in range(len(data_zyx_rs)):
         #     ff_image[np.where(mask[i] == 1)] = data_zyx_rs[i][np.where(mask[i] == 1)]
-        ff_image = np.asarray(torch.max(torch.multiply(bool_mask, data_zyx_rs), axis=0).values.cpu()).astype(np.uint16)
+        # ff_image = np.asarray(torch.max(torch.multiply(bool_mask, data_zyx_rs), axis=0).values.cpu()).astype(np.uint16)
+
+        ff_tensor = gaussian_focus_stacker(data_zyx_rs, filter_size, device)
         # take the negative
-        ff_image = 65535 - ff_image 
+        ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16)
 
         # save images
         ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
