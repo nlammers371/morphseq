@@ -89,15 +89,13 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
         else:
             ff_tensor = gaussian_focus_stacker(data_zyx_rs, filter_size, device)
         # take the negative
-        ff_image = np.asarray(ff_tensor.cpu()).astype(np.uint16) #65535 - 
+        ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16) 
 
         # save images
         ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
 
         io.imsave(os.path.join(ff_dir, ff_out_name + ".png"), ff_image)
-        # io.imsave(os.path.join(depth_dir, depth_out_name + ".png"), depth_image_int8)
 
-        # well_dict_out = dict({well_name_conv: well_dict})
 
     return {}
 
