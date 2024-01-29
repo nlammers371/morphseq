@@ -917,10 +917,10 @@ if __name__ == "__main__":
     root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     
     # print('Compiling well metadata...')
-    # build_well_metadata_master(root)
+    build_well_metadata_master(root)
     #
     # print('Compiling embryo metadata...')
-    # segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
+    segment_wells(root, par_flag=True, overwrite_well_stats=False, overwrite_embryo_stats=False)
 
     # print('Extracting embryo snips...')
     extract_embryo_snips(root, par_flag=False, outscale=6.5)

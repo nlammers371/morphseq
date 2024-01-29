@@ -44,8 +44,6 @@ def trim_image(im, out_shape):
 
     return im_out
 
-
-
 def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False, n_z_keep=16, ch_to_use=0, LoG_flag=True):
 
     # set scene
@@ -128,7 +126,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         dir_path = os.path.join(read_dir_root, sub_name, "")
 
         # depth_dir = os.path.join(write_dir, "stitched_depth_images", sub_name)
-        ff_dir = os.path.join(write_dir, "stitched_FF_images")
+        ff_dir = os.path.join(write_dir, "stitched_FF_images", sub_name)
 
         # if not os.path.isdir(depth_dir):
         #     os.makedirs(depth_dir)

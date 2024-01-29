@@ -1,7 +1,10 @@
 import glob
 import skimage.transform as st
+import skimage
+import skimage.io as io
 from torchvision import datasets, transforms
 from torch.utils.data.sampler import SubsetRandomSampler
+from src.functions.dataset_utils import set_inputs_to_device
 import torch
 import os
 import torch
@@ -12,7 +15,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 from aicsimageio import AICSImage
-from urllib.request import urlretrieve
+# from urllib3.request import urlretrieve
 
 def load_split_train_test(datadir, valid_size=.2, batch_size=8):
     # train_transforms = transforms.Compose([transforms.Resize(224),
@@ -63,10 +66,14 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
 
         filename = self.filenames[idx]
-        filename = filename.replace(".tif", "")  # get rid of tif suffix if it exists
-        image_path = os.path.join(self.images_directory, filename + ".tif")
-        mask_path = os.path.join(self.masks_directory, filename + ".tif")
-
+        if ".tif" in filename:
+            filename = filename.replace(".tif", "")  # get rid of tif suffix if it exists
+            image_path = os.path.join(self.images_directory, filename + ".tif")
+            mask_path = os.path.join(self.masks_directory, filename + ".tif")
+        elif ".png" in filename:
+            filename = filename.replace(".png", "")  # get rid of tif suffix if it exists
+            image_path = os.path.join(self.images_directory, filename + ".png")
+            mask_path = os.path.join(self.masks_directory, filename + ".png")
         # image = np.array(Image.open(image_path).convert("RGB"))
 
         # trimap = np.array(Image.open(mask_path))
@@ -93,17 +100,26 @@ class Dataset(torch.utils.data.Dataset):
                 mask = np.empty((self.num_classes, self.out_dims[0], self.out_dims[1]))
 
         # load and resize image
-        imObject = AICSImage(image_path)
-        im_temp = np.squeeze(imObject.data)
+        im_temp = io.imread(image_path)
         if len(im_temp.shape) == 3:
             im_temp = im_temp[:, :, 0]
+
+        # reformat to 8bit if image is natively 16 bit
+        if im_temp.dtype != "uint8":
+            im_temp = skimage.util.img_as_ubyte(im_temp)
+
+        if im_temp.shape[0] < im_temp.shape[1]:
+            im_temp = im_temp.transpose(1,0)
+            
         image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
         image = np.repeat(image[np.newaxis, :, :], 3, axis=0)
+
+    
         # image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
-        if False: #self.num_classes == 1:
-            sample = dict(image=image.astype(np.float32), mask=mask[np.newaxis, :, :].astype(np.float32))  #, trimap=trimap)
-        else:
-            sample = dict(image=image.astype(np.float32), mask=mask.astype(np.float32))
+        # if False: #self.num_classes == 1:
+        # sample = dict(image=image.astype(np.float32), mask=mask[np.newaxis, :, :].astype(np.float32))  #, trimap=trimap)
+        # else:
+        sample = dict(image=image.astype(np.float32), mask=mask.astype(np.float32), path=filename)
         if self.transform is not None:
             sample = self.transform(**sample)
 
@@ -255,21 +271,21 @@ class TqdmUpTo(tqdm):
             self.total = tsize
         self.update(b * bsize - self.n)
 
-def download_url(url, filepath):
-    directory = os.path.dirname(os.path.abspath(filepath))
-    os.makedirs(directory, exist_ok=True)
-    if os.path.exists(filepath):
-        return
+# def download_url(url, filepath):
+#     directory = os.path.dirname(os.path.abspath(filepath))
+#     os.makedirs(directory, exist_ok=True)
+#     if os.path.exists(filepath):
+#         return
 
-    with TqdmUpTo(
-        unit="B",
-        unit_scale=True,
-        unit_divisor=1024,
-        miniters=1,
-        desc=os.path.basename(filepath),
-    ) as t:
-        urlretrieve(url, filename=filepath, reporthook=t.update_to, data=None)
-        t.total = t.n
+#     with TqdmUpTo(
+#         unit="B",
+#         unit_scale=True,
+#         unit_divisor=1024,
+#         miniters=1,
+#         desc=os.path.basename(filepath),
+#     ) as t:
+#         urlretrieve(url, filename=filepath, reporthook=t.update_to, data=None)
+#         t.total = t.n
 
 
 def extract_archive(filepath):
