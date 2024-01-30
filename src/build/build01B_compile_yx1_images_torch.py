@@ -51,13 +51,6 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
     time_int = well_time_list[w]
     well_int = well_ind_list[w]
 
-    # get data
-    # start = time.time()
-    n_z_slices = im_data_dask.shape[2]
-    buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
-    data_zyx = im_data_dask[time_int, well_int, buffer:-buffer, :, :].compute()
-    # print(time.time() - start)
-
     # generate save names
     ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
 
@@ -67,6 +60,13 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
         print(f"Skipping time point {time_int} for well {well_name_conv}.")
 
     else:
+        # get data
+        # start = time.time()
+        n_z_slices = im_data_dask.shape[2]
+        buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
+        data_zyx = im_data_dask[time_int, well_int, buffer:-buffer, :, :].compute()
+        # print(time.time() - start)
+
         data_tensor_raw = torch.tensor(data_zyx.astype(np.float64))
         data_tensor_raw = set_inputs_to_device(data_tensor_raw, device)
 
@@ -102,7 +102,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
     read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
     if write_dir is None:
-        write_dir = os.path.join(data_root, 'built_image_data', 'YX1') 
+        write_dir = os.path.join(data_root, 'built_image_data') 
         
     # handle paths
     if dir_list is None:
@@ -280,8 +280,10 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         
 
         # load previous metadata
-        metadata_path = os.path.join(ff_dir, 'metadata.csv')
-        well_df.to_csv(metadata_path)
+        metadata_path = os.path.join(ff_dir, 'YX1', 'metadata', sub_name)
+        if not os.path.isdir(metadata_path):
+            os.makedirs(metadata_path)
+        well_df.to_csv(os.path.join(metadata_path, 'metadata.csv'))
 
         imObject.close()
         # with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
@@ -294,7 +296,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
 if __name__ == "__main__":
 
-    overwrite_flag = True
+    overwrite_flag = False
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     dir_list = ["20231206"]
     # build FF images

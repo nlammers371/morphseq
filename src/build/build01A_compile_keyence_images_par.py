@@ -270,7 +270,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
 
     # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
     ff_path = os.path.join(ff_folder_list[t], '')
-    ff_name = ff_path.replace(ff_tile_dir, "")
+    ff_name = path_leaf(ff_path)
     n_images = len(glob.glob(ff_path + '*.tif'))
     depth_path = os.path.join(depth_folder_list[t], '')
     depth_name = depth_path.replace(depth_tile_dir, "")
@@ -354,9 +354,9 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
 
 def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list=None, write_dir=None, no_timelapse_flag=False):
 
-    read_dir = os.path.join(data_root, 'raw_image_data', 'Keyence', '') 
+    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '') 
     if write_dir is None:
-        write_dir = os.path.join(data_root, 'built_image_data', 'Keyence', '')
+        write_dir = os.path.join(data_root, 'built_image_data', 'keyence', '')
         
     # # handle paths
     # if dir_list == None:
@@ -426,7 +426,7 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
 
 def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None, no_timelapse_flag=True):
     
-    read_dir = os.path.join(data_root, 'raw_keyence_data', '')
+    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence')
     if write_dir is None:
         write_dir = data_root
 
@@ -446,8 +446,8 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15,
         # sub_name = dir_path.replace(read_dir, "")
 
         # directories containing image tiles
-        depth_tile_dir = os.path.join(write_dir, "built_image_data", "Keyence", "D_images", sub_name, '')
-        ff_tile_dir = os.path.join(write_dir, "built_image_data", "Keyence", "FF_images", sub_name, '')
+        depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
+        ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
 
         
         metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
@@ -533,8 +533,8 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15,
 
 
         # directories to write stitched files to
-        stitch_depth_dir = os.path.join(write_dir, "built_image_data", "Keyence", "stitched_depth_images", sub_name)
-        stitch_ff_dir = os.path.join(write_dir, "built_image_data", "Keyence", "stitched_FF_images", sub_name)
+        stitch_depth_dir = os.path.join(write_dir, "built_image_data", "stitched_depth_images", sub_name)
+        stitch_ff_dir = os.path.join(write_dir, "built_image_data", "stitched_FF_images", sub_name)
 
         if not os.path.isdir(stitch_depth_dir):
             os.makedirs(stitch_depth_dir)
@@ -574,6 +574,6 @@ if __name__ == "__main__":
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     dir_list = ["lmx1b_20231207", "lmx1b_20231208"]
     # build FF images
-    # build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list, ch_to_use=3, no_timelapse_flag=True)
+    build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list, ch_to_use=3, no_timelapse_flag=True)
     # stitch FF images
     stitch_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)

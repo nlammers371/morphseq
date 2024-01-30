@@ -4,9 +4,9 @@ from tqdm import tqdm
 from skimage.measure import label, regionprops
 import cv2
 import pandas as pd
-from functions.utilities import path_leaf
+from src.functions.utilities import path_leaf
 import scipy
-from parfor import pmap
+# from parfor import pmap
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 import skimage
@@ -74,10 +74,10 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
 def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px_mean, px_std):
 
     # set path to segmentation data
-    ff_image_path = os.path.join(root, 'built_keyence_data', 'stitched_FF_images', '')
+    ff_image_path = os.path.join(root, 'built_image_data', 'stitched_FF_images', '')
 
     # set path to segmentation data
-    segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
+    segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
 
     # make directory for embryo snips
     im_snip_dir = os.path.join(root, 'training_data', 'bf_embryo_snips', '')
@@ -312,7 +312,13 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
         master_df_update = []
         df_diff = master_df
         for e, experiment_path in enumerate(experiment_list):
-            images_to_process += sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
+            im_list = sorted(glob.glob(os.path.join(experiment_path, "*.tif")))
+            experiment_date = path_leaf(experiment_path)
+            experiment_date = experiment_date[:8]
+            n_entries = np.sum(master_df["experiment_date"]==experiment_date)
+            if len(im_list) == n_entries:
+                print("Why?")
+            images_to_process += im_list
 
     else:
         master_df_update = pd.read_csv(meta_df_path, index_col=0)
@@ -350,7 +356,7 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
                 # if (iname[:9] not in imname_chunk_list) or (ename not in well_date_list):
                 #     images_to_process += [im]
 
-    df_diff.reset_index(inplace=True)
+        df_diff.reset_index(inplace=True)
 
     return images_to_process, df_diff, master_df_update
 
@@ -628,40 +634,66 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     row_out = pd.DataFrame(row).transpose()
     return row_out
 
-def build_well_metadata_master(root, well_sheets=None):
+
+####################
+# Main process function 1
+####################
+def build_well_metadata_master(root, well_sheets=None, microscope_list=["keyence", "YX1"]):
+
+    print("Compiling metadata...")
 
     if well_sheets == None:
         well_sheets = ["medium", "genotype", "chem_perturbation", "start_age_hpf", "embryos_per_well"]
 
     metadata_path = os.path.join(root, 'metadata', '')
     well_meta_path = os.path.join(metadata_path, 'well_metadata', '*.xlsx')
-    ff_im_path = os.path.join(root, 'built_keyence_data', 'FF_images', '*')
+    ff_im_path = os.path.join(root, 'built_image_data')#, 'FF_images', '*')
 
-    # Load and contanate well metadata into one long pandas table
-    project_list = sorted(glob.glob(ff_im_path))
-    project_list = [p for p in project_list if "ignore" not in p]
-    for p, project in enumerate(project_list):
-        readname = os.path.join(project, 'metadata.csv')
-        pname = path_leaf(project)
-        temp_table = pd.read_csv(readname, index_col=0)
-        temp_table["experiment_date"] = pname
-        temp_table["experiment_id"] = p
-        if p == 0:
-            master_well_table = temp_table.copy()
-        else:
-            master_well_table = pd.concat([master_well_table, temp_table], axis=0, ignore_index=True)
+    # load master experiment table
+    exp_df = pd.read_csv(os.path.join(metadata_path, 'experiment_metadata.csv'))
+    exp_df = exp_df[["experiment_id", "start_date", "temperature", "use_flag", "has_sci_data"]]
+    exp_df = exp_df.loc[exp_df["use_flag"]==1, :]
+    exp_df = exp_df.rename(columns={"start_date": "experiment_date"})
+    exp_date_list = exp_df["experiment_date"].astype(str).to_list()
+    # Load and concatenate well metadata into one long pandas table
+    well_df_list = []
+    for m, microscope in enumerate(microscope_list):
+        if microscope == "keyence":
+            project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "FF_images", "*")))
+        elif microscope == "YX1":
+            project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "metadata", "*")))
 
-    # join on data from experiment table
-    exp_table = pd.read_csv(os.path.join(metadata_path, 'experiment_metadata.csv'))
-    exp_table = exp_table[["experiment_id", "start_date", "temperature", "use_flag"]]
+        project_list = [p for p in project_list if "ignore" not in p]
+        project_list = [p for p in project_list if os.path.isdir(p)]
 
-    master_well_table = master_well_table.merge(exp_table, on="experiment_id", how='left')
+        for p, project in enumerate(project_list):
+            readname = os.path.join(project, 'metadata.csv')
+            pname = path_leaf(project)
+            exp_date = pname[:8]
+            if exp_date in exp_date_list:
+                temp_table = pd.read_csv(readname, index_col=0)
+                temp_table["experiment_date"] = exp_date
+                # temp_table["experiment_id"] = p
+                temp_table["microscope"] = microscope
+                if "lmx1b" in pname:
+                    temp_table = temp_table.drop_duplicates(subset=["well", "time_int"])
+                # add to list of metadata dfs
+                well_df_list.append(temp_table)
+
+    master_well_table = pd.concat(well_df_list, axis=0, ignore_index=True)
+
+    # recast experiment_date variables
+    master_well_table["experiment_date"] = master_well_table["experiment_date"].astype(str)
+    exp_df["experiment_date"] = exp_df["experiment_date"].astype(str)
+
+    master_well_table = master_well_table.merge(exp_df, on="experiment_date", how='left')
     if master_well_table['use_flag'].isnull().values.any():
         raise Exception("Error: mismatching experiment IDs between experiment- and well-level metadata")
 
     # pull metadata from individual well sheets
     project_list_well = sorted(glob.glob(well_meta_path))
     well_name_list = make_well_names()
+    well_df_list = []
     for p, project in enumerate(project_list_well):
         pname = path_leaf(project)
         if "$" not in pname:
@@ -674,27 +706,36 @@ def build_well_metadata_master(root, well_sheets=None):
             for sheet in well_sheets:
                 sheet_temp = xl_temp.parse(sheet)  # read a specific sheet to DataFrame
                 well_df[sheet] = sheet_temp.iloc[0:8, 1:13].values.ravel()
-            well_df["experiment_date"] = date_string
-            if p == 0:
-                long_df = well_df.copy()
+
+            if "qc" in xl_temp.sheet_names:
+                sheet_temp = xl_temp.parse("qc")
+                well_df["well_qc_flag"] = sheet_temp.iloc[0:8, 1:13].values.ravel()
             else:
-                long_df = pd.concat(([long_df, well_df]), axis=0, ignore_index=True)
+                well_df["well_qc_flag"] = 0
+
+            well_df["experiment_date"] = date_string
+
+            # add to list
+            well_df_list.append(well_df)
+            
+    well_df_long = pd.concat(well_df_list, axis=0, ignore_index=True)
+    well_df_long["experiment_date"] = well_df_long["experiment_date"].astype(str)
     # add to main dataset
-    master_well_table = master_well_table.merge(long_df, on=["well", "experiment_date"], how='left')
+    master_well_table = master_well_table.merge(well_df_long, on=["well", "experiment_date"], how='left')
 
     if master_well_table[well_sheets[0]].isnull().values.any():
         raise Exception("Error: missing well-specific metadata")
 
     # subset columns
-    all_cols = master_well_table.columns
-    rm_cols = ["start_date"]
-    keep_cols = [col for col in all_cols if col not in rm_cols]
-    master_well_table = master_well_table[keep_cols]
+    # all_cols = master_well_table.columns
+    # rm_cols = ["start_date"]
+    # keep_cols = [col for col in all_cols if col not in rm_cols]
+    # master_well_table = master_well_table[keep_cols]
 
     # calculate approximate stage using linear formula from Kimmel et al 1995 (is there a better formula out there?)
     # dev_time = actual_time*(0.055 T - 0.57) where T is in Celsius...
     master_well_table["predicted_stage_hpf"] = master_well_table["start_age_hpf"] + \
-                                               master_well_table["Time Rel (s)"]/3600*(0.055*22-0.57)  # rough estimate for room temp
+                                               master_well_table["Time Rel (s)"]/3600*(0.055*master_well_table["temperature"]-0.57)  # linear formulat to estimate stage 
 
     # generate new master index
     master_well_table["well_id"] = master_well_table["experiment_date"] + "_" + master_well_table["well"]
@@ -704,19 +745,24 @@ def build_well_metadata_master(root, well_sheets=None):
 
     # save to file
     master_well_table.to_csv(os.path.join(metadata_path, 'master_well_metadata.csv'))
-
+    print("Done.")
     return {}
 
+####################
+# Main process function 2
+####################
 
 def segment_wells(root, min_sa=2500, max_sa=15000, ld_rat_thresh=0.75, qc_scale_um=150, par_flag=False,
                   overwrite_well_stats=False, overwrite_embryo_stats=False):
 
+    print("Processing wells...")
     # generate paths to useful directories
     metadata_path = os.path.join(root, 'metadata', '')
-    segmentation_path = os.path.join(root, 'built_keyence_data', 'segmentation', '')
+    segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
 
     # load well-level metadata
     master_df = pd.read_csv(os.path.join(metadata_path, 'master_well_metadata.csv'), index_col=0)
+    experiments_to_use = np.unique(master_df["experiment_date"]).astype(str)
 
     # get list of segmentation directories
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
@@ -730,12 +776,28 @@ def segment_wells(root, min_sa=2500, max_sa=15000, ld_rat_thresh=0.75, qc_scale_
 
     # get list of experiments
     experiment_list = sorted(glob.glob(os.path.join(emb_path, "*")))
-    experiment_list = [e for e in experiment_list if "ignore" not in e]
+    experiment_name_list = [path_leaf(e) for e in experiment_list]
+    experiment_list = [experiment_list[e] for e in range(len(experiment_list)) if "ignore" not in experiment_list[e] and experiment_name_list[e][:8] in experiments_to_use ]
 
     ckpt1_path = (os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv"))
 
     images_to_process, df_to_process, prev_meta_df\
         = get_images_to_process(ckpt1_path, experiment_list, master_df, overwrite_well_stats)
+
+    # snip_ids_df = df_to_process.loc[:, "well_id"].to_list()
+    # time_ids_df = df_to_process.loc[:, "time_int"].to_list()
+    # snip_ids_df = [snip_ids_df[s] + f"_t{time_ids_df[s]:04}" for s in range(len(snip_ids_df))]
+    # snip_ids_image = []
+    # for im in images_to_process:
+    #     im_name = path_leaf(im)
+    #     date = path_leaf(im.replace(im_name, ""))
+    #     im_name = im_name.replace("ff_", "")
+        
+    #     snip_id = date[:8] + "_" + im_name[:9]
+    #     snip_id = snip_id.replace("ff_", "")
+    #     # if snip_id not in snip_ids_df:
+    #         # print(snip_id)
+    #     snip_ids_image.append(snip_id)
 
     assert len(images_to_process) == df_to_process.shape[0]
 
@@ -765,7 +827,7 @@ def segment_wells(root, min_sa=2500, max_sa=15000, ld_rat_thresh=0.75, qc_scale_
                 df_temp = count_embryo_regions(index, images_to_process, master_df_update, max_sa, min_sa)
                 emb_df_list.append(df_temp)
 
-        # udate the df
+        # update the df
         for e in range(len(emb_df_list)):
             master_index = emb_df_list[e][0]
             row = emb_df_list[e][1]
@@ -784,11 +846,6 @@ def segment_wells(root, min_sa=2500, max_sa=15000, ld_rat_thresh=0.75, qc_scale_
     # get list of unique well instances
     if np.any(np.isnan(master_df_update["n_embryos_observed"].values.astype(float))):
         raise Exception("Missing rows found in metadata df")
-
-    # master_df = master_df.iloc[np.where(~np.isnan(master_df_update["n_embryos_observed"].values.astype(float)))]
-    # master_df.reset_index(inplace=True)
-    # master_df_update = master_df_update.dropna(subset="n_embryos_observed")
-    # master_df_update.reset_index(inplace=True)
 
     well_id_list = np.unique(master_df_update["well_id"])
     track_df_list = []
@@ -914,7 +971,7 @@ def extract_embryo_snips(root, outscale=5.66, par_flag=False, outshape=None, dl_
 if __name__ == "__main__":
 
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
     
     # print('Compiling well metadata...')
     build_well_metadata_master(root)

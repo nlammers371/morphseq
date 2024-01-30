@@ -10,7 +10,7 @@ from tqdm import tqdm
 from src.functions.utilities import path_leaf
 import skimage.io as io
 
-def apply_unet(root, microscope, model_name, n_classes, overwrite_flag=False, segment_list=None, im_dims=None, batch_size=64, 
+def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=None, im_dims=None, batch_size=64, 
                n_workers=None, make_sample_figures=False, n_sample_figures=100):
 
     print("Generating segmentation masks using " + model_name + "....")
@@ -25,7 +25,7 @@ def apply_unet(root, microscope, model_name, n_classes, overwrite_flag=False, se
         im_dims = [576, 320]  # NL: can I read this off of the loaded model object?
 
     # generate directory for model predictions
-    path_to_labels = os.path.join(root, microscope, 'segmentation', model_name + '_predictions', '')
+    path_to_labels = os.path.join(root, 'segmentation', model_name + '_predictions', '')
 
     if make_sample_figures:
         sample_fig_path = os.path.join(path_to_labels, "sample_figures")
@@ -33,12 +33,12 @@ def apply_unet(root, microscope, model_name, n_classes, overwrite_flag=False, se
             os.makedirs(sample_fig_path)
 
     # get list of images to classify
-    path_to_images = os.path.join(root, microscope, 'stitched_FF_images', '*')
+    path_to_images = os.path.join(root, 'stitched_FF_images', '*')
     if segment_list is None:
-        project_list = glob.glob(path_to_images)
+        project_list = sorted(glob.glob(path_to_images))
         project_list = [p for p in project_list if "ignore" not in p]
     else:
-        project_list = [os.path.join(root, microscope, 'stitched_FF_images', p) for p in segment_list]
+        project_list = [os.path.join(root, 'stitched_FF_images', p) for p in segment_list]
 
     # select subset of images to label
     image_path_list = []
@@ -56,6 +56,7 @@ def apply_unet(root, microscope, model_name, n_classes, overwrite_flag=False, se
         for imp in im_list_temp:
             _, tail = ntpath.split(imp)
             label_path = os.path.join(label_path_root, tail)
+            label_path = label_path.replace(".png", ".tif")
             label_path_list.append(label_path)
             exist_flags.append(os.path.isfile(label_path))
 
@@ -169,25 +170,24 @@ def apply_unet(root, microscope, model_name, n_classes, overwrite_flag=False, se
 
 if __name__ == "__main__":
     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/built_image_data"
-    microscope = "Keyence"
 
     # first, apply classifier to identify living and dead embryos, as well bubbles
     n_classes = 2
     model_name = "unet_emb_v4_0050"
     make_sample_figures = True
-    apply_unet(root, microscope, model_name, n_classes)
+    apply_unet(root, model_name, n_classes)
 
-    # # now apply bubble classifier
-    # n_classes = 1
-    # model_name = "unet_bubble_v0_0050"
-    # apply_unet(root, model_name, n_classes)
+    # now apply bubble classifier
+    n_classes = 1
+    model_name = "unet_bubble_v0_0050"
+    apply_unet(root, model_name, n_classes)
 
-    # # now apply yolk classifier
-    # n_classes = 1
-    # model_name = "unet_yolk_v0_0050"
-    # apply_unet(root, model_name, n_classes)
+    # now apply yolk classifier
+    n_classes = 1
+    model_name = "unet_yolk_v0_0050"
+    apply_unet(root, model_name, n_classes)
 
-    # # now apply classifier to flag out-of-focus embryos
-    # n_classes = 1
-    # model_name = "unet_focus_v2_0050"
-    # apply_unet(root, model_name, n_classes)
+    # now apply classifier to flag out-of-focus embryos
+    n_classes = 1
+    model_name = "unet_focus_v2_0050"
+    apply_unet(root, model_name, n_classes)
