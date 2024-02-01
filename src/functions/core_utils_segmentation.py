@@ -73,7 +73,7 @@ class Dataset(torch.utils.data.Dataset):
         elif ".png" in filename:
             filename = filename.replace(".png", "")  # get rid of tif suffix if it exists
             image_path = os.path.join(self.images_directory, filename + ".png")
-            mask_path = os.path.join(self.masks_directory, filename + ".png")
+            mask_path = os.path.join(self.masks_directory, filename + ".tif")
         # image = np.array(Image.open(image_path).convert("RGB"))
 
         # trimap = np.array(Image.open(mask_path))

@@ -23,7 +23,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
     ############
     # Use surface-area of mask to remove large outliers
     min_embryos = 10
-    sa_ref_key = 'wck-AB'
+    sa_ref_key = 'wik'
     use_indices = np.where((embryo_metadata_df["master_perturbation"] == sa_ref_key) &\
                            (embryo_metadata_df["use_embryo_flag"] == 1))[0]
 
@@ -103,7 +103,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
 if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
 
     # print('Compiling well metadata...')
     # build_well_metadata_master(root)
