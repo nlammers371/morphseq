@@ -98,7 +98,7 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
     return {}
 
 
-def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, metadata_only_flag=False):
+def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, metadata_only_flag=False, n_z_keep_in=None):
 
     read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
     if write_dir is None:
@@ -148,7 +148,10 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         n_time_points = im_shape[0]
         n_wells = im_shape[1]
         n_z_slices = im_shape[2]
-
+        if n_z_keep_in is None:
+            n_z_keep = n_z_slices
+        else:
+            n_z_keep = n_z_keep_in
         # pull dask array
         im_array_dask = imObject.to_dask()
         # use first 10 frames to infer time resolution
@@ -272,7 +275,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         if not metadata_only_flag:
             for w in tqdm(range(n_wells*n_time_points)):
                 process_frame(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
-                                overwrite_flag=overwrite_flag)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
+                                overwrite_flag=overwrite_flag, n_z_keep=n_z_keep)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
         
         
         first_time = np.min(well_df['Time (s)'].copy())
@@ -302,4 +305,4 @@ if __name__ == "__main__":
     # build FF images
     # build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list, ch_to_use=4)
     # stitch FF images
-    build_ff_from_yx1(data_root=data_root, dir_list=dir_list, overwrite_flag=overwrite_flag)
+    build_ff_from_yx1(data_root=data_root, dir_list=dir_list, overwrite_flag=overwrite_flag, n_z_keep_in=8)

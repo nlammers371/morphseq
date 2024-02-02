@@ -319,6 +319,8 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
         cv2.imwrite(os.path.join(mask_snip_dir, "emb_" + im_name + ".jpg"), emb_mask_cropped)
         cv2.imwrite(os.path.join(mask_snip_dir, "yolk_" + im_name + ".jpg"), yolk_mask_cropped)
 
+    else:
+        out_of_frame_flag = None
 
 
     return out_of_frame_flag
@@ -1061,9 +1063,14 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     out_of_frame_flags = []
 
     # if not par_flag:
+    update_indices = []
     for r in tqdm(export_indices):
         oof = export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, 0.1*px_mean, 0.1*px_std, overwrite_flag=overwrite_flag)
-        out_of_frame_flags.append(oof)
+        if oof is not None:
+            out_of_frame_flags.append(oof)
+            update_indices.append(r)
+
+    update_indices = np.asarray(update_indices)
     # else:
     #     # process_map(partial(count_embryo_regions, image_list=images_to_process, master_df_update=master_df_update, max_sa=max_sa, min_sa=min_sa), 
     #     #                                 range(len(images_to_process)), max_workers=n_workers)
@@ -1071,7 +1078,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
                                                                         # outshape, 0.1*px_mean, 0.1*px_std), rP=0.75)
 
     # add oof flag
-    embryo_metadata_df["out_of_frame_flag"].iloc[export_indices] = out_of_frame_flags
+    embryo_metadata_df["out_of_frame_flag"].iloc[update_indices] = out_of_frame_flags
     embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
 
     # save
@@ -1092,4 +1099,4 @@ if __name__ == "__main__":
     # compile_embryo_stats(root, overwrite_flag=True)
 
     # print('Extracting embryo snips...')
-    extract_embryo_snips(root, par_flag=False, outscale=6.5, dl_rad_um=50, overwrite_flag=True)
+    extract_embryo_snips(root, par_flag=False, outscale=6.5, dl_rad_um=50, overwrite_flag=False)
