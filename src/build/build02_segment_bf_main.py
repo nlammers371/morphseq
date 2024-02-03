@@ -10,9 +10,21 @@ from tqdm import tqdm
 from src.functions.utilities import path_leaf
 import skimage.io as io
 
-def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=None, im_dims=None, batch_size=64, 
+def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=None, im_dims=None, batch_size=64,
                n_workers=None, make_sample_figures=False, n_sample_figures=100):
 
+
+    """
+
+    :param root:
+    :param model_name:
+    :param n_classes:
+    :param overwrite_flag:
+    :param im_dims:
+    :param batch_size:
+    :param n_workers:
+    :return:
+    """
     print("Generating segmentation masks using " + model_name + "....")
     # extract key info about computational resources
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
