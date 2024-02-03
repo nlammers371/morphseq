@@ -1078,8 +1078,9 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
                                                                         # outshape, 0.1*px_mean, 0.1*px_std), rP=0.75)
 
     # add oof flag
-    embryo_metadata_df["out_of_frame_flag"].iloc[update_indices] = out_of_frame_flags
-    embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
+    if update_indices.any():
+        embryo_metadata_df["out_of_frame_flag"].iloc[update_indices] = out_of_frame_flags
+        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
 
     # save
     embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
