@@ -30,4 +30,11 @@ write.csv(matrix_counts_lmx, file.path(lmx_analysis_path, "lmx_comb_cell_counts.
 main_model_str = "~ "
 nuisance_model_str = "~ sample_id"
 
-ccm_lmx  = new_cell_count_model(ccs_lmx1b, main_model_formula_str=main_model_str, nuisance_model_formula_str=nuisance_model_str)
+ccm_lmx  = new_cell_count_model(ccs_lmx1b, main_model_formula_str=main_model_str, nuisance_model_formula_str=nuisance_model_str, num_threads=4)
+
+# extract key model outputs
+best_model = ccm_lmx@best
+latent_matrix = best_model$latent
+
+saveRDS(x=matrix_counts_lmx, file=file.path(lmx_analysis_path, "best_lmx_model.rds"))
+write.csv(latent_matrix, file.path(lmx_analysis_path, "best_lmx_model_latent_counts.csv"))
