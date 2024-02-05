@@ -88,6 +88,7 @@ class SeqPairDataset(datasets.ImageFolder):
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
 
+        # positive options
         self_option_array = e_match_array & age_match_array
         other_option_array = ~e_match_array & age_match_array & pert_match_array
 
