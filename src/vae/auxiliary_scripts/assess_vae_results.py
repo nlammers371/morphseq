@@ -38,6 +38,12 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
     for m_iter, model_name in enumerate(models_to_assess):
 
         embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+
+        # make sure morphseq datasets make it through
+        morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
+        ms_bool_vec = np.asarray([embryo_metadata_df.loc[i, "experiment_date"].astype(str) in morphseq_dates for i in embryo_metadata_df.index])
+        embryo_metadata_df.loc[ms_bool_vec, "use_embryo_flag"] = True
+
         # strip down the full dataset
         embryo_df = embryo_metadata_df[
             ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
