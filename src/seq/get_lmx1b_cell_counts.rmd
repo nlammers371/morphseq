@@ -1,6 +1,21 @@
 library(monocle3)
-#library(BPCells)
+library(hooke)
 
-cds_path <- "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/sci-PLEX/processed_sci_data/231205_lmx1b_crispant_run2/lmx1b_projected_comb_cds/cds_object.rds"
+lmx1b_20230830_path = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/sci-PLEX/processed_sci_data/20230830_lmx1b_projected_comb_filt_cds/cds_object.rds"
 
-cds <- load_monocle_objects(directory_path=cds_path)
+lmx1b_20231207_path = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/sci-PLEX/processed_sci_data/20231207_lmx1b_projected_comb_cds/cds_object.rds"
+
+lmx1b_rds_20230830 = readRDS(lmx1b_20230830_path)
+lmx1b_rds_20231207 = readRDS(lmx1b_20231207_path)
+
+ccs_lmx1b_20230830 = new_cell_count_set(lmx1b_rds_20230830, 
+                                  sample_group = "embryo", 
+                                  cell_group = "cell_type")
+                                  
+ccs_lmx1b_20231207 = new_cell_count_set(lmx1b_rds_20231207, 
+                                  sample_group = "embryo", 
+                                  cell_group = "cell_type")
+
+
+ccm_20231207  = new_cell_count_model(ccs_lmx1b_20231207, 
+                                          main_model_formula_str="~ gene_target")
