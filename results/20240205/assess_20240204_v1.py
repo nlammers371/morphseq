@@ -11,7 +11,7 @@ train_name = "20240204_ds_v1"
 architecture_name_vec = ["SeqVAE_z100_ne250_triplet_loss_test_SELF_and_OTHER"]
 # mode_vec = ["train", "eval", "test"]
 
-models_to_assess = None #["SeqVAE_training_2023-12-21_00-18-39", "SeqVAE_training_2023-12-21_04-44-03"]
+models_to_assess = None #["SeqVAE_training_2024-02-06_09-11-54"]
 
 for architecture_name in architecture_name_vec:
     assess_vae_results(root, train_name, architecture_name, n_image_figures=n_image_figures,
