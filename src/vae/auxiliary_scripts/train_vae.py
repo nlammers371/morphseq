@@ -64,6 +64,7 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             input_dim=input_dim,
             **model_args
         )
+
         # Standard data transform
         data_transform = make_dynamic_rs_transform()
 
