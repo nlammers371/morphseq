@@ -25,8 +25,8 @@ def main():
     # (3B & 4B) Seq-VAE (triplet)
     #####################
     train_suffix = "triplet_loss_test_SELF_and_OTHER"
-    temperature_vec = [10, 25]# , 50]
-    gamma_vec = [5, 50]  # 50, 2, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
+    temperature_vec = [15]# , 50]
+    gamma_vec = [10]  # 50, 2, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
     distance_metric = "euclidean"
     self_target_prob = 0.5
     metric_loss_type = "triplet"
