@@ -1,8 +1,8 @@
 from pydantic.dataclasses import dataclass
 from typing_extensions import Literal
-
+from src.vae.auxiliary_scripts.make_training_key import make_seq_key, make_train_test_split
 from ..base.base_config import BaseAEConfig
-
+import pandas as pd
 
 @dataclass
 class VAEConfig(BaseAEConfig):
@@ -18,6 +18,14 @@ class VAEConfig(BaseAEConfig):
     n_out_channels: int = 16
     beta: float = 1.0  # tunes the weight of the KL normalization term
     reconstruction_loss: Literal["bce", "mse"] = "mse"
+    data_root: str = ''
+    train_folder: str = ''
+    age_key_path: str = ''
+
+    def __init__(self, data_root, train_folder, age_key_path):
+        self.data_root = data_root
+        self.train_folder = train_folder
+        self.age_key_path = age_key_path
 
     def split_train_test(self):
         """

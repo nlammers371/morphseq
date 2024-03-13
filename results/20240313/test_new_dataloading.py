@@ -18,13 +18,14 @@ def main():
     input_dim = (1, 288, 128)
     learning_rate = 1e-4
     beta = 1
-    model_type = "SeqVAE"
+    # model_type = "SeqVAE"
+    model_type = "VAE"
 
     #####################
     # (3B & 4B) Seq-VAE (triplet)
     #####################
     train_suffix = "triplet_loss_test_SELF_and_OTHER"
-    temperature = 15# , 50]
+    temperature = 15 # , 50]
     gamma = 10  # 50, 2, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
     distance_metric = "euclidean"
     self_target_prob = 0.5

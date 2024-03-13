@@ -1,7 +1,7 @@
 import os
 from dataclasses import field
 from typing import Union
-
+import numpy as np
 import torch.nn as nn
 from pydantic.dataclasses import dataclass
 
@@ -57,6 +57,8 @@ class BaseTrainerConfig(BaseConfig):
     num_epochs: int = 100
     train_dataloader_num_workers: int = 4
     eval_dataloader_num_workers: int = 4
+    train_indices: None = None
+    eval_indices: None = None
     optimizer_cls: str = "Adam"
     optimizer_params: Union[dict, None] = None
     scheduler_cls: Union[str, None] = None

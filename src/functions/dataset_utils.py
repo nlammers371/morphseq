@@ -6,94 +6,94 @@ import numpy as np
 from torch.utils.data.sampler import SubsetRandomSampler
 
 
-def load_split_train_test(datadir, model_type, model_config, training_config, valid_size=.2, train_frac=0.5):
+# def load_split_train_test(datadir, model_type, model_config, training_config, valid_size=.2, train_frac=0.5):
 
 
-    if model_type == "MetricVAE":
+#     if model_type == "MetricVAE":
 
-        # initialize contrastive data loader
-        data_transform = ContrastiveLearningViewGenerator(
-                                                 ContrastiveLearningDataset.get_simclr_pipeline_transform(), 2)
+#         # initialize contrastive data loader
+#         data_transform = ContrastiveLearningViewGenerator(
+#                                                  ContrastiveLearningDataset.get_simclr_pipeline_transform(), 2)
 
-        # Make datasets
-        image_data = MyCustomDataset(root=os.path.join(datadir),
-                                        transform=data_transform,
-                                        return_name=True
-                                        )
+#         # Make datasets
+#         image_data = MyCustomDataset(root=os.path.join(datadir),
+#                                         transform=data_transform,
+#                                         return_name=True
+#                                         )
 
-        # eval_data = MyCustomDataset(root=os.path.join(datadir),
-        #                                transform=data_transform,
-        #                                return_name=True
-        #                                )
+#         # eval_data = MyCustomDataset(root=os.path.join(datadir),
+#         #                                transform=data_transform,
+#         #                                return_name=True
+#         #                                )
 
-    elif model_type == "VAE":
-        # load standard VAE config
+#     elif model_type == "VAE":
+#         # load standard VAE config
 
-        # Standard data transform
-        data_transform = make_dynamic_rs_transform()
+#         # Standard data transform
+#         data_transform = make_dynamic_rs_transform()
 
-        # Make datasets
-        image_data = MyCustomDataset(root=os.path.join(datadir),
-                                        transform=data_transform,
-                                        return_name=True
-                                        )
+#         # Make datasets
+#         image_data = MyCustomDataset(root=os.path.join(datadir),
+#                                         transform=data_transform,
+#                                         return_name=True
+#                                         )
 
-        # eval_data = MyCustomDataset(root=os.path.join(datadir),
-        #                                transform=data_transform,
-        #                                return_name=True
-        #                                )
+#         # eval_data = MyCustomDataset(root=os.path.join(datadir),
+#         #                                transform=data_transform,
+#         #                                return_name=True
+#         #                                )
 
-    elif model_type == "SeqVAE":
+#     elif model_type == "SeqVAE":
 
-        # initialize contrastive data loader
-        data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
+#         # initialize contrastive data loader
+#         data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
 
-        if model_config.metric_loss_type == "NT-Xent":
-            # Make datasets
-            image_data = SeqPairDataset(root=os.path.join(datadir),
-                                           model_config=model_config,
-                                           mode="train",
-                                           transform=data_transform,
-                                           return_name=True
-                                            )
+#         if model_config.metric_loss_type == "NT-Xent":
+#             # Make datasets
+#             image_data = SeqPairDataset(root=os.path.join(datadir),
+#                                            model_config=model_config,
+#                                            mode="train",
+#                                            transform=data_transform,
+#                                            return_name=True
+#                                             )
 
-            # eval_data = SeqPairDataset(root=os.path.join(datadir),
-            #                               model_config=model_config,
-            #                               mode="eval",
-            #                               transform=data_transform,
-            #                               return_name=True
-            #                                )
-        elif model_config.metric_loss_type == "triplet":
-            # Make datasets
-            image_data = TripletPairDataset(root=os.path.join(datadir),
-                                           model_config=model_config,
-                                           mode="train",
-                                           transform=data_transform,
-                                           return_name=True
-                                            )
+#             # eval_data = SeqPairDataset(root=os.path.join(datadir),
+#             #                               model_config=model_config,
+#             #                               mode="eval",
+#             #                               transform=data_transform,
+#             #                               return_name=True
+#             #                                )
+#         elif model_config.metric_loss_type == "triplet":
+#             # Make datasets
+#             image_data = TripletPairDataset(root=os.path.join(datadir),
+#                                            model_config=model_config,
+#                                            mode="train",
+#                                            transform=data_transform,
+#                                            return_name=True
+#                                             )
 
-            # eval_data = TripletPairDataset(root=os.path.join(datadir),
-            #                               model_config=model_config,
-            #                               mode="eval",
-            #                               transform=data_transform,
-            #                               return_name=True
-            #                                )
-    else:
-        raise Exception("Unrecognized model type: " + model_type)
+#             # eval_data = TripletPairDataset(root=os.path.join(datadir),
+#             #                               model_config=model_config,
+#             #                               mode="eval",
+#             #                               transform=data_transform,
+#             #                               return_name=True
+#             #                                )
+#     else:
+#         raise Exception("Unrecognized model type: " + model_type)
 
-    num_train = len(train_data)
-    indices = list(range(num_train))
-    split = int(np.floor(valid_size * num_train))
-    np.random.shuffle(indices)
+#     num_train = len(train_data)
+#     indices = list(range(num_train))
+#     split = int(np.floor(valid_size * num_train))
+#     np.random.shuffle(indices)
 
-    train_idx, eval_idx = indices[split:], indices[:split]
-    train_sampler = SubsetRandomSampler(train_idx)
-    eval_sampler = SubsetRandomSampler(eval_idx)
+#     train_idx, eval_idx = indices[split:], indices[:split]
+#     train_sampler = SubsetRandomSampler(train_idx)
+#     eval_sampler = SubsetRandomSampler(eval_idx)
 
-    trainloader = torch.utils.data.DataLoader(image_data, sampler=train_sampler, batch_size=training_config.per_device_train_batch_size)
-    evalloader = torch.utils.data.DataLoader(image_data, sampler=eval_sampler, batch_size=training_config.per_device_eval_batch_size)
+#     trainloader = torch.utils.data.DataLoader(image_data, sampler=train_sampler, batch_size=training_config.per_device_train_batch_size)
+#     evalloader = torch.utils.data.DataLoader(image_data, sampler=eval_sampler, batch_size=training_config.per_device_eval_batch_size)
 
-    return trainloader, evalloader
+#     return trainloader, evalloader
 
 
 def set_inputs_to_device(input_tensor, device):
@@ -224,9 +224,9 @@ class TripletPairDataset(datasets.ImageFolder):
             X = self.transform(X)
 
 
-        # key_dict = self.model_config.seq_key_dict[self.mode]
+        key_dict = self.model_config.seq_key_dict[self.mode]
 
-        key_dict = self.model_config.seq_key_dict
+        # key_dict = self.model_config.seq_key_dict
 
         pert_id_vec = key_dict["pert_id_vec"]
         e_id_vec = key_dict["e_id_vec"]
