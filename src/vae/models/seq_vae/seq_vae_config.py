@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
-from ..vae import VAEConfig
+from src.vae.models.vae.vae_config import VAEConfig
 import pandas as pd
-from src.vae.auxiliary_scripts.make_training_key import make_seq_key, get_sequential_pairs
+from src.vae.auxiliary_scripts.make_training_key import make_seq_key, make_train_test_split
 import os
 import numpy as np
 
@@ -43,6 +43,9 @@ class SeqVAEConfig(VAEConfig):
                  data_root=None,
                  train_folder=None,
                  age_key_path=None,
+                 train_indices=None,
+                 eval_indices=None,
+                 test_indices=None,
                  metric_loss_type="NT-Xent",
                  input_dim=(1, 288, 128),
                  latent_dim=100,
@@ -63,6 +66,9 @@ class SeqVAEConfig(VAEConfig):
         self.uses_default_encoder = uses_default_encoder
         self.uses_default_decoder = uses_default_decoder
         self.reconstruction_loss = reconstruction_loss
+        self.train_indices = train_indices
+        self.eval_indices = eval_indices
+        self.test_indices = test_indices
         self.latent_dim = latent_dim
         self.input_dim = input_dim
         self.temperature = temperature
@@ -98,29 +104,34 @@ class SeqVAEConfig(VAEConfig):
             raise Error("No age key path provided")
             # seq_key["inferred_stage_hpf_reg"] = seq_key["predicted_stage_hpf"].copy()
 
+        seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key)
+
         self.seq_key = seq_key
+        self.eval_indices = eval_indices
+        self.test_indices = test_indices
+        self.train_indices = train_indices
 
-        # mode_vec = ["train", "eval", "test"]
-        # seq_key_dict = dict({})
-        # for m, mode in enumerate(mode_vec):
-        #     seq_key = self.seq_key
-        #     seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-        #     seq_key = seq_key.reset_index()
+        mode_vec = np.unique(seq_key["train_cat"])
+        seq_key_dict = dict({})
+        for m, mode in enumerate(mode_vec):
+            seq_key = self.seq_key
+            seq_key = seq_key.loc[seq_key["train_cat"] == mode]
+            seq_key = seq_key.reset_index()
 
-        #     pert_id_vec = seq_key["perturbation_id"].to_numpy()
-        #     e_id_vec = seq_key["embryo_id_num"].to_numpy()
-        #     age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
+            pert_id_vec = seq_key["perturbation_id"].to_numpy()
+            e_id_vec = seq_key["embryo_id_num"].to_numpy()
+            age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
 
-        #     dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
-        #     seq_key_dict[mode] = dict_entry
+            dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
+            seq_key_dict[mode] = dict_entry
 
-        seq_key = self.seq_key
+        # seq_key = self.seq_key
 
-        pert_id_vec = seq_key["perturbation_id"].to_numpy()
-        e_id_vec = seq_key["embryo_id_num"].to_numpy()
-        age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
+        # pert_id_vec = seq_key["perturbation_id"].to_numpy()
+        # e_id_vec = seq_key["embryo_id_num"].to_numpy()
+        # age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
 
-        seq_key_dict = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
+        # seq_key_dict = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
 
         self.seq_key_dict = seq_key_dict
 
