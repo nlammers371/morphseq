@@ -14,7 +14,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
-
+from torch.utils.data.sampler import SubsetRandomSampler
 from src.vae.customexception import ModelError
 from pythae.data.datasets import BaseDataset, collate_dataset_output
 from pythae.models import BaseAE
@@ -198,8 +198,11 @@ class BaseTrainer:
             train_sampler = DistributedSampler(
                 train_dataset, num_replicas=self.world_size, rank=self.rank
             )
+        elif self.training_config.train_indices is not None:
+            train_sampler = SubsetRandomSampler(self.training_config.train_indices)
         else:
             train_sampler = None
+
         return DataLoader(
             dataset=train_dataset,
             batch_size=self.training_config.per_device_train_batch_size,
@@ -217,6 +220,8 @@ class BaseTrainer:
             eval_sampler = DistributedSampler(
                 eval_dataset, num_replicas=self.world_size, rank=self.rank
             )
+        elif self.training_config.eval_indices is not None:
+            eval_sampler = SubsetRandomSampler(self.training_config.eval_indices)
         else:
             eval_sampler = None
         return DataLoader(

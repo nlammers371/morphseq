@@ -11,6 +11,7 @@ from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAECon
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
 from src.vae.trainers import BaseTrainerConfig
 from src.vae.pipelines.training import TrainingPipeline
+from torch.utils.data.sampler import SubsetRandomSampler
 
 def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_suffix='', **kwargs):
 
@@ -37,44 +38,48 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     train_dir = os.path.join(root, "training_data", train_folder)
     # metadata_path = os.path.join(root, "metadata", '')
 
-    if model_type == "MetricVAE":
-        # initialize model configuration
-        model_config = MetricVAEConfig(
-            input_dim=input_dim,
-            **model_args
-        )
-        # initialize contrastive data loader
-        data_transform = ContrastiveLearningViewGenerator(
-                                                 ContrastiveLearningDataset.get_simclr_pipeline_transform(), 2)
+    # if model_type == "MetricVAE":
+    #     # initialize model configuration
+    #     model_config = MetricVAEConfig(
+    #         input_dim=input_dim,
+    #         **model_args
+    #     )
+    #     # initialize contrastive data loader
+    #     data_transform = ContrastiveLearningViewGenerator(
+    #                                              ContrastiveLearningDataset.get_simclr_pipeline_transform(), 2)
 
-        # Make datasets
-        train_dataset = MyCustomDataset(root=os.path.join(train_dir, "train"),
-                                        transform=data_transform,
-                                        return_name=True
-                                        )
+    #     # Make datasets
+    #     train_dataset = MyCustomDataset(root=os.path.join(train_dir, "images"),
+    #                                     transform=data_transform,
+    #                                     return_name=True
+    #                                     )
 
-        eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
-                                       transform=data_transform,
-                                       return_name=True
-                                       )
+    #     eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "images"),
+    #                                    transform=data_transform,
+    #                                    return_name=True
+    #                                    )
 
-    elif model_type == "VAE":
+    if model_type == "VAE":
         # load standard VAE config
         model_config = VAEConfig(
             input_dim=input_dim,
+            data_root=root,
+            train_folder=train_folder,
             **model_args
         )
+        # generate train/test sample indices
+        model_config.split_train_test()
 
         # Standard data transform
         data_transform = make_dynamic_rs_transform()
 
         # Make datasets
-        train_dataset = MyCustomDataset(root=os.path.join(train_dir, "train"),
+        train_dataset = MyCustomDataset(root=os.path.join(train_dir, "images"),
                                         transform=data_transform,
                                         return_name=True
                                         )
 
-        eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "eval"),
+        eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "images"),
                                        transform=data_transform,
                                        return_name=True
                                        )
@@ -87,6 +92,7 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             train_folder=train_folder,
             **model_args
         )
+
         # initialize reference dataset
         print("Making lookup dictionary for sequential pairs...")
         model_config.make_dataset()
@@ -96,14 +102,14 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
 
         if model_config.metric_loss_type == "NT-Xent":
             # Make datasets
-            train_dataset = SeqPairDataset(root=os.path.join(train_dir, "train"),
+            train_dataset = SeqPairDataset(root=os.path.join(train_dir, "images"),
                                            model_config=model_config,
                                            mode="train",
                                            transform=data_transform,
                                            return_name=True
                                             )
 
-            eval_dataset = SeqPairDataset(root=os.path.join(train_dir, "eval"),
+            eval_dataset = SeqPairDataset(root=os.path.join(train_dir, "images"),
                                           model_config=model_config,
                                           mode="eval",
                                           transform=data_transform,
@@ -111,14 +117,14 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
                                            )
         elif model_config.metric_loss_type == "triplet":
             # Make datasets
-            train_dataset = TripletPairDataset(root=os.path.join(train_dir, "train"),
+            train_dataset = TripletPairDataset(root=os.path.join(train_dir, "images"),
                                            model_config=model_config,
                                            mode="train",
                                            transform=data_transform,
                                            return_name=True
                                             )
 
-            eval_dataset = TripletPairDataset(root=os.path.join(train_dir, "eval"),
+            eval_dataset = TripletPairDataset(root=os.path.join(train_dir, "images"),
                                           model_config=model_config,
                                           mode="eval",
                                           transform=data_transform,
@@ -136,24 +142,31 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     output_dir = os.path.join(train_dir, model_name)
 
     # initialize training configuration
-    config = BaseTrainerConfig(
+    train_config = BaseTrainerConfig(
         output_dir=output_dir,
         num_epochs=n_epochs,
         **training_args
     )
+
+    # get train and test indices
+    train_idx = model_config.train_indices
+    eval_idx = model_config.eval_indices
+
+    train_config.train_indices = train_idx
+    train_config.eval_indices = eval_idx
 
     # Initialize encoder and decoder
     encoder = Encoder_Conv_VAE(model_config)  # these are custom classes I wrote for this use case
     decoder = Decoder_Conv_VAE(encoder)
 
     # initialize model
-    if model_type == "MetricVAE":
-        model = MetricVAE(
-            model_config=model_config,
-            encoder=encoder,
-            decoder=decoder
-        )
-    elif model_type == "VAE":
+    # if model_type == "MetricVAE":
+    #     model = MetricVAE(
+    #         model_config=model_config,
+    #         encoder=encoder,
+    #         decoder=decoder
+    #     )
+    if model_type == "VAE":
         model = VAE(
             model_config=model_config,
             encoder=encoder,
@@ -168,8 +181,9 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     else:
         raise Exception("Unrecognized model type: " + model_type)
 
+
     pipeline = TrainingPipeline(
-        training_config=config,
+        training_config=train_config,
         model=model
     )
 
@@ -186,7 +200,7 @@ if __name__ == "__main__":
 
     #####################
     # Required arguments
-    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231106_ds"
     train_dir = os.path.join(root, "training_data", train_folder)
     model_type = "SeqVAE"
