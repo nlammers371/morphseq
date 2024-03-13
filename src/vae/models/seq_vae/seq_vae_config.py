@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 from ..vae import VAEConfig
 import pandas as pd
-from src.build.make_training_key import make_seq_key, get_sequential_pairs
+from src.vae.auxiliary_scripts.make_training_key import make_seq_key, get_sequential_pairs
 import os
 import numpy as np
 
@@ -90,11 +90,6 @@ class SeqVAEConfig(VAEConfig):
         # get seq key
         seq_key = make_seq_key(self.data_root, self.train_folder)
 
-        # use this to get dictionaries for valid pairs for each snip ID
-        # seq_key_dict = get_sequential_pairs(seq_key, time_window=self.time_window,
-        #                               self_target=self.self_target_prob,
-        #                               other_age_penalty=self.other_age_penalty)
-
         if self.age_key_path != '':
             age_key_df = pd.read_csv(self.age_key_path, index_col=0)
             age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
@@ -105,20 +100,28 @@ class SeqVAEConfig(VAEConfig):
 
         self.seq_key = seq_key
 
-        mode_vec = ["train", "eval", "test"]
-        seq_key_dict = dict({})
-        for m, mode in enumerate(mode_vec):
-            seq_key = self.seq_key
-            seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-            seq_key = seq_key.reset_index()
+        # mode_vec = ["train", "eval", "test"]
+        # seq_key_dict = dict({})
+        # for m, mode in enumerate(mode_vec):
+        #     seq_key = self.seq_key
+        #     seq_key = seq_key.loc[seq_key["train_cat"] == mode]
+        #     seq_key = seq_key.reset_index()
 
-            pert_id_vec = seq_key["perturbation_id"].to_numpy()
-            e_id_vec = seq_key["embryo_id_num"].to_numpy()
-            age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
+        #     pert_id_vec = seq_key["perturbation_id"].to_numpy()
+        #     e_id_vec = seq_key["embryo_id_num"].to_numpy()
+        #     age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
 
-            dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
-            seq_key_dict[mode] = dict_entry
+        #     dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
+        #     seq_key_dict[mode] = dict_entry
+
+        seq_key = self.seq_key
+
+        pert_id_vec = seq_key["perturbation_id"].to_numpy()
+        e_id_vec = seq_key["embryo_id_num"].to_numpy()
+        age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
+
+        seq_key_dict = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
 
         self.seq_key_dict = seq_key_dict
-        # self.write_seq_pair_data()
+
 

@@ -6,12 +6,16 @@ import glob as glob
 import pandas as pd
 from src.functions.utilities import path_leaf
 
+
+###########
+# STEP 1
+
 def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age_penalty=2):
 
     metadata_path = os.path.join(root, "metadata", '')
     training_path = os.path.join(root, "training_data", train_name, '')
     # instance_path = os.path.join(training_path, instance_name)
-    mode_vec = ["train", "eval", "test"]
+    mode_vec = sorted(glob.glob(training_path + "*"))
 
     # read in metadata database
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
@@ -33,7 +37,8 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
     # make temporary dataframe for merge purposes
     temp_df = pd.DataFrame(np.asarray(image_list), columns=["snip_id"])
-    temp_df["train_cat"] = mode_list
+    temp_df["image_folder"] = mode_list
+    temp_df["train_cat"] = ""
     temp_df["image_path"] = image_path_list
     seq_key = seq_key.merge(temp_df, how="inner", on="snip_id")
 
@@ -56,10 +61,141 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
     return seq_key
 
+
+#########
+# STEP 2
+
+def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
+                            frac_to_use=1.0, test_ids=None, test_dates=None, test_perturbations=None,
+                            overwrite_flag=False):
+
+
+    rs_flag = rs_factor != 1
+    
+    morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
+
+    np.random.seed(r_seed)
+    # metadata_path = os.path.join(root, "metadata", '')
+    # data_path = os.path.join(root, "training_data", "bf_embryo_snips", '')
+    
+    # read in metadata database
+    # embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+    
+    # get list of training files
+    image_list = seq_key["image_path"].to_numpy().tolist() 
+    snip_id_list = [path_leaf(path) for path in image_list]
+
+    # randomly partition into train, eval, and test
+    # this needs to be done at the level of embryos, not images
+    if train_eval_test == None:
+        train_eval_test = [0.8, 0.20, 0.0]
+    train_eval_test = (np.asarray(train_eval_test)*frac_to_use).tolist()
+
+    # snip_id_vec = embryo_metadata_df["snip_id"].values
+    # good_snip_indices = np.where(embryo_metadata_df["use_embryo_flag"].values == True)[0]
+    embryo_id_index = np.unique(embryo_metadata_df["embryo_id"].values)
+
+    # check to see if there are any experiment dates or perturb ation types that should be left out of training (kept in test)
+    if test_dates is not None:
+        eid_date_list = [embryo_metadata_df.loc[e, "embryo_id"] for e in embryo_metadata_df.index if embryo_metadata_df.loc[e, "experiment_date"].astype(str) in test_dates]
+        eids_date_test = np.unique(eid_date_list).tolist()
+        if test_ids is not None:
+            test_ids += eids_date_test
+        else:
+            test_ids = eids_date_test
+
+    if test_perturbations is not None:
+        eid_pert_list = [embryo_metadata_df.loc[e, "embryo_id"] for e in embryo_metadata_df.index if embryo_metadata_df.loc[e, "master_perturbation"] in test_perturbations]
+        eids_pert_test = np.unique(eid_pert_list).tolist()
+        if test_ids is not None:
+            test_ids += eids_pert_test
+        else:
+            test_ids = eids_pert_test 
+
+    # shuffle and filter
+    embryo_id_index_shuffle = np.random.choice(embryo_id_index, len(embryo_id_index), replace=False)
+    image_list_shuffle = []
+    image_indices_shuffle = []
+    
+    # if we specified specific embryos to test, remove them now
+    if test_ids != None:
+        test_ids = np.unique(test_ids)
+
+        test_paths_pre = []
+        test_indices_pre = []
+        # df_indices_pre = []
+        for tid in test_ids:
+            if tid[:8] not in morphseq_dates:
+                df_ids = np.where((embryo_metadata_df["embryo_id"].values == tid) &
+                        (embryo_metadata_df["use_embryo_flag"].values == True))[0]
+            else:
+                df_ids = np.where((embryo_metadata_df["embryo_id"].values == tid))[0]
+                
+            snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
+            e_list = [os.path.join(data_path, s + ".jpg") for s in snip_list]
+            i_list = df_ids.tolist()
+    
+            test_paths_pre += e_list
+            test_indices_pre += i_list
+            # df_indices_pre += df_ids.tolist()
+        
+        # train_eval_test[-1] = 0
+        # train_eval_test = train_eval_test / np.sum(train_eval_test)
+        
+        embryo_id_index_shuffle = [e for e in embryo_id_index_shuffle if e not in test_ids]
+
+    else:  # otherwise, sample embryos that were raised in MC, since these will give better stability over time
+        test_paths_pre = []
+        test_indices_pre = []
+        # df_indices_pre = []
+
+    # itereate through shuffled IDs
+    df_ids_list = []
+    for eid in embryo_id_index_shuffle:
+    
+        # extract embryos that match current eid
+        df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (embryo_metadata_df["use_embryo_flag"].values == True))[0]
+        snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
+        e_list = [os.path.join(data_path, s + ".jpg") for s in snip_list]
+        i_list = df_ids.tolist()
+    
+        # remove frames that did not meet QC standards
+        image_list_shuffle += e_list
+        image_indices_shuffle += i_list
+        # df_ids_list += df_ids.tolist()
+    
+    # assign to groups. Note that a few frames from the same embryo may end up split between categories. I think that this is fine
+    n_frames_total = len(image_list_shuffle) #np.sum(embryo_metadata_df["use_embryo_flag"].values == True)
+
+    n_train = np.round(train_eval_test[0]*n_frames_total).astype(int)
+    # train_paths = image_list_shuffle[:n_train]
+    train_indices = image_indices_shuffle[:n_train]
+    # train_df_indices = df_ids_list[:n_train]
+    
+    n_eval = np.round(train_eval_test[1]*n_frames_total).astype(int)
+    # eval_paths = image_list_shuffle[n_train:n_train+n_eval]
+    eval_indices = image_indices_shuffle[n_train:n_train+n_eval]
+    # eval_df_indices = df_ids_list[n_train:n_train+n_eval]
+
+    n_test = np.round(train_eval_test[2]*n_frames_total).astype(int)
+    # test_paths = test_paths_pre + image_list_shuffle[n_train+n_eval:n_train+n_eval+n_test]
+    test_indices = test_indices_pre + image_indices_shuffle[n_train+n_eval:n_train+n_eval+n_test]
+    # test_df_indices = df_indices_pre + df_ids_list[n_train+n_eval:n_train+n_eval+n_test]
+
+    # update seq key
+    seq_key.loc[train_indices, "train_cat"] = "train"
+    seq_key.loc[test_indices, "train_cat"] = "test"
+    seq_key.loc[eval_indices, "train_cat"] = "eval"
+
+    return seq_key, train_indices, eval_indices, test_indices
+
+#########
+# STEP 3
+
 def get_sequential_pairs(seq_key, time_window, self_target, other_age_penalty, mode_vec=None):
 
     if mode_vec is None:
-        mode_vec = ["train", "eval", "test"]
+        mode_vec = np.unique(seq_key["train_cat"])    #  ["train", "eval", "test"]
 
     seq_pair_dict = dict({})
 
