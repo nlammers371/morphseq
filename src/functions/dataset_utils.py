@@ -3,98 +3,10 @@ from torchvision import datasets, transforms
 import torch
 from PIL import Image
 import numpy as np
+from tqdm import tqdm
 from torch.utils.data.sampler import SubsetRandomSampler
-
-
-# def load_split_train_test(datadir, model_type, model_config, training_config, valid_size=.2, train_frac=0.5):
-
-
-#     if model_type == "MetricVAE":
-
-#         # initialize contrastive data loader
-#         data_transform = ContrastiveLearningViewGenerator(
-#                                                  ContrastiveLearningDataset.get_simclr_pipeline_transform(), 2)
-
-#         # Make datasets
-#         image_data = MyCustomDataset(root=os.path.join(datadir),
-#                                         transform=data_transform,
-#                                         return_name=True
-#                                         )
-
-#         # eval_data = MyCustomDataset(root=os.path.join(datadir),
-#         #                                transform=data_transform,
-#         #                                return_name=True
-#         #                                )
-
-#     elif model_type == "VAE":
-#         # load standard VAE config
-
-#         # Standard data transform
-#         data_transform = make_dynamic_rs_transform()
-
-#         # Make datasets
-#         image_data = MyCustomDataset(root=os.path.join(datadir),
-#                                         transform=data_transform,
-#                                         return_name=True
-#                                         )
-
-#         # eval_data = MyCustomDataset(root=os.path.join(datadir),
-#         #                                transform=data_transform,
-#         #                                return_name=True
-#         #                                )
-
-#     elif model_type == "SeqVAE":
-
-#         # initialize contrastive data loader
-#         data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
-
-#         if model_config.metric_loss_type == "NT-Xent":
-#             # Make datasets
-#             image_data = SeqPairDataset(root=os.path.join(datadir),
-#                                            model_config=model_config,
-#                                            mode="train",
-#                                            transform=data_transform,
-#                                            return_name=True
-#                                             )
-
-#             # eval_data = SeqPairDataset(root=os.path.join(datadir),
-#             #                               model_config=model_config,
-#             #                               mode="eval",
-#             #                               transform=data_transform,
-#             #                               return_name=True
-#             #                                )
-#         elif model_config.metric_loss_type == "triplet":
-#             # Make datasets
-#             image_data = TripletPairDataset(root=os.path.join(datadir),
-#                                            model_config=model_config,
-#                                            mode="train",
-#                                            transform=data_transform,
-#                                            return_name=True
-#                                             )
-
-#             # eval_data = TripletPairDataset(root=os.path.join(datadir),
-#             #                               model_config=model_config,
-#             #                               mode="eval",
-#             #                               transform=data_transform,
-#             #                               return_name=True
-#             #                                )
-#     else:
-#         raise Exception("Unrecognized model type: " + model_type)
-
-#     num_train = len(train_data)
-#     indices = list(range(num_train))
-#     split = int(np.floor(valid_size * num_train))
-#     np.random.shuffle(indices)
-
-#     train_idx, eval_idx = indices[split:], indices[:split]
-#     train_sampler = SubsetRandomSampler(train_idx)
-#     eval_sampler = SubsetRandomSampler(eval_idx)
-
-#     trainloader = torch.utils.data.DataLoader(image_data, sampler=train_sampler, batch_size=training_config.per_device_train_batch_size)
-#     evalloader = torch.utils.data.DataLoader(image_data, sampler=eval_sampler, batch_size=training_config.per_device_eval_batch_size)
-
-#     return trainloader, evalloader
-
+from torch.utils.data import DataLoader
+from pythae.data.datasets import collate_dataset_output
 
 def set_inputs_to_device(input_tensor, device):
 
@@ -121,6 +33,91 @@ def make_dynamic_rs_transform():#im_dims):
         transforms.ToTensor(),
     ])
     return data_transform
+
+def grayscale_transform():#im_dims):
+    data_transform = transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),
+        # transforms.Resize((im_dims[0], im_dims[1])),
+        # transforms.ToTensor(),
+    ])
+    return data_transform
+
+
+class DatasetCached(datasets.ImageFolder):
+
+    def __init__(self, root, training_config, use_cache=False, return_name=False, transform=None, target_transform=None, load_batch_size=128):
+        self.return_name = return_name
+        self.use_cache = use_cache
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+        if self.use_cache:
+
+            # look for device 
+            device = (
+                "cuda"
+                if torch.cuda.is_available()
+                else "cpu"
+            )
+
+            print("Preloading image data")
+            
+
+            basic_transform = transforms.Compose([
+                transforms.Grayscale(num_output_channels=1),
+                transforms.ToTensor(),
+            ])
+
+            data = datasets.ImageFolder(root=root, transform=basic_transform)
+
+            dataloader = DataLoader(
+                    dataset=data,
+                    batch_size=load_batch_size,
+                    shuffle=False,
+                    num_workers=training_config.train_dataloader_num_workers,
+                    collate_fn=collate_dataset_output,
+                )
+
+            n_images = len(data)
+            # n_load_batches = np.ceil(n_images / load_batch_size).astype(np.uint16)
+            start_i = 0
+
+            for batch_i, inputs in enumerate(tqdm(dataloader)):
+
+                # inputs = set_inputs_to_device(device, inputs)
+                x = torch.squeeze(inputs[0])
+                # xu = xtorch.squeeze(x[:, 0, :, :]*255).type(torch.uint8)
+                if batch_i == 0:
+                    data_tensor = torch.empty((n_images, x.shape[1], x.shape[2]), dtype=x.dtype)
+
+                data_tensor[start_i:start_i+load_batch_size] = x
+                start_i += load_batch_size
+
+            self.data = data_tensor #.to(device)
+
+    def __getitem__(self, index):
+        if not self.use_cache:
+            X, _ = super().__getitem__(index)
+
+            if not self.return_name:
+                return DatasetOutput(
+                    data=X
+                )
+            else:
+                return DatasetOutput(data=X, label=self.samples[index], index=index)
+        
+        else:
+            X = self.data[index, :, :].unsqueeze(0)
+
+            # if self.transform:
+            #     X = self.transform(X)
+
+            if not self.return_name:
+                return DatasetOutput(
+                    data=X
+                )
+            else:
+                return DatasetOutput(data=X, label=self.samples[index], index=index)
+
 
 #########3
 # Define a custom dataset class
