@@ -8,6 +8,50 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import DataLoader
 from pythae.data.datasets import collate_dataset_output
 
+def preload_data(root, training_config, load_batch_size=128):
+    # look for device 
+    device = (
+        "cuda"
+        if torch.cuda.is_available() and not training_config.no_cuda
+        else "cpu"
+    )
+
+    print("Preloading image data")
+    
+    basic_transform = transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),
+        transforms.ToTensor(),
+    ])
+
+    data = datasets.ImageFolder(root=root, transform=basic_transform)
+
+    dataloader = DataLoader(
+            dataset=data,
+            batch_size=load_batch_size,
+            shuffle=False,
+            num_workers=training_config.preload_dataloader_num_workers,
+            collate_fn=collate_dataset_output,
+        )
+
+    n_images = len(data)
+    # n_load_batches = np.ceil(n_images / load_batch_size).astype(np.uint16)
+    start_i = 0
+
+    for batch_i, inputs in enumerate(tqdm(dataloader)):
+
+        # inputs = set_inputs_to_device(device, inputs)
+        x = torch.squeeze(inputs[0])
+        # x = torch.squeeze(x[:, 0, :, :]*255).type(torch.uint8)
+        if batch_i == 0:
+            data_tensor = torch.empty((n_images, x.shape[1], x.shape[2]), dtype=x.dtype)
+
+        data_tensor[start_i:start_i+load_batch_size] = x
+        start_i += load_batch_size
+
+    # data_tensor = data_tensor.to(device)
+
+    return data_tensor
+
 def set_inputs_to_device(input_tensor, device):
 
     inputs_on_device = input_tensor
@@ -45,54 +89,18 @@ def grayscale_transform():#im_dims):
 
 class DatasetCached(datasets.ImageFolder):
 
-    def __init__(self, root, training_config, use_cache=False, return_name=False, transform=None, target_transform=None, load_batch_size=128):
+    def __init__(self, root, training_config, return_name=False, transform=None, target_transform=None, load_batch_size=128):
         self.return_name = return_name
-        self.use_cache = use_cache
+        self.train_config = training_config
+        self.root = root
+        self.use_cache = training_config.cache_data
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
         if self.use_cache:
 
-            # look for device 
-            device = (
-                "cuda"
-                if torch.cuda.is_available()
-                else "cpu"
-            )
+            data_tensor = preload_data(self.root, self.train_config)
 
-            print("Preloading image data")
-            
-
-            basic_transform = transforms.Compose([
-                transforms.Grayscale(num_output_channels=1),
-                transforms.ToTensor(),
-            ])
-
-            data = datasets.ImageFolder(root=root, transform=basic_transform)
-
-            dataloader = DataLoader(
-                    dataset=data,
-                    batch_size=load_batch_size,
-                    shuffle=False,
-                    num_workers=training_config.train_dataloader_num_workers,
-                    collate_fn=collate_dataset_output,
-                )
-
-            n_images = len(data)
-            # n_load_batches = np.ceil(n_images / load_batch_size).astype(np.uint16)
-            start_i = 0
-
-            for batch_i, inputs in enumerate(tqdm(dataloader)):
-
-                # inputs = set_inputs_to_device(device, inputs)
-                x = torch.squeeze(inputs[0])
-                # xu = xtorch.squeeze(x[:, 0, :, :]*255).type(torch.uint8)
-                if batch_i == 0:
-                    data_tensor = torch.empty((n_images, x.shape[1], x.shape[2]), dtype=x.dtype)
-
-                data_tensor[start_i:start_i+load_batch_size] = x
-                start_i += load_batch_size
-
-            self.data = data_tensor #.to(device)
+            self.data = data_tensor #.to(device) # pass to the device
 
     def __getitem__(self, index):
         if not self.use_cache:
@@ -108,8 +116,8 @@ class DatasetCached(datasets.ImageFolder):
         else:
             X = self.data[index, :, :].unsqueeze(0)
 
-            # if self.transform:
-            #     X = self.transform(X)
+            if self.transform:
+                X = self.transform(X)
 
             if not self.return_name:
                 return DatasetOutput(
@@ -137,6 +145,208 @@ class MyCustomDataset(datasets.ImageFolder):
         else:
             return DatasetOutput(data=X, label=self.samples[index], index=index)
 
+
+class SeqPairDatasetCached(datasets.ImageFolder):
+
+    def __init__(self, root, model_config, train_config, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
+        self.model_config = model_config
+        self.train_config = train_config
+        self.root = root
+        self.cache_data = train_config.cache_data
+        # self.mode = mode
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+        if self.cache_data:
+
+            data_tensor = preload_data(self.root, self.train_config)
+
+            self.data = data_tensor
+
+    def __getitem__(self, index):
+        
+        if self.cache_data:
+            X = self.data[index, :, :].unsqueeze(0)
+        else:
+            X = Image.open(self.samples[index][0])
+
+        if self.transform:
+            X = self.transform(X)
+
+        # determine if we're in train or eval partition
+        train_flag = index in self.model_config.train_indices
+        if train_flag:
+            group_bool_vec = self.model_config.train_bool
+        else:
+            group_bool_vec = self.model_config.eval_bool
+
+        key_dict = self.model_config.seq_key_dict  # [self.mode]
+
+        pert_id_vec = key_dict["pert_id_vec"]
+        e_id_vec = key_dict["e_id_vec"]
+        age_hpf_vec = key_dict["age_hpf_vec"]
+
+        time_window = self.model_config.time_window
+        self_target = self.model_config.self_target_prob
+        other_age_penalty = self.model_config.other_age_penalty
+
+        #############3
+        # Select sequential pair
+        pert_id_input = pert_id_vec[index]
+        e_id_input = e_id_vec[index]
+        age_hpf_input = age_hpf_vec[index]
+
+        pert_match_array = pert_id_vec == pert_id_input
+        e_match_array = e_id_vec == e_id_input
+        age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
+        age_match_array = age_delta_array <= time_window
+
+        # positive options
+        self_option_array = e_match_array & age_match_array & group_bool_vec
+        other_option_array = (~e_match_array) & age_match_array & pert_match_array & group_bool_vec
+
+        if (np.random.rand() <= self_target) or (np.sum(other_option_array) == 0):
+            options = np.nonzero(self_option_array)[0]
+            seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+            weight_hpf = age_delta_array[seq_pair_index] + 1
+        else:
+            options = np.nonzero(other_option_array)[0]
+            seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+            weight_hpf = age_delta_array[seq_pair_index] + 1 + other_age_penalty
+
+        #########
+        # load sequential pair
+        if self.cache_data:
+            Y = self.data[seq_pair_index, :, :].unsqueeze(0)
+        else:
+            Y = Image.open(self.samples[seq_pair_index][0])
+        
+        if self.transform:
+            Y = self.transform(Y)
+
+        X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
+        Y = torch.reshape(Y, (1, Y.shape[0], Y.shape[1], Y.shape[2]))
+        XY = torch.cat([X, Y], axis=0)
+
+        weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
+        # if not self.return_name:
+        #     return DatasetOutput(
+        #         data=X
+        #     )
+        # else:
+        return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index],
+                             weight_hpf=weight_hpf,
+                             self_stats=[e_id_input, age_hpf_input, pert_id_input],
+                             other_stats=[e_id_vec[seq_pair_index], age_hpf_vec[seq_pair_index], pert_id_vec[seq_pair_index]])
+
+
+class TripletDatasetCached(datasets.ImageFolder):
+
+    def __init__(self, root, model_config, train_config, cache_data, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
+        self.model_config = model_config
+        self.root = root
+        self.train_config = train_config
+        self.cache_data = cache_data
+
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+        if self.cache_data:
+            data_tensor = preload_data(self.root, self.train_config)
+
+            self.data = data_tensor
+
+
+    def __getitem__(self, index):
+
+        if self.cache_data:
+            X = self.data[index, :, :].unsqueeze(0)
+        else:
+            X = Image.open(self.samples[index][0])
+
+        if self.transform:
+            X = self.transform(X)
+
+
+        # determine if we're in train or eval partition
+        train_flag = index in self.model_config.train_indices
+        if train_flag:
+            group_bool_vec = self.model_config.train_bool
+        else:
+            group_bool_vec = self.model_config.eval_bool
+
+        key_dict = self.model_config.seq_key_dict
+
+        # key_dict = self.model_config.seq_key_dict
+
+        pert_id_vec = key_dict["pert_id_vec"]
+        e_id_vec = key_dict["e_id_vec"]
+        age_hpf_vec = key_dict["age_hpf_vec"]
+
+        time_window = self.model_config.time_window
+        self_target = self.model_config.self_target_prob
+        other_age_penalty = self.model_config.other_age_penalty
+
+        #############
+        # Select sequential pair
+        pert_id_input = pert_id_vec[index]
+        e_id_input = e_id_vec[index]
+        age_hpf_input = age_hpf_vec[index]
+
+        pert_match_array = pert_id_vec == pert_id_input
+        e_match_array = e_id_vec == e_id_input
+        age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
+        age_match_array = age_delta_array <= time_window
+
+        # Select positive comparison
+        self_option_array = e_match_array & age_match_array & group_bool_vec
+        other_option_array = (~e_match_array) & age_match_array & pert_match_array & group_bool_vec
+
+        if (np.random.rand() <= self_target) or (np.sum(other_option_array) == 0):
+            options = np.nonzero(self_option_array)[0]
+            pos_pair_index = np.random.choice(options, 1, replace=False)[0]
+
+        else:
+            options = np.nonzero(other_option_array)[0]
+            pos_pair_index = np.random.choice(options, 1, replace=False)[0]
+
+        # Select negative comparison
+        age_mismatch_array = age_delta_array >= (time_window + 1.5)
+        negative_option_array = (age_mismatch_array | (~pert_match_array)) & group_bool_vec
+        neg_options = np.nonzero(negative_option_array)[0]
+        neg_pair_index = np.random.choice(neg_options, 1, replace=False)[0]
+
+        #########
+        # load positive and negative points
+        if self.cache_data:
+            YP = self.data[pos_pair_index, :, :].unsqueeze(0)
+        else:
+            YP = Image.open(self.samples[pos_pair_index][0])
+        if self.transform:
+            YP = self.transform(YP)
+
+        if self.cache_data:
+            YN = self.data[neg_pair_index, :, :].unsqueeze(0)
+        else:
+            YN = Image.open(self.samples[neg_pair_index][0])
+        if self.transform:
+            YN = self.transform(YN)
+
+        X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
+        YP = torch.reshape(YP, (1, YP.shape[0], YP.shape[1], YP.shape[2]))
+        YN = torch.reshape(YN, (1, YN.shape[0], YN.shape[1], YN.shape[2]))
+        XY = torch.cat([X, YP, YN], axis=0)
+
+        # weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
+        # if not self.return_name:
+        #     return DatasetOutput(
+        #         data=X
+        #     )
+        # else:
+        return DatasetOutput(data=XY, label=[self.samples[index][0], self.samples[pos_pair_index][0], self.samples[neg_pair_index][0]],
+                             index=[index, pos_pair_index, neg_pair_index])
+
+
 class SeqPairDataset(datasets.ImageFolder):
 
     def __init__(self, root, model_config, mode, return_name=False, transform=None, target_transform=None):
@@ -146,10 +356,10 @@ class SeqPairDataset(datasets.ImageFolder):
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
     def __getitem__(self, index):
+
         X = Image.open(self.samples[index][0])
         if self.transform:
             X = self.transform(X)
-
 
         key_dict = self.model_config.seq_key_dict[self.mode]
 
@@ -219,7 +429,6 @@ class TripletPairDataset(datasets.ImageFolder):
         X = Image.open(self.samples[index][0])
         if self.transform:
             X = self.transform(X)
-
 
         key_dict = self.model_config.seq_key_dict[self.mode]
 
@@ -319,6 +528,21 @@ class ContrastiveLearningDataset:
                                               #transforms.RandomGrayscale(p=0.2),
                                               #GaussianBlur(kernel_size=5),
                                               transforms.ToTensor()])
+        return data_transforms
+
+    
+    def get_contrastive_transform_cache():#(size, s=1):
+        """Return a set of data augmentation transformations as described in the SimCLR paper."""
+        color_jitter = transforms.ColorJitter(brightness=0.3)
+        data_transforms = transforms.Compose([#transforms.Grayscale(num_output_channels=1),
+                                              transforms.RandomAffine(degrees=15, scale=tuple([0.7, 1.3])),
+                                              transforms.RandomHorizontalFlip(),
+                                              transforms.RandomVerticalFlip(),
+                                              transforms.RandomApply([color_jitter], p=0.8),
+                                              #transforms.RandomGrayscale(p=0.2),
+                                              #GaussianBlur(kernel_size=5),
+                                              #transforms.ToTensor()
+                                              ])
         return data_transforms
 
     def get_dataset(self, name, n_views):

@@ -211,6 +211,7 @@ class BaseTrainer:
             shuffle=(train_sampler is None),
             sampler=train_sampler,
             collate_fn=collate_dataset_output,
+            persistent_workers=False
         )
 
     def get_eval_dataloader(
@@ -232,6 +233,7 @@ class BaseTrainer:
             shuffle=(eval_sampler is None),
             sampler=eval_sampler,
             collate_fn=collate_dataset_output,
+            persistent_workers=False
         )
 
     def set_optimizer(self):

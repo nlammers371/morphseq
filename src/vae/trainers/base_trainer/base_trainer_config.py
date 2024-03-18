@@ -5,7 +5,7 @@ import numpy as np
 import torch.nn as nn
 from pydantic.dataclasses import dataclass
 
-from ...config import BaseConfig
+from src.vae.config import BaseConfig
 
 
 @dataclass
@@ -55,6 +55,7 @@ class BaseTrainerConfig(BaseConfig):
     per_device_train_batch_size: int = 64
     per_device_eval_batch_size: int = 64
     num_epochs: int = 100
+    preload_dataloader_num_workers: int = 4
     train_dataloader_num_workers: int = 4
     eval_dataloader_num_workers: int = 4
     train_indices: None = None
@@ -71,6 +72,7 @@ class BaseTrainerConfig(BaseConfig):
     seed: int = 8
     no_cuda: bool = False
     pin_memory: bool = True
+    cache_data: bool = False
     world_size: int = field(default=-1)
     local_rank: int = field(default=-1)
     rank: int = field(default=-1)
@@ -80,6 +82,12 @@ class BaseTrainerConfig(BaseConfig):
     amp: bool = False
 
     def __post_init__(self):
+        
+        # if self.cache_data:
+        #     self.pin_memory=False
+        #     self.train_dataloader_num_workers=0
+        #     self.eval_dataloader_num_workers=0
+
         """Check compatibility and sets up distributed training"""
         super().__post_init__()
         env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
