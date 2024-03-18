@@ -5,7 +5,7 @@ sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 # sys.path.append("../src/")
 
 from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, \
-    ContrastiveLearningViewGenerator, SeqPairDataset, TripletPairDataset, DatasetCached, grayscale_transform
+    ContrastiveLearningViewGenerator, SeqPairDataset, SeqPairDatasetCached, TripletPairDataset, TripletDatasetCached, DatasetCached, grayscale_transform
 import os
 from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
@@ -13,7 +13,7 @@ from src.vae.trainers import BaseTrainerConfig
 from src.vae.pipelines.training import TrainingPipeline
 from torch.utils.data.sampler import SubsetRandomSampler
 
-def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_suffix='', **kwargs):
+def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_data=True, train_suffix='', **kwargs):
 
     training_keys = ["batch_size", "learning_rate", "n_load_workers"] # optional training config kywords
     # model_keys = ["n_latent", "n_out_channels", "zn_frac", "depth", "nt_xent_temperature"]
@@ -27,6 +27,8 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
             elif key == "n_load_workers":
                 training_args["train_dataloader_num_workers"] = value
                 training_args["eval_dataloader_num_workers"] = value
+            elif key == "n_preload_workers":
+                training_args["preload_dataloader_num_workers"] = value
             else:
                 training_args[key] = value
         else:
@@ -36,30 +38,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
         input_dim = (1, 288, 128)
 
     train_dir = os.path.join(root, "training_data", train_folder)
-
-
-    # metadata_path = os.path.join(root, "metadata", '')
-
-    # if model_type == "MetricVAE":
-    #     # initialize model configuration
-    #     model_config = MetricVAEConfig(
-    #         input_dim=input_dim,
-    #         **model_args
-    #     )
-    #     # initialize contrastive data loader
-    #     data_transform = ContrastiveLearningViewGenerator(
-    #                                              ContrastiveLearningDataset.get_simclr_pipeline_transform(), 2)
-
-    #     # Make datasets
-    #     train_dataset = MyCustomDataset(root=os.path.join(train_dir, "images"),
-    #                                     transform=data_transform,
-    #                                     return_name=True
-    #                                     )
-
-    #     eval_dataset = MyCustomDataset(root=os.path.join(train_dir, "images"),
-    #                                    transform=data_transform,
-    #                                    return_name=True
-    #                                    )
 
     if model_type == "VAE":
         # load standard VAE config
@@ -73,10 +51,13 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
         model_config.split_train_test()
 
         # Standard data transform
-        data_transform = grayscale_transform()
+        if cache_data:
+            data_transform = None
+        else:
+            data_transform = make_dynamic_rs_transform()
 
     elif model_type == "SeqVAE":
-        raise Error("Need to update dataloader architecture for seqVAE")
+        # raise Error("Need to update dataloader architecture for seqVAE")
         # initialize model configuration
         model_config = SeqVAEConfig(
             input_dim=input_dim,
@@ -90,38 +71,11 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
         model_config.make_dataset()
 
         # initialize contrastive data loader
-        data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
+        if cache_data:
+            data_transform = ContrastiveLearningDataset.get_contrastive_transform_cache()
+        else:
+            data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
 
-        if model_config.metric_loss_type == "NT-Xent":
-            # Make datasets
-            train_dataset = SeqPairDataset(root=os.path.join(train_dir, "images"),
-                                           model_config=model_config,
-                                           mode="train",
-                                           transform=data_transform,
-                                           return_name=True
-                                            )
-
-            eval_dataset = SeqPairDataset(root=os.path.join(train_dir, "images"),
-                                          model_config=model_config,
-                                          mode="eval",
-                                          transform=data_transform,
-                                          return_name=True
-                                           )
-        elif model_config.metric_loss_type == "triplet":
-            # Make datasets
-            train_dataset = TripletPairDataset(root=os.path.join(train_dir, "images"),
-                                           model_config=model_config,
-                                           mode="train",
-                                           transform=data_transform,
-                                           return_name=True
-                                            )
-
-            eval_dataset = TripletPairDataset(root=os.path.join(train_dir, "images"),
-                                          model_config=model_config,
-                                          mode="eval",
-                                          transform=data_transform,
-                                          return_name=True
-                                           )
     else:
         raise Exception("Unrecognized model type: " + model_type)
 
@@ -137,15 +91,9 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     train_config = BaseTrainerConfig(
         output_dir=output_dir,
         num_epochs=n_epochs,
+        cache_data=cache_data,
         **training_args
     )
-
-    # Make datasets
-    train_dataset = DatasetCached(root=os.path.join(train_dir, "images"),
-                                    transform=data_transform,
-                                    training_config=train_config,
-                                    return_name=True,
-                                    use_cache=True)
 
     # get train and test indices
     train_idx = model_config.train_indices
@@ -154,6 +102,33 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, train_su
     train_config.train_indices = train_idx
     train_config.eval_indices = eval_idx
 
+    if model_type == "VAE":
+        # Make datasets
+        train_dataset = DatasetCached(root=os.path.join(train_dir, "images"),
+                                        transform=data_transform,
+                                        training_config=train_config,
+                                        return_name=True)
+
+    elif (model_type == "SeqVAE") & (model_config.metric_loss_type == "NT-Xent"):
+        # Make datasets
+        train_dataset = SeqPairDatasetCached(root=os.path.join(train_dir, "images"),
+                                        model_config=model_config,
+                                        train_config=train_config,
+                                        transform=data_transform,
+                                        return_name=True
+                                        )
+
+    elif (model_type == "SeqVAE") & (model_config.metric_loss_type == "triplet"):
+        # Make datasets
+        train_dataset = TripletDatasetCached(root=os.path.join(train_dir, "images"),
+                                        model_config=model_config,
+                                        train_config=train_config,
+                                        cache_data=cache_data,
+                                        transform=data_transform,
+                                        return_name=True
+                                        )
+
+    
     # Initialize encoder and decoder
     encoder = Encoder_Conv_VAE(model_config)  # these are custom classes I wrote for this use case
     decoder = Decoder_Conv_VAE(encoder)

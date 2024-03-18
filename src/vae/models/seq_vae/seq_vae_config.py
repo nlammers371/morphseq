@@ -111,28 +111,37 @@ class SeqVAEConfig(VAEConfig):
         self.test_indices = test_indices
         self.train_indices = train_indices
 
-        mode_vec = np.unique(seq_key["train_cat"])
-        seq_key_dict = dict({})
-        for m, mode in enumerate(mode_vec):
-            seq_key = self.seq_key
-            seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-            seq_key = seq_key.reset_index()
+        # mode_vec = np.unique(seq_key["train_cat"])
+        # seq_key_dict = dict({})
+        # for m, mode in enumerate(mode_vec):
+        #     seq_key = self.seq_key
+        #     seq_key = seq_key.loc[seq_key["train_cat"] == mode]
+        #     seq_key = seq_key.reset_index()
 
-            pert_id_vec = seq_key["perturbation_id"].to_numpy()
-            e_id_vec = seq_key["embryo_id_num"].to_numpy()
-            age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
+        #     pert_id_vec = seq_key["perturbation_id"].to_numpy()
+        #     e_id_vec = seq_key["embryo_id_num"].to_numpy()
+        #     age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
 
-            dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
-            seq_key_dict[mode] = dict_entry
+        #     dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
+        #     seq_key_dict[mode] = dict_entry
 
-        # seq_key = self.seq_key
+        seq_key = self.seq_key
 
-        # pert_id_vec = seq_key["perturbation_id"].to_numpy()
-        # e_id_vec = seq_key["embryo_id_num"].to_numpy()
-        # age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
+        pert_id_vec = seq_key["perturbation_id"].to_numpy()
+        e_id_vec = seq_key["embryo_id_num"].to_numpy()
+        age_hpf_vec = seq_key["inferred_stage_hpf_reg"].to_numpy()
 
-        # seq_key_dict = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
-
+        seq_key_dict = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
         self.seq_key_dict = seq_key_dict
+
+        # make boolean vactors for train, eval, and test groups
+        self.train_bool = np.zeros(pert_id_vec.shape, dtype=np.bool_)
+        self.train_bool[self.train_indices] = True
+        self.eval_bool = np.zeros(pert_id_vec.shape, dtype=np.bool_)
+        self.eval_bool[self.eval_indices] = True
+        self.test_bool = np.zeros(pert_id_vec.shape, dtype=np.bool_)
+        self.test_bool[self.test_indices] = True
+
+       
 
 
