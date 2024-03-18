@@ -2,11 +2,10 @@
 import os
 import numpy as np
 from PIL import Image
-from skimage import (exposure, feature, filters, io, measure,
-                      morphology, restoration, segmentation, transform,
-                      util)
-import matplotlib
+from tqdm.contrib.concurrent import process_map 
+from functools import partial
 from src.functions.utilities import path_leaf
+from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
 from tqdm import tqdm
 from PIL import Image
 import glob2 as glob
@@ -17,6 +16,7 @@ from tqdm import tqdm
 import pickle
 from parfor import pmap
 import pandas as pd
+
 
 def scrape_keyence_metadata(im_path):
 
@@ -99,13 +99,11 @@ def doLap(image, lap_size=3, blur_size=3):
     blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
     return cv2.Laplacian(blurred, cv2.CV_64F, ksize=lap_size)
 
-def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, overwrite_flag=False, no_timelapse_flag=False):
+def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
 
     well_dir = well_list[w]
     # extract basic well info
     well_name = well_dir[-4:]
-    # well_num = well_name[-2:]
-    # well_dict = dict({})
     well_df = pd.DataFrame([], columns=['well', 'time_int', 'time_string', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Channel', 'Objective', 'Time (s)'])
     master_iter_i = 0
 
@@ -115,18 +113,22 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
 
     # if multiple positions were taken per well, then there will be a layer of position folders
     position_dir_list = sorted(glob.glob(well_dir + "/P*"))
-    if no_timelapse_flag:
+    if len(position_dir_list) == 0:
         position_dir_list = [""]
+
     for p, pos_dir in enumerate(position_dir_list):
 
         # each pos dir contains one or more time points
         time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
+        no_timelapse_flag = len(time_dir_list) == 0
+
         if no_timelapse_flag:
             time_dir_list = [well_dir]
+
         for t, time_dir in enumerate(time_dir_list):
 
             # each time directoy contains a list of Z slices for each channel
-            ch_string = "CH" + str(ch_to_use)
+            ch_string = "CH" #+ str(ch_to_use)
             im_list = sorted(glob.glob(time_dir + "/*" + ch_string + "*"))
 
             # it is possible that multiple positionas are present within the same time folder
@@ -145,7 +147,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
             # check to see if images have already been generated
             do_flags = [1] * len(sub_pos_index)
             # print(sub_pos_index)
-            for pi in sub_pos_index:
+            for p, pi in enumerate(sub_pos_index):
                 if not no_timelapse_flag:
                     tt = int(time_dir[-4:])
                 else:
@@ -157,14 +159,14 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                     # pos_id_list.append(pi)
                     pos_string = f'p{pi:04}'
 
-                ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}/' #+ f'ch{ch_to_use:02}/'
                 if os.path.isfile(
                         os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif')) and not overwrite_flag:
-                    do_flags[pi - 1] = 0
+                    do_flags[p] = 0
                     if t == 0 and p == 0 and w == 0:
                         print("Skipping pre-existing files. Set 'overwrite_flag=True' to overwrite existing images")
 
-            for pi in sub_pos_index:
+            for p, pi in enumerate(sub_pos_index):
                 pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
                 # load
                 images = []
@@ -181,9 +183,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                         temp_df = pd.DataFrame(np.empty((1, len(k_list))), columns=k_list)
                         for k in k_list:
                             temp_df[k] = temp_dict[k]
-                        # if (t == 0) and (w == 0):
-                        #     base_time = temp_dict["Time (s)"]
-                        # temp_dict["Time (s)"] = temp_dict["Time (s)"]# - base_time
+
                         # add to main dictionary
                         if no_timelapse_flag:
                             tstring = 'T0'
@@ -199,9 +199,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                         # add to main dataframe
                         well_df.loc[master_iter_i] = temp_df.loc[0]
                         master_iter_i += 1
-                            # temp_df = temp_df[temp_df.columns[::-1]]
-                            # well_dict[tstring] = temp_dict
-                             # metadata_dict[well_name_conv] = temp_dict2
+
 
                 if do_flags[pi - 1]:
                     laps = []
@@ -220,7 +218,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
 
                     # calculate full-focus and depth images
                     ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
-                    depth_image = np.argmax(abs_laps_d, axis=0)
+                    # depth_image = np.argmax(abs_laps_d, axis=0)
                     maxima = abs_laps.max(axis=0)
                     bool_mask = abs_laps == maxima
                     mask = bool_mask.astype(np.uint8)
@@ -241,23 +239,22 @@ def process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1, o
                         pos_string = f'p{pi:04}'
 
                     # save images
-                    ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                    depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
+                    ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}/' #+ f'ch{ch_to_use:02}/'
+                    # depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
                     op_ff = os.path.join(ff_dir, ff_out_name)
-                    op_depth = os.path.join(depth_dir, depth_out_name)
+                    # op_depth = os.path.join(depth_dir, depth_out_name)
 
                     if not os.path.isdir(op_ff):
                         os.makedirs(op_ff)
-                    if not os.path.isdir(op_depth):
-                        os.makedirs(op_depth)
+                    # if not os.path.isdir(op_depth):
+                    #     os.makedirs(op_depth)
 
                     # convet depth image to 8 bit
-                    max_z = abs_laps.shape[0]
-                    depth_image_int8 = np.round(depth_image / max_z * 255).astype('uint8')
+                    # max_z = abs_laps.shape[0]
+                    # depth_image_int8 = np.round(depth_image / max_z * 255).astype('uint8')
+                    cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.jpg'), ff_image)
 
-                    cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif'), ff_image)
-
-                    cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
+                    # cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
 
     # well_dict_out = dict({well_name_conv: well_dict})
 
@@ -352,20 +349,20 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
 
     return{}
 
-def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list=None, write_dir=None, no_timelapse_flag=False):
+def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag=False, dir_list=None, write_dir=None,):
 
     read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '') 
     if write_dir is None:
         write_dir = os.path.join(data_root, 'built_image_data', 'keyence', '')
         
-    # # handle paths
-    # if dir_list == None:
-    #     # Get a list of directories
-    #     dir_list_raw = sorted(glob.glob(read_dir + "*"))
-    #     dir_list = []
-    #     for dd in dir_list_raw:
-    #         if os.path.isdir(dd):
-    #             dir_list.append(dd)
+    # handle paths
+    if dir_list == None:
+        # Get a list of directories
+        dir_list_raw = sorted(glob.glob(read_dir + "*"))
+        dir_list = []
+        for dd in dir_list_raw:
+            if os.path.isdir(dd):
+                dir_list.append(dd)
 
     # filter for desired directories
     dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
@@ -376,11 +373,11 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
         sub_name = dir_list[d]
         dir_path = os.path.join(read_dir, sub_name, '')
 
-        depth_dir = os.path.join(write_dir, "D_images", sub_name)
+        # depth_dir = os.path.join(write_dir, "D_images", sub_name)
         ff_dir = os.path.join(write_dir, "FF_images",  sub_name)
 
-        if not os.path.isdir(depth_dir):
-            os.makedirs(depth_dir)
+        # if not os.path.isdir(depth_dir):
+        #     os.makedirs(depth_dir)
         if not os.path.isdir(ff_dir):
             os.makedirs(ff_dir)
 
@@ -396,10 +393,17 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
         # (w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1)
         # metadata_dict_list = []
         metadata_df_list = []
-        for w in tqdm(range(len(well_list))):
-            temp_df = process_well(w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag, no_timelapse_flag)
-            metadata_df_list.append(temp_df)
-
+        if not par_flag:
+            for w in tqdm(range(len(well_list))):
+                temp_df = process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag)
+                metadata_df_list.append(temp_df)
+        else:
+            metadata_df_temp = process_map(partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, 
+                                                                        ff_dir=ff_dir, overwrite_flag=overwrite_flag), 
+                                        range(len(well_list)), max_workers=n_workers)
+            metadata_df_list += metadata_df_temp
+            
+        process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False)
         # metadata_df_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
         if len(metadata_df_list) > 0:
             metadata_df = pd.concat(metadata_df_list)
@@ -410,10 +414,7 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
 
         # load previous metadata
         metadata_path = os.path.join(ff_dir, 'metadata.csv')
-        # if os.path.isfile(metadata_path) and len(metadata_df) > 0:
-        #     prev_metadata = pd.read_csv(metadata_path, index_col=0)
-        #     updated_metadata_df = pd.concat([metadata_df, prev_metadata])
-        #     updated_metadata_df.drop_duplicates(subset=["well", "Time (s)"])
+
 
         if len(metadata_df) > 0:
             metadata_df.reset_index()
@@ -424,7 +425,7 @@ def build_ff_from_keyence(data_root, overwrite_flag=False, ch_to_use=1, dir_list
 
     print('Done.')
 
-def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None, no_timelapse_flag=True):
+def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None):
     
     read_dir = os.path.join(data_root, 'raw_image_data', 'keyence')
     if write_dir is None:
@@ -446,13 +447,14 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15,
         # sub_name = dir_path.replace(read_dir, "")
 
         # directories containing image tiles
-        depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
+        # depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
         ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
 
-        
         metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
         metadata_df = pd.read_csv(metadata_path, index_col=0)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
+        time_ind_index = np.unique(metadata_df["time_int"])
+        no_timelapse_flag = len(time_ind_index) == 0
         if no_timelapse_flag:
             out_shape = np.asarray([800, 630])*size_factor
         else:
@@ -460,7 +462,6 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15,
         out_shape = out_shape.astype(int)
 
         # get list of subfolders
-        # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
         ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
 
         # # if not no_timelapse_flag:
@@ -520,43 +521,36 @@ def stitch_ff_from_keyence(data_root, overwrite_flag=False, n_stitch_samples=15,
             with open(depth_tile_dir + "/master_params.json", "w") as outfile:
                 outfile.write(jason_params)
 
-    # # Now perform the stitching
-    # print('Done.')
-
-    # for d in dir_indices:
-    #     dir_path = dir_list[d]
-    #     sub_name = dir_path.replace(read_dir, "")
-
-    #     # directories containing image tiles
-    #     depth_tile_dir = os.path.join(write_dir, "built_keyence_data", "D_images", sub_name, '')
-    #     ff_tile_dir = os.path.join(write_dir, "built_keyence_data", "FF_images", sub_name, '')
-
-
         # directories to write stitched files to
         stitch_depth_dir = os.path.join(write_dir, "built_image_data", "stitched_depth_images", sub_name)
         stitch_ff_dir = os.path.join(write_dir, "built_image_data", "stitched_FF_images", sub_name)
 
-        if not os.path.isdir(stitch_depth_dir):
-            os.makedirs(stitch_depth_dir)
+        # if not os.path.isdir(stitch_depth_dir):
+        #     os.makedirs(stitch_depth_dir)
         if not os.path.isdir(stitch_ff_dir):
             os.makedirs(stitch_ff_dir)
 
         # get list of subfolders
-        depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
+        # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
         ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
 
         print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # Call parallel function to stitch images
-        if no_timelapse_flag:
+        if par_flag: #no_timelapse_flag:
             # out_shape[0] = 1230
             for f in tqdm(range(len(ff_folder_list))):
                 stitch_experiment(f, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
                                   stitch_depth_dir, overwrite_flag, out_shape)
+
         else:
-            raise Warning("Some compute environments may not be compatible with parfor pmap function")
-            pmap(stitch_experiment, range(len(ff_folder_list)), (ff_folder_list, ff_tile_dir, depth_folder_list,
-                              depth_tile_dir, stitch_ff_dir,
-                              stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
+            process_map(partial(stitch_experiment,ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
+                                  stitch_depth_dir, overwrite_flag, out_shape), 
+                                        range(len(ff_folder_list)), max_workers=n_workers)
+        # else:
+        #     raise Warning("Some compute environments may not be compatible with parfor pmap function")
+        #     pmap(stitch_experiment, range(len(ff_folder_list)), (ff_folder_list, ff_tile_dir, depth_folder_list,
+        #                       depth_tile_dir, stitch_ff_dir,
+        #                       stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
             
             # pmap(stitch_experiment, range(len(ff_folder_list)),
             #                             (ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
@@ -572,8 +566,8 @@ if __name__ == "__main__":
     overwrite_flag = True
 
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    dir_list = ["lmx1b_20231207", "lmx1b_20231208"]
+    dir_list = ["20230525", "20231207"]
     # build FF images
-    build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list, ch_to_use=3, no_timelapse_flag=True)
+    build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
     # stitch FF images
     stitch_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
