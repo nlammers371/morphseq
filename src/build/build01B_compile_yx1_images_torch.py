@@ -18,7 +18,6 @@ from sklearn.cluster import KMeans
 
 
 
-
 def findnth(haystack, needle, n):
     parts = haystack.split(needle, n+1)
     if len(parts)<=n+1:
@@ -44,7 +43,7 @@ def trim_image(im, out_shape):
 
     return im_out
 
-def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False, n_z_keep=16, ch_to_use=0, LoG_flag=True):
+def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False, n_z_keep=16, ch_to_use=0, LoG_flag=True):
 
     # set scene
     well_name_conv = well_name_list[w]
@@ -70,11 +69,6 @@ def process_frame(w, im_data_dask, well_name_list, well_time_list, well_ind_list
         data_tensor_raw = torch.tensor(data_zyx.astype(np.float64))
         data_tensor_raw = set_inputs_to_device(data_tensor_raw, device)
 
-        # resize image
-        # if rs_dims_yx is not None:
-        #     # print("Resizing...")
-        #     data_zyx_rs = torchvision.transforms.functional.resize(data_tensor_raw, tuple([int(rs_dims_yx[0]), int(rs_dims_yx[1])]), antialias=True)
-        # else:
         data_zyx_rs = data_tensor_raw
 
         px99 = torch.tensor(np.percentile(data_zyx, 99))
@@ -258,7 +252,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         well_df["Time (s)"] = frame_time_vec[time_ind_vec]
 
         # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        # temp = pmap(process_frame, range(n_wells*n_time_points), 
+        # temp = pmap(calculate_FF_images, range(n_wells*n_time_points), 
         #                         (im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, depth_dir, overwrite_flag))
 
         # get device
@@ -274,7 +268,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # call FF function
         if not metadata_only_flag:
             for w in tqdm(range(n_wells*n_time_points)):
-                process_frame(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
+                calculate_FF_images(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
                                 overwrite_flag=overwrite_flag, n_z_keep=n_z_keep)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
         
         
