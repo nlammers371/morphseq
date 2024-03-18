@@ -370,7 +370,7 @@ def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
     for d in dir_indices:
         # initialize dictionary to metadata
         # metadata_dict = dict({})
-        sub_name = dir_list[d]
+        sub_name = path_leaf(dir_list[d])
         dir_path = os.path.join(read_dir, sub_name, '')
 
         # depth_dir = os.path.join(write_dir, "D_images", sub_name)
@@ -403,7 +403,7 @@ def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
                                         range(len(well_list)), max_workers=n_workers)
             metadata_df_list += metadata_df_temp
             
-        process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False)
+        # process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False)
         # metadata_df_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
         if len(metadata_df_list) > 0:
             metadata_df = pd.concat(metadata_df_list)
@@ -443,7 +443,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
     # print('Estimating stitching prior...')
     dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
     for d in dir_indices:
-        sub_name = dir_list[d]
+        sub_name = path_leaf(dir_list[d])
         # sub_name = dir_path.replace(read_dir, "")
 
         # directories containing image tiles
