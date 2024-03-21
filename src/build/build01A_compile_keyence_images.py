@@ -147,7 +147,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
             # check to see if images have already been generated
             do_flags = [1] * len(sub_pos_index)
             # print(sub_pos_index)
-            for p, pi in enumerate(sub_pos_index):
+            for sp, pi in enumerate(sub_pos_index):
                 if not no_timelapse_flag:
                     tt = int(time_dir[-4:])
                 else:
@@ -157,21 +157,21 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     pos_string = f'p{p:04}'
                 else:
                     # pos_id_list.append(pi)
-                    pos_string = f'p{pi:04}'
+                    pos_string = f'p{sp:04}'
 
                 ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}/' #+ f'ch{ch_to_use:02}/'
                 if os.path.isfile(
-                        os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.tif')) and not overwrite_flag:
-                    do_flags[p] = 0
+                        os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.jpg')) and not overwrite_flag:
+                    do_flags[sp] = 0
                     if t == 0 and p == 0 and w == 0:
                         print("Skipping pre-existing files. Set 'overwrite_flag=True' to overwrite existing images")
 
-            for p, pi in enumerate(sub_pos_index):
+            for sp, pi in enumerate(sub_pos_index):
                 pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
                 # load
                 images = []
                 for iter_i, i in enumerate(pos_indices):
-                    if do_flags[pi - 1]:
+                    if do_flags[sp]:
                         im = cv2.imread(im_list[i])
                         if im is not None:
                             images.append(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY))
@@ -201,20 +201,20 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                         master_iter_i += 1
 
 
-                if do_flags[pi - 1]:
+                if do_flags[sp]:
                     laps = []
-                    laps_d = []
+                    # laps_d = []
                     for i in range(len(images)):
                         # print
                         # "Lap {}".format(i)
                         laps.append(doLap(images[i]))
-                        laps_d.append(doLap(images[i], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
+                        # laps_d.append(doLap(images[i], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
 
                     laps = np.asarray(laps)
                     abs_laps = np.absolute(laps)
 
-                    laps_d = np.asarray(laps_d)
-                    abs_laps_d = np.absolute(laps_d)
+                    # laps_d = np.asarray(laps_d)
+                    # abs_laps_d = np.absolute(laps_d)
 
                     # calculate full-focus and depth images
                     ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
@@ -225,7 +225,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     for i in range(len(images)):
                         ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
 
-                    # ff_image = 255 - ff_image  # take the negative
+                    ff_image = 255 - ff_image  # take the negative
 
                     if not no_timelapse_flag:
                         tt = int(time_dir[-4:])

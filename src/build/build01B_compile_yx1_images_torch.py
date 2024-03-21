@@ -111,6 +111,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
         data_zyx_rs = data_tensor_raw
 
+        # apply basic intensity normalization
         px99 = torch.tensor(np.percentile(data_zyx, 99))
         data_zyx_rs = data_zyx_rs / px99
         data_zyx_rs[data_zyx_rs > 1] = 1
