@@ -114,7 +114,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
     # if multiple positions were taken per well, then there will be a layer of position folders
     position_dir_list = sorted(glob.glob(well_dir + "/P*"))
     if len(position_dir_list) == 0:
-        position_dir_list = [""]
+        position_dir_list = [well_dir]
 
     for p, pos_dir in enumerate(position_dir_list):
 
@@ -335,7 +335,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
             ff_out = trim_image(ff_arr, out_shape)
 
             # invert
-            ff_out = 255 - ff_out
+            # ff_out = 255 - ff_out
 
             # depth_arr = depth_mosaic.stitch()
             # depth_out = trim_image(depth_arr, out_shape)
@@ -542,7 +542,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
         else:
             process_map(partial(stitch_experiment, ff_folder_list=ff_folder_list, ff_tile_dir=ff_tile_dir, 
                                 stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, out_shape=out_shape), 
-                                        range(len(ff_folder_list)), max_workers=n_workers)
+                                        range(len(ff_folder_list)), max_workers=n_workers, chunksize=1)
 
         # else:
         #     raise Warning("Some compute environments may not be compatible with parfor pmap function")
