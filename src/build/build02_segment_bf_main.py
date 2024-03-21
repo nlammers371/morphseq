@@ -57,7 +57,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     label_path_list = []
     exist_flags = []
     for ind, p in enumerate(project_list):
-        im_list_temp = glob.glob(os.path.join(p, '*.png')) + glob.glob(os.path.join(p, '*.tif'))
+        im_list_temp = glob.glob(os.path.join(p, '*.png')) + glob.glob(os.path.join(p, '*.tif')) + + glob.glob(os.path.join(p, '*.jpg'))
         image_path_list += im_list_temp
 
         _, project_name = ntpath.split(p)

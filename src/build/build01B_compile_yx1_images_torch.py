@@ -2,7 +2,7 @@
 import os
 import numpy as np
 from skimage import io
-import glob2 as glob
+import glob as glob
 import torchvision
 import torch
 import torch.nn.functional as F
@@ -15,8 +15,6 @@ import time
 import nd2
 import cv2
 from sklearn.cluster import KMeans
-
-
 
 def findnth(haystack, needle, n):
     parts = haystack.split(needle, n+1)
@@ -43,7 +41,43 @@ def trim_image(im, out_shape):
 
     return im_out
 
-def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False, n_z_keep=16, ch_to_use=0, LoG_flag=True):
+def calculate_max_fluo_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, max_dir, ch_to_use, overwrite_flag=False,
+                                n_z_keep=None):
+
+    # set scene
+    well_name_conv = well_name_list[w]
+    time_int = well_time_list[w]
+    well_int = well_ind_list[w]
+
+    # generate save names
+    max_out_name = 'max_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
+
+    if os.path.isfile(os.path.join(max_dir, max_out_name + ".png")) and not overwrite_flag:
+        print(f"Skipping time point {time_int} for well {well_name_conv}.")
+
+    else:
+        # get data
+        n_z_slices = im_data_dask.shape[3]
+        if n_z_keep is not None:
+            buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
+            data_zyx = np.squeeze(im_data_dask[time_int, well_int, buffer:-buffer, ch_to_use, :, :].compute())
+        else:
+            data_zyx = np.squeeze(im_data_dask[time_int, well_int, :, ch_to_use, :, :].compute())
+
+        data_max = np.max(data_zyx, axis=0)
+
+        # take the negative
+        fluo_image = data_max.astype(np.uint16)
+
+        # save images
+        max_out_name = 'max_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
+
+        io.imsave(os.path.join(max_dir, max_out_name + ".png"), fluo_image, check_contrast=False)
+
+
+    return {}
+def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False,
+                        n_z_keep=None, ch_to_use=0, LoG_flag=True):
 
     # set scene
     well_name_conv = well_name_list[w]
@@ -62,8 +96,14 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
         # get data
         # start = time.time()
         n_z_slices = im_data_dask.shape[2]
-        buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
-        data_zyx = im_data_dask[time_int, well_int, buffer:-buffer, :, :].compute()
+        if n_z_keep is not None:
+            buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
+            if buffer > 0:
+                data_zyx = im_data_dask[time_int, well_int, buffer:-buffer, :, :].compute()
+            else:
+                data_zyx = im_data_dask[time_int, well_int, :, :, :].compute()
+        else:
+            data_zyx = im_data_dask[time_int, well_int, :, :, :].compute()
         # print(time.time() - start)
 
         data_tensor_raw = torch.tensor(data_zyx.astype(np.float64))
@@ -88,16 +128,17 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
         io.imsave(os.path.join(ff_dir, ff_out_name + ".png"), ff_image)
 
-
     return {}
 
 
-def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=None, write_dir=None, metadata_only_flag=False, n_z_keep_in=None):
+def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=None, metadata_only_flag=False,
+                      n_z_keep_in=None):
 
     read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
     if write_dir is None:
         write_dir = os.path.join(data_root, 'built_image_data') 
-        
+
+    metadata_path = os.path.join(data_root, "metadata", "well_metadata", "")
     # handle paths
     if dir_list is None:
         # Get a list of directories
@@ -122,8 +163,6 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # depth_dir = os.path.join(write_dir, "stitched_depth_images", sub_name)
         ff_dir = os.path.join(write_dir, "stitched_FF_images", sub_name)
 
-        # if not os.path.isdir(depth_dir):
-        #     os.makedirs(depth_dir)
         if not os.path.isdir(ff_dir):
             os.makedirs(ff_dir)
 
@@ -149,6 +188,16 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # pull dask array
         im_array_dask = imObject.to_dask()
         # use first 10 frames to infer time resolution
+        # to see if we have multiple channels
+        n_channels = len(imObject.frame_metadata(0).channels)
+        channel_names = [c.channel.name for c in imObject.frame_metadata(0).channels]
+        bf_channel_ind = channel_names.index("BF")
+        non_bf_indices = [i for i in range(len(channel_names)) if channel_names[i] != "BF"]
+
+        if n_channels > 1:
+            fluo_dir = os.path.join(write_dir, "stitched_fluo_images", sub_name)
+            if not os.path.isdir(fluo_dir):
+                os.makedirs(fluo_dir)
 
         # extract frame times
         n_frames_total = imObject.frame_metadata(0).contents.frameCount
@@ -170,14 +219,20 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
 
         # get image resolution
         voxel_size = imObject.voxel_size()
-        voxel_yx = np.asarray([voxel_size[1], voxel_size[0]])
+        # voxel_yx = np.asarray([voxel_size[1], voxel_size[0]])
         # rs_factor = np.divide(voxel_yx, rs_res)
 
         # rs_dims_yx = np.round(np.multiply(np.asarray(im_shape[3:]), rs_factor)).astype(int)
         # resample images to a standardized resolution
+        # get channel names (if necessary)
+
 
         # read in plate map
-        plate_map_xl = pd.ExcelFile(dir_path + sub_name + "_plate_map.xlsx")
+        plate_map_xl = pd.ExcelFile(metadata_path + sub_name + "_well_metadata.xlsx")
+
+        if n_channels > 1:
+            channel_map = plate_map_xl.parse("channels")
+
         series_map = plate_map_xl.parse("series_number_map").iloc[:8, 1:13]
 
         well_name_list = []
@@ -226,13 +281,13 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         row_si = np.argsort(np.argsort(row_clusters.cluster_centers_.ravel()))
         row_ind_pd = row_si[row_clusters.labels_]
         row_letter_pd = row_index[row_ind_pd]
-        assert np.all(row_letter_pd==row_letter_vec)
+        assert np.all(row_letter_pd == row_letter_vec)
 
         col_clusters = KMeans(n_init="auto", n_clusters=len(col_index)).fit(stage_xyz_array[:, 0].reshape(-1, 1))
         col_si = np.argsort(np.argsort(col_clusters.cluster_centers_.ravel()))
         col_ind_pd = col_si[col_clusters.labels_]
         col_num_pd = col_index[len(col_index)-col_ind_pd-1]
-        assert np.all(col_num_pd==col_num_vec)
+        assert np.all(col_num_pd == col_num_vec)
 
         # generate metadata dataframe
         well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
@@ -244,12 +299,19 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         well_df["Width (um)"] = im_shape[4]*voxel_size[0]
         well_df["Height (px)"] = im_shape[3]
         well_df["Width (px)"] = im_shape[4]
-        well_df["Channel"] = imObject.frame_metadata(0).channels[0].channel.name
+        well_df["BF Channel"] = bf_channel_ind
         well_df["Objective"] = imObject.frame_metadata(0).channels[0].microscope.objectiveName
         time_ind_vec = []
         for n in range(n_wells):
             time_ind_vec += np.arange(n, n_wells*n_time_points, n_wells).tolist()
         well_df["Time (s)"] = frame_time_vec[time_ind_vec]
+
+        if n_channels > 1:
+            for iter_i, channel_ind in enumerate(non_bf_indices):
+                well_df["Marker Channel " + str(iter_i)] = channel_names[channel_ind]
+                well_df["Marker Gene " + str(iter_i)] = channel_map.loc[channel_map["channel"]==channel_names[channel_ind], "gene"].values[0]
+                well_df["Marker Fluor " + str(iter_i)] = \
+                channel_map.loc[channel_map["channel"] == channel_names[channel_ind], "fluor"].values[0]
 
         # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # temp = pmap(calculate_FF_images, range(n_wells*n_time_points), 
@@ -265,11 +327,28 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, ch_to_use=0, dir_list=Non
         # for indexing dask array
         well_int_list = np.repeat(np.arange(0, n_wells), n_time_points)
 
+        # calculate max projections for each fluorescence channel
+
         # call FF function
         if not metadata_only_flag:
+
+            print("Calculating full-focus images for the BF channel...")
+            if n_channels > 1:
+                im_array_bf = np.squeeze(im_array_dask[:, :, :, bf_channel_ind, :, :])
+            else:
+                im_array_bf = im_array_dask
+
             for w in tqdm(range(n_wells*n_time_points)):
-                calculate_FF_images(w, im_array_dask, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device, 
+                calculate_FF_images(w, im_array_bf, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device,
                                 overwrite_flag=overwrite_flag, n_z_keep=n_z_keep)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
+
+            if n_channels > 1:
+                for iter_i, channel_id in enumerate(non_bf_indices):
+                    print("Calculating max-project images for the fluorescent marker channel " + str(channel_id))
+                    for w in tqdm(range(n_wells * n_time_points)):
+                        calculate_max_fluo_images(w, im_data_dask=im_array_dask, well_name_list=well_name_list_long,
+                                                  well_time_list=time_int_list, well_ind_list=well_int_list,
+                                                  max_dir=fluo_dir, ch_to_use=channel_id)
         
         
         first_time = np.min(well_df['Time (s)'].copy())
