@@ -261,19 +261,17 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
     return well_df
 
 
-def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
-                      stitch_depth_dir, overwrite_flag, out_shape):
-
+def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, out_shape):
 
     # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
     ff_path = os.path.join(ff_folder_list[t], '')
     ff_name = path_leaf(ff_path)
-    n_images = len(glob.glob(ff_path + '*.tif'))
-    depth_path = os.path.join(depth_folder_list[t], '')
-    depth_name = depth_path.replace(depth_tile_dir, "")
+    n_images = len(glob.glob(ff_path + '*.jpg'))
+    # depth_path = os.path.join(depth_folder_list[t], '')
+    # depth_name = depth_path.replace(depth_tile_dir, "")
 
-    ff_out_name = ff_name[3:-1] + '_stitch.tif'
-    depth_out_name = depth_name[6:-1] + '_stitch.tif'
+    ff_out_name = ff_name[3:-1] + '_stitch.png'
+    # depth_out_name = depth_name[6:-1] + '_stitch.png'
 
     if not os.path.isfile(os.path.join(stitch_ff_dir, ff_out_name)) or overwrite_flag:
 
@@ -317,17 +315,17 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
             ff_mosaic.smooth_seams()
 
             # perform stitching
-            depth_mosaic = StructuredMosaic(
-                depth_path,
-                dim=n_images,  # number of tiles in primary axis
-                origin="upper left",  # position of first tile
-                direction="vertical",
-                pattern="raster"
-            )
+            # depth_mosaic = StructuredMosaic(
+            #     depth_path,
+            #     dim=n_images,  # number of tiles in primary axis
+            #     origin="upper left",  # position of first tile
+            #     direction="vertical",
+            #     pattern="raster"
+            # )
 
             # mosaic.downsample(0.6)
-            depth_mosaic.load_params(ff_path + 'params.json')
-            depth_mosaic.smooth_seams()
+            # depth_mosaic.load_params(ff_path + 'params.json')
+            # depth_mosaic.smooth_seams()
 
             # name_start_ind = ff_path.find("/ff_")
             # well_name = ff_path[name_start_ind+4:name_start_ind+7]
@@ -339,11 +337,11 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, depth_folder_list, depth_t
             # invert
             ff_out = 255 - ff_out
 
-            depth_arr = depth_mosaic.stitch()
-            depth_out = trim_image(depth_arr, out_shape)
+            # depth_arr = depth_mosaic.stitch()
+            # depth_out = trim_image(depth_arr, out_shape)
 
             cv2.imwrite(os.path.join(stitch_ff_dir, ff_out_name), ff_out)
-            cv2.imwrite(os.path.join(stitch_depth_dir, depth_out_name), depth_out)
+            # cv2.imwrite(os.path.join(stitch_depth_dir, depth_out_name), depth_out)
         except:
             pass
 
@@ -427,7 +425,7 @@ def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
 
 def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None):
     
-    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence')
+    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '')
     if write_dir is None:
         write_dir = data_root
 
@@ -476,7 +474,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
             for n in tqdm(range(len(stitch_samples))):
                 im_ind = stitch_samples[n]
                 ff_path = ff_folder_list[im_ind]
-                n_images = len(glob.glob(ff_path + '/*.tif'))
+                n_images = len(glob.glob(ff_path + '/*.jpg'))
                 if n == 0:
                     align_array = np.empty((n_stitch_samples, 2, n_images))
                     align_array[:] = np.nan
@@ -518,11 +516,11 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
                 outfile.write(jason_params)
 
             # Writing to json
-            with open(depth_tile_dir + "/master_params.json", "w") as outfile:
-                outfile.write(jason_params)
+            # with open(depth_tile_dir + "/master_params.json", "w") as outfile:
+            #     outfile.write(jason_params)
 
         # directories to write stitched files to
-        stitch_depth_dir = os.path.join(write_dir, "built_image_data", "stitched_depth_images", sub_name)
+        # stitch_depth_dir = os.path.join(write_dir, "built_image_data", "stitched_depth_images", sub_name)
         stitch_ff_dir = os.path.join(write_dir, "built_image_data", "stitched_FF_images", sub_name)
 
         # if not os.path.isdir(stitch_depth_dir):
@@ -536,16 +534,16 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
 
         print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # Call parallel function to stitch images
-        if par_flag: #no_timelapse_flag:
+        if not par_flag: #no_timelapse_flag:
             # out_shape[0] = 1230
             for f in tqdm(range(len(ff_folder_list))):
-                stitch_experiment(f, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
-                                  stitch_depth_dir, overwrite_flag, out_shape)
+                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, out_shape)
 
         else:
-            process_map(partial(stitch_experiment,ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
-                                  stitch_depth_dir, overwrite_flag, out_shape), 
+            process_map(partial(stitch_experiment, ff_folder_list=ff_folder_list, ff_tile_dir=ff_tile_dir, 
+                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, out_shape=out_shape), 
                                         range(len(ff_folder_list)), max_workers=n_workers)
+
         # else:
         #     raise Warning("Some compute environments may not be compatible with parfor pmap function")
         #     pmap(stitch_experiment, range(len(ff_folder_list)), (ff_folder_list, ff_tile_dir, depth_folder_list,
