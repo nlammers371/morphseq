@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from src.functions.utilities import path_leaf
 from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
 from src.functions.dataset_utils import set_inputs_to_device
+from tqdm.contrib.concurrent import process_map
+from functools import partial
 from tqdm import tqdm
 import pandas as pd
 import time
@@ -122,7 +124,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
         else:
             ff_tensor = gaussian_focus_stacker(data_zyx_rs, filter_size, device)
         # take the negative
-        ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16) 
+        ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16)
 
         # save images
         ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
@@ -133,7 +135,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
 
 def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=None, metadata_only_flag=False,
-                      n_z_keep_in=None):
+                      n_z_keep_in=None, par_flag=False, n_workers=12):
 
     read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
     if write_dir is None:
@@ -333,23 +335,41 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
         # call FF function
         if not metadata_only_flag:
 
+            if n_channels > 1:
+                for iter_i, channel_id in enumerate(non_bf_indices):
+                    print("Calculating max-project images for the fluorescent marker channel " + str(channel_id))
+
+                    if par_flag:
+                        process_map(partial(calculate_max_fluo_images, im_data_dask=im_array_dask,
+                                            well_name_list=well_name_list_long, well_time_list=time_int_list,
+                                            well_ind_list=well_int_list, max_dir=fluo_dir, overwrite_flag=overwrite_flag,
+                                            ch_to_use=channel_id),
+                                    range(n_wells * n_time_points), max_workers=n_workers, chunksize=1)
+
+                    else:
+                        for w in tqdm(range(n_wells * n_time_points)):
+                            calculate_max_fluo_images(w, im_data_dask=im_array_dask, well_name_list=well_name_list_long,
+                                                  well_time_list=time_int_list, well_ind_list=well_int_list,
+                                                  max_dir=fluo_dir, ch_to_use=channel_id, overwrite_flag=overwrite_flag)
+
             print("Calculating full-focus images for the BF channel...")
             if n_channels > 1:
                 im_array_bf = np.squeeze(im_array_dask[:, :, :, bf_channel_ind, :, :])
             else:
                 im_array_bf = im_array_dask
 
+            # if par_flag:
+            #     process_map(partial(calculate_FF_images, im_data_dask=im_array_bf, device=device,
+            #                         well_name_list=well_name_list_long, well_time_list=time_int_list,
+            #                         well_ind_list=well_int_list, ff_dir=ff_dir, overwrite_flag=overwrite_flag),
+            #                 range(n_wells*n_time_points), max_workers=n_workers, chunksize=1)
+            # else:
             for w in tqdm(range(n_wells*n_time_points)):
                 calculate_FF_images(w, im_array_bf, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device,
                                 overwrite_flag=overwrite_flag, n_z_keep=n_z_keep)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
 
-            if n_channels > 1:
-                for iter_i, channel_id in enumerate(non_bf_indices):
-                    print("Calculating max-project images for the fluorescent marker channel " + str(channel_id))
-                    for w in tqdm(range(n_wells * n_time_points)):
-                        calculate_max_fluo_images(w, im_data_dask=im_array_dask, well_name_list=well_name_list_long,
-                                                  well_time_list=time_int_list, well_ind_list=well_int_list,
-                                                  max_dir=fluo_dir, ch_to_use=channel_id)
+
+
         
         
         first_time = np.min(well_df['Time (s)'].copy())
