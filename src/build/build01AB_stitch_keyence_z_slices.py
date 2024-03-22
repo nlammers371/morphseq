@@ -135,8 +135,8 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
 
             # load saved parameters
             z_mosaic.load_params(os.path.join(ff_tile_path, "params.json"))
-            z_mosaic.reset_tiles()
             z_mosaic.smooth_seams()
+            
             z_arr = z_mosaic.stitch()
             z_out = trim_image(z_arr, out_shape)
             z_slice_array[z, :, :] = z_out
@@ -216,130 +216,6 @@ def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
 
 
     print('Done.')
-
-def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None):
-    
-    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '')
-    if write_dir is None:
-        write_dir = data_root
-
-    # handle paths
-    if dir_list == None:
-        # Get a list of directories
-        dir_list_raw = sorted(glob.glob(read_dir + "*"))
-        dir_list = []
-        for dd in dir_list_raw:
-            if os.path.isdir(dd):
-                dir_list.append(dd)
-
-    # print('Estimating stitching prior...')
-    dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
-    for d in dir_indices:
-        sub_name = path_leaf(dir_list[d])
-        # sub_name = dir_path.replace(read_dir, "")
-
-        # directories containing image tiles
-        # depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
-        ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
-
-        metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
-        metadata_df = pd.read_csv(metadata_path, index_col=0)
-        size_factor = metadata_df["Width (px)"].iloc[0] / 640
-        time_ind_index = np.unique(metadata_df["time_int"])
-        no_timelapse_flag = len(time_ind_index) == 0
-        if no_timelapse_flag:
-            out_shape = np.asarray([800, 630])*size_factor
-        else:
-            out_shape = np.asarray([1140, 630])*size_factor
-        out_shape = out_shape.astype(int)
-
-        # get list of subfolders
-        ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
-
-        # # if not no_timelapse_flag:
-        if not os.path.isfile(ff_tile_dir + "/master_params.json") or overwrite_flag:
-
-            # select a random set of directories to iterate through to estimate stitching prior
-            folder_options = range(len(ff_folder_list))
-            stitch_samples = np.random.choice(folder_options, np.min([n_stitch_samples, len(folder_options)]), replace=False)
-
-
-            print(f'Estimating stitch priors for images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-            for n in tqdm(range(len(stitch_samples))):
-                im_ind = stitch_samples[n]
-                ff_path = ff_folder_list[im_ind]
-                n_images = len(glob.glob(ff_path + '/*.jpg'))
-                if n == 0:
-                    align_array = np.empty((n_stitch_samples, 2, n_images))
-                    align_array[:] = np.nan
-                n_pass = 0
-                # perform stitching
-                ff_mosaic = StructuredMosaic(
-                    ff_path,
-                    dim=n_images,  # number of tiles in primary axis
-                    origin="upper left",  # position of first tile
-                    direction="vertical",
-                    pattern="raster"
-                )
-                try:
-                    ff_mosaic.align()
-                    n_pass += 1
-                    # ff_mosaic.reset_tiles()
-                except:
-                    pass
-
-                if (len(ff_mosaic.params["coords"]) == n_images) and n_images > 1:       # NL: need to make this more general eventually
-                    c_params = ff_mosaic.params["coords"]
-                    for c in range(len(c_params)):
-                        align_array[n, :, c] = c_params[c]
-
-            # now make a master mosaic to use when alignment fails
-            master_mosaic = ff_mosaic.copy()
-            master_params = master_mosaic.params
-            # calculate median parameters for each tile
-            med_coords = np.nanmedian(align_array, axis=0)
-            c_dict = dict({})
-            for c in range(align_array.shape[2]):
-                c_dict[c] =  med_coords[:, c].tolist()
-            master_params["coords"] = c_dict
-
-            # save params for subsequent use
-            jason_params = json.dumps(master_params)
-            # Writing to json
-            with open(ff_tile_dir + "/master_params.json", "w") as outfile:
-                outfile.write(jason_params)
-
-            # Writing to json
-            # with open(depth_tile_dir + "/master_params.json", "w") as outfile:
-            #     outfile.write(jason_params)
-
-        # directories to write stitched files to
-        # stitch_depth_dir = os.path.join(write_dir, "built_image_data", "stitched_depth_images", sub_name)
-        stitch_ff_dir = os.path.join(write_dir, "built_image_data", "stitched_FF_images", sub_name)
-
-        # if not os.path.isdir(stitch_depth_dir):
-        #     os.makedirs(stitch_depth_dir)
-        if not os.path.isdir(stitch_ff_dir):
-            os.makedirs(stitch_ff_dir)
-
-        # get list of subfolders
-        # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
-        ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
-
-        print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        # Call parallel function to stitch images
-        if not par_flag: #no_timelapse_flag:
-            # out_shape[0] = 1230
-            for f in tqdm(range(len(ff_folder_list))):
-                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, out_shape)
-
-        else:
-            process_map(partial(stitch_experiment, ff_folder_list=ff_folder_list, ff_tile_dir=ff_tile_dir, 
-                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, out_shape=out_shape), 
-                                        range(len(ff_folder_list)), max_workers=n_workers, chunksize=1)
-
-    
-
 
 
 if __name__ == "__main__":
