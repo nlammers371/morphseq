@@ -78,6 +78,8 @@ def calculate_max_fluo_images(w, im_data_dask, well_name_list, well_time_list, w
 
 
     return {}
+
+
 def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False,
                         n_z_keep=None, ch_to_use=0, LoG_flag=True):
 
@@ -135,9 +137,9 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
 
 def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=None, metadata_only_flag=False,
-                      n_z_keep_in=None, par_flag=False, n_workers=12):
+                      n_z_keep_in=None, par_flag=False):
 
-    read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1') 
+    read_dir_root = os.path.join(data_root, 'raw_image_data', 'YX1', '') 
     if write_dir is None:
         write_dir = os.path.join(data_root, 'built_image_data') 
 
@@ -151,6 +153,8 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
             if os.path.isdir(dd):
                 dir_list.append(path_leaf(dd))
 
+        n_z_keep_in = ["None"] * len(dir_list)
+
     # if rs_res is None:
     #     rs_res = np.asarray([3.2, 3.2])
 
@@ -158,7 +162,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
     dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
 
     for d in dir_indices:
-
+        
         # initialize dictionary to metadata
         sub_name = dir_list[d]
         dir_path = os.path.join(read_dir_root, sub_name, "")
@@ -184,10 +188,11 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
         n_time_points = im_shape[0]
         n_wells = im_shape[1]
         n_z_slices = im_shape[2]
-        if n_z_keep_in is None:
-            n_z_keep = n_z_slices
-        else:
-            n_z_keep = n_z_keep_in
+        # if n_z_keep_in is None:
+        #     n_z_keep = n_z_slices
+        # else:
+        #     n_z_keep = n_z_keep_in
+
         # pull dask array
         im_array_dask = imObject.to_dask()
         # use first 10 frames to infer time resolution
@@ -323,7 +328,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
         # get device
         device = (
                 "cuda"
-                if torch.cuda.is_available() 
+                if torch.cuda.is_available() and (not par_flag)
                 else "cpu"
             )
 
@@ -343,14 +348,14 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
                         process_map(partial(calculate_max_fluo_images, im_data_dask=im_array_dask,
                                             well_name_list=well_name_list_long, well_time_list=time_int_list,
                                             well_ind_list=well_int_list, max_dir=fluo_dir, overwrite_flag=overwrite_flag,
-                                            ch_to_use=channel_id),
+                                            ch_to_use=channel_id, n_z_keep=n_z_keep_in[d]),
                                     range(n_wells * n_time_points), max_workers=n_workers, chunksize=1)
 
                     else:
                         for w in tqdm(range(n_wells * n_time_points)):
                             calculate_max_fluo_images(w, im_data_dask=im_array_dask, well_name_list=well_name_list_long,
                                                   well_time_list=time_int_list, well_ind_list=well_int_list,
-                                                  max_dir=fluo_dir, ch_to_use=channel_id, overwrite_flag=overwrite_flag)
+                                                  max_dir=fluo_dir, ch_to_use=channel_id, overwrite_flag=overwrite_flag, n_z_keep=n_z_keep_in[d])
 
             print("Calculating full-focus images for the BF channel...")
             if n_channels > 1:
@@ -358,33 +363,27 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
             else:
                 im_array_bf = im_array_dask
 
-            # if par_flag:
-            #     process_map(partial(calculate_FF_images, im_data_dask=im_array_bf, device=device,
-            #                         well_name_list=well_name_list_long, well_time_list=time_int_list,
-            #                         well_ind_list=well_int_list, ff_dir=ff_dir, overwrite_flag=overwrite_flag),
-            #                 range(n_wells*n_time_points), max_workers=n_workers, chunksize=1)
-            # else:
-            for w in tqdm(range(n_wells*n_time_points)):
-                calculate_FF_images(w, im_array_bf, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device,
-                                overwrite_flag=overwrite_flag, n_z_keep=n_z_keep)#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
+            if par_flag:
+                process_map(partial(calculate_FF_images, im_data_dask=im_array_bf, device=device,
+                                    well_name_list=well_name_list_long, well_time_list=time_int_list,
+                                    well_ind_list=well_int_list, ff_dir=ff_dir, overwrite_flag=overwrite_flag, ch_to_use=bf_channel_ind, n_z_keep=n_z_keep_in[d]),
+                            range(n_wells*n_time_points), chunksize=1)
+            else:
+                for w in tqdm(range(n_wells*n_time_points)):
+                    calculate_FF_images(w, im_array_bf, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device,
+                                    overwrite_flag=overwrite_flag, ch_to_use=bf_channel_ind, n_z_keep=n_z_keep_in[d])#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
 
 
-
-        
-        
         first_time = np.min(well_df['Time (s)'].copy())
         well_df['Time Rel (s)'] = well_df['Time (s)'] - first_time
         
-
         # load previous metadata
-        metadata_path = os.path.join(ff_dir, 'YX1', 'metadata', sub_name)
-        if not os.path.isdir(metadata_path):
-            os.makedirs(metadata_path)
-        well_df.to_csv(os.path.join(metadata_path, 'metadata.csv'))
+        metadata_out_path = os.path.join(data_root, "metadata", "built_metadata_files", "") 
+        if not os.path.isdir(metadata_out_path):
+            os.makedirs(metadata_out_path)
+        well_df.to_csv(os.path.join(metadata_out_path, sub_name + '_metadata.csv'), index=False)
 
         imObject.close()
-        # with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
-        #     pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
     print('Done.')

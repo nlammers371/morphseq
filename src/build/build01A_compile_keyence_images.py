@@ -411,12 +411,12 @@ def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
             metadata_df = []
 
         # load previous metadata
-        metadata_path = os.path.join(ff_dir, 'metadata.csv')
+        metadata_path = os.path.join(data_root, 'metadata', "built_metadata_files", sub_name + '_metadata.csv')
 
 
         if len(metadata_df) > 0:
             metadata_df.reset_index()
-            metadata_df.to_csv(metadata_path)
+            metadata_df.to_csv(metadata_path, index=False)
         # with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
         #     pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 

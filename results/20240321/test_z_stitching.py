@@ -6,7 +6,7 @@ def main():
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     dir_list = None
     n_workers = 8
-    overwrite_flag = True
+    overwrite_flag = False
     # build FF images
     # build_ff_from_keyence(data_root, n_workers=n_workers, par_flag=True, overwrite_flag=overwrite_flag, dir_list=dir_list)
 
