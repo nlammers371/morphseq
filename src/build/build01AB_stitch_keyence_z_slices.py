@@ -212,7 +212,7 @@ def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
         else:
             process_map(partial(stitch_well, well_list=well_list, cytometer_flag=cytometer_flag, 
                                                                         out_dir=out_dir, overwrite_flag=overwrite_flag, out_shape=out_shape, ff_tile_dir=ff_tile_dir), 
-                                        range(len(well_list)), max_workers=n_workers, stacksize=1)
+                                        range(len(well_list)), chunksize=1)
 
 
     print('Done.')

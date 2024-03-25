@@ -58,6 +58,7 @@ def LoG_focus_stacker(data_zyx, filter_size, device):
     lpf = cv2.Laplacian(lpf, cv2.CV_64F, ksize=filter_size)
     lpf = lpf[ind:-ind, ind:-ind]
     lpf_tensor = set_inputs_to_device(torch.reshape(torch.tensor(lpf), (1, 1, filter_size, filter_size)), device)
+    
     # get Gaussian filter
     gf = np.zeros((2*filter_size+1, 2*filter_size+1))
     gf[filter_size, filter_size] = 1
