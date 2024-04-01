@@ -1,11 +1,12 @@
 import os
 import glob
 from tqdm import tqdm
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops, find_contours
 import skimage
 import cv2
 import pandas as pd
 from src.functions.utilities import path_leaf
+from skimage.morphology import disk, binary_closing
 import scipy
 # from parfor import pmap
 from scipy.optimize import linear_sum_assignment
@@ -13,6 +14,7 @@ from sklearn.metrics import pairwise_distances
 import skimage
 from scipy.stats import truncnorm
 import numpy as np
+import skimage.io as io
 import multiprocessing
 from functools import partial
 from tqdm.contrib.concurrent import process_map 
@@ -79,7 +81,7 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
 
         # load main embryo mask
         im_emb_path = os.path.join(emb_path, date, lb_name)
-        im_ldb = cv2.imread(im_emb_path)
+        im_ldb = io.imread(im_emb_path)
         im_ldb = im_ldb[:, :, 0]
         im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
         im_bkg = np.ones(im_ldb.shape, dtype="uint8")
@@ -88,7 +90,7 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
 
         # load image
         im_ff_path = os.path.join(ff_image_path, date, im_name)
-        im_ff = cv2.imread(im_ff_path)
+        im_ff = io.imread(im_ff_path)
         im_ff = im_ff[:, :, 0]
         if im_ff.shape[0] < im_ff.shape[1]:
             im_ff = im_ff.transpose(1,0)
@@ -107,7 +109,8 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
     return px_mean, px_std
 
 
-def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px_mean, px_std, overwrite_flag=False):
+def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px_mean, px_std, 
+                        overwrite_flag=False, close_radius=15):
 
     # set path to segmentation data
     ff_image_path = os.path.join(root, 'built_image_data', 'stitched_FF_images', '')
@@ -155,8 +158,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
 
         # load main embryo mask
         im_emb_path = os.path.join(emb_path, date, lb_name)
-        im_ldb = cv2.imread(im_emb_path)
-        im_ldb = im_ldb[:, :, 0]
+        im_ldb = io.imread(im_emb_path)
         im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
         im_merge = np.zeros(im_ldb.shape, dtype="uint8")
         im_merge[np.where(im_ldb == 1)] = 1
@@ -165,8 +167,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
 
         # load yolk mask
         im_yolk_path = os.path.join(yolk_path, date, lb_name)
-        im_yolk = cv2.imread(im_yolk_path)
-        im_yolk = im_yolk[:, :, 0]
+        im_yolk = io.imread(im_yolk_path)
         im_yolk = np.round(im_yolk / np.min(im_yolk) - 1).astype(int)
         im_yolk = skimage.morphology.remove_small_objects(im_yolk, min_size=75)  # remove small stuff
 
@@ -180,6 +181,10 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
         assert lbi != 0  # make sure we're not grabbing empty space
 
         im_merge_ft = (im_merge_lb == lbi).astype(int)
+
+        # apply simple morph operations to fill small holes
+        i_disk = disk(close_radius)
+        im_merge_ft = binary_closing(im_merge_ft, i_disk)
 
         # filter out yolk regions that don't contact the embryo ROI
         im_intersect = np.multiply(im_yolk * 1, im_merge_ft * 1)
@@ -205,8 +210,7 @@ def export_embryo_snips(r, embryo_metadata_df, dl_rad_um, outscale, outshape, px
         # Load raw image
         ############
         im_ff_path = os.path.join(ff_image_path, date, im_name)
-        im_ff = cv2.imread(im_ff_path)
-        im_ff = im_ff[:, :, 0]
+        im_ff = io.imread(im_ff_path)
         if im_ff.shape[0] < im_ff.shape[1]:
             im_ff = im_ff.transpose(1,0)
 
@@ -454,9 +458,9 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
     #     ff = ff.transpose(1,0)
 
     # load label image
-    im = cv2.imread(image_path)
+    im = io.imread(image_path)
     im = im / np.min(im) - 1
-    im = np.round(im[:, :, 0]).astype(int)
+    # im = np.round(im[:, :, 0]).astype(int)
 
     # merge live/dead labels for now
     im_merge = np.zeros(im.shape, dtype="uint8")
@@ -647,8 +651,7 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
 
     # load masked images
     im_emb_path = os.path.join(emb_path, date, im_name)
-    im_ldb = cv2.imread(im_emb_path)
-    im_ldb = im_ldb[:, :, 0]
+    im_ldb = io.imread(im_emb_path)
     im_ldb = np.round(im_ldb / np.min(im_ldb) - 1).astype(int)
     im_merge = np.zeros(im_ldb.shape, dtype="uint8")
     im_merge[np.where(im_ldb == 1)] = 1
@@ -656,18 +659,15 @@ def get_embryo_stats(index, embryo_metadata_df, qc_scale_um, ld_rat_thresh):
     im_merge_lb = label(im_merge)
 
     im_bubble_path = os.path.join(bubble_path, date, im_name)
-    im_bubble = cv2.imread(im_bubble_path)
-    im_bubble = im_bubble[:, :, 0]
+    im_bubble = io.imread(im_bubble_path)
     im_bubble = np.round(im_bubble / np.min(im_bubble) - 1).astype(int)
 
     im_focus_path = os.path.join(focus_path, date, im_name)
-    im_focus = cv2.imread(im_focus_path)
-    im_focus = im_focus[:, :, 0]
+    im_focus = io.imread(im_focus_path)
     im_focus = np.round(im_focus / np.min(im_focus) - 1).astype(int)
 
     im_yolk_path = os.path.join(yolk_path, date, im_name)
-    im_yolk = cv2.imread(im_yolk_path)
-    im_yolk = im_yolk[:, :, 0]
+    im_yolk = io.imread(im_yolk_path)
     im_yolk = np.round(im_yolk / np.min(im_yolk) - 1).astype(int)
 
     # get surface area
@@ -879,6 +879,7 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
          = get_images_to_process(ckpt1_path, experiment_list, master_df, overwrite_well_stats)
 
     assert len(images_to_process) == df_to_process.shape[0]
+
     # print("Remember to un-comment this stuff")
     if len(images_to_process) > 0:
         # initialize empty columns to store embryo information
@@ -1095,9 +1096,9 @@ if __name__ == "__main__":
     # build_well_metadata_master(root)
     # #
     # # print('Compiling embryo metadata...')
-    # segment_wells(root, par_flag=False, overwrite_well_stats=False)
+    segment_wells(root, par_flag=False, overwrite_well_stats=True)
 
-    # compile_embryo_stats(root, overwrite_flag=True)
+    compile_embryo_stats(root, overwrite_flag=True)
 
     # print('Extracting embryo snips...')
     extract_embryo_snips(root, par_flag=False, outscale=6.5, dl_rad_um=50, overwrite_flag=False)

@@ -2,6 +2,7 @@
 import os
 import numpy as np
 from PIL import Image
+import skimage.io as io
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from src.functions.utilities import path_leaf
@@ -270,7 +271,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
     # depth_path = os.path.join(depth_folder_list[t], '')
     # depth_name = depth_path.replace(depth_tile_dir, "")
 
-    ff_out_name = ff_name[3:-1] + '_stitch.png'
+    ff_out_name = ff_name[3:] + '_stitch.png'
     # depth_out_name = depth_name[6:-1] + '_stitch.png'
 
     if not os.path.isfile(os.path.join(stitch_ff_dir, ff_out_name)) or overwrite_flag:
@@ -340,7 +341,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
             # depth_arr = depth_mosaic.stitch()
             # depth_out = trim_image(depth_arr, out_shape)
 
-            cv2.imwrite(os.path.join(stitch_ff_dir, ff_out_name), ff_out)
+            io.imsave(os.path.join(stitch_ff_dir, ff_out_name), ff_out, check_contrast=False)
             # cv2.imwrite(os.path.join(stitch_depth_dir, depth_out_name), depth_out)
         except:
             pass
@@ -429,6 +430,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
     if write_dir is None:
         write_dir = data_root
 
+    metadata_root = os.path.join(data_root, "metadata", "built_metadata_files", "")
     # handle paths
     if dir_list == None:
         # Get a list of directories
@@ -448,7 +450,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
         # depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
         ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
 
-        metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
+        metadata_path = os.path.join(metadata_root, sub_name + '_metadata.csv')
         metadata_df = pd.read_csv(metadata_path, index_col=0)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
         time_ind_index = np.unique(metadata_df["time_int"])
