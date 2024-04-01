@@ -4,9 +4,9 @@ import multiprocessing
 
 def main():
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    dir_list = None
+    dir_list = ["20231208"]
     n_workers = 8
-    overwrite_flag = False
+    overwrite_flag = True
     # build FF images
     # build_ff_from_keyence(data_root, n_workers=n_workers, par_flag=True, overwrite_flag=overwrite_flag, dir_list=dir_list)
 

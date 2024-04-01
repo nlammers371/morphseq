@@ -27,7 +27,7 @@ def trim_image(im, out_shape):
 
     pad_width = -im_diffs
     pad_width[np.where(pad_width < 0)] = 0
-    im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype('uint8')
+    im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype(im.dtype)
 
     im_diffs[np.where(im_diffs < 0)] = 0
     sv = np.floor(im_diffs / 2).astype(int)
@@ -55,7 +55,7 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
     # if multiple positions were taken per well, then there will be a layer of position folders
     position_dir_list = sorted(glob.glob(well_dir + "/P*"))
     if len(position_dir_list) == 0:
-        position_dir_list = [""]
+        position_dir_list = [well_dir]
 
     #####
     # load all paths into a parsable list object
@@ -110,42 +110,76 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
     n_time_points = len(well_path_list)
     n_pos_tiles = len(well_path_list[0])
     n_z_slices = len(well_path_list[0][0])
-
+    prev_params = np.nan
     for t in range(n_time_points):
         
         ff_out_name = 'ff_' + well_name_conv + f'_t{t+1:04}'
         ff_tile_path = os.path.join(ff_tile_dir, ff_out_name, "")
 
-        z_slice_array = np.zeros((n_z_slices, out_shape[0], out_shape[1]), dtype=np.uint8)
-        for z in range(n_z_slices):
-            im_z_list = []
-            for p in range(n_pos_tiles):
-                im = io.imread(well_path_list[t][p][z])
-                im_z_list.append(Tile(im))
-
-            n_images = len(im_z_list)
-            # initialize mosaic
-            z_mosaic = StructuredMosaic(
-                im_z_list,
-                dim=n_images,  # number of tiles in primary axis
-                origin="upper left",  # position of first tile
-                direction="vertical",
-                pattern="raster"
-            )
-
-            # load saved parameters
-            z_mosaic.load_params(os.path.join(ff_tile_path, "params.json"))
-            z_mosaic.smooth_seams()
-            
-            z_arr = z_mosaic.stitch()
-            z_out = trim_image(z_arr, out_shape)
-            z_slice_array[z, :, :] = z_out
-
-        # save 
         out_name = ff_out_name
         out_name = out_name.replace("ff_", "")
         out_name = out_name +  "_stack.tif"
-        io.imsave(os.path.join(out_dir, out_name), z_slice_array, check_contrast=False)
+
+        save_path = os.path.join(out_dir, out_name)
+
+        if (not os.path.isfile(save_path)) or overwrite_flag: 
+            z_slice_array = np.zeros((n_z_slices, out_shape[0], out_shape[1]))
+            for z in range(n_z_slices):
+                im_z_list = []
+                for p in range(n_pos_tiles):
+                    load_string = well_path_list[t][p][z]
+                    if load_string == '/net/trapnell/vol1/home/nlammers/projects/data/morphseq/raw_image_data/keyence/20230608/W045/P00003/T0040/wt_11ss_W045_P00003_T0040_Z001_CH1.tif':
+                        im = np.zeros(out_shape, dtype=np.uint8) # handle a one-time issue with a corrupt tile
+                    else:
+                        im = io.imread(load_string)
+                        out_dtype = im.dtype
+                    im_z_list.append(Tile(im))
+
+                n_images = len(im_z_list)
+                # initialize mosaic
+                # try:
+
+                z_mosaic = StructuredMosaic(
+                        im_z_list,
+                        dim=n_images,  # number of tiles in primary axis
+                        origin="upper left",  # position of first tile
+                        direction="vertical",
+                        pattern="raster"
+                    )
+
+                if n_images > 1:
+                    
+
+                    # load saved parameters
+                    if os.path.isfile(os.path.join(ff_tile_path, "params.json")):
+                        z_mosaic.load_params(os.path.join(ff_tile_path, "params.json"))
+                    else:
+                        z_mosaic.load_params(os.path.join(ff_tile_dir, "master_params.json"))
+                    z_mosaic.smooth_seams()
+                    
+                    z_arr = z_mosaic.stitch()
+                    # except:
+                    #     z_mosaic = StructuredMosaic(
+                    #         im_z_list,
+                    #         dim=n_images,  # number of tiles in primary axis
+                    #         origin="upper left",  # position of first tile
+                    #         direction="vertical",
+                    #         pattern="raster"
+                    #     )
+
+                    #     # load saved parameters
+                    #     # z_mosaic.load_params(os.path.join(ff_tile_dir, "master_params.json"))\
+                    #     # z_mosaic.align()
+                    #     z_mosaic.smooth_seams()
+                    #     z_arr = z_mosaic.stitch()
+                else:
+                    z_arr = z_mosaic.stitch()
+                z_out = trim_image(z_arr.astype(out_dtype), out_shape)
+                z_slice_array[z, :, :] = z_out
+
+            # save 
+            io.imsave(save_path, z_slice_array, check_contrast=False)
+        
                 
     # well_dict_out = dict({well_name_conv: well_dict})
 
@@ -190,11 +224,11 @@ def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
 
         # get list of FF tile folders
         ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
-        metadata_path = os.path.join(ff_tile_dir, 'metadata.csv')
-        metadata_df = pd.read_csv(metadata_path, index_col=0)
+        metadata_path = os.path.join(data_root, 'metadata', 'built_metadata_files', sub_name + '_metadata.csv')
+        metadata_df = pd.read_csv(metadata_path)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
         time_ind_index = np.unique(metadata_df["time_int"])
-        no_timelapse_flag = len(time_ind_index) == 0
+        no_timelapse_flag = len(time_ind_index) == 1
         if no_timelapse_flag:
             out_shape = np.asarray([800, 630])*size_factor
         else:
@@ -222,9 +256,9 @@ if __name__ == "__main__":
 
     overwrite_flag = True
 
-    data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    dir_list = ["20230525", "20231207"]
-    # build FF images
-    build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
-    # stitch FF images
-    stitch_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
+    # data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    # dir_list = ["20230525", "20231207"]
+    # # build FF images
+    # build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
+    # # stitch FF images
+    # stitch_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)

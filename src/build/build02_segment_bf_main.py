@@ -15,7 +15,6 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
 
 
     """
-
     :param root:
     :param model_name:
     :param n_classes:
@@ -25,7 +24,9 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     :param n_workers:
     :return:
     """
+
     print("Generating segmentation masks using " + model_name + "....")
+
     # extract key info about computational resources
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -49,6 +50,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     if segment_list is None:
         project_list = sorted(glob.glob(path_to_images))
         project_list = [p for p in project_list if "ignore" not in p]
+        project_list = [p for p in project_list if os.path.isdir(p)]
     else:
         project_list = [os.path.join(root, 'stitched_FF_images', p) for p in segment_list]
 
@@ -57,7 +59,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     label_path_list = []
     exist_flags = []
     for ind, p in enumerate(project_list):
-        im_list_temp = glob.glob(os.path.join(p, '*.png')) + glob.glob(os.path.join(p, '*.tif')) + + glob.glob(os.path.join(p, '*.jpg'))
+        im_list_temp = glob.glob(os.path.join(p, '*.png')) + glob.glob(os.path.join(p, '*.tif')) + glob.glob(os.path.join(p, '*.jpg'))
         image_path_list += im_list_temp
 
         _, project_name = ntpath.split(p)
@@ -85,7 +87,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     im_dataloader = DataLoader(im_dataset,
                                batch_size=batch_size,
                                shuffle=False,
-                               num_workers=n_workers)
+                               num_workers=0)
 
     # initialize instance of model
     model = FishModel("FPN",
