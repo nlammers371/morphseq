@@ -89,7 +89,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
     well_int = well_ind_list[w]
 
     # generate save names
-    ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
+    ff_out_name = well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
 
     # calculate filter size
     filter_size = 3 #(np.round(5.66/rs_res_yx[0]*3) // 2 * 2 + 1).astype(int)
@@ -129,7 +129,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
         ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16)
 
         # save images
-        ff_out_name = 'ff_' + well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
+        ff_out_name = well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
 
         io.imsave(os.path.join(ff_dir, ff_out_name + ".png"), ff_image)
 
