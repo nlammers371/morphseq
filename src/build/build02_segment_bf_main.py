@@ -87,7 +87,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     im_dataloader = DataLoader(im_dataset,
                                batch_size=batch_size,
                                shuffle=False,
-                               num_workers=0)
+                               num_workers=n_workers)
 
     # initialize instance of model
     model = FishModel("FPN",
@@ -135,7 +135,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                 im_path = im_paths[b]
                 suffix = im_path.replace(path_to_images[:-1], "")
                 out_path = os.path.join(path_to_labels, suffix + ".tif")
-                io.imsave(out_path, lb_temp)
+                io.imsave(out_path, lb_temp, check_contrast=False)
 
                 # make figure
                 if iter_i in figure_indices:

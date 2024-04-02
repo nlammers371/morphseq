@@ -741,40 +741,44 @@ def build_well_metadata_master(root, well_sheets=None, microscope_list=["keyence
 
     metadata_path = os.path.join(root, 'metadata', '')
     well_meta_path = os.path.join(metadata_path, 'well_metadata', '*.xlsx')
+    built_meta_path = os.path.join(metadata_path, 'built_metadata_files', '')
     ff_im_path = os.path.join(root, 'built_image_data')#, 'FF_images', '*')
 
     # load master experiment table
     exp_df = pd.read_csv(os.path.join(metadata_path, 'experiment_metadata.csv'))
-    exp_df = exp_df[["experiment_id", "start_date", "temperature", "use_flag", "has_sci_data"]]
+    exp_df = exp_df[["experiment_id", "start_date", "temperature", "use_flag", "has_sci_data", "microscope"]]
+    exp_df.loc[np.isnan(exp_df["has_sci_data"]), "has_sci_data"] = 0
     exp_df = exp_df.loc[exp_df["use_flag"]==1, :]
     exp_df = exp_df.rename(columns={"start_date": "experiment_date"})
     exp_date_list = exp_df["experiment_date"].astype(str).to_list()
     # Load and concatenate well metadata into one long pandas table
     well_df_list = []
-    for m, microscope in enumerate(microscope_list):
-        if microscope == "keyence":
-            project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "FF_images", "*")))
-        elif microscope == "YX1":
-            project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "metadata", "*")))
+    # for m, microscope in enumerate(microscope_list):
+        # if microscope == "keyence":
+            # project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "FF_images", "*")))
+        # elif microscope == "YX1":
+            # project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "metadata", "*")))
 
-        project_list = [p for p in project_list if "ignore" not in p]
-        project_list = [p for p in project_list if os.path.isdir(p)]
+    project_list = sorted(glob.glob(os.path.join(built_meta_path, "*.csv")))
+    # project_list = [p for p in project_list if "ignore" not in p]
+    # project_list = [p for p in project_list if os.path.isdir(p)]
 
-        for p, project in enumerate(project_list):
-            readname = os.path.join(project, 'metadata.csv')
-            pname = path_leaf(project)
-            exp_date = pname[:8]
-            if exp_date in exp_date_list:
-                temp_table = pd.read_csv(readname, index_col=0)
-                temp_table["experiment_date"] = exp_date
-                # temp_table["experiment_id"] = p
-                temp_table["microscope"] = microscope
-                if "lmx1b" in pname:
-                    temp_table = temp_table.drop_duplicates(subset=["well", "time_int"])
-                # add to list of metadata dfs
-                well_df_list.append(temp_table)
+    for p, readname in enumerate(project_list):
+        pname = path_leaf(readname)
+        exp_date = pname[:8]
+        if exp_date in exp_date_list:
+            temp_table = pd.read_csv(readname)
+            temp_table["experiment_date"] = exp_date
+            # temp_table["experiment_id"] = p
+            # temp_table["microscope"] = microscope
+            # if exp_date == "20230830":
+            temp_table = temp_table.drop_duplicates(subset=["well", "time_int"]) # these dupes only happen for Keyence experiments with no timelapse
+            # add to list of metadata dfs
+            well_df_list.append(temp_table)
 
     master_well_table = pd.concat(well_df_list, axis=0, ignore_index=True)
+    if "microscope" in master_well_table.columns:
+        master_well_table = master_well_table.drop(labels="microscope", axis=1)
 
     # recast experiment_date variables
     master_well_table["experiment_date"] = master_well_table["experiment_date"].astype(str)
@@ -885,7 +889,7 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
         # initialize empty columns to store embryo information
         master_df_update = df_to_process.copy()
         master_df_update["n_embryos_observed"] = np.nan
-        for n in range(4):
+        for n in range(4): # allow for a maximum of 4 embryos per well
             master_df_update["e" + str(n) + "_x"] = np.nan
             master_df_update["e" + str(n) + "_y"] = np.nan
             master_df_update["e" + str(n) + "_label"] = np.nan
@@ -895,6 +899,9 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
         # extract position and live/dead status of each embryo in each well
         ##########################
 
+        # add little function to load 1 FF from each experiment and throw the stitched pixel dims into the metadata df
+        raise Exception("Add image size function")
+        
         emb_df_list = []
         print("Extracting embryo locations...")
         n_workers = np.ceil(os.cpu_count()/4).astype(int)
@@ -1093,7 +1100,7 @@ if __name__ == "__main__":
     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
     
     # print('Compiling well metadata...')
-    # build_well_metadata_master(root)
+    build_well_metadata_master(root)
     # #
     # # print('Compiling embryo metadata...')
     segment_wells(root, par_flag=False, overwrite_well_stats=True)
