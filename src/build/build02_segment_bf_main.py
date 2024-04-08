@@ -134,7 +134,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                 lb_temp = np.squeeze(lb_predicted[b, :, :])
                 im_path = im_paths[b]
                 suffix = im_path.replace(path_to_images[:-1], "")
-                out_path = os.path.join(path_to_labels, suffix + ".tif")
+                out_path = os.path.join(path_to_labels, suffix + ".jpg")
                 io.imsave(out_path, lb_temp, check_contrast=False)
 
                 # make figure
