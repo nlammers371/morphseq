@@ -394,7 +394,7 @@ if __name__ == "__main__":
 
     overwrite_flag = False
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    dir_list = ["20231206"]
+    dir_list = ["2020306"]
     # build FF images
     # build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list, ch_to_use=4)
     # stitch FF images
