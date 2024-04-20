@@ -70,7 +70,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         for imp in im_list_temp:
             _, tail = ntpath.split(imp)
             label_path = os.path.join(label_path_root, tail)
-            label_path = label_path.replace(".png", ".tif")
+            label_path = label_path.replace(".png", ".jpg")
             label_path_list.append(label_path)
             exist_flags.append(os.path.isfile(label_path))
 
