@@ -2,7 +2,7 @@ from src.build.build02_segment_bf_main import apply_unet
 
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/built_image_data"
 n_workers = 4
-overwrite = False
+overwrite = True
 
 n_class_vec = [2, 1, 1, 1]
 model_name_vec = ["unet_emb_v4_0050", "unet_bubble_v0_0050", "unet_yolk_v0_0050", "unet_focus_v2_0050"]
