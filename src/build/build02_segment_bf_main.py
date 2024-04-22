@@ -125,6 +125,9 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
             lb_predicted = pr_max.indices + 2
             lb_predicted[pr_max.values < 0.5] = 1
 
+            if np.max(lb_predicted) > 1:
+                print("check")
+                
             lb_predicted = lb_predicted / (n_classes+1) * 255
             lb_predicted = np.asarray(lb_predicted.cpu()).astype(np.uint8)  # convert to integer
 
