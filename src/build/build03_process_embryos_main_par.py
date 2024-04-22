@@ -439,7 +439,7 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
     return images_to_process, df_diff, master_df_to_update, image_size_vec, mask_size_vec
 
 
-def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
+def count_embryo_regions(index, image_list, master_df_update, ff_size_list, max_sa, min_sa):
 
     image_path = image_list[index]
 
@@ -448,6 +448,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
     ename = path_leaf(os.path.dirname(image_path))
     ename = ename[:8]       
 
+    ff_size = ff_size_list[index]
     # extract metadata from image name
     dash_index = iname.find("_")
     well = iname[:dash_index]
@@ -466,20 +467,11 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
 
     row = master_df_update.loc[master_index].copy()
 
-    # get model name 
-    # mdl_name = path_leaf(os.path.dirname(os.path.dirname(image_path)))
-    # ff_path = image_path.replace("segmentation/", "")
-    # ff_path = ff_path.replace(mdl_name, "stitched_FF_images")
-    ff_size = get_fov_size_px(row)
-
-    # ff = cv2.imread(ff_path)[:, :, 0]
-    # if ff.shape[0] < ff.shape[1]: # repeat transpose logic from segmentation script
-    #     ff = ff.transpose(1,0)
+    # ff_size = get_fov_size_px(row)
 
     # load label image
     im = io.imread(image_path)
     im = im / np.min(im) - 1
-    # im = np.round(im[:, :, 0]).astype(int)
 
     # merge live/dead labels for now
     im_merge = np.zeros(im.shape, dtype="uint8")
@@ -493,13 +485,10 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
     im_area_um2 = pixel_size_raw**2 * ff_size   # to adjust for size reduction (need to automate this)
     lb_size = im_merge_lb.size
     sa_adjustment = (im_area_um2 / lb_size / 124.9)**-1
-    # px_dim = px_dim_raw * size_factor
 
     max_sa = max_sa*sa_adjustment
     min_sa = min_sa*sa_adjustment
-    # if master_df_update.loc[master_index, "microscope"] == "YX1":
-    #     print("check")
-    # get surface areas
+
     sa_vec = np.empty((len(regions),))
     for r, region in enumerate(regions):
         sa_vec[r] = region.area
@@ -513,8 +502,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa, min_sa):
         min_sa_new = np.max([sa_vec[-n_prior], min_sa])
     else:
         min_sa_new = min_sa
-    # if t_index == 1:
-    #     print("pause")
+
     i_pass = 0
     for r in regions:
         sa = r.area
@@ -600,8 +588,6 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
                 # update positions
                 last_pos_array[from_ind, :] = curr_pos_array[to_ind]  # note that unassigned positions carried over
 
-        # carry assignments forward if necessary
-        # id_array[t + 2 + first_i:, :] = id_array[t + 1 + first_i, :]
 
         # use ID array to generate stable embryo IDs
         for n in range(n_emb_orig):
@@ -621,12 +607,6 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
                 df_temp.loc[iter, "fraction_alive"] = master_df_update.loc[ui, "e" + str(id) + "_frac_alive"]
                 df_temp.loc[iter, "region_label"] = master_df_update.loc[ui, "e" + str(id) + "_label"]
             df_temp["embryo_id"] = well_id + f'_e{n:02}'
-
-            # if i_pass == 0:
-            #     embryo_metadata_df = df_temp.copy()
-            # else:
-            #     embryo_metadata_df = pd.concat([embryo_metadata_df, df_temp.copy()], axis=0, ignore_index=True)
-            # i_pass += 1
 
     return df_temp
 
@@ -772,15 +752,8 @@ def build_well_metadata_master(root, well_sheets=None, microscope_list=["keyence
     exp_date_list = exp_df["experiment_date"].astype(str).to_list()
     # Load and concatenate well metadata into one long pandas table
     well_df_list = []
-    # for m, microscope in enumerate(microscope_list):
-        # if microscope == "keyence":
-            # project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "FF_images", "*")))
-        # elif microscope == "YX1":
-            # project_list = sorted(glob.glob(os.path.join(ff_im_path, microscope, "metadata", "*")))
 
     project_list = sorted(glob.glob(os.path.join(built_meta_path, "*.csv")))
-    # project_list = [p for p in project_list if "ignore" not in p]
-    # project_list = [p for p in project_list if os.path.isdir(p)]
 
     for p, readname in enumerate(project_list):
         pname = path_leaf(readname)
@@ -843,12 +816,6 @@ def build_well_metadata_master(root, well_sheets=None, microscope_list=["keyence
     if master_well_table[well_sheets[0]].isnull().values.any():
         raise Exception("Error: missing well-specific metadata")
 
-    # subset columns
-    # all_cols = master_well_table.columns
-    # rm_cols = ["start_date"]
-    # keep_cols = [col for col in all_cols if col not in rm_cols]
-    # master_well_table = master_well_table[keep_cols]
-
     # calculate approximate stage using linear formula from Kimmel et al 1995 (is there a better formula out there?)
     # dev_time = actual_time*(0.055 T - 0.57) where T is in Celsius...
     master_well_table["predicted_stage_hpf"] = master_well_table["start_age_hpf"] + \
@@ -888,7 +855,6 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
     ###################
     # Track number of embryos and position over time
     ###################
-
     emb_path = [m for m in seg_dir_list if "emb" in m][0]
 
     # get list of experiments
@@ -899,7 +865,7 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
     ckpt1_path = (os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv"))
 
     images_to_process, df_to_process, prev_meta_df, image_size_vec, mask_size_vec\
-         = get_images_to_process(ckpt1_path, experiment_list, master_df, overwrite_well_stats)
+                                = get_images_to_process(ckpt1_path, experiment_list, master_df, overwrite_well_stats)
 
     assert len(images_to_process) == df_to_process.shape[0]
 
@@ -908,7 +874,7 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
         # initialize empty columns to store embryo information
         master_df_update = df_to_process.copy()
         master_df_update["n_embryos_observed"] = np.nan
-        for n in range(4): # allow for a maximum of 4 embryos per well
+        for n in range(4):    # allow for a maximum of 4 embryos per well
             master_df_update["e" + str(n) + "_x"] = np.nan
             master_df_update["e" + str(n) + "_y"] = np.nan
             master_df_update["e" + str(n) + "_label"] = np.nan
@@ -923,16 +889,16 @@ def segment_wells(root, min_sa=2500, max_sa=15000, par_flag=False,
         
         emb_df_list = []
         print("Extracting embryo locations...")
-        n_workers = np.ceil(os.cpu_count()/4).astype(int)
+        n_workers = np.ceil(os.cpu_count()/2).astype(int)
         # images_to_process = [im for im in images_to_process if "20231110" in im]
-        # images_to_process1 = images_to_process[:300]
         if par_flag:
-            emb_df_temp = process_map(partial(count_embryo_regions, image_list=images_to_process, master_df_update=master_df_update, max_sa=max_sa, min_sa=min_sa), 
+            emb_df_temp = process_map(partial(count_embryo_regions, image_list=images_to_process, master_df_update=master_df_update,
+                                              ff_size_list=image_size_vec, max_sa=max_sa, min_sa=min_sa),
                                         range(len(images_to_process)), max_workers=n_workers)
             emb_df_list += emb_df_temp
         else:
             for index in tqdm(range(len(images_to_process))):
-                df_temp = count_embryo_regions(index, images_to_process, master_df_update, max_sa, min_sa)
+                df_temp = count_embryo_regions(index, images_to_process, master_df_update, image_size_vec, max_sa, min_sa)
                 emb_df_list.append(df_temp)
 
         # update the df
@@ -1013,9 +979,7 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.75, qc_scal
     else:
         indices_to_process = range(embryo_metadata_df.shape[0])
 
-
-
-    print("Extracting embryo stats")
+    print("Extracting embryo stats...")
     # if False: #par_flag:
     #     emb_df_list = pmap(get_embryo_stats, indices_to_process,
     #                             (embryo_metadata_df, qc_scale_um, ld_rat_thresh), rP=0.75)
@@ -1030,16 +994,6 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.75, qc_scal
         row_df = emb_df_list[i]
         for nc in new_cols:
             embryo_metadata_df.loc[ind, nc] = row_df[nc].values
-
-    # fix nan qc flag var
-    # embryo_metadata_df.loc[np.isnan(embryo_metadata_df["well_qc_flag"]), "well_qc_flag"] = 0
-
-    # # fix microscope var
-    # for i in range(embryo_metadata_df.shape[0]):
-    #     if isinstance(embryo_metadata_df.loc[i, "microscope"], str):
-    #         pass
-    #     else:
-    #         embryo_metadata_df.loc[i, "microscope"] = "keyence"
 
     # make master flag
     embryo_metadata_df["use_embryo_flag"] = ~(
@@ -1098,11 +1052,6 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
             update_indices.append(r)
 
     update_indices = np.asarray(update_indices)
-    # else:
-    #     # process_map(partial(count_embryo_regions, image_list=images_to_process, master_df_update=master_df_update, max_sa=max_sa, min_sa=min_sa), 
-    #     #                                 range(len(images_to_process)), max_workers=n_workers)
-    #     out_of_frame_flags = pmap(export_embryo_snips, export_indices, (embryo_metadata_df, dl_rad_um, outscale,
-                                                                        # outshape, 0.1*px_mean, 0.1*px_std), rP=0.75)
 
     # add oof flag
     if update_indices.any():
