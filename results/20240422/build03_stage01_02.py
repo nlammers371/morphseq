@@ -1,4 +1,5 @@
 from src.build.build03_process_embryos_main_par import build_well_metadata_master, segment_wells
+import multiprocessing
 
 def main():
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
@@ -8,7 +9,7 @@ def main():
     build_well_metadata_master(root)
     # #
     # # print('Compiling embryo metadata...')
-    segment_wells(root, par_flag=True, overwrite_well_stats=True)
+    segment_wells(root, par_flag=True, overwrite_well_stats=False)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()

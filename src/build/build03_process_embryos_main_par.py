@@ -387,54 +387,56 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
 
         # unprocessed_date_index = np.unique(df_diff["experiment_date"]).astype(str)
 
-        well_id_list = master_df_to_update["well"].values
-        well_date_list = master_df_to_update["experiment_date"].values.astype(str)
-        well_time_list = master_df_to_update["time_int"].values
+        well_id_list = df_diff["well"].values
+        well_date_list = df_diff["experiment_date"].values.astype(str)
+        well_time_list = df_diff["time_int"].values
 
         for e, experiment_path in enumerate(experiment_list):
             ename = path_leaf(experiment_path)
-            date_indices = [d for d in range(len(well_date_list)) if str(well_date_list[d]) == ename]
-            # get list of tif files to process
-            image_list = sorted(glob.glob(os.path.join(experiment_path, "*.jpg")))
+            date_indices = np.where(well_date_list == ename)[0]
+            # get channel info 
+            image_list_full = sorted(glob.glob(os.path.join(experiment_path, "*.jpg")))
+            im_name_test = path_leaf(image_list_full[0])
+            image_suffix = im_name_test[9:]
+            # get list of image prefixes
+            im_names = [os.path.join(experiment_path, well_id_list[i] + f"_t{well_time_list[i]:04}" + image_suffix) for i in date_indices]
+            images_to_process += im_names
+            # for im in image_list:
+            #     # check if well-date combination already exists. I'm treating all time
+            #     iname = path_leaf(im)
+            #     # iname = iname.replace("ff_", "")
+            #     dash_index = iname.find("_")
+            #     well = iname[:dash_index]
+            #     wd_indices = [wd for wd in date_indices if well_id_list[wd] == well]
+            #     t_index = int(iname[dash_index + 2:dash_index + 6])
+            #     wdt_indices = [wdt for wdt in wd_indices if well_time_list[wdt] == t_index]
+            #     if len(wdt_indices) == 0:
+            #         images_to_process += [im]
+             
 
-            if False: #name[:8] not in processed_date_index:
-                for im in image_list:
-                    images_to_process += [im]
-            else:
-                for im in image_list:
-                    # check if well-date combination already exists. I'm treating all time
-                    iname = path_leaf(im)
-                    # iname = iname.replace("ff_", "")
-                    dash_index = iname.find("_")
-                    well = iname[:dash_index]
-                    wd_indices = [wd for wd in date_indices if well_id_list[wd] == well]
-                    t_index = int(iname[dash_index + 2:dash_index + 6])
-                    wdt_indices = [wdt for wdt in wd_indices if well_time_list[wdt] == t_index]
-                    if len(wdt_indices) == 0:
-                        images_to_process += [im]
-                    # if (iname[:9] not in imname_chunk_list) or (ename not in well_date_list):
-                    #     images_to_process += [im]
-
-        df_diff.reset_index(inplace=True)
+        df_diff.reset_index(inplace=True, drop=True)
 
     # get list of FF and mask sizes
-    image_root = str(Path(images_to_process[0]).parents[3])
-    experiment_dates = [exp.split("/")[-2] for exp in images_to_process]
-    date_index = np.unique(experiment_dates)
+    
     image_size_vec = np.empty(len(images_to_process))
     mask_size_vec = np.empty(len(images_to_process))
-    # load the first FF image from each experiment folder
-    for d, date in enumerate(date_index):
-        ff_path = os.path.join(image_root, "stitched_FF_images", date, "")
-        ff_images = glob.glob(ff_path + "*.png")
 
-        date_indices = np.where(np.asarray(experiment_dates) == date)[0]
+    if len(images_to_process) > 0:
+        image_root = str(Path(images_to_process[0]).parents[3])
+        experiment_dates = [exp.split("/")[-2] for exp in images_to_process]
+        date_index = np.unique(experiment_dates)
+        # load the first FF image from each experiment folder
+        for d, date in enumerate(date_index):
+            ff_path = os.path.join(image_root, "stitched_FF_images", date, "")
+            ff_images = glob.glob(ff_path + "*.png")
 
-        sample_image = io.imread(ff_images[0])
-        sample_mask = io.imread(images_to_process[date_indices[0]])
+            date_indices = np.where(np.asarray(experiment_dates) == date)[0]
 
-        image_size_vec[date_indices] = sample_image.size
-        mask_size_vec[date_indices] = sample_mask.size
+            sample_image = io.imread(ff_images[0])
+            sample_mask = io.imread(images_to_process[date_indices[0]])
+
+            image_size_vec[date_indices] = sample_image.size
+            mask_size_vec[date_indices] = sample_mask.size
 
     return images_to_process, df_diff, master_df_to_update, image_size_vec, mask_size_vec
 
@@ -836,7 +838,7 @@ def build_well_metadata_master(root, well_sheets=None, microscope_list=["keyence
 # Main process function 2
 ####################
 
-def segment_wells(root, min_sa_um=25000, max_sa_um=150000, par_flag=False,
+def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
                   overwrite_well_stats=False, overwrite_embryo_stats=False):
 
     print("Processing wells...")
@@ -916,6 +918,8 @@ def segment_wells(root, min_sa_um=25000, max_sa_um=150000, par_flag=False,
 
     else:
         master_df_update = pd.read_csv(ckpt1_path, index_col=0)
+        drop_cols = [col for col in master_df_update.columns if "Unnamed" in col]
+        master_df_update = master_df_update.drop(labels=drop_cols, axis=1)
     # Next, iterate through the extracted positions and use rudimentary tracking to assign embryo instances to stable
     # embryo_id that persists over time
 
