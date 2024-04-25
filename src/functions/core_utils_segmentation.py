@@ -69,11 +69,16 @@ class Dataset(torch.utils.data.Dataset):
         if ".tif" in filename:
             filename = filename.replace(".tif", "")  # get rid of tif suffix if it exists
             image_path = os.path.join(self.images_directory, filename + ".tif")
-            mask_path = os.path.join(self.masks_directory, filename + ".tif")
         elif ".png" in filename:
             filename = filename.replace(".png", "")  # get rid of tif suffix if it exists
             image_path = os.path.join(self.images_directory, filename + ".png")
-            mask_path = os.path.join(self.masks_directory, filename + ".tif")
+        elif ".jpg" in filename:
+            filename = filename.replace(".jpg", "")  # get rid of tif suffix if it exists
+            image_path = os.path.join(self.images_directory, filename + ".jpg")
+        else:
+            raise Exception("File type not supported")
+
+        mask_path = os.path.join(self.masks_directory, filename + ".jpg")
         # image = np.array(Image.open(image_path).convert("RGB"))
 
         # trimap = np.array(Image.open(mask_path))
@@ -95,9 +100,9 @@ class Dataset(torch.utils.data.Dataset):
                     mask[c, :, :] = (mask_temp == (c+1))*1.0
         else:
             if self.num_classes == 1:
-                mask = np.empty(self.out_dims)
+                mask = np.zeros(self.out_dims)
             else:
-                mask = np.empty((self.num_classes, self.out_dims[0], self.out_dims[1]))
+                mask = np.zeros((self.num_classes, self.out_dims[0], self.out_dims[1]))
 
         # load and resize image
         im_temp = io.imread(image_path)
@@ -119,6 +124,9 @@ class Dataset(torch.utils.data.Dataset):
         # if False: #self.num_classes == 1:
         # sample = dict(image=image.astype(np.float32), mask=mask[np.newaxis, :, :].astype(np.float32))  #, trimap=trimap)
         # else:
+        if np.any(np.isnan(mask)):
+            raise Exception("wft")
+
         sample = dict(image=image.astype(np.float32), mask=mask.astype(np.float32), path=filename)
         if self.transform is not None:
             sample = self.transform(**sample)
