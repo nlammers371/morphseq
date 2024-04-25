@@ -77,7 +77,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     # remove images with previously existing labels if overwrite_flag=False
     if not overwrite_flag:
         image_path_list = [image_path_list[e] for e in range(len(image_path_list)) if not exist_flags[e]]
-        label_path_list = [label_path_list[e] for e in range(len(label_path_list)) if not exist_flags[e]]
+        # label_path_list = [label_path_list[e] for e in range(len(label_path_list)) if not exist_flags[e]]
         n_ex = np.sum(np.asarray(exist_flags) == 1)
         if n_ex > 0:
             print('Skipping ' + str(n_ex) + " previously segmented images. Set 'overwrite_flag=True' to overwrite")
@@ -124,9 +124,6 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
 
             lb_predicted = pr_max.indices + 2
             lb_predicted[pr_max.values < 0.5] = 1
-
-            if np.max(lb_predicted) > 1:
-                print("check")
                 
             lb_predicted = lb_predicted / (n_classes+1) * 255
             lb_predicted = np.asarray(lb_predicted.cpu()).astype(np.uint8)  # convert to integer
