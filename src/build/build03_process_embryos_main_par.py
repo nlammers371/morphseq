@@ -46,7 +46,7 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
     bkg_sample_indices = np.random.choice(range(embryo_metadata_df.shape[0]), n_bkg_samples, replace=True)
     bkg_pixel_list = []
 
-    for r in tqdm(range(len(bkg_sample_indices))):
+    for r in tqdm(range(len(bkg_sample_indices)), "Estimating background..."):
         sample_i = bkg_sample_indices[r]
         row = embryo_metadata_df.iloc[sample_i].copy()
 
@@ -530,7 +530,6 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
     # check how many embryos we are dealing with
     n_emb_col = master_df_update.loc[well_indices, ["n_embryos_observed"]].values.ravel()
 
-
     if np.max(n_emb_col) == 0:  # skip
         df_temp = []
 
@@ -594,7 +593,7 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
 
         # carry assignments forward if necessary
         # id_array[t + 2 + first_i:, :] = id_array[t + 1 + first_i, :]
-
+        df_list = []
         # use ID array to generate stable embryo IDs
         for n in range(n_emb_orig):
             use_indices = [well_indices[w] for w in range(len(well_indices)) if ~np.isnan(id_array[w, n])]
@@ -602,9 +601,9 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
             use_subindices = [w for w in range(len(well_indices)) if ~np.isnan(id_array[w, n])]
 
             df_temp = master_df_update.loc[use_indices, temp_cols].copy()
-            df_temp.reset_index(inplace=True)
-            keep_cols = [n for n in df_temp.columns if n != "index"]
-            df_temp = df_temp.loc[:, keep_cols]
+            df_temp.reset_index(inplace=True, drop=True)
+            # keep_cols = [n for n in df_temp.columns if n != "index"]
+            # df_temp = df_temp.loc[:, keep_cols]
             for iter, ui in enumerate(use_indices):
                 id = int(id_array[use_subindices[iter], n])
 
@@ -613,6 +612,10 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
                 df_temp.loc[iter, "fraction_alive"] = master_df_update.loc[ui, "e" + str(id) + "_frac_alive"]
                 df_temp.loc[iter, "region_label"] = master_df_update.loc[ui, "e" + str(id) + "_label"]
             df_temp["embryo_id"] = well_id + f'_e{n:02}'
+
+            df_list.append(df_temp)
+
+        df_temp = pd.concat(df_list, axis=0, ignore_index=True)
 
             # if i_pass == 0:
             #     embryo_metadata_df = df_temp.copy()
@@ -841,8 +844,7 @@ def build_well_metadata_master(root, well_sheets=None):
 # Main process function 2
 ####################
 
-def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
-                  overwrite_well_stats=False, overwrite_embryo_stats=False):
+def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, overwrite_well_stats=False):
 
     print("Processing wells...")
     # generate paths to useful directories
@@ -896,7 +898,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
         ##########################
         
         emb_df_list = []
-        print("Extracting embryo locations...")
+
         n_workers = np.ceil(os.cpu_count()/4).astype(int)
         if par_flag:
             emb_df_temp = process_map(partial(count_embryo_regions, image_list=images_to_process, master_df_update=master_df_update,
@@ -904,7 +906,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
                                         range(len(images_to_process)), max_workers=n_workers, chunksize=10)
             emb_df_list += emb_df_temp
         else:
-            for index in tqdm(range(len(images_to_process))):
+            for index in tqdm(range(len(images_to_process)), "Calculating embryo stats..."):
                 df_temp = count_embryo_regions(index, images_to_process, master_df_update, max_sa_um, min_sa_um)
                 emb_df_list.append(df_temp)
 
@@ -927,8 +929,9 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
 
     else:
         master_df_update = pd.read_csv(ckpt1_path, index_col=0)
-        drop_cols = [col for col in master_df_update.columns if "Unnamed" in col]
-        master_df_update = master_df_update.drop(labels=drop_cols, axis=1)
+
+    drop_cols = [col for col in master_df_update.columns if "Unnamed" in col]
+    master_df_update = master_df_update.drop(labels=drop_cols, axis=1)
     # Next, iterate through the extracted positions and use rudimentary tracking to assign embryo instances to stable
     # embryo_id that persists over time
 
@@ -938,8 +941,8 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
 
     well_id_list = np.unique(master_df_update["well_id"])
     track_df_list = []
-    print("Performing embryo tracking...")
-    for w in tqdm(range(len(well_id_list))):
+    # print("Performing embryo tracking...")
+    for w in tqdm(range(len(well_id_list)), "Doing embryo tracking..."):
         well_id = well_id_list[w]
         df_temp = do_embryo_tracking(well_id, master_df, master_df_update)
         track_df_list.append(df_temp)
@@ -953,7 +956,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=1500000, par_flag=False,
     return {}
 
 
-def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.75, qc_scale_um=150):
+def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale_um=150):
 
     metadata_path = os.path.join(root, 'metadata', '')
     # segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
@@ -995,13 +998,13 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.75, qc_scal
 
 
 
-    print("Extracting embryo stats")
+    # print("Extracting embryo stats")
     # if False: #par_flag:
     #     emb_df_list = pmap(get_embryo_stats, indices_to_process,
     #                             (embryo_metadata_df, qc_scale_um, ld_rat_thresh), rP=0.75)
     # else:
     emb_df_list = []
-    for index in tqdm(indices_to_process):
+    for index in tqdm(indices_to_process, "Extracting embryo stats..."):
         df_temp = get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh)
         emb_df_list.append(df_temp)
 
@@ -1031,7 +1034,7 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.75, qc_scal
 
     print("phew")
 
-def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=False, outshape=None, dl_rad_um=10):
+def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=False, outshape=None, dl_rad_um=75):
 
     if outshape == None:
         outshape = [576, 256]
@@ -1081,7 +1084,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         update_indices = np.where(out_of_frame_flags > -1)
         out_of_frame_flags = out_of_frame_flags[out_of_frame_flags > - 1]
     else:
-        for r in tqdm(export_indices):
+        for r in tqdm(export_indices, "Exporting snips..."):
             oof = export_embryo_snips(r, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
                                       px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag)
