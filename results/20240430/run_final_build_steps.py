@@ -6,7 +6,7 @@ def main():
 
     # segment_wells(root, par_flag=False, overwrite_well_stats=False)
     # compile_embryo_stats(root, overwrite_flag=True)
-    extract_embryo_snips(root, par_flag=True, outscale=6.5, dl_rad_um=75, overwrite_flag=True)
+    # extract_embryo_snips(root, par_flag=True, outscale=6.5, dl_rad_um=75, overwrite_flag=True)
     #
     perform_embryo_qc(root)
 
