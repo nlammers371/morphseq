@@ -1063,7 +1063,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     export_indices = range(embryo_metadata_df.shape[0])
 
     # draw random sample to estimate background
-    print("Estimating background...")
+    # print("Estimating background...")
     px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
 
     embryo_metadata_df["out_of_frame_flag"] = False
@@ -1081,8 +1081,8 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
                                       px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag),
                     range(len(export_indices)), max_workers=n_workers, chunksize=10)
 
-        update_indices = np.where(out_of_frame_flags > -1)
-        out_of_frame_flags = out_of_frame_flags[out_of_frame_flags > - 1]
+        update_indices = np.where(np.asarray(out_of_frame_flags) > -1)
+        out_of_frame_flags = np.asarray(out_of_frame_flags)[update_indices]
     else:
         for r in tqdm(export_indices, "Exporting snips..."):
             oof = export_embryo_snips(r, root=root, embryo_metadata_df=embryo_metadata_df,
@@ -1093,7 +1093,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
                 out_of_frame_flags.append(oof)
                 update_indices.append(r)
 
-    update_indices = np.asarray(update_indices)
+        update_indices = np.asarray(update_indices)
 
     # add oof flag
     if update_indices.any():

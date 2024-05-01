@@ -48,8 +48,8 @@ def perform_embryo_qc(root, dead_lead_time=2):
     # iterate through time points
     first_i = np.nan
     last_i = np.nan
-    for t, time in enumerate(time_index):
-        t_indices_ref = np.where((time_vec_ref >= time - hpf_window) & (time_vec_ref <= time + hpf_window))[0]
+    for t, ti in enumerate(time_index):
+        t_indices_ref = np.where((time_vec_ref >= ti - hpf_window) & (time_vec_ref <= ti + hpf_window))[0]
         if len(t_indices_ref) >= min_embryos:
             sa_vec_t_ref = sa_vec_ref[t_indices_ref].copy()
 
