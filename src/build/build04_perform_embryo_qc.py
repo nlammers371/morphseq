@@ -153,6 +153,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     curation_df_emb["start_stage_manual"] = np.nan
     curation_df_emb["hq_flag_emb"] = True
+    curation_df_emb["reference_flag"] = False
     curation_df_emb["manual_update_flag"] = False
 
     emb_curation_df_path = os.path.join(curation_path, "embryo_curation_df.csv")

@@ -116,7 +116,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
         data_zyx_rs = data_tensor_raw
 
         # apply basic intensity normalization
-        px99 = torch.tensor(np.percentile(data_zyx, 99))
+        px99 = torch.tensor(np.percentile(data_zyx, 99.9))
         data_zyx_rs = data_zyx_rs / px99
         data_zyx_rs[data_zyx_rs > 1] = 1
         data_zyx_rs = data_zyx_rs * 65535
@@ -345,6 +345,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
                     print("Calculating max-project images for the fluorescent marker channel " + str(channel_id))
 
                     if par_flag:
+                        n_workers = np.ceil(os.cpu_count() / 4).astype(int)
                         process_map(partial(calculate_max_fluo_images, im_data_dask=im_array_dask,
                                             well_name_list=well_name_list_long, well_time_list=time_int_list,
                                             well_ind_list=well_int_list, max_dir=fluo_dir, overwrite_flag=overwrite_flag,
