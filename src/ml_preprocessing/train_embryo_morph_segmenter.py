@@ -3,7 +3,8 @@ import os
 import torch
 import numpy as np
 import pytorch_lightning as pl
-from _archive.functions_folder.core_utils_segmentation import Dataset, FishModel
+from src.functions.core_utils_segmentation import Dataset, FishModel
+from src.functions.utilities import path_leaf
 from pprint import pprint
 from torch.utils.data import DataLoader
 import glob
@@ -12,20 +13,15 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import loggers as pl_loggers
 
 
-if __name__ == "__main__":
+def train_unet_classifier(image_root, model_type, model_name, seed_str, n_epoch=50, pretrained_model=None):
 
-    n_classes = 2
-    n_epoch = 50
-    model_name = 'unet_emb_v5_'
-    # n_classes = 3
-    # n_epoch = 5
-    # model_name = 'unet_morph_v0_'
+    if model_type=="emb":
+        n_classes=2
+    else:
+        n_classes=1
 
-    # Set path do data
-    # data_path = "D:\\Nick\morphseq\\built_keyence_data\\UNET_training\\"
-    # data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\morph_UNET_training\\"
-    data_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\UNET_training_emb\\"
-    seed_str = str(126) + "_v2"  # '_v2' # specify random seed that points to specific set of labeled training images
+    data_path = os.path.join(image_root, "unet_training", "UNET_training_" + model_type)
+
     root = os.path.join(data_path, seed_str)
 
     # extract key info about computational resources
@@ -36,14 +32,19 @@ if __name__ == "__main__":
     ttv_split = [0.85, 0.0, 0.15]
     im_dims = [576, 320]
 
-    image_list = glob.glob(os.path.join(data_path, seed_str, 'images', '*.tif'))
-    mask_list = glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.tif'))
+    image_list = sorted(glob.glob(os.path.join(data_path, seed_str, 'images', '*.tif')) +
+                        glob.glob(os.path.join(data_path, seed_str, 'images', '*.png')) +
+                        glob.glob(os.path.join(data_path, seed_str, 'images', '*.jpg')))
+
+    mask_list = sorted(glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.tif')) +
+                       glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.png')) +
+                       glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.jpg')))
     n_samples_total = len(mask_list)
 
     im_list = []
     for n in range(n_samples_total):
-        _, im_name = ntpath.split(image_list[n])
-        im_list.append(im_name.replace('.tif', ''))
+        im_name = path_leaf(image_list[n])
+        im_list.append(im_name)
 
     # split into train, test, and validation sets
     n_train = np.round(ttv_split[0] * n_samples_total).astype(int)
@@ -56,9 +57,9 @@ if __name__ == "__main__":
     # test_files = [im_list[r] for r in random_indices[n_train:n_train + n_test]]
     valid_files = [im_list[r] for r in random_indices[n_train + n_test:]]
 
-    train_dataset = Dataset(root, train_files, im_dims, num_classes=n_classes)#, transform=transforms)
+    train_dataset = Dataset(root, train_files, im_dims, num_classes=n_classes)  # , transform=transforms)
     # test_dataset = Dataset(root, test_files, im_dims)
-    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=n_classes)#, transform=transforms)
+    valid_dataset = Dataset(root, valid_files, im_dims, num_classes=n_classes)  # , transform=transforms)
 
     # It is a good practice to check datasets don`t intersects with each other
     assert set(train_dataset.filenames).isdisjoint(set(valid_dataset.filenames))
@@ -67,17 +68,22 @@ if __name__ == "__main__":
     print(f"Valid size: {len(valid_dataset)}")
     # print(f"Test size: {len(test_dataset)}")
 
-    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=n_cpu)#**kwargs) # I think it is OK for Dataloader to use CPU workers
-    valid_dataloader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=n_cpu)#**kwargs)
+    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True,
+                                  num_workers=n_cpu)  # **kwargs) # I think it is OK for Dataloader to use CPU workers
+    valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=n_cpu)  # **kwargs)
     # test_dataloader = DataLoader(test_dataset, batch_size=6, shuffle=False, num_workers=n_cpu)
 
     model = FishModel("FPN",
                       "resnet34",
                       in_channels=3,
                       out_classes=n_classes)
-                      # classes=['live', 'dead'])
+    # classes=['live', 'dead'])
 
-    n_devices = 1 if gpu_flag else n_cpu
+    if pretrained_model is not None:
+        model.load_state_dict(
+            torch.load(pretrained_model, map_location=device))
+
+    # n_devices = 1 if gpu_flag else n_cpu
 
     # instrcut pytorch to track model performance and save the best-performing versions
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(data_path, seed_str, model_name + 'checkpoints', ''),
@@ -89,7 +95,6 @@ if __name__ == "__main__":
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join(data_path, seed_str, model_name + "logs", ''))
     trainer = pl.Trainer(
         gpus=1,
-        # devices=n_devices,
         accelerator='auto',
         max_epochs=n_epoch,
         callbacks=[checkpoint_callback],
@@ -114,32 +119,18 @@ if __name__ == "__main__":
     print(best_model_path)
     print(best_model_score)
 
-    # test_metrics = trainer.test(model, dataloaders=test_dataloader, verbose=False)
-    # pprint(test_metrics)
+if __name__ == "__main__":
 
-    # batch = next(iter(valid_dataloader))
-    # with torch.no_grad():
-    #     model.eval()
-    #     logits = model(batch["image"])
-    # pr_masks = logits.sigmoid()
-    # print(pr_masks.shape)
-    #
-    # for image, gt_mask, pr_mask in zip(batch["image"], batch["mask"], pr_masks):
-    #     plt.figure(figsize=(10, 5))
-    #
-    #     plt.subplot(1, 3, 1)
-    #     plt.imshow(image.numpy().transpose(1, 2, 0))  # convert CHW -> HWC
-    #     plt.title("Image")
-    #     plt.axis("off")
-    #
-    #     plt.subplot(1, 3, 2)
-    #     plt.imshow(gt_mask.numpy().squeeze())  # just squeeze classes dim, because we have only one class
-    #     plt.title("Ground truth")
-    #     plt.axis("off")
-    #
-    #     plt.subplot(1, 3, 3)
-    #     plt.imshow(pr_mask.numpy().squeeze())  # just squeeze classes dim, because we have only one class
-    #     plt.title("Prediction")
-    #     plt.axis("off")
-    #
-    #     plt.show()
+
+    n_epoch = 50
+    model_name = 'unet_emb_v5_'
+
+    # option to load previously trained model
+    pretrained_model = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/built_image_data/segmentation_models/20240507/unet_emb_v40050"
+    n_epochs = 25
+    # Set path to data
+    root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/built_image_data/"
+
+    seed_str = str(932)
+
+

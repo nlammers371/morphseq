@@ -67,18 +67,18 @@ class Dataset(torch.utils.data.Dataset):
 
         filename = self.filenames[idx]
         if ".tif" in filename:
-            filename = filename.replace(".tif", "")  # get rid of tif suffix if it exists
-            image_path = os.path.join(self.images_directory, filename + ".tif")
+            # filename = filename.replace(".tif", "")  # get rid of tif suffix if it exists
+            image_path = os.path.join(self.images_directory, filename)
         elif ".png" in filename:
-            filename = filename.replace(".png", "")  # get rid of tif suffix if it exists
-            image_path = os.path.join(self.images_directory, filename + ".png")
+            # filename = filename.replace(".png", "")  # get rid of tif suffix if it exists
+            image_path = os.path.join(self.images_directory, filename)
         elif ".jpg" in filename:
-            filename = filename.replace(".jpg", "")  # get rid of tif suffix if it exists
-            image_path = os.path.join(self.images_directory, filename + ".jpg")
+            # filename = filename.replace(".jpg", "")  # get rid of tif suffix if it exists
+            image_path = os.path.join(self.images_directory, filename)
         else:
             raise Exception("File type not supported")
 
-        mask_path = os.path.join(self.masks_directory, filename + ".jpg")
+        mask_path = glob.glob(os.path.join(self.masks_directory, filename[:-4] + "*"))[0]
         # image = np.array(Image.open(image_path).convert("RGB"))
 
         # trimap = np.array(Image.open(mask_path))
