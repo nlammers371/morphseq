@@ -58,7 +58,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     image_path_list = []
     label_path_list = []
     exist_flags = []
-    for ind, p in enumerate(project_list):
+    for ind, p in enumerate(tqdm(project_list, "Compiling list of images to segment...")):
         im_list_temp = glob.glob(os.path.join(p, '*.png')) + glob.glob(os.path.join(p, '*.tif')) + glob.glob(os.path.join(p, '*.jpg'))
         image_path_list += im_list_temp
 
@@ -70,8 +70,16 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         for imp in im_list_temp:
             _, tail = ntpath.split(imp)
             label_path = os.path.join(label_path_root, tail)
-            label_path = label_path.replace(".png", ".jpg")
+            label_path = label_path + ".jpg"#.replace(".png", ".jpg")
             label_path_list.append(label_path)
+            # im_ls = glob.glob(label_path[:-4] + "*")
+            # if len(im_ls) == 1:
+            #     exist_flags.append(True)
+            # elif len(im_ls) == 0:
+            #     exist_flags.append(False)
+            # else:
+            #     raise Exception("Duplicate labels found!")
+
             exist_flags.append(os.path.isfile(label_path))
 
     # remove images with previously existing labels if overwrite_flag=False
@@ -105,14 +113,14 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     else:
         figure_indices = np.asarray([])
 
-    
+    # print(device)
     # get predictions
-    print("Classifying images...")
+    # print("Classifying images...")
     with torch.no_grad():
         # data_list = list(im_dataloader)
         it = iter(im_dataloader)
         iter_i = 0
-        for idx in tqdm(range(len(im_dataloader))):
+        for idx in tqdm(range(len(im_dataloader)), "Segmenting images..."):
             batch = next(it)
             im = batch["image"]
             im = im.to(device)
@@ -134,7 +142,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                 lb_temp = np.squeeze(lb_predicted[b, :, :])
                 im_path = im_paths[b]
                 suffix = im_path.replace(path_to_images[:-1], "")
-                out_path = os.path.join(path_to_labels, suffix + ".jpg")
+                out_path = os.path.join(path_to_labels, suffix.replace(".png", "") + ".jpg")
                 io.imsave(out_path, lb_temp, check_contrast=False)
 
                 # make figure
@@ -169,11 +177,13 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                     # save
                     im_name = path_leaf(suffix)
                     subfolder = suffix.replace(im_name, "")
-                    out_path = os.path.join(sample_fig_path, subfolder)
+                    im_name = im_name.replace("jpg", "").replace(".tif", "").replace(".png", "")
+
+                    out_path = os.path.join(sample_fig_path) #, subfolder)
                     if not os.path.isdir(out_path):
                         os.makedirs(out_path)
 
-                    plt.savefig(os.path.join(out_path, im_name + '_prediction.jpg'))
+                    plt.savefig(os.path.join(out_path, subfolder[:-1] + "_" + im_name + '_prediction.jpg'))
                     plt.close()
 
                 iter_i += 1

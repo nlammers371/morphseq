@@ -2,22 +2,18 @@ import numpy as np
 import napari
 import os
 import glob2 as glob
-import cv2
-from aicsimageio import AICSImage
-import ntpath
-# from PIL import Image
+import skimage.io as io
+from src.functions.utilities import path_leaf
 
-def path_leaf(path):
-    head, tail = ntpath.split(path)
-    return tail or ntpath.basename(head)
 
-morph_label_flag = False
-focus_label_flag = True
-# db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
-db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\" # "D:\\Nick\\morphseq\\built_keyence_data\\"   #
-path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
-project_list = glob.glob(path_to_images)
-#
+
+yolk_label_flag = True
+focus_label_flag = False
+# root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
+root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/built_image_data/" #"E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\" # "D:\\Nick\\morphseq\\built_keyence_data\\"   #
+path_to_images = os.path.join(root, 'stitched_FF_images', '*')
+project_list = sorted(glob.glob(path_to_images))
+
 n_im = 1000
 image_i = 0
 
@@ -29,20 +25,20 @@ if overwrite_flag:
     skip_labeled_flag = False
 
 # set random seed for reproducibility
-seed = 678
-suffix = "_focus"
+seed = 932 #126
+suffix = "" #"_v2"
 np.random.seed(seed)
 
 # make write paths
-if morph_label_flag:
-    image_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'annotations', '')
+if yolk_label_flag:
+    image_path = os.path.join(root, "unet_training", 'UNET_training_yolk', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(root, "unet_training", 'UNET_training_yolk', str(seed) + suffix, 'annotations', '')
 elif focus_label_flag:
-    image_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'annotations', '')
+    image_path = os.path.join(root, "unet_training", 'UNET_training_focus', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(root, "unet_training", 'UNET_training_focus', str(seed) + suffix, 'annotations', '')
 else:
-    image_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
+    image_path = os.path.join(root, "unet_training", 'UNET_training_emb', str(seed) + suffix, 'images', '')
+    label_path = os.path.join(root, "unet_training", 'UNET_training_emb', str(seed) + suffix, 'annotations', '')
 
 
 if not os.path.isdir(image_path):
@@ -51,27 +47,26 @@ if not os.path.isdir(label_path):
     os.makedirs(label_path)
 
 # get list of existing labels (if any)
-existing_labels = sorted(glob.glob(label_path + "*tif"))
+existing_labels = sorted(glob.glob(label_path + "*tif") +glob.glob(label_path + "*png") + glob.glob(label_path + "*jpg"))
 existing_label_names = []
 for ex in existing_labels:
-    _, im_name = ntpath.split(ex)
+    im_name = path_leaf(ex)
     existing_label_names.append(im_name)
 
-existing_images = sorted(glob.glob(image_path + "*tif"))
+existing_images = sorted(glob.glob(image_path + "*tif") + glob.glob(image_path + "*png") + glob.glob(image_path + "*jpg"))
 existing_image_names = []
 for ex in existing_images:
-    _, im_name = ntpath.split(ex)
+    im_name = path_leaf(ex)
     existing_image_names.append(im_name)
-
 
 # select subset of images to label
 im_list = []
 project_index = []
 project_ind_long = []
 for ind, p in enumerate(project_list):
-    im_list_temp = glob.glob(os.path.join(p, '*.tif'))
+    im_list_temp = glob.glob(os.path.join(p, '*tif')) + glob.glob(os.path.join(p, '*png')) + glob.glob(os.path.join(p, '*jpg'))
     im_list += im_list_temp
-    _, tail = ntpath.split(p)
+    tail = path_leaf(p)
     project_index.append(tail)
     project_ind_long += [ind]*len(im_list_temp)
 im_lb_indices_raw = np.random.choice(range(len(im_list)), n_im, replace=False)
@@ -80,41 +75,40 @@ im_lb_indices_raw = np.random.choice(range(len(im_list)), n_im, replace=False)
 # random seed early in the labeling process, so there are some inconsistencies
 im_name_list = []
 for i in range(len(im_list)):
-    _, im_name = ntpath.split(im_list[i])
+    im_name = path_leaf(im_list[i])
     prefix = project_index[project_ind_long[i]]
     # lb_path_full = label_path + prefix + '_' + im_name
     im_name_list.append(prefix + '_' + im_name)
 
 # concatenate existing labels to randomly drawn list
-existing_indices = [im_name_list.index(ex) for ex in existing_label_names]
+# existing_indices = [im_name_list.index(ex) for ex in existing_label_names]
 existing_im_indices = [im_name_list.index(ex) for ex in existing_image_names if ex not in existing_label_names]
-full_list = existing_im_indices + existing_indices + im_lb_indices_raw.tolist()
+full_list = existing_im_indices # + existing_indices + im_lb_indices_raw.tolist()
 new_indices = np.unique(full_list, return_index=True)[1]
 im_lb_indices = [full_list[index] for index in sorted(new_indices)]
 im_lb_indices = im_lb_indices[0:n_im]
-# initialize viewer
 
-while image_i < len(im_lb_indices)-1:
+# initialize viewer
+while image_i <= len(im_lb_indices)-1:
     prefix = project_index[project_ind_long[im_lb_indices[image_i]]]
     # load image
     im_path = im_list[im_lb_indices[image_i]]
-    _, im_name = ntpath.split(im_path)
+    im_name = path_leaf(im_path)
 
     # open labels if they exist (and we want to keep them)
     lb_path_full = label_path + prefix + '_' + im_name
     if (lb_path_full not in existing_labels) or (not skip_labeled_flag):
 
-        im_temp = cv2.imread(im_path)
+        im_temp = io.imread(im_path)
 
         # open viewer
-        viewer = napari.view_image(im_temp[:, :, 0], colormap="gray")
+        viewer = napari.view_image(im_temp, colormap="gray")
 
         if not overwrite_flag and (lb_path_full in existing_labels):
-            lbObject = AICSImage(lb_path_full)
-            lb_temp = np.squeeze(lbObject.data)
+            lb_temp = io.imread(lb_path_full)
             viewer.add_labels(lb_temp, name='Labels')
         # else:
-        #     lbObject = AICSImage(os.path.join(db_path, 'well_mask.tif'))
+        #     lbObject = AICSImage(os.path.join(root, 'well_mask.tif'))
         #     lb_temp = np.squeeze(lbObject.data)
 
 
@@ -125,9 +119,9 @@ while image_i < len(im_lb_indices)-1:
             lb_layer = viewer.layers["Labels"]
         except:
             lb_layer = viewer.layers["SAM labels"]
-        AICSImage(lb_layer.data.astype(np.uint8)).save(lb_path_full)
+        io.imsave(lb_path_full, lb_layer.data.astype(np.uint8), check_contrast=False)
         # save
-        cv2.imwrite(image_path + prefix + '_' + im_name, im_temp)
+        io.imsave(image_path + prefix + '_' + im_name, im_temp, check_contrast=False)
             # time_in_msec = 1000
             # QTimer().singleShot(time_in_msec, app.quit)
 

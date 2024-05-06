@@ -1,4 +1,4 @@
-from src.build.build02_segment_bf_main import apply_unet
+from src.build.build02B_segment_bf_main import apply_unet
 
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/built_image_data"
 microscope = "Keyence"
