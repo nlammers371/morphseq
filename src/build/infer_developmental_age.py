@@ -32,7 +32,7 @@ def infer_developmental_age(root, train_name, architecture_name, model_name, ref
     # make a lightweight age key
     age_key_df = embryo_df.loc[:, ["snip_id", "experiment_date", "embryo_id", "temperature", "predicted_stage_hpf", "inferred_stage_hpf_reg", "Time Rel (s)", "master_perturbation"]]
     age_key_df["Time Rel (s)"] = age_key_df["Time Rel (s)"] / 3600
-    age_key_df.rename(columns={"predicted_stage_hpf":"calc_stage_hpf", "Time Rel (s)":"abs_time_hr"}, inplace=True)
+    age_key_df.rename(columns={"predicted_stage_hpf": "calc_stage_hpf", "Time Rel (s)": "abs_time_hr"}, inplace=True)
     age_key_df["train_dir"] = train_name
     age_key_df["model_name"] = model_name
     age_key_df["architecture_name"] = architecture_name

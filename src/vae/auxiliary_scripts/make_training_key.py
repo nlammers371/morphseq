@@ -116,10 +116,10 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
         test_indices_pre = []
         # df_indices_pre = []
         for tid in test_ids:
-            if tid[:8] not in morphseq_dates:
-                df_ids = np.where((seq_key["embryo_id"].values == tid) & (seq_key["use_embryo_flag"].values == True))[0]
-            else:
-                df_ids = np.where((seq_key["embryo_id"].values == tid))[0]
+            # if tid[:8] not in morphseq_dates:
+            df_ids = np.where((seq_key["embryo_id"].values == tid) & (seq_key["use_embryo_flag"].values == True))[0]
+            # else:
+            #     df_ids = np.where((seq_key["embryo_id"].values == tid))[0]
                 
             snip_list = seq_key["snip_id"].iloc[df_ids].tolist()
             # e_list = [os.path.join(data_path, s + ".jpg") for s in snip_list]

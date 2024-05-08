@@ -13,7 +13,7 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
 
     rs_flag = rs_factor != 1
     
-    morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
+    # morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
 
     # np.random.seed(r_seed)
     metadata_path = os.path.join(root, "metadata", '')
@@ -23,8 +23,8 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
     
     # get list of training files
-    image_list = glob.glob(data_path + "*.jpg")
-    snip_id_list = [path_leaf(path) for path in image_list]
+    # image_list = glob.glob(data_path + "*.jpg")
+    # snip_id_list = [path_leaf(path) for path in image_list]
     
     # snip_id_vec = embryo_metadata_df["snip_id"].values
     # good_snip_indices = np.where(embryo_metadata_df["use_embryo_flag"].values == True)[0]
@@ -36,15 +36,14 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     image_indices = []
 
     # itereate through shuffled IDs
-    df_ids_list = []
+    # df_ids_list = []
     for eid in embryo_id_index:
-    
-        
+
         # extract embryos that match current eid
-        if eid[:8] not in morphseq_dates:
-            df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (embryo_metadata_df["use_embryo_flag"].values == True))[0]
-        else: 
-            df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid))[0]
+        # if eid[:8] not in morphseq_dates:
+        df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid) & (embryo_metadata_df["use_embryo_flag"].values==True))[0]
+        # else:
+        #     df_ids = np.where((embryo_metadata_df["embryo_id"].values == eid))[0]
 
         snip_list = embryo_metadata_df["snip_id"].iloc[df_ids].tolist()
         e_list = [os.path.join(data_path, s + ".jpg") for s in snip_list]
@@ -66,12 +65,6 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     train_dir = os.path.join(root, "training_data", train_name)
     if not os.path.exists(os.path.join(train_dir, "images")):
         os.makedirs(os.path.join(train_dir, "images"))
-    
-    #################
-    # make metadata file to keep track of things
-    # print("Builting training key DF...")
-    # training_key_df = embryo_metadata_df.loc[:, ["snip_id", "experiment_date", "master_perturbation", "embryo_id", "well_id", "predicted_stage_hpf"]]
-    # training_key_df.to_csv(os.path.join(train_dir, "training_key_df.csv"))
 
     #################
     # Write snips to file
