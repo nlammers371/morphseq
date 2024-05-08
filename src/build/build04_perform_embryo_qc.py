@@ -111,10 +111,11 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     # generate dataset to use for manual curation
     keep_cols = ["snip_id", 'master_perturbation', 'temperature', 'medium',
-                 'bubble_flag', 'focus_flag', 'frame_flag', 'dead_flag2', 'no_yolk_flag', 'out_of_frame_flag',
+                 'bubble_flag', 'focus_flag', 'frame_flag', 'dead_flag2', 'no_yolk_flag', #'out_of_frame_flag',
                  "use_embryo_flag", "predicted_stage_hpf"]
 
     curation_df = embryo_metadata_df[keep_cols].copy()
+
     # add additional curation cols
     curation_df.loc[:, "confinement_flag"] = False
     curation_df.loc[:, "segmentation_flag"] = False
@@ -126,6 +127,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     # Check for previous version of the curation dataset
     curation_df_path = os.path.join(curation_path, "curation_df.csv")
+    dt_string = str(np.round(time.time()))
     if os.path.exists(curation_df_path):
         curr_snips = curation_df["snip_id"].to_numpy()
 
@@ -139,7 +141,6 @@ def perform_embryo_qc(root, dead_lead_time=2):
         curation_df = pd.concat([curation_df.loc[keep_filter, :], curation_df_prev], axis=0, ignore_index=True)
 
         # rename old DF to keep it just in case
-        dt_string = str(np.round(time.time()))
         os.rename(curation_df_path, os.path.join(curation_path, "curation_df_" + dt_string + ".csv"))
 
     # save
@@ -171,6 +172,17 @@ def perform_embryo_qc(root, dead_lead_time=2):
         os.rename(curation_df_path, os.path.join(curation_path, "embryo_curation_df_" + dt_string + ".csv"))
 
     curation_df_emb.to_csv(emb_curation_df_path, index=False)
+
+    # now, make perturbation-level keys to inform training inclusion/exclusion and metric comparisons
+    pert_train_key = embryo_metadata_df.loc[:, ["master_perturbation"]].drop_duplicates()
+    pert_train_key["start_hpf"] = 0
+    pert_train_key["stop_hpf"] = 100
+    pert_train_key.to_csv(os.path.join(curation_path, "perturbation_train_key.csv"), index=False)
+
+    pert_u = np.unique(embryo_metadata_df.loc[:, "master_perturbation"])
+    pert_metric_key = pd.DataFrame(np.eye(len(pert_u)), columns=pert_u.tolist())
+    pert_metric_key.set_index(pert_u, inplace=True)
+    pert_metric_key.to_csv(os.path.join(curation_path, "perturbation_metric_key.csv"), index=True)
 
 if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"

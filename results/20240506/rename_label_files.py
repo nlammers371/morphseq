@@ -38,9 +38,9 @@ def rename_label_files(root, model_name, segment_list=None):
         project_list = [os.path.join(root, 'stitched_FF_images', p) for p in segment_list]
 
     # select subset of images to label
-    image_path_list = []
-    label_path_list = []
-    exist_flags = []
+    # image_path_list = []
+    # label_path_list = []
+    # exist_flags = []
     for ind, p in enumerate(tqdm(project_list, "Renaming label files...")):
         im_list_temp = glob.glob(os.path.join(p, '*.png')) + glob.glob(os.path.join(p, '*.tif')) + glob.glob(os.path.join(p, '*.jpg'))
         # image_path_list += im_list_temp
@@ -54,8 +54,10 @@ def rename_label_files(root, model_name, segment_list=None):
             _, tail = ntpath.split(imp)
             label_path = os.path.join(label_path_root, tail)
             label_path = label_path + ".jpg"
-            label_path_new = label_path_list.replace(".png", "")#.replace(".png", ".jpg")
-            os.rename(label_path, label_path_new)
+            label_path_new = label_path.replace(".png", "")#.replace(".png", ".jpg")
+            label_path_new = label_path_new.replace(".jpg.jpg", ".jpg")
+            if os.path.isfile(label_path):
+                os.rename(label_path, label_path_new)
 
 if __name__ == '__main__':
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/built_image_data/"

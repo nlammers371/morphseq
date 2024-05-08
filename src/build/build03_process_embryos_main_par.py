@@ -154,7 +154,9 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
         # elif row["microscope"] == "YX1":
         #     im_name = "ff_" + well + f"_t{time_int:04}_ch00_stitch.png"
         #     lb_name = im_name.replace("png", "tif")
-        
+
+        # if (not row["dead_flag"]) and (row["no_yolk_flag"]):
+        #     print("wtf")
 
         ############
         # Load masks from segmentation
@@ -172,7 +174,7 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
         # load yolk mask
         im_yolk_path = glob.glob(os.path.join(yolk_path, date, im_stub))[0]
         im_yolk = io.imread(im_yolk_path)
-        im_yolk = np.round(im_yolk / 255 * 2 - 1).astype(np.uint8)
+        im_yolk = np.round(im_yolk / 255).astype(np.uint8)
         if np.any(im_yolk == 1):
             im_yolk = skimage.morphology.remove_small_objects(im_yolk.astype(bool), min_size=75).astype(int)  # remove small stuff
 
@@ -567,7 +569,7 @@ def do_embryo_tracking(well_id, master_df, master_df_update):
         # carry out tracking
         for t, ind in enumerate(track_indices[1:]):
             # check how many embryos were detected
-            n_emb = n_emb_col[t + 1 + first_i].astype(int)
+            n_emb = int(n_emb_col[t + 1 + first_i])#.astype(int)
             if n_emb == 0:
                 pass  # note that we carry over last_pos_array
             else:
@@ -1096,7 +1098,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         update_indices = np.asarray(update_indices)
 
     # add oof flag
-    if update_indices.any():
+    if update_indices[0].any():
         embryo_metadata_df["out_of_frame_flag"].iloc[update_indices] = out_of_frame_flags
         embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
 

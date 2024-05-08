@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     #####################
     # Required arguments
-    # root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
+    root = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\"
     train_folder = "20231106_ds"
     train_dir = os.path.join(root, "training_data", train_folder)
     model_type = "SeqVAE"

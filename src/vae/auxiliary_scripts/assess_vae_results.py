@@ -37,7 +37,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
     for m_iter, model_name in enumerate(models_to_assess):
 
-        embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+        embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"))
 
         # make sure morphseq datasets make it through
         morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
@@ -97,22 +97,22 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         ############################################
         # Compare latent encodings of contrastive pairs
         # strip down the full dataset
-        contrastive_df = embryo_metadata_df[
-            ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        contrastive_df = contrastive_df.reset_index()
-
-        latent_df = calculate_contrastive_distances(trained_model, train_dir, device=device, batch_size=batch_size)#,
-
-        # duplicate base contrastive DF and join on latent dimensions
-        cdf0 = contrastive_df
-        cdf1 = cdf0.copy()
-        cdf0["contrast_id"] = 0
-        cdf1["contrast_id"] = 1
-
-        contrastive_df_final = pd.concat([cdf0, cdf1], axis=0, ignore_index=True)
-        contrastive_df_final = contrastive_df_final.merge(latent_df, how="left", on=["snip_id", "contrast_id"])
-        
-        contrastive_df_final.to_csv(os.path.join(figure_path, "contrastive_df.csv"))
+        # contrastive_df = embryo_metadata_df[
+        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
+        # contrastive_df = contrastive_df.reset_index()
+        #
+        # latent_df = calculate_contrastive_distances(trained_model, train_dir, device=device, batch_size=batch_size)#,
+        #
+        # # duplicate base contrastive DF and join on latent dimensions
+        # cdf0 = contrastive_df
+        # cdf1 = cdf0.copy()
+        # cdf0["contrast_id"] = 0
+        # cdf1["contrast_id"] = 1
+        #
+        # contrastive_df_final = pd.concat([cdf0, cdf1], axis=0, ignore_index=True)
+        # contrastive_df_final = contrastive_df_final.merge(latent_df, how="left", on=["snip_id", "contrast_id"])
+        #
+        # contrastive_df_final.to_csv(os.path.join(figure_path, "contrastive_df.csv"))
 
         # #########################################
         # Test how predictive latent space is of developmental age
@@ -559,21 +559,14 @@ def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
         else "cpu"
         )
 
-    data_transform = make_dynamic_rs_transform() # use standard dataloader
-    data_sampler_vec = []
-    for mode in mode_vec:
-        ds_temp = MyCustomDataset(
-            root=os.path.join(train_dir, mode),
-            transform=data_transform,
-            return_name=True
-        )
-        temp_loader = DataLoader(
-                        dataset=ds_temp,
-                        batch_size=batch_size,
-                        shuffle=True,
-                        collate_fn=collate_dataset_output,
-                    )
-        data_sampler_vec.append(temp_loader)
+
+    #     temp_loader = DataLoader(
+    #                     dataset=ds_temp,
+    #                     batch_size=batch_size,
+    #                     shuffle=True,
+    #                     collate_fn=collate_dataset_output,
+    #                 )
+    #     data_sampler_vec.append(temp_loader)
 
     try:
         trained_model = AutoModel.load_from_folder(os.path.join(output_dir, 'final_model'))
@@ -605,6 +598,41 @@ def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
             print("No final model loaded for " + output_dir + ". \nEither there are no saved model directories, or an error occurred during loading")
             continue_flag = True
             trained_model = []
+
+    # get list of data loaders
+    data_transform = make_dynamic_rs_transform()  # use standard dataloader
+    data_sampler_vec = []
+
+        # train_config.test_indices = np.asarray([])
+        
+    for mode in mode_vec:
+        dataset = MyCustomDataset(
+            root=os.path.join(train_dir, "images"),
+            transform=data_transform,
+            return_name=True
+        )
+        if mode == "train":
+            sampler = SubsetRandomSampler(train_config["train_indices"])
+        elif mode == "eval":
+            sampler = SubsetRandomSampler(train_config["eval_indices"])
+        elif mode == "test":
+            if "test_indices" in train_config.keys():
+                sampler = SubsetRandomSampler(train_config["test_indices"])
+            else:
+                sampler = SubsetRandomSampler(np.asarray([]))
+            
+        dataloader = DataLoader(
+            dataset=dataset,
+            batch_size=batch_size,
+            num_workers=train_config["train_dataloader_num_workers"],
+            pin_memory=train_config["pin_memory"],
+            shuffle=(sampler is None),
+            sampler=sampler,
+            collate_fn=collate_dataset_output,
+            persistent_workers=False
+        )
+
+        data_sampler_vec.append(dataloader)
 
     meta_df = []
     if not continue_flag:

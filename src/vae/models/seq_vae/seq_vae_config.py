@@ -101,7 +101,7 @@ class SeqVAEConfig(VAEConfig):
             age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
             seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
         else:
-            raise Error("No age key path provided")
+            raise Exception("No age key path provided")
             # seq_key["inferred_stage_hpf_reg"] = seq_key["predicted_stage_hpf"].copy()
 
         seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key)
