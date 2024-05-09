@@ -33,6 +33,7 @@ class SeqVAEConfig(VAEConfig):
     data_root: str = ''
     train_folder: str = ''
     age_key_path: str = ''
+    metric_key_path: str = ''
 
     # set sequential hyperparameters
     time_window: float = 1.5  # max permitted age difference between sequential pairs
@@ -43,6 +44,7 @@ class SeqVAEConfig(VAEConfig):
                  data_root=None,
                  train_folder=None,
                  age_key_path=None,
+                 metric_key_path=None,
                  train_indices=None,
                  eval_indices=None,
                  test_indices=None,
@@ -85,6 +87,7 @@ class SeqVAEConfig(VAEConfig):
         self.train_folder = train_folder
         self.time_window = time_window
         self.age_key_path = age_key_path
+        self.metric_key_path = metric_key_path
         self.self_target_prob = self_target_prob
         self.other_age_penalty = other_age_penalty
 
@@ -96,12 +99,22 @@ class SeqVAEConfig(VAEConfig):
         # get seq key
         seq_key = make_seq_key(self.data_root, self.train_folder)
 
+        # load age info
         if self.age_key_path != '':
             age_key_df = pd.read_csv(self.age_key_path, index_col=0)
             age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
             seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
         else:
             raise Exception("No age key path provided")
+
+        # load metric info
+        if self.metric_key_path != '':
+            metric_key_df = pd.read_csv(self.metric_key_path, index_col=0)
+            # age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
+            self.metric_key = metric_key_df
+            # seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
+        else:
+            raise Exception("No metric key path provided")
             # seq_key["inferred_stage_hpf_reg"] = seq_key["predicted_stage_hpf"].copy()
 
         seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key)
@@ -133,6 +146,15 @@ class SeqVAEConfig(VAEConfig):
 
         seq_key_dict = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
         self.seq_key_dict = seq_key_dict
+
+        # make array version of metric key
+        metric_key = self.metric_key
+        pert_id_key = seq_key.loc[:, ["master_perturbation", "perturbation_id"]].drop_duplicates().reset_index(drop=True)
+        metric_array = metric_key.to_numpy()
+        pert_list = metric_key.index.tolist()
+        id_sort_vec = np.asarray([pert_id_key.loc[pert_id_key["master_perturbation"]==pert, "perturbation_id"].values[0] for pert in pert_list])
+        metric_array = metric_array[id_sort_vec, :]
+        self.metric_array = metric_array[:, id_sort_vec]
 
         # make boolean vactors for train, eval, and test groups
         self.train_bool = np.zeros(pert_id_vec.shape, dtype=np.bool_)

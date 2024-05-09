@@ -13,7 +13,7 @@ import ntpath
 def infer_developmental_age(root, train_name, architecture_name, model_name, reference_perturbations=None, reference_datasets=None):
 
     if reference_perturbations is None:
-        reference_perturbations =["wik", "wik-inj-ctrl", "wik-ctrl-inj"]
+        reference_perturbations =["DMSO", "wik", "ab", "ab-inj-ctrl", "wik-inj-ctrl", "wik-ctrl-inj"]
 
     # set path to output dir
     train_dir = os.path.join(root, "training_data", train_name, '')
@@ -24,10 +24,10 @@ def infer_developmental_age(root, train_name, architecture_name, model_name, ref
     embryo_df = pd.read_csv(os.path.join(data_path, "embryo_stats_df.csv"), index_col=0)
     metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
     metadata_df = metadata_df.loc[:, ["snip_id", "temperature", "embryo_id", "Time Rel (s)"]]
+
     # add temperature and 
     embryo_df = embryo_df.merge(metadata_df, on="snip_id", how="left")
     embryo_df = get_embryo_age_predictions(embryo_df, reference_perturbations=reference_perturbations, reference_datasets=reference_datasets)
-
 
     # make a lightweight age key
     age_key_df = embryo_df.loc[:, ["snip_id", "experiment_date", "embryo_id", "temperature", "predicted_stage_hpf", "inferred_stage_hpf_reg", "Time Rel (s)", "master_perturbation"]]
@@ -36,22 +36,7 @@ def infer_developmental_age(root, train_name, architecture_name, model_name, ref
     age_key_df["train_dir"] = train_name
     age_key_df["model_name"] = model_name
     age_key_df["architecture_name"] = architecture_name
-    # snip_id_vec = age_key_df["snip_id"]
-    # embryo_id_vec = [snip[:-10] for snip in snip_id_vec]
-    # age_key_df["embryo_id"] = embryo_id_vec
-    # embryo_id_index = np.unique(age_key_df["embryo_id"])
 
-    # for e, embryo_id in enumerate(embryo_id_index):
-    #     embryo_indices = np.where(age_key_df["embryo_id"] == embryo_id)[0]
-    #     age_vec = age_key_df.loc[embryo_indices, "inferred_stage_hpf_reg"].to_numpy()
-    #     if len(embryo_indices) > 2:
-    #         embryo_vec = np.arange(len(embryo_indices))
-    #         reg = LinearRegression().fit(embryo_vec[:, np.newaxis], age_vec[:, np.newaxis])
-    #         age_pd = reg.predict(embryo_vec[:, np.newaxis])
-    #         age_key_df.loc[embryo_indices, "inferred_stage_hpf_reg"] = age_pd
-    #     else:
-    #         age_key_df.loc[embryo_indices, "inferred_stage_hpf_reg"] = age_vec
-    # finally, fit linear models to each embryo for internal constency
 
 
     age_key_df.to_csv(os.path.join(metadata_path, "age_key_df.csv"))
@@ -106,7 +91,7 @@ def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_dat
 
     date_index = np.unique(embryo_df["experiment_date"])
     embryo_df["inferred_stage_hpf_reg"] = np.nan
-    for d, date in enumerate(tqdm(date_index)):
+    for d, date in enumerate(tqdm(date_index, "Predicting standardized embryo stages...")):
 
         # get indexing vectors
         ref_bool_vec = stage_lookup_df["experiment_date"]==date
@@ -125,13 +110,13 @@ def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_dat
             calc_stage = embryo_df.loc[to_ind, "predicted_stage_hpf"]
             stage_diffs = np.abs(date_calc_stage_vec - calc_stage)
             if np.sum(stage_diffs <= max_stage_delta) >= n_ref:
-                ref_indices = np.where(stage_diffs<=max_stage_delta)[0]
+                ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
                 ref_calc_stage = date_calc_stage_vec[ref_indices]
                 ref_pd_stage = date_pd_stage_vec[ref_indices]
 
             else: # if not enough comps, use lookups from other experiments at the same temperature
                 stage_diffs = np.abs(temp_calc_stage_vec - calc_stage)
-                ref_indices = np.where(stage_diffs<=max_stage_delta)[0]
+                ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
                 if len(ref_indices) < n_ref:
                     option_indices = np.argsort(stage_diffs)
                     ref_indices = option_indices[:n_ref]
