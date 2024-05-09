@@ -14,6 +14,7 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
     metadata_path = os.path.join(root, "metadata", '')
     training_path = os.path.join(root, "training_data", train_name, '')
+
     # instance_path = os.path.join(training_path, instance_name)
     mode_vec = sorted(glob.glob(training_path + "*"))
 

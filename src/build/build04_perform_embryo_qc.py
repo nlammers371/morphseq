@@ -99,7 +99,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
                                                    (~embryo_metadata_df.loc[:, "sa_outlier_flag"])
 
     # save
-    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index=False)
+    # embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index=False)
 
     # generate table to use for manual curation
     curation_path = os.path.join(metadata_path, "curation")
@@ -127,17 +127,26 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     # Check for previous version of the curation dataset
     curation_df_path = os.path.join(curation_path, "curation_df.csv")
-    dt_string = str(np.round(time.time()))
+    dt_string = str(int(np.round(time.time())))
     if os.path.exists(curation_df_path):
         curr_snips = curation_df["snip_id"].to_numpy()
 
         curation_df_prev = pd.read_csv(curation_df_path)
+
         # preserve only entries that have been manually updated
         curation_df_prev = curation_df_prev.loc[curation_df_prev["manual_update_flag"] == 1, :]
+
+        curation_prev = curation_df_prev.loc[:, ["snip_id", "use_embryo_flag"]].rename(columns={"use_embryo_flag" : "use_embryo_flag_frame"})
+        embryo_metadata_df = embryo_metadata_df.merge(curation_prev, how="left", on="snip_id", indicator=True)
+        embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_frame"] = True
+        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df["use_embryo_flag_frame"]
+        embryo_metadata_df.drop(labels=["use_embryo_flag_frame", "_merge"], axis=1, inplace=True)
+
+        # combine with new entries
         prev_snips = curation_df_prev["snip_id"].to_numpy()
 
         # remove duplicate entries from new dataset and concatenate
-        keep_filter =~ np.isin(curr_snips, prev_snips)
+        keep_filter = ~np.isin(curr_snips, prev_snips)
         curation_df = pd.concat([curation_df.loc[keep_filter, :], curation_df_prev], axis=0, ignore_index=True)
 
         # rename old DF to keep it just in case
@@ -163,6 +172,17 @@ def perform_embryo_qc(root, dead_lead_time=2):
         curation_df_emb_prev = pd.read_csv(emb_curation_df_path)
         # preserve only entries that have been manually updated
         curation_df_emb_prev = curation_df_emb_prev.loc[curation_df_emb_prev["manual_update_flag"] == 1, :]
+        curation_emb_prev = curation_df_emb_prev.loc[:, ["embryo_id", "reference_flag", "hq_flag_emb", "master_perturbation"]].rename(
+                columns={"hq_flag_emb" : "use_embryo_flag_emb", "master_perturbation":"manual_perturbation"})
+        embryo_metadata_df = embryo_metadata_df.merge(curation_emb_prev, how="left", on="embryo_id", indicator=True)
+        embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_emb"] = True
+        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df[
+                                        "use_embryo_flag_emb"]
+        # update perturbation labels
+        embryo_metadata_df.loc["both"==embryo_metadata_df["_merge"], "master_perturbation"] = (
+                                    embryo_metadata_df.loc)["both"==embryo_metadata_df["_merge"], "manual_perturbation"]
+        embryo_metadata_df.drop(labels=["use_embryo_flag_emb", "manual_perturbation", "_merge"], axis=1, inplace=True)
+
         prev_emb_ids = curation_df_emb_prev["embryo_id"].to_numpy()
 
         # remove duplicate entries from new dataset and concatenate
@@ -172,6 +192,10 @@ def perform_embryo_qc(root, dead_lead_time=2):
         os.rename(curation_df_path, os.path.join(curation_path, "embryo_curation_df_" + dt_string + ".csv"))
 
     curation_df_emb.to_csv(emb_curation_df_path, index=False)
+
+    #######
+    # save main metadata set
+    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index=False)
 
     # now, make perturbation-level keys to inform training inclusion/exclusion and metric comparisons
     pert_train_key = embryo_metadata_df.loc[:, ["master_perturbation"]].drop_duplicates()

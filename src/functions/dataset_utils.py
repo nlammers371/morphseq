@@ -285,7 +285,7 @@ class TripletDatasetCached(datasets.ImageFolder):
 
         time_window = self.model_config.time_window
         self_target = self.model_config.self_target_prob
-        other_age_penalty = self.model_config.other_age_penalty
+        # other_age_penalty = self.model_config.other_age_penalty
 
         #############
         # Select sequential pair
@@ -293,7 +293,13 @@ class TripletDatasetCached(datasets.ImageFolder):
         e_id_input = e_id_vec[index]
         age_hpf_input = age_hpf_vec[index]
 
-        pert_match_array = pert_id_vec == pert_id_input
+        # get list of "pos", "neutral", and "negative" pairs
+        metric_array = self.model_config.metric_array
+        pos_pert_ids = np.where(metric_array[pert_id_input, :]==1)[0]
+        neg_pert_ids = np.where(metric_array[pert_id_input, :]==0)[0]
+
+        # generate arrays for selection
+        pert_match_array = np.isin(pert_id_vec, pos_pert_ids)
         e_match_array = e_id_vec == e_id_input
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
@@ -310,9 +316,10 @@ class TripletDatasetCached(datasets.ImageFolder):
             options = np.nonzero(other_option_array)[0]
             pos_pair_index = np.random.choice(options, 1, replace=False)[0]
 
-        # Select negative comparison
-        age_mismatch_array = age_delta_array >= (time_window + 1.5)
-        negative_option_array = (age_mismatch_array | (~pert_match_array)) & group_bool_vec
+        # select negative comparison
+        age_mismatch_array = age_delta_array >= (time_window + 1.5) # note the extra 1.5hr buffer
+        neg_pert_match_array = np.isin(pert_id_vec, neg_pert_ids)
+        negative_option_array = (age_mismatch_array | (neg_pert_match_array)) & group_bool_vec
         neg_options = np.nonzero(negative_option_array)[0]
         neg_pair_index = np.random.choice(neg_options, 1, replace=False)[0]
 
@@ -531,19 +538,19 @@ class ContrastiveLearningDataset:
         return data_transforms
 
     
-    def get_contrastive_transform_cache():#(size, s=1):
-        """Return a set of data augmentation transformations as described in the SimCLR paper."""
-        color_jitter = transforms.ColorJitter(brightness=0.3)
-        data_transforms = transforms.Compose([#transforms.Grayscale(num_output_channels=1),
-                                              transforms.RandomAffine(degrees=15, scale=tuple([0.7, 1.3])),
-                                              transforms.RandomHorizontalFlip(),
-                                              transforms.RandomVerticalFlip(),
-                                              transforms.RandomApply([color_jitter], p=0.8),
-                                              #transforms.RandomGrayscale(p=0.2),
-                                              #GaussianBlur(kernel_size=5),
-                                              #transforms.ToTensor()
-                                              ])
-        return data_transforms
+    # def get_contrastive_transform_cache():#(size, s=1):
+    #     """Return a set of data augmentation transformations as described in the SimCLR paper."""
+    #     color_jitter = transforms.ColorJitter(brightness=0.3)
+    #     data_transforms = transforms.Compose([#transforms.Grayscale(num_output_channels=1),
+    #                                           transforms.RandomAffine(degrees=15, scale=tuple([0.7, 1.3])),
+    #                                           transforms.RandomHorizontalFlip(),
+    #                                           transforms.RandomVerticalFlip(),
+    #                                           transforms.RandomApply([color_jitter], p=0.8),
+    #                                           #transforms.RandomGrayscale(p=0.2),
+    #                                           #GaussianBlur(kernel_size=5),
+    #                                           #transforms.ToTensor()
+    #                                           ])
+    #     return data_transforms
 
     def get_dataset(self, name, n_views):
         valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=True,

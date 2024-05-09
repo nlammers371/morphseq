@@ -10,7 +10,7 @@ def main():
     #
     # perform_embryo_qc(root)
 
-    train_name = "20240507"
+    train_name = "20240508"
     make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_flag=False)
 
 if __name__ == '__main__':
