@@ -34,6 +34,7 @@ class SeqVAEConfig(VAEConfig):
     train_folder: str = ''
     age_key_path: str = ''
     metric_key_path: str = ''
+    pert_time_key_path: str = ''
 
     # set sequential hyperparameters
     time_window: float = 1.5  # max permitted age difference between sequential pairs
@@ -44,6 +45,7 @@ class SeqVAEConfig(VAEConfig):
                  data_root=None,
                  train_folder=None,
                  age_key_path=None,
+                 pert_time_key_path=None,
                  metric_key_path=None,
                  train_indices=None,
                  eval_indices=None,
@@ -88,6 +90,7 @@ class SeqVAEConfig(VAEConfig):
         self.time_window = time_window
         self.age_key_path = age_key_path
         self.metric_key_path = metric_key_path
+        self.pert_time_key_path = pert_time_key_path
         self.self_target_prob = self_target_prob
         self.other_age_penalty = other_age_penalty
 
@@ -117,7 +120,12 @@ class SeqVAEConfig(VAEConfig):
             raise Exception("No metric key path provided")
             # seq_key["inferred_stage_hpf_reg"] = seq_key["predicted_stage_hpf"].copy()
 
-        seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key)
+        if self.pert_time_key_path != '':
+            pert_time_key = pd.read_csv(self.pert_time_key_path)
+        else:
+            pert_time_key = None
+
+        seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)
 
         self.seq_key = seq_key
         self.eval_indices = eval_indices

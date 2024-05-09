@@ -20,7 +20,7 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
     # read in metadata database
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
-    seq_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "predicted_stage_hpf", "master_perturbation"]]
+    seq_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "experiment_date", "predicted_stage_hpf", "master_perturbation"]]
 
     # The above dataset comprises all available images. Some training folders will only use a subset of these. Check
     # which images are in the present one (specified by "train name")
@@ -68,7 +68,7 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
 def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
                             frac_to_use=1.0, test_ids=None, test_dates=None, test_perturbations=None,
-                            overwrite_flag=False):
+                            pert_time_key=None, overwrite_flag=False):
 
 
     np.random.seed(r_seed)
@@ -85,75 +85,88 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
 
     # snip_id_vec = embryo_metadata_df["snip_id"].values
     # good_snip_indices = np.where(embryo_metadata_df["use_embryo_flag"].values == True)[0]
-    embryo_id_index = np.unique(seq_key["embryo_id"].values)
+    # embryo_id_index = np.unique(seq_key["embryo_id"].values)
 
     # check to see if there are any experiment dates or perturb ation types that should be left out of training (kept in test)
+    test_constraints_flag = False
+    emb_key = seq_key.loc[:, ["embryo_id", "master_perturbation", "experiment_date"]].drop_duplicates().reset_index(drop=True)
+    emb_id_vec = emb_key["embryo_id"].values
+    if pert_time_key is not None:
+        test_constraints_flag = True
+        min_age_vec = np.asarray([pert_time_key.loc[pert_time_key["master_perturbation"]==pert, "start_hpf"].values[0]
+                       for pert in emb_key["master_perturbation"].tolist()])
+        max_age_vec = np.asarray([pert_time_key.loc[pert_time_key["master_perturbation"] == pert, "stop_hpf"].values[0]
+                       for pert in emb_key["master_perturbation"].tolist()])
+    else:
+        min_age_vec = np.zeros(emb_id_vec.shape)
+        max_age_vec = np.zeros(emb_id_vec.shape) + np.Inf
+
     if test_dates is not None:
-        eid_date_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "experiment_date"].astype(str) in test_dates]
-        eids_date_test = np.unique(eid_date_list).tolist()
-        if test_ids is not None:
-            test_ids += eids_date_test
-        else:
-            test_ids = eids_date_test
+        test_constraints_flag = True
+        min_age_vec[np.isin(emb_key[:, "experiment_date"].to_numpy(), test_dates)] = np.inf
+        # eid_date_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "experiment_date"].astype(str) in test_dates]
+        # eids_date_test = np.unique(eid_date_list).tolist()
+        # if test_ids is not None:
+        #     test_ids += eids_date_test
+        # else:
+        #     test_ids = eids_date_test
 
     if test_perturbations is not None:
-        eid_pert_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "master_perturbation"] in test_perturbations]
-        eids_pert_test = np.unique(eid_pert_list).tolist()
-        if test_ids is not None:
-            test_ids += eids_pert_test
-        else:
-            test_ids = eids_pert_test 
+        test_constraints_flag = True
+        min_age_vec[np.isin(emb_key[:, "master_perturbations"].to_numpy(), test_perturbations)] = np.inf
+        # eid_pert_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "master_perturbation"] in test_perturbations]
+        # eids_pert_test = np.unique(eid_pert_list).tolist()
+        # if test_ids is not None:
+        #     test_ids += eids_pert_test
+        # else:
+        #     test_ids = eids_pert_test
+
 
     # shuffle and filter
-    embryo_id_index_shuffle = np.random.choice(embryo_id_index, len(embryo_id_index), replace=False)
-    # image_list_shuffle = []
+    embryo_id_index_shuffle = np.random.choice(emb_id_vec, len(emb_id_vec), replace=False)
     image_indices_shuffle = []
     
     # if we specified specific embryos to test, remove them now
-    if test_ids != None:
-        test_ids = np.unique(test_ids)
+    if test_constraints_flag:
 
-        # test_paths_pre = []
         test_indices_pre = []
-        # df_indices_pre = []
-        for tid in test_ids:
+        for tid in embryo_id_index_shuffle:
+            max_age = max_age_vec[emb_id_vec == tid]
+            min_age = min_age_vec[emb_id_vec == tid]
             # if tid[:8] not in morphseq_dates:
-            df_ids = np.where((seq_key["embryo_id"].values == tid) & (seq_key["use_embryo_flag"].values == True))[0]
-            # else:
-            #     df_ids = np.where((seq_key["embryo_id"].values == tid))[0]
+            emb_filter = (seq_key["embryo_id"].values == tid)
+            time_filter = (seq_key["inferred_stage_hpf_reg"].values > max_age) | (seq_key["inferred_stage_hpf_reg"].values < min_age)
+            df_ids = np.where(emb_filter & time_filter)[0]
                 
-            snip_list = seq_key["snip_id"].iloc[df_ids].tolist()
-            # e_list = [os.path.join(data_path, s + ".jpg") for s in snip_list]
+            # snip_list = seq_key["snip_id"].iloc[df_ids].tolist()
             i_list = df_ids.tolist()
     
             # test_paths_pre += e_list
             test_indices_pre += i_list
-            # df_indices_pre += df_ids.tolist()
-        
-        # train_eval_test[-1] = 0
-        # train_eval_test = train_eval_test / np.sum(train_eval_test)
-        
-        embryo_id_index_shuffle = [e for e in embryo_id_index_shuffle if e not in test_ids]
+
+        # embryo_id_index_shuffle = [e for e in embryo_id_index_shuffle if e not in test_ids]
 
     else:  # otherwise, sample embryos that were raised in MC, since these will give better stability over time
-        test_paths_pre = []
         test_indices_pre = []
-        # df_indices_pre = []
 
-    # itereate through shuffled IDs
-    df_ids_list = []
+
+    # iterate through shuffled IDs
     for eid in embryo_id_index_shuffle:
-    
+        max_age = max_age_vec[emb_id_vec == eid]
+        min_age = min_age_vec[emb_id_vec == eid]
         # extract embryos that match current eid
-        df_ids = np.where((seq_key["embryo_id"].values == eid))[0] #& (seq_key["use_embryo_flag"].values == True))[0]
-        snip_list = seq_key["snip_id"].iloc[df_ids].tolist()
+        emb_filter = (seq_key["embryo_id"].values == eid)
+        time_filter = (seq_key["inferred_stage_hpf_reg"].values <= max_age) & (
+                    seq_key["inferred_stage_hpf_reg"].values >= min_age)
+
+        df_ids = np.where(emb_filter & time_filter)[0]
         i_list = df_ids.tolist()
     
         # remove frames that did not meet QC standards
         image_indices_shuffle += i_list
     
     # assign to groups. Note that a few frames from the same embryo may end up split between categories. I think that this is fine
-    n_frames_total = len(image_indices_shuffle) #np.sum(seq_key["use_embryo_flag"].values == True)
+    n_frames_total = len(image_indices_shuffle)
 
     n_train = np.round(train_eval_test[0]*n_frames_total).astype(int)
     # train_paths = image_list_shuffle[:n_train]
