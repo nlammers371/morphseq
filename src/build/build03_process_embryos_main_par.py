@@ -1089,7 +1089,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         for r in tqdm(export_indices, "Exporting snips..."):
             oof = export_embryo_snips(r, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
-                                      px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag)
+                                      px_mean=0.5*px_mean, px_std=0.5*px_std, overwrite_flag=overwrite_flag)
 
             if oof > -1:
                 out_of_frame_flags.append(oof)

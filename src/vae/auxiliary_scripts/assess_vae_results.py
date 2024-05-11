@@ -47,7 +47,8 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         # strip down the full dataset
         embryo_df = embryo_metadata_df[
             ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
-             "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
+             "length_um", "width_um", "reference_flag"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
+        embryo_df.loc[embryo_df["reference_flag"].astype(str)=="nan", "reference_flag"] = False
         embryo_df = embryo_df.reset_index()
 
         # set path to output dir
@@ -91,7 +92,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         umap_cols = [col for col in emb_cols if "UMAP" in col]
         umap_df = embryo_df[
             ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "train_cat",
-             "recon_mse"] + umap_cols].copy()
+             "recon_mse", "reference_flag"] + umap_cols].copy()
         umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
 
         ############################################
@@ -185,8 +186,7 @@ def calculate_contrastive_distances(trained_model, train_dir, device, batch_size
     for m, mode in enumerate(mode_vec):
         data_loader = c_data_loader_vec[m]
 
-        print(f"Calculating {mode} contrastive differences...")
-        for i, inputs in enumerate(tqdm(data_loader)):
+        for i, inputs in enumerate(tqdm(data_loader, f"Calculating {mode} contrastive differences...")):
             inputs = set_inputs_to_device(device, inputs)
             x = inputs["data"]
             bs = x.shape[0]
@@ -373,8 +373,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
 
         # recon_loss_array = np.empty((n_recon_samples,))
         fig_counter = 0
-        print("Scoring image reconstructions for " + mode + " images...")
-        for n, inputs in enumerate(tqdm(data_loader)):
+        for n, inputs in enumerate(tqdm(data_loader, "Scoring image reconstructions for " + mode + " images...")):
 
             inputs = set_inputs_to_device(device, inputs)
             x = inputs["data"]
@@ -602,40 +601,41 @@ def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
     # get list of data loaders
     data_transform = make_dynamic_rs_transform()  # use standard dataloader
     data_sampler_vec = []
-
-        # train_config.test_indices = np.asarray([])
-        
-    for mode in mode_vec:
-        dataset = MyCustomDataset(
-            root=os.path.join(train_dir, "images"),
-            transform=data_transform,
-            return_name=True
-        )
-        if mode == "train":
-            sampler = SubsetRandomSampler(train_config["train_indices"])
-        elif mode == "eval":
-            sampler = SubsetRandomSampler(train_config["eval_indices"])
-        elif mode == "test":
-            if "test_indices" in train_config.keys():
-                sampler = SubsetRandomSampler(train_config["test_indices"])
-            else:
-                sampler = SubsetRandomSampler(np.asarray([]))
-            
-        dataloader = DataLoader(
-            dataset=dataset,
-            batch_size=batch_size,
-            num_workers=train_config["train_dataloader_num_workers"],
-            pin_memory=train_config["pin_memory"],
-            shuffle=(sampler is None),
-            sampler=sampler,
-            collate_fn=collate_dataset_output,
-            persistent_workers=False
-        )
-
-        data_sampler_vec.append(dataloader)
-
     meta_df = []
     if not continue_flag:
+        for mode in mode_vec:
+            dataset = MyCustomDataset(
+                root=os.path.join(train_dir, "images"),
+                transform=data_transform,
+                return_name=True
+            )
+            if mode == "train":
+                sampler = SubsetRandomSampler(train_config["train_indices"])
+            elif mode == "eval":
+                sampler = SubsetRandomSampler(train_config["eval_indices"])
+            elif mode == "test":
+                if "test_indices" in train_config.keys():
+                    sampler = SubsetRandomSampler(train_config["test_indices"])
+                else:
+                    all_indices = np.arange(len(dataset))
+                    test_indices = np.where((~np.isin(all_indices, train_config["eval_indices"])) &
+                                            (~np.isin(all_indices, train_config["train_indices"])))[0]
+                    sampler = SubsetRandomSampler(test_indices)
+
+            dataloader = DataLoader(
+                dataset=dataset,
+                batch_size=batch_size,
+                num_workers=train_config["train_dataloader_num_workers"],
+                pin_memory=train_config["pin_memory"],
+                shuffle=(sampler is None),
+                sampler=sampler,
+                collate_fn=collate_dataset_output,
+                persistent_workers=False
+            )
+
+            data_sampler_vec.append(dataloader)
+
+
 
         # pass model to device
         trained_model = trained_model.to(device)

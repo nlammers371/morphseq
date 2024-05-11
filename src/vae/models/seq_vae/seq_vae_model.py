@@ -249,7 +249,8 @@ class SeqVAE(BaseAE):
         else:
             metric_loss = torch.tensor(0)
 
-        return recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + self.gamma * metric_loss, recon_loss.mean(
+        recon_weight = (128*288) / (recon_x.shape[2]*recon_x.shape[3]) # this holds relative image recon weight constant
+        return recon_weight*recon_loss.mean(dim=0) + self.beta * KLD.mean(dim=0) + self.gamma * metric_loss, recon_weight*recon_loss.mean(
             dim=0), self.beta * KLD.mean(
             dim=0), self.gamma * metric_loss
 
