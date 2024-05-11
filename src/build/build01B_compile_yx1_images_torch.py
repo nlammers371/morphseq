@@ -168,7 +168,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
         dir_path = os.path.join(read_dir_root, sub_name, "")
 
         # depth_dir = os.path.join(write_dir, "stitched_depth_images", sub_name)
-        ff_dir = os.path.join(write_dir, "stitched_FF_images", sub_name)
+        ff_dir = os.path.join(write_dir, "stitched_FF_images_raw", sub_name)
 
         if not os.path.isdir(ff_dir):
             os.makedirs(ff_dir)
