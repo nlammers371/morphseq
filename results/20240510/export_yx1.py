@@ -9,7 +9,7 @@ def main():
     n_z_keep_vec = [None]
     # reducing kept z slices because of OOF issue with 1206 experiment
     # build FF images
-    build_ff_from_yx1(data_root=data_root, dir_list=dir_list, overwrite_flag=overwrite_flag, metadata_only_flag=False,
+    build_ff_from_yx1(data_root=data_root, dir_list=dir_list, overwrite_flag=overwrite_flag, metadata_only_flag=True,
                       par_flag=False, n_z_keep_in=n_z_keep_vec)
 
 

@@ -78,8 +78,6 @@ def adjust_contrast_wrapper(root, overwrite_flag=False, par_flag=True, n_workers
                 label_path_list.append(label_path)
                 exist_flags.append(os.path.isfile(label_path))
 
-    image_path_list = sorted(image_path_list)
-
     # remove images with previously existing labels if overwrite_flag=False
     if not overwrite_flag:
         image_path_list = [image_path_list[e] for e in range(len(image_path_list)) if not exist_flags[e]]
@@ -88,6 +86,8 @@ def adjust_contrast_wrapper(root, overwrite_flag=False, par_flag=True, n_workers
         if n_ex > 0:
             print('Skipping ' + str(
                 n_ex) + " previously segmented images. Set 'overwrite_flag=True' to overwrite")
+
+    image_path_list = sorted(image_path_list)
 
     # iterate through images and adjust contrast
     if par_flag:
