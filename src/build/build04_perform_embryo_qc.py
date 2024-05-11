@@ -25,7 +25,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
     # Use surface-area of mask to remove large outliers
     min_embryos = 10
     sa_ref_key = 'wik'
-    use_indices = np.where((embryo_metadata_df["master_perturbation"] == sa_ref_key) &\
+    use_indices = np.where((embryo_metadata_df["master_perturbation"] == sa_ref_key) & \
                            (embryo_metadata_df["use_embryo_flag"] == 1))[0]
 
     sa_vec_ref = embryo_metadata_df["surface_area_um"].iloc[use_indices].values

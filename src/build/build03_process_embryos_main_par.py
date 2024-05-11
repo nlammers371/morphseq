@@ -378,9 +378,6 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
     if (not os.path.isfile(meta_df_path)) or overwrite_flag:
         master_df_to_update = []
         df_diff = master_df
-        # for e, experiment_path in enumerate(experiment_list):
-        #     im_list = sorted(glob.glob(os.path.join(experiment_path, "*.jpg")))
-        #     images_to_process += im_list
 
     else:
         master_df_to_update = pd.read_csv(meta_df_path, index_col=0)
@@ -389,7 +386,7 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
         df_all = master_df.merge(master_df_to_update.drop_duplicates(), on=["well", "experiment_date", "time_int"],
                            how='left', indicator=True)
         diff_indices = np.where(df_all['_merge'].values == 'left_only')[0]
-        df_diff = master_df.iloc[diff_indices]
+        df_diff = master_df.iloc[diff_indices].drop_duplicates()
 
     # unprocessed_date_index = np.unique(df_diff["experiment_date"]).astype(str)
     well_id_list = df_diff["well"].values
@@ -757,6 +754,7 @@ def build_well_metadata_master(root, well_sheets=None):
     exp_df.loc[np.isnan(exp_df["has_sci_data"]), "has_sci_data"] = 0
     exp_df = exp_df.loc[exp_df["use_flag"] == 1, :]
     exp_df = exp_df.rename(columns={"start_date": "experiment_date"})
+    exp_df["experiment_date"] = exp_df["experiment_date"].astype(int)
     exp_date_list = exp_df["experiment_date"].astype(str).to_list()
     # Load and concatenate well metadata into one long pandas table
     well_df_list = []
@@ -783,7 +781,6 @@ def build_well_metadata_master(root, well_sheets=None):
     # recast experiment_date variables
     master_well_table["experiment_date"] = master_well_table["experiment_date"].astype(str)
     exp_df["experiment_date"] = exp_df["experiment_date"].astype(str)
-
     master_well_table = master_well_table.merge(exp_df, on="experiment_date", how='left')
     if master_well_table['use_flag'].isnull().values.any():
         raise Exception("Error: mismatching experiment IDs between experiment- and well-level metadata")
@@ -1080,13 +1077,13 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         n_workers = np.ceil(os.cpu_count() / 2).astype(int)
         out_of_frame_flags = process_map(partial(export_embryo_snips, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
-                                      px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag),
+                                      px_mean=0.5*px_mean, px_std=0.5*px_std, overwrite_flag=overwrite_flag),
                     range(len(export_indices)), max_workers=n_workers, chunksize=10)
 
         update_indices = np.where(np.asarray(out_of_frame_flags) > -1)
         out_of_frame_flags = np.asarray(out_of_frame_flags)[update_indices]
     else:
-        for r in tqdm(export_indices, "Exporting snips..."):
+        for r in tqdm(export_indices[-3764:], "Exporting snips..."):
             oof = export_embryo_snips(r, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
                                       px_mean=0.5*px_mean, px_std=0.5*px_std, overwrite_flag=overwrite_flag)

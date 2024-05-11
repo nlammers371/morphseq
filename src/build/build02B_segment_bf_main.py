@@ -38,7 +38,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         im_dims = [576, 320]  # NL: can I read this off of the loaded model object?
 
     # generate directory for model predictions
-    path_to_labels = os.path.join(root, 'segmentation', model_name + '_predictions', '')
+    path_to_labels = os.path.join(root, "built_image_data", 'segmentation', model_name + '_predictions', '')
 
     if make_sample_figures:
         sample_fig_path = os.path.join(path_to_labels, "sample_figures")
@@ -46,13 +46,13 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
             os.makedirs(sample_fig_path)
 
     # get list of images to classify
-    path_to_images = os.path.join(root, 'stitched_FF_images_raw', '*')
+    path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images_raw', '*')
     if segment_list is None:
         project_list = sorted(glob.glob(path_to_images))
         project_list = [p for p in project_list if "ignore" not in p]
         project_list = [p for p in project_list if os.path.isdir(p)]
     else:
-        project_list = [os.path.join(root, 'stitched_FF_images_raw', p) for p in segment_list]
+        project_list = [os.path.join(root, "built_image_data", 'stitched_FF_images_raw', p) for p in segment_list]
 
     # select subset of images to label
     image_path_list = []
@@ -69,7 +69,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
 
         for imp in im_list_temp:
             _, tail = ntpath.split(imp)
-            label_path = os.path.join(label_path_root, tail)
+            label_path = os.path.join(label_path_root, tail).replace(".png", "")
             label_path = label_path + ".jpg"#.replace(".png", ".jpg")
             label_path_list.append(label_path)
             # im_ls = glob.glob(label_path[:-4] + "*")
@@ -104,7 +104,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                       out_classes=n_classes)
 
     # load trained model weights
-    model.load_state_dict(torch.load(os.path.join(root, 'segmentation_models', model_name), map_location=device))
+    model.load_state_dict(torch.load(os.path.join(root, "built_image_data", 'segmentation_models', model_name), map_location=device))
     model = model.to(device)
     model.eval()
 
@@ -113,9 +113,6 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
     else:
         figure_indices = np.asarray([])
 
-    # print(device)
-    # get predictions
-    # print("Classifying images...")
     with torch.no_grad():
         # data_list = list(im_dataloader)
         it = iter(im_dataloader)
