@@ -67,12 +67,14 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 # STEP 2
 
 def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
-                            frac_to_use=1.0, test_ids=None, test_dates=None, test_perturbations=None,
+                            frac_to_use=1.0, test_dates=None, test_perturbations=None,
                             pert_time_key=None, overwrite_flag=False):
 
 
     np.random.seed(r_seed)
 
+    if test_dates is None:
+        test_dates = ["20240418"]
     # get list of training files
     image_list = seq_key["image_path"].to_numpy().tolist() 
     snip_id_list = [path_leaf(path) for path in image_list]
@@ -103,7 +105,7 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
 
     if test_dates is not None:
         test_constraints_flag = True
-        min_age_vec[np.isin(emb_key[:, "experiment_date"].to_numpy(), test_dates)] = np.inf
+        min_age_vec[np.isin(emb_key.loc[:, "experiment_date"].astype(str).to_numpy(), np.asarray(test_dates))] = 200
         # eid_date_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "experiment_date"].astype(str) in test_dates]
         # eids_date_test = np.unique(eid_date_list).tolist()
         # if test_ids is not None:

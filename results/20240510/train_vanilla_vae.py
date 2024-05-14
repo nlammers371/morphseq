@@ -15,9 +15,8 @@ def main():
     n_conv_layers = 5
     batch_size = 128
     n_epochs = 250
-    input_dim = (1, 576, 256)
+    input_dim = (1, 288, 128)
     learning_rate = 1e-4
-    beta = 1
     # model_type = "SeqVAE"
     cache_data = False
     model_type = "VAE"
@@ -25,12 +24,7 @@ def main():
     #####################
     # (3B & 4B) Seq-VAE (triplet)
     #####################
-    train_suffix = "base_model"
-    temperature = 15 # , 50]
-    gamma = 10  # 50, 2, 1000] #[0.0001, 0.001, 0.01, 0.1, 1]
-    distance_metric = "euclidean"
-    self_target_prob = 0.5
-    metric_loss_type = "triplet" #"NT-Xent" 
+    train_suffix = "base_model_v2"
     
     # age_key_path = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\metadata\\age_key_df.csv"
     # age_key_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/age_key_df.csv"
