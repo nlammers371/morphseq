@@ -41,7 +41,8 @@ class VAEConfig(BaseAEConfig):
             age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
             seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
         else:
-            raise Exception("No age key path provided")
+            # raise Warning("No age key path provided")
+            seq_key["inferred_stage_hpf_reg"] = 1
 
         if self.pert_time_key_path != '':
             pert_time_key = pd.read_csv(self.pert_time_key_path)
