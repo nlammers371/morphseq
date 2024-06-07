@@ -190,6 +190,11 @@ class AutoConfig(BaseConfig):
 
             model_config = SeqVAEConfig.from_json_file(json_path)
 
+        elif config_name == "MorphIAFVAEConfig":
+            from ..morph_iaf_vae import MorphIAFVAEConfig
+
+            model_config = MorphIAFVAEConfig.from_json_file(json_path)
+
         else:
             raise NameError(
                 "Cannot reload automatically the model configuration... "

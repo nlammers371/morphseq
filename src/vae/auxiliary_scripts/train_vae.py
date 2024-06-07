@@ -7,13 +7,13 @@ sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, \
     ContrastiveLearningViewGenerator, SeqPairDataset, SeqPairDatasetCached, TripletPairDataset, TripletDatasetCached, DatasetCached, grayscale_transform
 import os
-from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE
+from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE, MorphIAFVAE, MorphIAFVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
 from src.vae.trainers import BaseTrainerConfig
 from src.vae.pipelines.training import TrainingPipeline
 from torch.utils.data.sampler import SubsetRandomSampler
 
-def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_data=True, train_suffix='', **kwargs):
+def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_data=False, train_suffix='', **kwargs):
 
     training_keys = ["batch_size", "learning_rate", "n_load_workers"] # optional training config kywords
     # model_keys = ["n_latent", "n_out_channels", "zn_frac", "depth", "nt_xent_temperature"]
@@ -60,6 +60,26 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
         # raise Error("Need to update dataloader architecture for seqVAE")
         # initialize model configuration
         model_config = SeqVAEConfig(
+            input_dim=input_dim,
+            data_root=root,
+            train_folder=train_folder,
+            **model_args
+        )
+
+        # initialize reference dataset
+        print("Making lookup dictionary for sequential pairs...")
+        model_config.make_dataset()
+
+        # initialize contrastive data loader
+        if cache_data:
+            data_transform = ContrastiveLearningDataset.get_contrastive_transform_cache()
+        else:
+            data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
+
+    elif model_type == "MorphIAFVAE":
+        # raise Error("Need to update dataloader architecture for seqVAE")
+        # initialize model configuration
+        model_config = MorphIAFVAEConfig(
             input_dim=input_dim,
             data_root=root,
             train_folder=train_folder,
@@ -128,6 +148,16 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
                                         return_name=True
                                         )
 
+    elif (model_type == "MorphIAFVAE") & (model_config.metric_loss_type == "triplet"):
+        # Make datasets
+        train_dataset = TripletDatasetCached(root=os.path.join(train_dir, "images"),
+                                        model_config=model_config,
+                                        train_config=train_config,
+                                        cache_data=cache_data,
+                                        transform=data_transform,
+                                        return_name=True
+                                        )
+
     
     # Initialize encoder and decoder
     encoder = Encoder_Conv_VAE(model_config)  # these are custom classes I wrote for this use case
@@ -152,6 +182,13 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
             encoder=encoder,
             decoder=decoder
         )
+
+    elif model_type == "MorphIAFVAE":
+        model = MorphIAFVAE(
+            model_config=model_config,
+            encoder=encoder,
+            decoder=decoder
+        )
     else:
         raise Exception("Unrecognized model type: " + model_type)
 
@@ -160,20 +197,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
         training_config=train_config,
         model=model
     )
-
-    # # test data loader
-    # from pythae.data.datasets import BaseDataset, collate_dataset_output
-    # from torch.utils.data import DataLoader, Dataset
-    # from torch.utils.data.distributed import DistributedSampler
-    # from torch.utils.data.sampler import SubsetRandomSampler
-
-    # test_loader = DataLoader(
-    #         dataset=train_dataset,
-    #         batch_size=train_config.per_device_train_batch_size,
-    #         num_workers=train_config.train_dataloader_num_workers,
-    #         shuffle=True,
-    #         collate_fn=collate_dataset_output,
-    #     )
 
     # inputs = next(iter(test_loader))
 
