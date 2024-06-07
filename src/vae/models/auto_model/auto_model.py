@@ -204,6 +204,11 @@ class AutoModel(nn.Module):
 
             model = SeqVAE.load_from_folder(dir_path=dir_path)
 
+        elif model_name == "MorphIAFVAEConfig":
+            from ..morph_iaf_vae import MorphIAFVAE
+
+            model = MorphIAFVAE.load_from_folder(dir_path=dir_path)
+
         else:
             raise NameError(
                 "Cannot reload automatically the model... "

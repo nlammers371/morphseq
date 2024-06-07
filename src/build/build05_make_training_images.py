@@ -66,6 +66,9 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     if not os.path.exists(os.path.join(train_dir, "images")):
         os.makedirs(os.path.join(train_dir, "images"))
 
+    # save copy of the metadata file
+    embryo_metadata_df.to_csv(os.path.join(train_dir, "embryo_metadata_df_train.csv"), index=False)
+
     #################
     # Write snips to file
     

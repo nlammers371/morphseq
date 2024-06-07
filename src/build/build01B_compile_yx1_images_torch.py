@@ -98,7 +98,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
     else:
         # get data
-        # start = time.time()
+        start = time.time()
         n_z_slices = im_data_dask.shape[2]
         if n_z_keep is not None:
             buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
@@ -132,6 +132,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
         ff_out_name = well_name_conv + f'_t{time_int:04}_' + f'ch{ch_to_use:02}_stitch'
 
         io.imsave(os.path.join(ff_dir, ff_out_name + ".png"), ff_image)
+        # print(time.time() - start)
 
     return {}
 
@@ -356,13 +357,16 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
                         for w in tqdm(range(n_wells * n_time_points)):
                             calculate_max_fluo_images(w, im_data_dask=im_array_dask, well_name_list=well_name_list_long,
                                                   well_time_list=time_int_list, well_ind_list=well_int_list,
-                                                  max_dir=fluo_dir, ch_to_use=channel_id, overwrite_flag=overwrite_flag, n_z_keep=n_z_keep_in[d])
+                                                  max_dir=fluo_dir, ch_to_use=channel_id, overwrite_flag=overwrite_flag,
+                                                      n_z_keep=n_z_keep_in[d])
 
             print("Calculating full-focus images for the BF channel...")
+
+            print("Loading dask array into memory...")
             if n_channels > 1:
-                im_array_bf = np.squeeze(im_array_dask[:, :, :, bf_channel_ind, :, :])
+                im_array_bf = np.squeeze(im_array_dask[:, :, :, bf_channel_ind, :, :])#.compute()
             else:
-                im_array_bf = im_array_dask
+                im_array_bf = im_array_dask#.compute()
 
             if par_flag:
                 process_map(partial(calculate_FF_images, im_data_dask=im_array_bf, device=device,
