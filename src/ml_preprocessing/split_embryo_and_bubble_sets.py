@@ -10,52 +10,14 @@ def path_leaf(path):
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
 
-morph_label_flag = False
-focus_label_flag = False
-# db_path = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphSeq/data/built_keyence_data_v2/"
-db_path = "E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\built_keyence_data\\" # "D:\\Nick\\morphseq\\built_keyence_data\\"   #
-path_to_images = os.path.join(db_path, 'stitched_ff_images', '*')
+root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
+path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images', '*')
 project_list = glob.glob(path_to_images)
+label_type = "mask"  # "via" "bubble" "focus"
 
-# set starting point
-# im_dims = [641, 1158]
-overwrite_flag = False
-skip_labeled_flag = False
-if overwrite_flag:
-    skip_labeled_flag = False
+image_path = os.path.join(root, "built_image_data", "unet_training", "UNET_training_" + label_type, 'images', '')
+label_path = os.path.join(root, "built_image_data", "unet_training", "UNET_training_" + label_type, 'annotations', '')
 
-# set random seed for reproducibility
-# seed = 678
-# suffix = "_focus"
-seed = 126
-suffix = "_v2"
-
-
-# make write paths
-if morph_label_flag:
-    image_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'morph_UNET_training', str(seed) + suffix, 'annotations', '')
-elif focus_label_flag:
-    image_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'images', '')
-    label_path = os.path.join(db_path, 'focus_UNET_training', str(seed) + suffix, 'annotations', '')
-
-image_path_in = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'images', '')
-label_path_in = os.path.join(db_path, 'UNET_training', str(seed) + suffix, 'annotations', '')
-
-image_path_bubble = os.path.join(db_path, 'bubble_UNET_training', str(seed) + suffix, 'images', '')
-label_path_bubble = os.path.join(db_path, 'bubble_UNET_training', str(seed) + suffix, 'annotations', '')
-
-image_path_emb = os.path.join(db_path, 'emb_UNET_training', str(seed) + suffix, 'images', '')
-label_path_emb = os.path.join(db_path, 'emb_UNET_training', str(seed) + suffix, 'annotations', '')
-
-if not os.path.isdir(image_path_bubble):
-    os.makedirs(image_path_bubble)
-if not os.path.isdir(label_path_bubble):
-    os.makedirs(label_path_bubble)
-if not os.path.isdir(image_path_emb):
-    os.makedirs(image_path_emb)
-if not os.path.isdir(label_path_emb):
-    os.makedirs(label_path_emb)
 
 # get list of existing labels (if any)
 existing_labels = sorted(glob.glob(label_path_in + "*tif"))

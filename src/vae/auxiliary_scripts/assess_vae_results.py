@@ -205,7 +205,7 @@ def calculate_contrastive_distances(trained_model, train_dir, device, batch_size
             new_cols = []
             for n in range(trained_model.latent_dim):
 
-                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
+                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE") or (trained_model.model_name == "MorphIAFVAE"):
                     if n in trained_model.nuisance_indices:
                         new_cols.append(f"z_mu_n_{n:02}")
                     else:
@@ -346,7 +346,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
     new_cols = []
     for n in range(trained_model.latent_dim):
 
-        if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
+        if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE") or (trained_model.model_name == "MorphIAFVAE"):
             if n in trained_model.nuisance_indices:
                 new_cols.append(f"z_mu_n_{n:02}")
                 new_cols.append(f"z_sigma_n_{n:02}")
@@ -384,7 +384,12 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             mu, log_var = encoder_output.embedding, encoder_output.log_covariance
             std = torch.exp(0.5 * log_var)
 
-            z_out, eps = trained_model._sample_gauss(mu, std)
+            z0, eps = trained_model._sample_gauss(mu, std)
+            if trained_model.model_name == "MorphIAFVAE":
+                flow_output = trained_model.af_flow.inverse(z0)  # sampling
+                z_out = flow_output.out
+            else:
+                z_out = z0
             recon_x_out = trained_model.decoder(z_out)["reconstruction"]
             # .detach().cpu()
 
@@ -406,7 +411,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             zm_array = np.asarray(encoder_output[0].detach().cpu())
             zs_array = np.asarray(encoder_output[1].detach().cpu())
             for z in range(trained_model.latent_dim):
-                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
+                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE") or (trained_model.model_name == "MorphIAFVAE"):
                     if z in trained_model.nuisance_indices:
                         embryo_df.loc[df_ind_vec, f"z_mu_n_{z:02}"] = zm_array[:, z]
                         embryo_df.loc[df_ind_vec, f"z_sigma_n_{z:02}"] = zs_array[:, z]

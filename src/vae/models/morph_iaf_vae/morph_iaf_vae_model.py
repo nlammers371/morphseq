@@ -184,7 +184,6 @@ class MorphIAFVAE(BaseAE):
             z0p = zp
             z0n = zn
 
-            # split into biological and non-biological
 
             # Pass it through the Normalizing flows
             flow_outputa = self.af_flow.inverse(za)  # sampling
@@ -283,17 +282,17 @@ class MorphIAFVAE(BaseAE):
         if self.contrastive_flag:
 
             if self.distance_metric == "cosine":
-                metric_loss = self.nt_xent_loss(features=z0, self_stats=self_stats, other_stats=other_stats)
+                metric_loss = self.nt_xent_loss(features=zk, self_stats=self_stats, other_stats=other_stats)
 
 
             elif self.distance_metric == "euclidean":
-                metric_loss = self.nt_xent_loss_euclidean(features=z0, self_stats=self_stats,
+                metric_loss = self.nt_xent_loss_euclidean(features=zk, self_stats=self_stats,
                                                            other_stats=other_stats, temp_weights=hpf_deltas)
             else:
                 raise Exception("Invalid distance metric was passed to model.")
 
         elif self.triplet_flag:
-            metric_loss = self.triplet_loss(features=mu)
+            metric_loss = self.triplet_loss(features=zk)
         else:
             metric_loss = torch.tensor(0)
 

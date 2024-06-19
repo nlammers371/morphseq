@@ -13,32 +13,28 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import loggers as pl_loggers
 
 
-def train_unet_classifier(image_root, model_type, model_name, seed_str, n_epoch=50, pretrained_model=None):
+def train_unet_classifier(image_root, model_type, model_name, n_epoch=50, pretrained_model=None, n_classes=1):
 
-    if model_type=="emb":
-        n_classes=2
-    else:
-        n_classes=1
 
     data_path = os.path.join(image_root, "unet_training", "UNET_training_" + model_type)
 
-    root = os.path.join(data_path, seed_str)
+    root = os.path.join(data_path, "training")
 
     # extract key info about computational resources
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    n_cpu = os.cpu_count()
+    n_cpu = 0 #os.cpu_count()
     gpu_flag = device.type == 'cuda'
 
     ttv_split = [0.85, 0.0, 0.15]
     im_dims = [576, 320]
 
-    image_list = sorted(glob.glob(os.path.join(data_path, seed_str, 'images', '*.tif')) +
-                        glob.glob(os.path.join(data_path, seed_str, 'images', '*.png')) +
-                        glob.glob(os.path.join(data_path, seed_str, 'images', '*.jpg')))
+    image_list = sorted(glob.glob(os.path.join(root, 'images', '*.tif')) +
+                        glob.glob(os.path.join(root, 'images', '*.png')) +
+                        glob.glob(os.path.join(root, 'images', '*.jpg')))
 
-    mask_list = sorted(glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.tif')) +
-                       glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.png')) +
-                       glob.glob(os.path.join(data_path, seed_str, 'annotations', '*.jpg')))
+    mask_list = sorted(glob.glob(os.path.join(root, 'annotations', '*.tif')) +
+                       glob.glob(os.path.join(root, 'annotations', '*.png')) +
+                       glob.glob(os.path.join(root, 'annotations', '*.jpg')))
     n_samples_total = len(mask_list)
 
     im_list = []
@@ -49,7 +45,7 @@ def train_unet_classifier(image_root, model_type, model_name, seed_str, n_epoch=
     # split into train, test, and validation sets
     n_train = np.round(ttv_split[0] * n_samples_total).astype(int)
     n_test = np.round(ttv_split[1] * n_samples_total).astype(int)
-    n_validate = n_samples_total - n_train - n_test
+    # n_validate = n_samples_total - n_train - n_test
 
     # np.random.seed(345)
     random_indices = np.random.choice(np.arange(n_samples_total), n_samples_total, replace=False)
@@ -68,7 +64,7 @@ def train_unet_classifier(image_root, model_type, model_name, seed_str, n_epoch=
     print(f"Valid size: {len(valid_dataset)}")
     # print(f"Test size: {len(test_dataset)}")
 
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True,
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True,
                                   num_workers=n_cpu)  # **kwargs) # I think it is OK for Dataloader to use CPU workers
     valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=n_cpu)  # **kwargs)
     # test_dataloader = DataLoader(test_dataset, batch_size=6, shuffle=False, num_workers=n_cpu)
@@ -86,13 +82,13 @@ def train_unet_classifier(image_root, model_type, model_name, seed_str, n_epoch=
     # n_devices = 1 if gpu_flag else n_cpu
 
     # instrcut pytorch to track model performance and save the best-performing versions
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(data_path, seed_str, model_name + 'checkpoints', ''),
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(data_path, "training", model_name + 'checkpoints', ''),
                                           save_top_k=5,
                                           monitor='valid_per_image_iou',
                                           mode='max')
 
     # initialize custom logger so I can control where the (rather large) training logs are stored
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join(data_path, seed_str, model_name + "logs", ''))
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join(data_path, "training", model_name + "logs", ''))
     trainer = pl.Trainer(
         gpus=1,
         accelerator='auto',

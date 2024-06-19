@@ -13,7 +13,7 @@ def main():
     latent_dim = 100
     n_conv_layers = 5
     batch_size = 64
-    n_epochs = 100
+    n_epochs = 250
     input_dim = (1, 576, 256)
     learning_rate = 1e-4
     cache_data = False

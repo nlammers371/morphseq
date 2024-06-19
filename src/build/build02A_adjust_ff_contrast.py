@@ -32,7 +32,11 @@ def adjust_contrast(index, image_path_list):
         raise ValueError('Unsupported image type')
 
     # save
-    out_path = im_path.replace("stitched_FF_images_raw", "stitched_FF_images")
+    temp_path = im_path.replace("stitched_FF_images_raw", "stitched_FF_images")
+    im_stub = path_leaf(temp_path)
+    date_string = path_leaf(os.path.dirname(temp_path))
+    root_dir = os.path.dirname(os.path.dirname(temp_path))
+    out_path = os.path.join(root_dir, date_string + "_" + im_stub)
     io.imsave(out_path, im, check_contrast=False)
 
 def adjust_contrast_wrapper(root, overwrite_flag=False, par_flag=True, n_workers=None):
