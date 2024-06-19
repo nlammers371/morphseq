@@ -78,7 +78,13 @@ class Dataset(torch.utils.data.Dataset):
         else:
             raise Exception("File type not supported")
 
-        mask_path = glob.glob(os.path.join(self.masks_directory, filename[:-4] + "*"))[0]
+        stub_name = filename[:-4].replace("_stitch", "")
+        stub_name = stub_name.replace("_ch01", "")
+        mask_path = glob.glob(os.path.join(self.masks_directory, stub_name + "*"))
+
+        if len(mask_path) > 1:
+            raise Exception("Multiple masks found")
+        mask_path = mask_path[0]
         # image = np.array(Image.open(image_path).convert("RGB"))
 
         # trimap = np.array(Image.open(mask_path))
