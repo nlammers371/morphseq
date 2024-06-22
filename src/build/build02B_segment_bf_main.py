@@ -11,7 +11,7 @@ from src.functions.utilities import path_leaf
 import skimage.io as io
 
 def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=None, im_dims=None, batch_size=64,
-               n_workers=None, make_sample_figures=False, n_sample_figures=100):
+               checkpoint_path=None, n_workers=None, make_sample_figures=False, n_sample_figures=100):
 
 
     """
@@ -90,6 +90,10 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         if n_ex > 0:
             print('Skipping ' + str(n_ex) + " previously segmented images. Set 'overwrite_flag=True' to overwrite")
 
+    # randomize the ordering
+    si = np.random.choice(range(len(image_path_list)), len(image_path_list), replace=False)
+    image_path_list = [image_path_list[i] for i in si]
+
     # generate data loader object
     im_dataset = Dataset(root, image_path_list, im_dims, num_classes=n_classes, predict_only_flag=True)
     im_dataloader = DataLoader(im_dataset,
@@ -104,7 +108,11 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                       out_classes=n_classes)
 
     # load trained model weights
-    model.load_state_dict(torch.load(os.path.join(root, "built_image_data", 'segmentation_models', model_name), map_location=device))
+    if checkpoint_path is not None:
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['state_dict'])
+    else:
+        model.load_state_dict(torch.load(os.path.join(root, "built_image_data", 'segmentation_models', model_name), map_location=device))
     model = model.to(device)
     model.eval()
 
@@ -161,9 +169,11 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                     # plt.pcolormesh(x, y, Image2_mask, cmap='jet')
                     plt.imshow(im_plot)
 
-                    lb_plot = lb_temp / 255 * (n_classes+1)
+                    lb_plot = lb_temp - np.min(lb_temp)
+                    if np.max(lb_plot) > 0:
+                        lb_plot = lb_plot / np.max(lb_plot) * (n_classes)
                     lb_plot = lb_plot
-                    plt.imshow(lb_plot, cmap='Set1', alpha=0.5, vmin=0, vmax=n_classes+1, interpolation='none')
+                    plt.imshow(lb_plot, cmap='Set1', alpha=0.5, vmin=0, vmax=1.5, interpolation='none')
                     # plt.axis([x.min(), x.max(), y.min(), y.max()])
 
                     plt.xlim([x.min(), x.max()])
