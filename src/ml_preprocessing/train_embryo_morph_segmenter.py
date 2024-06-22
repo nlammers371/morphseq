@@ -64,7 +64,7 @@ def train_unet_classifier(image_root, model_type, model_name, n_epoch=50, pretra
     print(f"Valid size: {len(valid_dataset)}")
     # print(f"Test size: {len(test_dataset)}")
 
-    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True,
+    train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True,
                                   num_workers=n_cpu)  # **kwargs) # I think it is OK for Dataloader to use CPU workers
     valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=n_cpu)  # **kwargs)
     # test_dataloader = DataLoader(test_dataset, batch_size=6, shuffle=False, num_workers=n_cpu)

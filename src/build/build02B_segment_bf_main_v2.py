@@ -147,9 +147,10 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                     plt.imshow(im_plot)
 
                     lb_plot = lb_temp - np.min(lb_temp)
-                    lb_plot = lb_plot / np.max(lb_plot) * (n_classes)
+                    if np.max(lb_plot) > 0:
+                        lb_plot = lb_plot / np.max(lb_plot) * (n_classes)
                     lb_plot = lb_plot
-                    plt.imshow(lb_plot, cmap='Set1', alpha=0.5, vmin=0, vmax=n_classes+1, interpolation='none')
+                    plt.imshow(lb_plot, cmap='Set1', alpha=0.5, vmin=0, vmax=1.5, interpolation='none')
                     # plt.axis([x.min(), x.max(), y.min(), y.max()])
 
                     plt.xlim([x.min(), x.max()])
