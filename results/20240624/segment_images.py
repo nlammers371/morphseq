@@ -3,9 +3,9 @@ from src.build.build02B_segment_bf_main import apply_unet
 # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/built_image_data"
 root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
 n_workers = 2
-overwrite = True
+overwrite = False
 
-model_name_vec = ["mask_v0_0050"]#, "bubble_raw_v0_0050", "focus_raw_v0_0050"]#'["mask_v0_0050", "bubble_v0_0050", "focus_v0_0050"] #, "via_v0_0050"] #, "unet_yolk_v1_0050", "unet_focus_v2_0050"]
+model_name_vec = ["bubble_v0_0100", "focus_v0_0100"]#'["mask_v0_0050", "bubble_v0_0050", "focus_v0_0050"] #, "via_v0_0050"] #, "unet_yolk_v1_0050", "unet_focus_v2_0050"]
 checkpoint_path = None #"/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/built_image_data/unet_training/UNET_training_mask/training/mask_raw_v2_checkpoints/epoch=82-step=3817.ckpt"
 segment_list = None
 for m, model_name in enumerate(model_name_vec):
