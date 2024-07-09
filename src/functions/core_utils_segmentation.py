@@ -97,13 +97,12 @@ class Dataset(torch.utils.data.Dataset):
             if len(lb_temp.shape) == 3:
                 lb_temp = lb_temp[:, :, 0]
 
-            if False: #self.num_classes == 1:
-                mask = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
-            else:
-                mask_temp = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
-                mask = np.zeros((self.num_classes, self.out_dims[0], self.out_dims[1]))
-                for c in range(self.num_classes):
-                    mask[c, :, :] = (mask_temp == (c+1))*1.0
+            if lb_temp.shape[0] < lb_temp.shape[1]:
+                lb_temp = lb_temp.transpose(1, 0)
+            mask_temp = st.resize(lb_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
+            mask = np.zeros((self.num_classes, self.out_dims[0], self.out_dims[1]))
+            for c in range(self.num_classes):
+                mask[c, :, :] = (mask_temp == (c+1))*1.0
         else:
             if self.num_classes == 1:
                 mask = np.zeros(self.out_dims)
@@ -120,18 +119,16 @@ class Dataset(torch.utils.data.Dataset):
             im_temp = skimage.util.img_as_ubyte(im_temp)
 
         if im_temp.shape[0] < im_temp.shape[1]:
-            im_temp = im_temp.transpose(1,0)
+            im_temp = im_temp.transpose(1, 0)
             
         image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
         image = np.repeat(image[np.newaxis, :, :], 3, axis=0)
 
-    
+
         # image = st.resize(im_temp, self.out_dims, order=0, preserve_range=True, anti_aliasing=False)
         # if False: #self.num_classes == 1:
         # sample = dict(image=image.astype(np.float32), mask=mask[np.newaxis, :, :].astype(np.float32))  #, trimap=trimap)
         # else:
-        if np.any(np.isnan(mask)):
-            raise Exception("wft")
 
         sample = dict(image=image.astype(np.float32), mask=mask.astype(np.float32), path=filename)
         if self.transform is not None:

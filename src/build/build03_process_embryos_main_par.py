@@ -6,7 +6,7 @@ import skimage
 import cv2
 import pandas as pd
 from src.functions.utilities import path_leaf
-from skimage.morphology import disk, binary_closing
+from skimage.morphology import disk, binary_closing, remove_small_objects
 import scipy
 # from parfor import pmap
 from scipy.optimize import linear_sum_assignment
@@ -58,36 +58,31 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
         seg_dir_list_raw = glob.glob(segmentation_path + "*")
         seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-        emb_path = [m for m in seg_dir_list if "emb" in m][0]
+        emb_path = [m for m in seg_dir_list if "mask" in m][0]
+        via_path = [m for m in seg_dir_list if "via" in m][0]
 
         well = row["well"]
         time_int = row["time_int"]
         date = str(row["experiment_date"])
-
-        # im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
-        # if row["microscope"] == "keyence":
-        #     if row["experiment_date"].astype(str) in ['20231208', '20231207']:
-        #         im_name = well + f"_t{time_int:04}_ch03_stitch.tif"
-        #     else:
-        #         im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
-        #     lb_name = im_name
-        # elif row["microscope"] == "YX1":
-        #     im_name = "ff_" + well + f"_t{time_int:04}_ch00_stitch.png"
-        #     lb_name = im_name.replace("png", "tif")
 
         ############
         # Load masks from segmentation
         ############
         stub_name = well + f"_t{time_int:04}*"
         im_emb_path = glob.glob(os.path.join(emb_path, date, stub_name))[0]
+        im_via_path = glob.glob(os.path.join(via_path, date, stub_name))[0]
 
         # load main embryo mask
         # im_emb_path = os.path.join(emb_path, date, lb_name)
-        im_ldb = io.imread(im_emb_path)
-        im_ldb = np.round(im_ldb / 255 * 3 - 1).astype(int)
-        im_bkg = np.ones(im_ldb.shape, dtype="uint8")
-        im_bkg[np.where(im_ldb == 1)] = 0
-        im_bkg[np.where(im_ldb == 2)] = 0
+        im_mask = io.imread(im_emb_path)
+        im_mask = np.round(im_mask / 255 * 2 - 1).astype(int)
+
+        im_via = io.imread(im_via_path)
+        im_via = np.round(im_via / 255 * 2 - 1).astype(int)
+
+        im_bkg = np.ones(im_mask.shape, dtype="uint8")
+        im_bkg[np.where(im_mask == 1)] = 0
+        im_bkg[np.where(im_via == 1)] = 0
 
         # load image
         im_ff_path = glob.glob(os.path.join(ff_image_path, date, stub_name))[0] #os.path.join(ff_image_path, date, im_name)
@@ -126,7 +121,7 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    emb_path = [m for m in seg_dir_list if "emb" in m][0]
+    emb_path = [m for m in seg_dir_list if "mask" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
     row = embryo_metadata_df.iloc[r].copy()
@@ -145,31 +140,18 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
         time_int = row["time_int"]
         date = str(row["experiment_date"])
 
-        # if row["microscope"] == "keyence":
-        #     if row["experiment_date"].astype(str) in ['20231208', '20231207']:
-        #         im_name = well + f"_t{time_int:04}_ch03_stitch.tif"
-        #     else:
-        #         im_name = well + f"_t{time_int:04}_ch01_stitch.tif"
-        #     lb_name = im_name
-        # elif row["microscope"] == "YX1":
-        #     im_name = "ff_" + well + f"_t{time_int:04}_ch00_stitch.png"
-        #     lb_name = im_name.replace("png", "tif")
-
-        # if (not row["dead_flag"]) and (row["no_yolk_flag"]):
-        #     print("wtf")
-
         ############
         # Load masks from segmentation
         ############
         im_stub = well + f"_t{time_int:04}*"
         # load main embryo mask
         im_emb_path = glob.glob(os.path.join(emb_path, date, im_stub))[0]
-        im_ldb = io.imread(im_emb_path)
-        im_ldb = np.round(im_ldb / 255 * 3 - 1).astype(int)
-        im_merge = np.zeros(im_ldb.shape, dtype="uint8")
-        im_merge[np.where(im_ldb == 1)] = 1
-        im_merge[np.where(im_ldb == 2)] = 1
-        im_merge_lb = label(im_merge)
+        im_mask = io.imread(im_emb_path)
+        im_mask = np.round(im_mask / 255 * 2 - 1).astype(np.uint8)
+        # im_mask = np.zeros(im_ldb.shape, dtype="uint8")
+        # im_mask[np.where(im_ldb == 1)] = 1
+        # im_mask[np.where(im_ldb == 2)] = 1
+        im_mask_lb = label(im_mask)
 
         # load yolk mask
         im_yolk_path = glob.glob(os.path.join(yolk_path, date, im_stub))[0]
@@ -181,18 +163,18 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
         # get surface area
         px_dim_raw = row["Height (um)"] / row["Height (px)"]  # to adjust for size reduction (need to automate this)
 
-        lbi = row["region_label"]  # im_merge_lb[yi, xi]
+        lbi = row["region_label"]  # im_mask_lb[yi, xi]
 
         assert lbi != 0  # make sure we're not grabbing empty space
 
-        im_merge_ft = (im_merge_lb == lbi).astype(int)
+        im_mask_ft = (im_mask_lb == lbi).astype(int)
 
         # apply simple morph operations to fill small holes
         i_disk = disk(close_radius)
-        im_merge_ft = binary_closing(im_merge_ft, i_disk).astype(int)
+        im_mask_ft = binary_closing(im_mask_ft, i_disk).astype(int)
 
         # filter out yolk regions that don't contact the embryo ROI
-        im_intersect = np.multiply(im_yolk * 1, im_merge_ft * 1)
+        im_intersect = np.multiply(im_yolk * 1, im_mask_ft * 1)
 
         if np.sum(im_intersect) < 10:
             im_yolk = np.zeros(im_yolk.shape).astype(int)
@@ -209,7 +191,7 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
                 lu = np.unique(y_lb[np.where(i_lb == i_max+1)])
                 im_yolk = (y_lb == lu[0])*1
 
-        # im_merge_other = ((im_merge_lb > 0) & (im_merge_lb != lbi)).astype(int)
+        # im_mask_other = ((im_mask_lb > 0) & (im_mask_lb != lbi)).astype(int)
 
         ############
         # Load raw image
@@ -223,8 +205,8 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
             im_ff = skimage.util.img_as_ubyte(im_ff)
         # rescale masks and image
         im_ff_rs = cv2.resize(im_ff, None, fx=px_dim_raw / outscale, fy=px_dim_raw / outscale)
-        mask_emb_rs = cv2.resize(im_merge_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-        # mask_other_rs = cv2.resize(im_merge_other, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+        mask_emb_rs = cv2.resize(im_mask_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+        # mask_other_rs = cv2.resize(im_mask_other, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
         mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
 
         rp = regionprops(mask_emb_rs)
@@ -457,10 +439,6 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
     well = iname[:dash_index]
     t_index = int(iname[dash_index + 2:dash_index + 6])
 
-    # find corresponding index in master dataset
-    # t_indices = np.where(master_df_update["time_int"] == t_index)[0]
-    # well_indices = np.where(master_df_update[["well"]] == well)[0]
-    # e_indices = np.where(master_df_update[["experiment_date"]] == int(ename))[0]
     entry_filter = (master_df_update["time_int"].values == t_index) & \
                    (master_df_update["well"].values == well) & (master_df_update["experiment_date"].values == int(ename))
     master_index = master_df_update.index[entry_filter] #[i for i in t_indices if (i in well_indices) and (i in e_indices)]
@@ -476,36 +454,37 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
 
     # load label image
     im = io.imread(image_path)
-    im = np.round(im / 255 * 3) - 1
+    im_mask = (np.round(im / 255 * 2) - 1).astype(np.uint8)
 
+    # load viability image
+    seg_path = os.path.dirname(os.path.dirname(os.path.dirname(image_path)))
+    date_dir = path_leaf(os.path.dirname(image_path))
+    im_stub = path_leaf(image_path)[:9]
+    via_dir = glob.glob(os.path.join(seg_path, "via_*"))[0]
+    via_path = glob.glob(os.path.join(via_dir, date_dir, im_stub + "*"))[0]
+    im_via = io.imread(via_path)
+    im_via = (np.round(im_via / 255 * 2) - 1).astype(np.uint8)
+    
+    # make a combined mask
+    cb_mask = np.ones_like(im_mask)
+    cb_mask[np.where(im_mask == 1)] = 1  # alive
+    cb_mask[np.where((im_mask == 1) & (im_via == 1))] = 2  # dead
+    
     # merge live/dead labels for now
-    im_merge = np.zeros(im.shape, dtype="uint8")
-    im_merge[np.where(im == 1)] = 1
-    im_merge[np.where(im == 2)] = 1
-    im_merge_lb = label(im_merge)
-    regions = regionprops(im_merge_lb)
+    # im_mask = np.zeros(im.shape, dtype="uint8")
+    
+    im_mask_lb = label(im_mask)
+    regions = regionprops(im_mask_lb)
 
     # recalibrate things relative to "standard" dimensions
     pixel_size_raw = row["Height (um)"] / row["Height (px)"]
     # im_area_um2 = pixel_size_raw**2 * ff_size   # to adjust for size reduction 
-    lb_size = im_merge_lb.size
+    lb_size = im_mask_lb.size
 
     sa_vec = np.asarray([rg["Area"] for rg in regions]) * ff_size / lb_size * pixel_size_raw**2
     sa_filter = (sa_vec <= max_sa_um) & (sa_vec >= min_sa_um)
     sa_ranks = len(sa_vec) - np.argsort(sa_vec) - 1
-    # sa_vec = sa_vec[sa_filter]
-    # regions = regions[sa_filter]
-    # sa_vec = sa_vec[np.where(sa_vec >= min_sa_um)]
-    # sa_vec = sorted(sa_vec)
 
-    # revise cutoff to ensure we do not track more embryos than initially
-    # n_prior = int(row.loc["embryos_per_well"])
-    # if len(sa_vec) > n_prior:
-    #     min_sa_um_new = np.max([sa_vec[-n_prior], min_sa_um])
-    # else:
-    #     min_sa_um_new = min_sa_um
-    # if t_index == 1:
-    #     print("pause")
     i_pass = 0
     for i, r in enumerate(regions):
         # sa = r.area
@@ -513,8 +492,8 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
             row.loc["e" + str(i_pass) + "_x"] = r.centroid[1]
             row.loc["e" + str(i_pass) + "_y"] = r.centroid[0]
             row.loc["e" + str(i_pass) + "_label"] = r.label
-            lb_indices = np.where(im_merge_lb == r.label)
-            row.loc["e" + str(i_pass) + "_frac_alive"] = np.mean(im[lb_indices] == 1)
+            lb_indices = np.where(im_mask_lb == r.label)
+            row.loc["e" + str(i_pass) + "_frac_alive"] = np.mean(cb_mask[lb_indices] == 1)
 
             i_pass += 1
 
@@ -637,7 +616,7 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-    emb_path = [m for m in seg_dir_list if "emb" in m][0]
+    emb_path = [m for m in seg_dir_list if "mask" in m][0]
     bubble_path = [m for m in seg_dir_list if "bubble" in m][0]
     focus_path = [m for m in seg_dir_list if "focus" in m][0]
     yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
@@ -654,42 +633,46 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     # im_emb_path = os.path.join(emb_path, date, im_name)
 
     im = io.imread(im_name[0])
-    im = np.round(im / 255 * 3) - 1
+    im_mask = (np.round(im / 255 * 2) - 1).astype(np.uint8)
 
     # merge live/dead labels for now
-    im_merge = np.zeros(im.shape, dtype="uint8")
-    im_merge[np.where(im == 1)] = 1
-    im_merge[np.where(im == 2)] = 1
-    im_merge_lb = label(im_merge)
+    # im_mask = np.zeros(im.shape, dtype="uint8")
+    # im_mask[np.where(im == 1)] = 1
+    # im_mask[np.where(im == 2)] = 1
+    im_mask_lb = label(im_mask)
 
     im_bubble_path = glob.glob(os.path.join(bubble_path, date, "*" + im_stub + "*"))[0]
     im_bubble = io.imread(im_bubble_path)
     im_bubble = np.round(im_bubble / 255 * 2 - 1).astype(int)
+    im_bubble = remove_small_objects(label(im_bubble), 128)
+    im_bubble[im_bubble > 0] = 1
 
     im_focus_path = glob.glob(os.path.join(focus_path, date, "*" + im_stub + "*"))[0] #os.path.join(focus_path, date, im_name)
     im_focus = io.imread(im_focus_path)
     im_focus = np.round(im_focus / 255 * 2 - 1).astype(int)
+    im_focus = remove_small_objects(label(im_focus), 128)
+    im_focus[im_focus > 0] = 1
 
     im_yolk_path = glob.glob(os.path.join(yolk_path, date, "*" + im_stub + "*"))[0] #os.path.join(yolk_path, date, im_name)
     im_yolk = io.imread(im_yolk_path)
     im_yolk = np.round(im_yolk / 255 * 2 - 1).astype(int)
+    # im_yolk = remove_small_objects(label(im_yolk), 128)
+    # im_yolk[im_yolk > 0] = 1
 
     # get surface area
     px_dim_raw = row["Height (um)"] / row["Height (px)"]   # to adjust for size reduction (need to automate this)
     size_factor = np.sqrt(ff_size / im_yolk.size) #row["Width (px)"] / 640 * 630/320
     px_dim = px_dim_raw * size_factor
     qc_scale_px = int(np.ceil(qc_scale_um / px_dim))
-    # ih, iw = im_yolk.shape
-    # yi = np.min([np.max([int(row["ypos"]), 1]), ih])
-    # xi = np.min([np.max([int(row["xpos"]), 1]), iw])
-    lbi = row["region_label"]  # im_merge_lb[yi, xi]
+
+    lbi = row["region_label"]  # im_mask_lb[yi, xi]
 
     assert lbi != 0  # make sure we're not grabbing empty space
 
-    im_merge_lb = (im_merge_lb == lbi).astype(int)
+    im_mask_lb = (im_mask_lb == lbi).astype(int)
 
     # calculate sa-related metrics
-    rg = regionprops(im_merge_lb)
+    rg = regionprops(im_mask_lb)
     row.loc["surface_area_um"] = rg[0].area_filled * px_dim ** 2
     row.loc["length_um"] = rg[0].axis_major_length * px_dim
     row.loc["width_um"] = rg[0].axis_minor_length * px_dim
@@ -709,16 +692,16 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     row.loc["dead_flag"] = row["fraction_alive"] < ld_rat_thresh
 
     # is there a yolk detected in the vicinity of the embryo body?
-    im_intersect = np.multiply((im_yolk == 1)*1, (im_merge_lb == 1)*1)
+    im_intersect = np.multiply((im_yolk == 1)*1, (im_mask_lb == 1)*1)
     row.loc["no_yolk_flag"] = ~np.any(im_intersect)
 
     # is a part of the embryo mask at or near the image boundary?
-    im_trunc = im_merge_lb[qc_scale_px:-qc_scale_px, qc_scale_px:-qc_scale_px]
-    row.loc["frame_flag"] = np.sum(im_merge_lb) != np.sum(im_trunc)
+    im_trunc = im_mask_lb[qc_scale_px:-qc_scale_px, qc_scale_px:-qc_scale_px]
+    row.loc["frame_flag"] = np.sum(im_mask_lb) != np.sum(im_trunc)
 
     # is there an out-of-focus region in the vicinity of the mask?
     if np.any(im_focus) or np.any(im_bubble):
-        im_dist = scipy.ndimage.distance_transform_edt(im_merge_lb == 0)
+        im_dist = scipy.ndimage.distance_transform_edt(im_mask_lb == 0)
 
     if np.any(im_focus):
         min_dist = np.min(im_dist[np.where(im_focus == 1)])
@@ -835,7 +818,15 @@ def build_well_metadata_master(root, well_sheets=None):
     # save to file
     drop_cols = [col for col in master_well_table.columns if "Unnamed" in col]
     master_well_table = master_well_table.drop(labels=drop_cols, axis=1)
-    master_well_table.to_csv(os.path.join(metadata_path, 'master_well_metadata.csv'))
+
+    out_path = os.path.join(metadata_path, "combined_metadata_files", "")
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    master_well_table.to_csv(os.path.join(out_path, 'master_well_metadata.csv'))
+
+    # if np.any(master_well_table["master_perturbation"].astype(str) == "nan"):
+    #     raise Exception("Error: missing master perturbation info")
+
     print("Done.")
     return {}
 
@@ -847,7 +838,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
 
     print("Processing wells...")
     # generate paths to useful directories
-    metadata_path = os.path.join(root, 'metadata', '')
+    metadata_path = os.path.join(root, 'metadata', 'combined_metadata_files')
     segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
 
     # load well-level metadata
@@ -862,14 +853,14 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
     # Track number of embryos and position over time
     ###################
 
-    emb_path = [m for m in seg_dir_list if "emb" in m][0]
+    emb_path = [m for m in seg_dir_list if "mask" in m][0]
 
     # get list of experiments
     experiment_list = sorted(glob.glob(os.path.join(emb_path, "*")))
     experiment_name_list = [path_leaf(e) for e in experiment_list]
     experiment_list = [experiment_list[e] for e in range(len(experiment_list)) if "ignore" not in experiment_list[e] and experiment_name_list[e][:8] in experiments_to_use ]
 
-    ckpt1_path = (os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv"))
+    ckpt1_path = os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv")
 
     images_to_process, df_to_process, prev_meta_df, image_size_vec, mask_size_vec\
          = get_images_to_process(ckpt1_path, experiment_list, master_df, overwrite_well_stats)
@@ -957,7 +948,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
 
 def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale_um=150):
 
-    metadata_path = os.path.join(root, 'metadata', '')
+    metadata_path = os.path.join(root, 'metadata', "combined_metadata_files", '')
     # segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
 
     track_path = (os.path.join(metadata_path, "embryo_metadata_df_tracked.csv"))
@@ -1013,15 +1004,6 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
         for nc in new_cols:
             embryo_metadata_df.loc[ind, nc] = row_df[nc].values
 
-    # fix nan qc flag var
-    # embryo_metadata_df.loc[np.isnan(embryo_metadata_df["well_qc_flag"]), "well_qc_flag"] = 0
-
-    # # fix microscope var
-    # for i in range(embryo_metadata_df.shape[0]):
-    #     if isinstance(embryo_metadata_df.loc[i, "microscope"], str):
-    #         pass
-    #     else:
-    #         embryo_metadata_df.loc[i, "microscope"] = "keyence"
 
     # make master flag
     embryo_metadata_df["use_embryo_flag"] = ~(
@@ -1039,7 +1021,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         outshape = [576, 256]
 
     # read in metadata
-    metadata_path = os.path.join(root, 'metadata', '')
+    metadata_path = os.path.join(root, 'metadata', "combined_metadata_files", '')
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
 
     # make directory for embryo snips
@@ -1077,16 +1059,16 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         n_workers = np.ceil(os.cpu_count() / 2).astype(int)
         out_of_frame_flags = process_map(partial(export_embryo_snips, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
-                                      px_mean=0.5*px_mean, px_std=0.5*px_std, overwrite_flag=overwrite_flag),
+                                      px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag),
                     range(len(export_indices)), max_workers=n_workers, chunksize=10)
 
         update_indices = np.where(np.asarray(out_of_frame_flags) > -1)
         out_of_frame_flags = np.asarray(out_of_frame_flags)[update_indices]
     else:
-        for r in tqdm(export_indices[-3764:], "Exporting snips..."):
+        for r in tqdm(export_indices, "Exporting snips..."):
             oof = export_embryo_snips(r, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
-                                      px_mean=0.5*px_mean, px_std=0.5*px_std, overwrite_flag=overwrite_flag)
+                                      px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag)
 
             if oof > -1:
                 out_of_frame_flags.append(oof)

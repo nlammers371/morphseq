@@ -3,7 +3,7 @@ from src.build.build03_process_embryos_main_par import segment_wells, compile_em
 
 def main():
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    adjust_contrast_wrapper(root, par_flag=True, overwrite_flag=True)
+    adjust_contrast_wrapper(root, par_flag=True, overwrite_flag=False)
 
 if __name__ == '__main__':
     main()

@@ -7,7 +7,7 @@ import time
 def perform_embryo_qc(root, dead_lead_time=2):
 
     # read in metadata
-    metadata_path = os.path.join(root, 'metadata', '')
+    metadata_path = os.path.join(root, 'metadata', "combined_metadata_files", '')
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
 
     ############

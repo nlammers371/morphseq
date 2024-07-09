@@ -13,8 +13,6 @@ import cv2
 from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
-import pickle
-from parfor import pmap
 import skimage.io as io
 import pandas as pd
 from stitch2d.tile import Tile
