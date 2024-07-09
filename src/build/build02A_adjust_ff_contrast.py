@@ -36,7 +36,7 @@ def adjust_contrast(index, image_path_list):
     im_stub = path_leaf(temp_path)
     date_string = path_leaf(os.path.dirname(temp_path))
     root_dir = os.path.dirname(os.path.dirname(temp_path))
-    out_path = os.path.join(root_dir, date_string + "_" + im_stub)
+    out_path = os.path.join(root_dir, date_string, im_stub)
     io.imsave(out_path, im, check_contrast=False)
 
 def adjust_contrast_wrapper(root, overwrite_flag=False, par_flag=True, n_workers=None):
