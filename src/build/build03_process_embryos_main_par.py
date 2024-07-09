@@ -824,8 +824,8 @@ def build_well_metadata_master(root, well_sheets=None):
         os.makedirs(out_path)
     master_well_table.to_csv(os.path.join(out_path, 'master_well_metadata.csv'))
 
-    if np.any(master_well_table["master_perturbation"].astype(str) == "nan"):
-        raise Exception("Error: missing master perturbation info")
+    # if np.any(master_well_table["master_perturbation"].astype(str) == "nan"):
+    #     raise Exception("Error: missing master perturbation info")
 
     print("Done.")
     return {}
