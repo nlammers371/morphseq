@@ -46,13 +46,13 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
             os.makedirs(sample_fig_path)
 
     # get list of images to classify
-    path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images_raw', '*')
+    path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images', '*')
     if segment_list is None:
         project_list = sorted(glob.glob(path_to_images))
         project_list = [p for p in project_list if "ignore" not in p]
         project_list = [p for p in project_list if os.path.isdir(p)]
     else:
-        project_list = [os.path.join(root, "built_image_data", 'stitched_FF_images_raw', p) for p in segment_list]
+        project_list = [os.path.join(root, "built_image_data", 'stitched_FF_images', p) for p in segment_list]
 
     # select subset of images to label
     image_path_list = []
