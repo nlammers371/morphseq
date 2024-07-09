@@ -7,8 +7,8 @@ import multiprocessing
 
 def main():
     # root = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\"
-    root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    train_folder = "20240509_ds"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    train_folder = "20240204_ds_v1"
     # train_dir = os.path.join(root, "training_data", train_folder)
 
     latent_dim = 100
