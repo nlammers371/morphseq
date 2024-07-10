@@ -53,13 +53,20 @@ def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samp
         # set path to segmentation data
         ff_image_path = os.path.join(root, 'built_image_data', 'stitched_FF_images', '')
         segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
+        segmentation_model_path = os.path.join(root, 'built_image_data', 'segmentation_models', '')
+
+         # get list of up-to-date models
+        seg_mdl_list_raw = glob.glob(segmentation_model_path + "*")
+        seg_mdl_list = [s for s in seg_mdl_list_raw if ~os.path.isdir(s)]
+        emb_mdl_name = [path_leaf(m) for m in seg_mdl_list if "mask" in m][0]
+        via_mdl_name = [path_leaf(m) for m in seg_mdl_list if "via" in m][0]
 
         # generate path and image name
         seg_dir_list_raw = glob.glob(segmentation_path + "*")
         seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
 
-        emb_path = [m for m in seg_dir_list if "mask" in m][0]
-        via_path = [m for m in seg_dir_list if "via" in m][0]
+        emb_path = [m for m in seg_dir_list if emb_mdl_name in m][0]
+        via_path = [m for m in seg_dir_list if via_mdl_name in m][0]
 
         well = row["well"]
         time_int = row["time_int"]
@@ -233,23 +240,23 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
                 angle_to_use = -angle+np.pi
 
         im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(angle_to_use))
-        im_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(angle_to_use))
+        emb_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(angle_to_use))
         # im_other_rotated = rotate_image(mask_other_rs.astype(np.uint8), np.rad2deg(-angle), cm[1], cm[0])
         im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(angle_to_use))
 
         # extract snip
-        # im_dist = scipy.ndimage.distance_transform_edt(1 * (im_mask_rotated == 0))
+        # im_dist = scipy.ndimage.distance_transform_edt(1 * (emb_mask_rotated == 0))
         # im_mask_dl = 1*(im_dist <= dl_rad_px)
 
         # masked_image = im_ff_rotated.copy()
         # masked_image[np.where(im_mask_dl == 0)] = np.random.choice(other_pixel_array, np.sum(im_mask_dl == 0))
 
-        y_indices = np.where(np.max(im_mask_rotated, axis=1) == 1)[0]
-        x_indices = np.where(np.max(im_mask_rotated, axis=0) == 1)[0]
+        y_indices = np.where(np.max(emb_mask_rotated, axis=1) == 1)[0]
+        x_indices = np.where(np.max(emb_mask_rotated, axis=0) == 1)[0]
         y_mean = int(np.mean(y_indices))
         x_mean = int(np.mean(x_indices))
 
-        fromshape = im_mask_rotated.shape
+        fromshape = emb_mask_rotated.shape
         raw_range_y = [y_mean - int(outshape[0] / 2), y_mean + int(outshape[0] / 2)]
         from_range_y = np.asarray([np.max([raw_range_y[0], 0]), np.min([raw_range_y[1], fromshape[0]])])
         to_range_y = [0 + (from_range_y[0] - raw_range_y[0]), outshape[0] + (from_range_y[1] - raw_range_y[1])]
@@ -264,23 +271,18 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
 
         emb_mask_cropped = np.zeros(outshape).astype(np.uint8)
         emb_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
-            im_mask_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
+            emb_mask_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
 
         yolk_mask_cropped = np.zeros(outshape).astype(np.uint8)
         yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
             im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
 
-        # im_dist_cropped = np.zeros(outshape).astype(np.uint8)
-        # im_dist_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
-        #     im_dist[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
-
-
         # fill holes in embryo and yolk masks
-        emb_mask_cropped = scipy.ndimage.binary_fill_holes(emb_mask_cropped).astype(np.uint8)
+        emb_mask_cropped2 = scipy.ndimage.binary_fill_holes(emb_mask_cropped).astype(np.uint8)
         yolk_mask_cropped = scipy.ndimage.binary_fill_holes(yolk_mask_cropped).astype(np.uint8)
 
         # calculate the distance transform
-        im_dist_cropped = scipy.ndimage.distance_transform_edt(1 * (emb_mask_cropped == 0))
+        im_dist_cropped = scipy.ndimage.distance_transform_edt(1 * (emb_mask_cropped2 == 0))
 
         # crop out background
         dl_rad_px = int(np.ceil(dl_rad_um / outscale))
@@ -301,14 +303,14 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
         im_masked_cropped = np.round(im_masked_cropped).astype(np.uint8)
 
         # check whether we cropped out part of the embryo
-        out_of_frame_flag = np.sum(emb_mask_cropped == 1) / np.sum(im_mask_rotated == 1) < 0.99
+        out_of_frame_flag = np.sum(emb_mask_cropped == 1) / np.sum(emb_mask_rotated == 1) < 0.99
 
         # write to file
         # im_name = row["snip_id"]
 
         io.imsave(ff_save_path, im_masked_cropped, check_contrast=False)
         io.imsave(ff_save_path_uc, im_cropped, check_contrast=False)
-        io.imsave(os.path.join(mask_snip_dir, "emb_" + im_name + ".jpg"), emb_mask_cropped, check_contrast=False)
+        io.imsave(os.path.join(mask_snip_dir, "emb_" + im_name + ".jpg"), emb_mask_cropped2, check_contrast=False)
         io.imsave(os.path.join(mask_snip_dir, "yolk_" + im_name + ".jpg"), yolk_mask_cropped, check_contrast=False)
 
     else:
@@ -788,6 +790,7 @@ def build_well_metadata_master(root, well_sheets=None):
             if "qc" in xl_temp.sheet_names:
                 sheet_temp = xl_temp.parse("qc")
                 well_df["well_qc_flag"] = sheet_temp.iloc[0:8, 1:13].values.ravel()
+                well_df.loc[np.isnan(well_df["well_qc_flag"]), "well_qc_flag"] = 0
             else:
                 well_df["well_qc_flag"] = 0
 
@@ -973,15 +976,19 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
     if os.path.isfile(os.path.join(metadata_path, "embryo_metadata_df.csv")) and not overwrite_flag:
         embryo_metadata_df_prev = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
         # First, check to see if there are new embryo-well-time entries (rows)
-        merge_skel = embryo_metadata_df.loc[:, ["well", "experiment_date", "time_int"]]
-        df_all = merge_skel.merge(embryo_metadata_df_prev.drop_duplicates(), on=["well", "experiment_date", "time_int"],
+        merge_skel = embryo_metadata_df.loc[:, ["embryo_id", "time_int"]]
+        df_all = merge_skel.merge(embryo_metadata_df_prev.drop_duplicates(), on=["embryo_id", "time_int"],
                                  how='left', indicator=True)
         diff_indices = np.where(df_all['_merge'].values == 'left_only')[0].tolist()
 
         # second, check to see if some or all of the stat columns are already filled in prev table
         for nc in new_cols:
             embryo_metadata_df[nc] = df_all.loc[:, nc]
-        nan_indices = np.where(np.isnan(embryo_metadata_df["surface_area_um"].values.astype(float)))[0].tolist()
+            sa_nan = np.isnan(embryo_metadata_df["surface_area_um"].values.astype(float))
+            bb_nan = embryo_metadata_df["bubble_flag"].astype(str) == "nan"
+            ff_nan = embryo_metadata_df["focus_flag"].astype(str) == "nan"
+
+        nan_indices = np.where(sa_nan | ff_nan | bb_nan)[0].tolist()
         indices_to_process = np.unique(diff_indices + nan_indices).tolist()
     else:
         indices_to_process = range(embryo_metadata_df.shape[0])
@@ -1079,6 +1086,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     # add oof flag
     if update_indices[0].any():
         embryo_metadata_df["out_of_frame_flag"].iloc[update_indices] = out_of_frame_flags
+        embryo_metadata_df["use_embryo_flag_orig"] = embryo_metadata_df["use_embryo_flag"].copy()
         embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
 
     # save
