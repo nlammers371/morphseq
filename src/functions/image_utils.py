@@ -86,4 +86,4 @@ def LoG_focus_stacker(data_zyx, filter_size, device):
     # data_weighted = torch.multiply(weights, data_tensor)
     # data_FF = torch.squeeze(torch.divide(torch.sum(data_weighted, axis=0), torch.sum(weights, axis=0)))
 
-    return data_FF
+    return data_FF, abs_laps
