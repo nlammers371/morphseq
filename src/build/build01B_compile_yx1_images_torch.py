@@ -189,10 +189,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
         n_time_points = im_shape[0]
         n_wells = im_shape[1]
         n_z_slices = im_shape[2]
-        # if n_z_keep_in is None:
-        #     n_z_keep = n_z_slices
-        # else:
-        #     n_z_keep = n_z_keep_in
+
 
         # pull dask array
         im_array_dask = imObject.to_dask()
