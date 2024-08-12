@@ -20,7 +20,13 @@ def perform_embryo_qc(root, dead_lead_time=2):
     embryo_metadata_df.loc[np.where(embryo_metadata_df["master_perturbation"] == "None")[0], "master_perturbation"] = \
         embryo_metadata_df["genotype"].iloc[
             np.where(embryo_metadata_df["master_perturbation"] == "None")[0]].copy().values
-    
+
+    # Manually re-label late time points from 20240626 experiment. This is because the temperature rose to above 30C
+    # for the second day
+    relabel_flags = (embryo_metadata_df["experiment_date"].astype(str) == "20240626") & \
+                      ((embryo_metadata_df["Time Rel (s)"] / 3600) > 30)
+    embryo_metadata_df.loc[relabel_flags, "master_perturbation"] = "Uncertain"  # this label just prevents these time points from being used for metric learning
+
     ############
     # Use surface-area of mask to remove large outliers
     min_embryos = 10
