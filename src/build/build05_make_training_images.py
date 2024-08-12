@@ -16,7 +16,7 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     # morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
 
     # np.random.seed(r_seed)
-    metadata_path = os.path.join(root, "metadata", '')
+    metadata_path = os.path.join(root, "metadata", "combined_metadata_files", '')
     data_path = os.path.join(root, "training_data", "bf_embryo_snips", '')
     
     # read in metadata database
