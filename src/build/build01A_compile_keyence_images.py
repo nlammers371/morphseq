@@ -1,21 +1,21 @@
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
-from PIL import Image
+# from PIL import Image
 import skimage.io as io
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from src.functions.utilities import path_leaf
-from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
-from tqdm import tqdm
-from PIL import Image
+# from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
+# from tqdm import tqdm
+# from PIL import Image
 import glob2 as glob
 import cv2
 from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
-import pickle
-from parfor import pmap
+# import pickle
+# from parfor import pmap
 import pandas as pd
 
 
@@ -89,7 +89,7 @@ def trim_image(im, out_shape):
 
     return im_out
 
-def doLap(image, lap_size=3, blur_size=3):
+def doLap(image, lap_size=7, blur_size=7):
 
     # YOU SHOULD TUNE THESE VALUES TO SUIT YOUR NEEDS
 #     kernel_size = 5  # Size of the laplacian window
@@ -226,7 +226,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     for i in range(len(images)):
                         ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
 
-                    ff_image = 255 - ff_image  # take the negative
+                    # ff_image = 255 - ff_image  # take the negative
 
                     if not no_timelapse_flag:
                         tt = int(time_dir[-4:])
