@@ -1,21 +1,21 @@
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
-from PIL import Image
+# from PIL import Image
 import skimage.io as io
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from src.functions.utilities import path_leaf
-from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
-from tqdm import tqdm
-from PIL import Image
+# from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
+# from tqdm import tqdm
+# from PIL import Image
 import glob2 as glob
 import cv2
 from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
-import pickle
-from parfor import pmap
+# import pickle
+# from parfor import pmap
 import pandas as pd
 
 
@@ -89,7 +89,7 @@ def trim_image(im, out_shape):
 
     return im_out
 
-def doLap(image, lap_size=3, blur_size=3):
+def doLap(image, lap_size=7, blur_size=7):
 
     # YOU SHOULD TUNE THESE VALUES TO SUIT YOUR NEEDS
 #     kernel_size = 5  # Size of the laplacian window
@@ -173,7 +173,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                 images = []
                 for iter_i, i in enumerate(pos_indices):
                     if do_flags[sp]:
-                        im = cv2.imread(im_list[i])
+                        im = io.imread(im_list[i])
                         if im is not None:
                             images.append(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY))
 
@@ -226,7 +226,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     for i in range(len(images)):
                         ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
 
-                    ff_image = 255 - ff_image  # take the negative
+                    # ff_image = 255 - ff_image  # take the negative
 
                     if not no_timelapse_flag:
                         tt = int(time_dir[-4:])
@@ -262,17 +262,21 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
     return well_df
 
 
-def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, out_shape):
+def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor):
 
     # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
     ff_path = os.path.join(ff_folder_list[t], '')
     ff_name = path_leaf(ff_path)
     n_images = len(glob.glob(ff_path + '*.jpg'))
-    # depth_path = os.path.join(depth_folder_list[t], '')
-    # depth_name = depth_path.replace(depth_tile_dir, "")
+
+    # set target stitched image size
+    if n_images == 2:
+        out_shape = np.asarray([800, 630]) * size_factor
+    else:
+        out_shape = np.asarray([1140, 630]) * size_factor
+    out_shape = out_shape.astype(int)
 
     ff_out_name = ff_name[3:] + '_stitch.png'
-    # depth_out_name = depth_name[6:-1] + '_stitch.png'
 
     if not os.path.isfile(os.path.join(stitch_ff_dir, ff_out_name)) or overwrite_flag:
 
@@ -299,50 +303,29 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
                 c_params = ff_mosaic.params["coords"]
                 if n_images == 3:
                     lr_shifts = np.asarray([c_params[0][1], c_params[1][1], c_params[2][1]])
-                    if np.max(lr_shifts) > 2:
-                        default_flag = True
-                # elif n_images == 2:
-                #     lr_shifts = np.asarray([c_params[0][1], c_params[1][1]])
-                #     ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
-                    # if np.max(lr_shifts) > 1:
-                    #     default_flag = True
+                    default_flag = np.max(lr_shifts) > 2
+
+                elif n_images == 2:
+                    lr_shifts = np.asarray([c_params[0][1], c_params[1][1]])
+                    # ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
+                    default_flag = np.max(lr_shifts) > 1
 
             if default_flag:
                 ff_mosaic.load_params(ff_tile_dir + "/master_params.json")
 
             ff_mosaic.reset_tiles()
             ff_mosaic.save_params(ff_path + 'params.json')
-            # ff_mosaic.save_params(path=depth_path)
             ff_mosaic.smooth_seams()
-
-            # perform stitching
-            # depth_mosaic = StructuredMosaic(
-            #     depth_path,
-            #     dim=n_images,  # number of tiles in primary axis
-            #     origin="upper left",  # position of first tile
-            #     direction="vertical",
-            #     pattern="raster"
-            # )
-
-            # mosaic.downsample(0.6)
-            # depth_mosaic.load_params(ff_path + 'params.json')
-            # depth_mosaic.smooth_seams()
-
-            # name_start_ind = ff_path.find("/ff_")
-            # well_name = ff_path[name_start_ind+4:name_start_ind+7]
 
             # trim to standardize the size
             ff_arr = ff_mosaic.stitch()
             ff_out = trim_image(ff_arr, out_shape)
 
             # invert
-            # ff_out = 255 - ff_out
-
-            # depth_arr = depth_mosaic.stitch()
-            # depth_out = trim_image(depth_arr, out_shape)
+            ff_out = 255 - ff_out
 
             io.imsave(os.path.join(stitch_ff_dir, ff_out_name), ff_out, check_contrast=False)
-            # cv2.imwrite(os.path.join(stitch_depth_dir, depth_out_name), depth_out)
+
         except:
             pass
 
@@ -444,7 +427,6 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
     dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
     for d in dir_indices:
         sub_name = path_leaf(dir_list[d])
-        # sub_name = dir_path.replace(read_dir, "")
 
         # directories containing image tiles
         # depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
@@ -454,12 +436,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
         metadata_df = pd.read_csv(metadata_path, index_col=0)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
         time_ind_index = np.unique(metadata_df["time_int"])
-        no_timelapse_flag = len(time_ind_index) == 0
-        if no_timelapse_flag:
-            out_shape = np.asarray([800, 630])*size_factor
-        else:
-            out_shape = np.asarray([1140, 630])*size_factor
-        out_shape = out_shape.astype(int)
+        # no_timelapse_flag = len(time_ind_index) == 0
 
         # get list of subfolders
         ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
@@ -473,6 +450,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
 
 
             print(f'Estimating stitch priors for images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+            n_images_exp = None
             for n in tqdm(range(len(stitch_samples))):
                 im_ind = stitch_samples[n]
                 ff_path = ff_folder_list[im_ind]
@@ -480,6 +458,8 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
                 if n == 0:
                     align_array = np.empty((n_stitch_samples, 2, n_images))
                     align_array[:] = np.nan
+                    n_images_exp = n_images
+
                 n_pass = 0
                 # perform stitching
                 ff_mosaic = StructuredMosaic(
@@ -517,12 +497,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
             with open(ff_tile_dir + "/master_params.json", "w") as outfile:
                 outfile.write(jason_params)
 
-            # Writing to json
-            # with open(depth_tile_dir + "/master_params.json", "w") as outfile:
-            #     outfile.write(jason_params)
-
         # directories to write stitched files to
-        # stitch_depth_dir = os.path.join(write_dir, "built_image_data", "stitched_depth_images", sub_name)
         stitch_ff_dir = os.path.join(write_dir, "built_image_data", "stitched_FF_images", sub_name)
 
         # if not os.path.isdir(stitch_depth_dir):
@@ -536,14 +511,13 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
 
         print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # Call parallel function to stitch images
-        if not par_flag: #no_timelapse_flag:
-            # out_shape[0] = 1230
+        if not par_flag:
             for f in tqdm(range(len(ff_folder_list))):
-                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, out_shape)
+                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor)
 
         else:
             process_map(partial(stitch_experiment, ff_folder_list=ff_folder_list, ff_tile_dir=ff_tile_dir, 
-                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, out_shape=out_shape), 
+                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, size_factor=size_factor),
                                         range(len(ff_folder_list)), max_workers=n_workers, chunksize=1)
 
         # else:

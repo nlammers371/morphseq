@@ -16,7 +16,7 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     # morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
 
     # np.random.seed(r_seed)
-    metadata_path = os.path.join(root, "metadata", '')
+    metadata_path = os.path.join(root, "metadata", "combined_metadata_files", '')
     data_path = os.path.join(root, "training_data", "bf_embryo_snips", '')
     
     # read in metadata database
@@ -55,7 +55,7 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
         # df_ids_list += df_ids.tolist()
     
     # assign to groups. Note that a few frames from the same embryo may end up split between categories. I think that this is fine
-    n_frames_total = len(image_list) #np.sum(embryo_metadata_df["use_embryo_flag"].values == True)
+    #n_frames_total = len(image_list) #np.sum(embryo_metadata_df["use_embryo_flag"].values == True)
 
     # n_train = np.round(train_eval_test[0]*n_frames_total).astype(int)
     # image_list = image_list[:n_train]

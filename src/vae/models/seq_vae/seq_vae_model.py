@@ -173,11 +173,11 @@ class SeqVAE(BaseAE):
             # combine
             x_out = torch.cat([xa, xp, xn], axis=0)
             recon_x_out = torch.cat([recon_xa, recon_xp, recon_xn], axis=0)
-            mu_out = torch.cat([mua, mup, mun], axis=0)
+            # mu_out = torch.cat([mua, mup, mun], axis=0)
             log_var_out = torch.cat([log_vara, log_varp, log_varn], axis=0)
             z_out = torch.cat([za, zp, zn], axis=0)
 
-            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, mu_out, log_var_out,
+            loss, recon_loss, kld, nt_xent = self.loss_function(recon_x_out, x_out, z_out, log_var_out,
                                                                 None, None, None)  # , labels=y)
 
         else:
