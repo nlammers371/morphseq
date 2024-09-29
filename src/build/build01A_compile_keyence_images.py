@@ -175,7 +175,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     if do_flags[sp]:
                         im = io.imread(im_list[i])
                         if im is not None:
-                            images.append(cv2.cvtColor(im, cv2.COLOR_BGR2GRAY))
+                            images.append(im)
 
                     # scrape metadata from first image
                     if (iter_i == 0) and (p == 0):
@@ -204,11 +204,13 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
 
                 if do_flags[sp]:
                     laps = []
+                    well_res = (well_df["Width (um)"]/ well_df["Width (px)"]).to_numpy()[0]
+                    filter_rad = 3 # int(np.floor(26/well_res/2)*2)+1
                     # laps_d = []
                     for i in range(len(images)):
                         # print
                         # "Lap {}".format(i)
-                        laps.append(doLap(images[i]))
+                        laps.append(doLap(images[i], lap_size=filter_rad, blur_size=filter_rad))
                         # laps_d.append(doLap(images[i], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
 
                     laps = np.asarray(laps)
@@ -253,7 +255,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     # convet depth image to 8 bit
                     # max_z = abs_laps.shape[0]
                     # depth_image_int8 = np.round(depth_image / max_z * 255).astype('uint8')
-                    cv2.imwrite(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.jpg'), ff_image)
+                    io.imsave(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.jpg'), ff_image, check_constrast=False)
 
                     # cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
 
@@ -262,7 +264,7 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
     return well_df
 
 
-def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor):
+def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor, orientation):
 
     # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
     ff_path = os.path.join(ff_folder_list[t], '')
@@ -272,8 +274,14 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
     # set target stitched image size
     if n_images == 2:
         out_shape = np.asarray([800, 630]) * size_factor
+    elif n_images == 3:
+        if orientation == "vertical":
+            out_shape = np.asarray([1140, 630]) * size_factor
+        else: 
+            out_shape = np.asarray([1140, 480]) * size_factor
     else:
-        out_shape = np.asarray([1140, 630]) * size_factor
+        raise Exception("Unrecognized number of images to stitch")
+
     out_shape = out_shape.astype(int)
 
     ff_out_name = ff_name[3:] + '_stitch.png'
@@ -285,7 +293,7 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
             ff_path,
             dim=n_images,  # number of tiles in primary axis
             origin="upper left",  # position of first tile
-            direction="vertical",
+            direction=orientation,
             pattern="raster"
         )
 
@@ -301,14 +309,24 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
                 default_flag = True
             else:
                 c_params = ff_mosaic.params["coords"]
-                if n_images == 3:
-                    lr_shifts = np.asarray([c_params[0][1], c_params[1][1], c_params[2][1]])
-                    default_flag = np.max(lr_shifts) > 2
+                if orientation == "vertical":
+                    if n_images == 3:
+                        lr_shifts = np.asarray([c_params[0][1], c_params[1][1], c_params[2][1]])
+                        default_flag = np.max(lr_shifts) > 2
 
-                elif n_images == 2:
-                    lr_shifts = np.asarray([c_params[0][1], c_params[1][1]])
-                    # ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
-                    default_flag = np.max(lr_shifts) > 1
+                    elif n_images == 2:
+                        lr_shifts = np.asarray([c_params[0][1], c_params[1][1]])
+                        # ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
+                        default_flag = np.max(lr_shifts) > 1
+                else:
+                    if n_images == 3:
+                        ud_shifts = np.asarray([c_params[0][0], c_params[1][0], c_params[2][0]])
+                        default_flag = np.max(ud_shifts) > 2
+
+                    elif n_images == 2:
+                        ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
+                        # ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
+                        default_flag = np.max(ud_shifts) > 1
 
             if default_flag:
                 ff_mosaic.load_params(ff_tile_dir + "/master_params.json")
@@ -319,10 +337,17 @@ def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_f
 
             # trim to standardize the size
             ff_arr = ff_mosaic.stitch()
+            if orientation == "horizontal":
+                ff_arr = ff_arr.T
             ff_out = trim_image(ff_arr, out_shape)
 
             # invert
-            ff_out = 255 - ff_out
+            if ff_out.dtype == np.uint16:
+                ff_out = 65535 - ff_out
+            elif ff_out.dtype == np.uint8: 
+                ff_out = 255 - ff_out
+            else:
+                raise Exception("Image data type not recognized")
 
             io.imsave(os.path.join(stitch_ff_dir, ff_out_name), ff_out, check_contrast=False)
 
@@ -404,10 +429,10 @@ def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
         # with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
         #     pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-
     print('Done.')
 
-def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None):
+
+def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None, orientation_list=None):
     
     read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '')
     if write_dir is None:
@@ -425,9 +450,12 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
 
     # print('Estimating stitching prior...')
     dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
+    if orientation_list is None:
+        orientation_list = ["vertical"] * len(dir_list)
+
     for d in dir_indices:
         sub_name = path_leaf(dir_list[d])
-
+        orientation = orientation_list[d]
         # directories containing image tiles
         # depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
         ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
@@ -466,7 +494,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
                     ff_path,
                     dim=n_images,  # number of tiles in primary axis
                     origin="upper left",  # position of first tile
-                    direction="vertical",
+                    direction=orientation,
                     pattern="raster"
                 )
                 try:
@@ -513,11 +541,11 @@ def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_fla
         # Call parallel function to stitch images
         if not par_flag:
             for f in tqdm(range(len(ff_folder_list))):
-                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor)
+                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor, orientation=orientation)
 
         else:
             process_map(partial(stitch_experiment, ff_folder_list=ff_folder_list, ff_tile_dir=ff_tile_dir, 
-                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, size_factor=size_factor),
+                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, size_factor=size_factor, orientation=orientation),
                                         range(len(ff_folder_list)), max_workers=n_workers, chunksize=1)
 
         # else:
