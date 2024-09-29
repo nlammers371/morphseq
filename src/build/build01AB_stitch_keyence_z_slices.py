@@ -108,7 +108,8 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
     n_time_points = len(well_path_list)
     n_pos_tiles = len(well_path_list[0])
     n_z_slices = len(well_path_list[0][0])
-    prev_params = np.nan
+
+    # prev_params = np.nan
     for t in range(n_time_points):
         
         ff_out_name = 'ff_' + well_name_conv + f'_t{t+1:04}'
@@ -134,8 +135,6 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
                     im_z_list.append(Tile(im))
 
                 n_images = len(im_z_list)
-                # initialize mosaic
-                # try:
 
                 z_mosaic = StructuredMosaic(
                         im_z_list,
@@ -146,7 +145,6 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
                     )
 
                 if n_images > 1:
-                    
 
                     # load saved parameters
                     if os.path.isfile(os.path.join(ff_tile_path, "params.json")):
@@ -156,20 +154,7 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
                     z_mosaic.smooth_seams()
                     
                     z_arr = z_mosaic.stitch()
-                    # except:
-                    #     z_mosaic = StructuredMosaic(
-                    #         im_z_list,
-                    #         dim=n_images,  # number of tiles in primary axis
-                    #         origin="upper left",  # position of first tile
-                    #         direction="vertical",
-                    #         pattern="raster"
-                    #     )
 
-                    #     # load saved parameters
-                    #     # z_mosaic.load_params(os.path.join(ff_tile_dir, "master_params.json"))\
-                    #     # z_mosaic.align()
-                    #     z_mosaic.smooth_seams()
-                    #     z_arr = z_mosaic.stitch()
                 else:
                     z_arr = z_mosaic.stitch()
                 z_out = trim_image(z_arr.astype(out_dtype), out_shape)
