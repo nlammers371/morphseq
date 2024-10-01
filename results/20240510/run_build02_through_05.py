@@ -1,9 +1,9 @@
-from src.build.build03_process_embryos_main_par import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
+from src.build.build03A_process_embryos_main_par import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
 import multiprocessing
 from src.build.build02A_adjust_ff_contrast import adjust_contrast_wrapper
 from src.build.build02B_segment_bf_main import apply_unet
 from src.build.build04_perform_embryo_qc import perform_embryo_qc
-from src.build.build05_make_training_images import make_image_snips
+from src.build.build05A_make_training_images_ff import make_image_snips
 def main():
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
     # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
