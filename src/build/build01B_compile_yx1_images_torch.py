@@ -98,7 +98,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
     else:
         # get data
-        start = time.time()
+        # start = time.time()
         n_z_slices = im_data_dask.shape[2]
         if n_z_keep is not None:
             buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])

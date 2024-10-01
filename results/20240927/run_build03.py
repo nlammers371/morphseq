@@ -3,10 +3,10 @@ import multiprocessing
 
 def main():
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
-    root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
+    # root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
     print('Compiling well metadata...')
-    build_well_metadata_master(root)
+    # build_well_metadata_master(root)
 
     print('Compiling embryo metadata...')
     segment_wells(root, par_flag=True, overwrite_well_stats=True)

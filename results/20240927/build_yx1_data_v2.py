@@ -5,11 +5,11 @@ def main():
     overwrite_flag = False
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     # data_root = "E:/Nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    dir_list = ["20231218", "20240522"]
+    dir_list = ["20240307"]
     n_z_keep_vec = [None, None]
     # reducing kept z slices because of OOF issue with 1206 experiment
     # build FF images
-    build_ff_from_yx1(data_root=data_root, overwrite_flag=True, metadata_only_flag=False, dir_list=dir_list,
+    build_ff_from_yx1(data_root=data_root, overwrite_flag=True, metadata_only_flag=True, dir_list=dir_list,
                       par_flag=False, n_z_keep_in=n_z_keep_vec)
 
 

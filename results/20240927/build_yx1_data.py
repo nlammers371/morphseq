@@ -5,7 +5,7 @@ def main():
     overwrite_flag = False
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     # data_root = "E:/Nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    dir_list = ["20240626", "20240812"]
+    dir_list = ["20240812"]
     n_z_keep_vec = [None]
     # reducing kept z slices because of OOF issue with 1206 experiment
     # build FF images
