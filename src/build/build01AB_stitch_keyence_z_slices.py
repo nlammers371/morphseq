@@ -36,15 +36,15 @@ def trim_image(im, out_shape):
     elif sv[1]==0:
         im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
 
-    return im_out
+    return im_out[:out_shape[0], :out_shape[1]]
 
-def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, overwrite_flag=False):
+def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir, orientation, overwrite_flag=False):
 
     well_dir = well_list[w]
     # extract basic well info
     well_name = well_dir[-4:]
 
-    master_iter_i = 0
+    # master_iter_i = 0
 
     # get conventional well name
     well_name_conv = sorted(glob.glob(os.path.join(well_dir, "_*")))
@@ -62,6 +62,7 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
     for p, pos_dir in enumerate(position_dir_list):
         # each pos dir contains one or more time points
         time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
+        time_dir_list = [t for t in time_dir_list if os.path.isdir(t)]
         no_timelapse_flag = len(time_dir_list) == 0
 
         if no_timelapse_flag:
@@ -109,6 +110,17 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
     n_pos_tiles = len(well_path_list[0])
     n_z_slices = len(well_path_list[0][0])
 
+    # set target stitched image size
+    if n_pos_tiles == 2:
+        out_shape = np.asarray([800, 630]) * size_factor
+    elif n_pos_tiles == 3:
+        if orientation == "vertical":
+            out_shape = np.asarray([1140, 630]) * size_factor
+        else: 
+            out_shape = np.asarray([1140, 480]) * size_factor
+    else:
+        raise Exception("Unrecognized number of images to stitch")
+    out_shape = out_shape.astype(int)
     # prev_params = np.nan
     for t in range(n_time_points):
         
@@ -140,7 +152,7 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
                         im_z_list,
                         dim=n_images,  # number of tiles in primary axis
                         origin="upper left",  # position of first tile
-                        direction="vertical",
+                        direction=orientation,
                         pattern="raster"
                     )
 
@@ -157,6 +169,9 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
 
                 else:
                     z_arr = z_mosaic.stitch()
+
+                if orientation == "horizontal":
+                    z_arr = z_arr.T
                 z_out = trim_image(z_arr.astype(out_dtype), out_shape)
                 z_slice_array[z, :, :] = z_out
 
@@ -169,7 +184,7 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, out_shape, ff_tile_dir, o
     return {}
 
 
-def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag=False, dir_list=None, write_dir=None,):
+def stitch_z_from_keyence(data_root, orientation_list, par_flag=False, n_workers=4, overwrite_flag=False, dir_list=None, write_dir=None):
 
     read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '') 
     # built_dir = os.path.join(data_root, 'built_image_data', 'keyence', '') 
@@ -189,9 +204,10 @@ def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
 
     for d in dir_indices:
         # initialize dictionary to metadata
-        # metadata_dict = dict({})
         sub_name = path_leaf(dir_list[d])
         dir_path = os.path.join(read_dir, sub_name, '')
+
+        orientation = orientation_list[d]
 
         # depth_dir = os.path.join(write_dir, "D_images", sub_name)
         out_dir = os.path.join(write_dir, 'built_image_data', 'keyence_stitched_z', sub_name)
@@ -211,12 +227,12 @@ def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
         metadata_df = pd.read_csv(metadata_path)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
         time_ind_index = np.unique(metadata_df["time_int"])
-        no_timelapse_flag = len(time_ind_index) == 1
-        if no_timelapse_flag:
-            out_shape = np.asarray([800, 630])*size_factor
-        else:
-            out_shape = np.asarray([1140, 630])*size_factor
-        out_shape = out_shape.astype(int)
+        # no_timelapse_flag = len(time_ind_index) == 1
+        # if no_timelapse_flag:
+        #     out_shape = np.asarray([800, 630])*size_factor
+        # else:
+        #     out_shape = np.asarray([1140, 630])*size_factor
+        # out_shape = out_shape.astype(int)
 
         # get list of subfolders
         # ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
@@ -224,11 +240,11 @@ def stitch_z_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
         print(f'Stitching z slices in directory {d+1:01} of ' + f'{len(dir_indices)}')
         if not par_flag:
             for w in tqdm(range(len(well_list))):
-                stitch_well(w, well_list=well_list, cytometer_flag=cytometer_flag, out_dir=out_dir, overwrite_flag=overwrite_flag, out_shape=out_shape, ff_tile_dir=ff_tile_dir)
+                stitch_well(w, well_list=well_list, orientation=orientation, cytometer_flag=cytometer_flag, out_dir=out_dir, overwrite_flag=overwrite_flag, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
                 
         else:
-            process_map(partial(stitch_well, well_list=well_list, cytometer_flag=cytometer_flag, 
-                                                                        out_dir=out_dir, overwrite_flag=overwrite_flag, out_shape=out_shape, ff_tile_dir=ff_tile_dir), 
+            process_map(partial(stitch_well, well_list=well_list, orientation=orientation, cytometer_flag=cytometer_flag, 
+                                                                        out_dir=out_dir, overwrite_flag=overwrite_flag, size_factor=size_factor, ff_tile_dir=ff_tile_dir), 
                                         range(len(well_list)), chunksize=1)
 
     print('Done.')
