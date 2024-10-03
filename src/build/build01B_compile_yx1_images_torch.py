@@ -80,7 +80,7 @@ def calculate_max_fluo_images(w, im_data_dask, well_name_list, well_time_list, w
     return {}
 
 
-def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, overwrite_flag=False,
+def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_ind_list, ff_dir, device, rs_dims_yx, overwrite_flag=False,
                         n_z_keep=None, ch_to_use=0, LoG_flag=True):
 
     # set scene
@@ -98,7 +98,7 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
 
     else:
         # get data
-        start = time.time()
+        # start = time.time()
         n_z_slices = im_data_dask.shape[2]
         if n_z_keep is not None:
             buffer = np.max([int((n_z_slices - n_z_keep)/2), 0])
@@ -122,9 +122,10 @@ def calculate_FF_images(w, im_data_dask, well_name_list, well_time_list, well_in
         data_zyx_rs = data_zyx_rs * 65535
 
         if LoG_flag:
-            ff_tensor = LoG_focus_stacker(data_zyx_rs, filter_size, device)
+            ff_tensor, _ = LoG_focus_stacker(data_zyx_rs, filter_size, device)
         else:
             ff_tensor = gaussian_focus_stacker(data_zyx_rs, filter_size, device)
+
         # take the negative
         ff_image = 65535 - np.asarray(ff_tensor.cpu()).astype(np.uint16)
 
@@ -155,6 +156,8 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
                 dir_list.append(path_leaf(dd))
 
         n_z_keep_in = ["None"] * len(dir_list)
+    elif n_z_keep_in is None:
+        n_z_keep_in = ["None"] * len(dir_list)
 
     # if rs_res is None:
     #     rs_res = np.asarray([3.2, 3.2])
@@ -169,7 +172,7 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
         dir_path = os.path.join(read_dir_root, sub_name, "")
 
         # depth_dir = os.path.join(write_dir, "stitched_depth_images", sub_name)
-        ff_dir = os.path.join(write_dir, "stitched_FF_images_raw", sub_name)
+        ff_dir = os.path.join(write_dir, "stitched_FF_images", sub_name)
 
         if not os.path.isdir(ff_dir):
             os.makedirs(ff_dir)
@@ -366,14 +369,14 @@ def build_ff_from_yx1(data_root, overwrite_flag=False, dir_list=None, write_dir=
                 im_array_bf = im_array_dask#.compute()
 
             if par_flag:
-                process_map(partial(calculate_FF_images, im_data_dask=im_array_bf, device=device,
+                process_map(partial(calculate_FF_images, im_data_dask=im_array_bf, device=device, rs_dims_yx=voxel_size[1],
                                     well_name_list=well_name_list_long, well_time_list=time_int_list,
                                     well_ind_list=well_int_list, ff_dir=ff_dir, overwrite_flag=overwrite_flag, ch_to_use=bf_channel_ind, n_z_keep=n_z_keep_in[d]),
                             range(n_wells*n_time_points), chunksize=1)
             else:
                 for w in tqdm(range(n_wells*n_time_points)):
                     calculate_FF_images(w, im_array_bf, well_name_list_long, time_int_list, well_int_list, ff_dir, device=device,
-                                    overwrite_flag=overwrite_flag, ch_to_use=bf_channel_ind, n_z_keep=n_z_keep_in[d])#, rs_dims_yx=rs_dims_yx, rs_res_yx=rs_res)
+                                    overwrite_flag=overwrite_flag, ch_to_use=bf_channel_ind, n_z_keep=n_z_keep_in[d], rs_dims_yx=voxel_size[1]) #, rs_res_yx=rs_res)
 
 
         first_time = np.min(well_df['Time (s)'].copy())

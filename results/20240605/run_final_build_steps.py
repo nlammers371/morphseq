@@ -1,5 +1,5 @@
 from src.build.build04_perform_embryo_qc import perform_embryo_qc
-from src.build.build05_make_training_images import make_image_snips
+from src.build.build05A_make_training_images_ff import make_image_snips
 
 def main():
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
