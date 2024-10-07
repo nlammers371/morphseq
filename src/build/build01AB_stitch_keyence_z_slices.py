@@ -22,20 +22,22 @@ from stitch2d.tile import Tile
 def trim_image(im, out_shape):
     im_shape = im.shape
     im_diffs = im_shape - out_shape
+    if np.any(np.abs(im_diffs) > 0):
+        pad_width = -im_diffs
+        pad_width[np.where(pad_width < 0)] = 0
+        im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype(im.dtype)
 
-    pad_width = -im_diffs
-    pad_width[np.where(pad_width < 0)] = 0
-    im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype(im.dtype)
-
-    im_diffs[np.where(im_diffs < 0)] = 0
-    sv = np.floor(im_diffs / 2).astype(int)
-    if np.all(sv>0):
-        im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
-    elif sv[0]==0:
-        im_out = im_out[:, sv[1]:-(im_diffs[1] - sv[1])]
-    elif sv[1]==0:
-        im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
-
+        im_diffs[np.where(im_diffs < 0)] = 0
+        sv = np.floor(im_diffs / 2).astype(int)
+        if np.all(sv>0):
+            im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
+        elif sv[0]==0:
+            im_out = im_out[:, sv[1]:-(im_diffs[1] - sv[1])]
+        elif sv[1]==0:
+            im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
+    else:
+        im_out = im
+        
     return im_out[:out_shape[0], :out_shape[1]]
 
 def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir, orientation, overwrite_flag=False):
@@ -111,7 +113,9 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir,
     n_z_slices = len(well_path_list[0][0])
 
     # set target stitched image size
-    if n_pos_tiles == 2:
+    if n_pos_tiles == 1:
+        out_shape = np.asarray([480, 640]) * size_factor
+    elif n_pos_tiles == 2:
         out_shape = np.asarray([800, 630]) * size_factor
     elif n_pos_tiles == 3:
         if orientation == "vertical":
@@ -121,10 +125,12 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir,
     else:
         raise Exception("Unrecognized number of images to stitch")
     out_shape = out_shape.astype(int)
-    # prev_params = np.nan
+    
     for t in range(n_time_points):
-        
-        ff_out_name = 'ff_' + well_name_conv + f'_t{t+1:04}'
+        if n_time_points > 1:
+            ff_out_name = 'ff_' + well_name_conv + f'_t{t+1:04}'
+        else:
+            ff_out_name = 'ff_' + well_name_conv + f'_t{t:04}'
         ff_tile_path = os.path.join(ff_tile_dir, ff_out_name, "")
 
         out_name = ff_out_name

@@ -104,6 +104,15 @@ def perform_embryo_qc(root, dead_lead_time=2):
                                                    (~embryo_metadata_df.loc[:, "dead_flag2"]) & \
                                                    (~embryo_metadata_df.loc[:, "sa_outlier_flag"])
 
+    
+    # join on additional perturbation info
+    pert_name_key = pd.read_csv(os.path.join(root, 'metadata',"perturbation_name_key.csv"))
+    embryo_metadata_df = embryo_metadata_df.merge(pert_name_key, how="left", on="master_perturbation", indicator=True)
+    if np.any(embryo_metadata_df["_merge"] != "both"):
+        problem_perts = np.unique(embryo_metadata_df.loc[embryo_metadata_df["_merge"] != "both", "master_perturbation"])
+        raise Exception("Some perturbations were not found in key: " + ', '.join(problem_perts.tolist()))
+    embryo_metadata_df.drop(labels=["_merge"], axis=1, inplace=True)
+
     # save
     # embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index=False)
 
@@ -116,7 +125,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
     # Make DF for frame-level curation
 
     # generate dataset to use for manual curation
-    keep_cols = ["snip_id", 'master_perturbation', 'temperature', 'medium',
+    keep_cols = ["snip_id", 'short_pert_name', 'master_perturbation', 'temperature', 'medium',
                  'bubble_flag', 'focus_flag', 'frame_flag', 'dead_flag2', 'no_yolk_flag', #'out_of_frame_flag',
                  "use_embryo_flag", "predicted_stage_hpf"]
 
@@ -164,7 +173,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     #######################################
     # Make embryo-level annotation DF
-    keep_cols = ["embryo_id", 'master_perturbation', 'temperature']
+    keep_cols = ["embryo_id", 'short_pert_name', 'temperature']
     curation_df_emb = embryo_metadata_df[keep_cols].drop_duplicates().reset_index(drop=True)
 
     curation_df_emb["start_stage_manual"] = np.nan
@@ -182,16 +191,15 @@ def perform_embryo_qc(root, dead_lead_time=2):
                 columns={"hq_flag_emb" : "use_embryo_flag_emb", "master_perturbation":"manual_perturbation"})
         embryo_metadata_df = embryo_metadata_df.merge(curation_emb_prev, how="left", on="embryo_id", indicator=True)
         embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_emb"] = True
-        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df[
-                                        "use_embryo_flag_emb"]
+        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df["use_embryo_flag_emb"]
         # update perturbation labels
-        embryo_metadata_df.loc["both"==embryo_metadata_df["_merge"], "master_perturbation"] = (
+        embryo_metadata_df.loc["both"==embryo_metadata_df["_merge"], "short_pert_name"] = (
                                     embryo_metadata_df.loc)["both"==embryo_metadata_df["_merge"], "manual_perturbation"]
         embryo_metadata_df.drop(labels=["use_embryo_flag_emb", "manual_perturbation", "_merge"], axis=1, inplace=True)
 
         prev_emb_ids = curation_df_emb_prev["embryo_id"].to_numpy()
 
-        # remove duplicate entries from new dataset and concatenate
+        # remove duplicate entries from new dataset and concatenate_Archive
         keep_filter = ~np.isin(curr_emb_ids, prev_emb_ids)
         curation_df_emb = pd.concat([curation_df_emb.loc[keep_filter, :], curation_df_emb_prev], axis=0, ignore_index=True)
 
@@ -201,16 +209,50 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     #######
     # save main metadata set
-    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index=False)
+    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df02.csv"), index=False)
 
+    #######
     # now, make perturbation-level keys to inform training inclusion/exclusion and metric comparisons
-    pert_train_key = embryo_metadata_df.loc[:, ["master_perturbation"]].drop_duplicates()
+    pert_train_key = embryo_metadata_df.loc[:, ["short_pert_name"]].drop_duplicates()
     pert_train_key["start_hpf"] = 0
     pert_train_key["stop_hpf"] = 100
     pert_train_key.to_csv(os.path.join(curation_path, "perturbation_train_key.csv"), index=False)
 
-    pert_u = np.unique(embryo_metadata_df.loc[:, "master_perturbation"])
-    pert_metric_key = pd.DataFrame(np.eye(len(pert_u)), columns=pert_u.tolist())
+    pert_df_u = pert_name_key.drop_duplicates(subset=["short_pert_name"]).reset_index(drop=True)
+    pert_u = pert_df_u.loc[:, "short_pert_name"].to_numpy()
+    ctrl_flags = np.where(pert_df_u.loc[:, "control_flag"])[0]
+    wt_flags = np.where(pert_df_u.loc[:, "phenotype"]=="wt")[0]
+    cr_flags = np.where(pert_df_u.loc[:, "pert_type"]=="crispant")[0]
+    u_flags = np.where(pert_df_u.loc[:, "phenotype"]=="uncertain")[0]
+    wt_ab_flag = np.where(pert_df_u.loc[:, "short_pert_name"]=="wt_ab")[0]
+    wt_wik_flag = np.where(pert_df_u.loc[:, "short_pert_name"]=="wt_wik")[0]
+    wt_other_flags = np.where((pert_df_u.loc[:, "phenotype"]=="wt") & (pert_df_u.loc[:, "pert_type"]!="fluor") &
+                              (pert_df_u.loc[:, "background"]!="ab") & (pert_df_u.loc[:, "background"]!="wik"))[0]
+    # build in some basic relations to be refined manually
+    metric_array = np.zeros((len(pert_u), len(pert_u)), dtype=np.int16)
+    # tell model to leave metric relations amongst control subtypes unspecified
+    metric_array[np.ix_(ctrl_flags, ctrl_flags)] = -1
+    # tell model to leave metric relations between control and wt subtypes unspecified
+    metric_array[np.ix_(ctrl_flags, wt_flags)] = -1
+    metric_array[np.ix_(wt_flags, ctrl_flags)] = -1
+    # leave all relations amongst crispants and between cr and wt unspecified
+    metric_array[np.ix_(cr_flags, cr_flags)] = -1
+    metric_array[np.ix_(cr_flags, wt_flags)] = -1
+    metric_array[np.ix_(wt_flags, cr_flags)] = -1
+    # leave relation between wik and ab wt strains unspecified
+    metric_array[np.ix_(wt_ab_flag, wt_wik_flag)] = -1
+    metric_array[np.ix_(wt_wik_flag, wt_ab_flag)] = -1
+    # embryos of uncertain phenotype are neutral relatiove to all others
+    metric_array[u_flags, :] = -1
+    metric_array[:, u_flags] = -1
+    # apply neutrality between embryos from mutant background with no phenotype (these encompass hets and homo wt)
+    metric_array[np.ix_(wt_other_flags, wt_flags)] = -1
+    metric_array[np.ix_(wt_flags, wt_other_flags)] = -1
+    # By default all phenotypes are positive references for themselves
+    eye_array = np.eye(len(pert_u))
+    metric_array[eye_array==1] = 1
+    
+    pert_metric_key = pd.DataFrame(metric_array, columns=pert_u.tolist())
     pert_metric_key.set_index(pert_u, inplace=True)
     pert_metric_key.to_csv(os.path.join(curation_path, "perturbation_metric_key.csv"), index=True)
 

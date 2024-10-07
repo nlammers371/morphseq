@@ -41,6 +41,11 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
     if not os.path.isdir(im_snip_dir[:-1] + "_uncropped"):
         os.makedirs(im_snip_dir[:-1] + "_uncropped")
 
+    # initialize folder to save temporary metadata files
+    metadata_temp_dir = os.path.join(root, 'metadata', f'metadata_files_temp_z{n_z_max:02}', '')
+    if not os.path.isdir(metadata_temp_dir):
+        os.makedirs(metadata_temp_dir)
+
     # generate path and image name
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
@@ -76,7 +81,6 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
     # load main embryo mask
     im_emb_path = glob.glob(os.path.join(emb_path, date, im_stub))[0]
     im_mask = io.imread(im_emb_path)
-    
 
     # load yolk mask
     im_yolk_path = glob.glob(os.path.join(yolk_path, date, im_stub))[0]
@@ -91,12 +95,14 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
     
     # set path to image stack
     if scope == "Keyence":
-        image_path = os.path.join(root, 'built_image_data', 'keyence_stitched_z', '')
-        im_stack_path = glob.glob(os.path.join(image_path, date, im_stub))[0]
-        im_stack = io.imread(im_stack_path)
-        if im_stack.shape[1] < im_stack.shape[2]:
-            im_stack = im_stack.transpose(1,0)
-
+        try:
+            image_path = os.path.join(root, 'built_image_data', 'keyence_stitched_z', '')
+            im_stack_path = glob.glob(os.path.join(image_path, date, im_stub))[0]        
+            im_stack = io.imread(im_stack_path)
+        except:
+            print("Could not open image stack for " + date + "_" + im_stub) 
+            return
+        
         zres = experiment_log.loc[experiment_log["start_date"]==date, "z_res_um"].to_numpy()[0]
 
     elif scope == "YX1":
@@ -108,17 +114,38 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
             raise Exception("No nd2 files found in " + date)
 
         # get array
-        imObject= nd2.ND2File(image_list[0])
-        im_array_dask = imObject.to_dask()
-        series_num = row["nd2_series_num"]
-        im_stack = im_array_dask[time_int, series_num-1, :, :, :].compute()
+        with nd2.ND2File(image_list[0]) as imObject:
+            # imObject= nd2.ND2File(image_list[0])
+            im_array_dask = imObject.to_dask()
 
-        # get z resolution
-        voxel_size = imObject.voxel_size()
-        zres = voxel_size[2]
+            n_channels = len(imObject.frame_metadata(0).channels)
+            channel_names = [c.channel.name for c in imObject.frame_metadata(0).channels]
+            bf_channel_ind = channel_names.index("BF")
+
+            if n_channels > 1:
+                im_array_bf = np.squeeze(im_array_dask[:, :, :, bf_channel_ind, :, :])#.compute()
+            else:
+                im_array_bf = im_array_dask
+
+            series_num = row["nd2_series_num"].astype(int)
+            im_stack = im_array_bf[time_int, series_num-1, :, :, :].compute()
+
+            # get z resolution
+            voxel_size = imObject.voxel_size()
+            zres = voxel_size[2]
     else:
         raise Exception("Unrecognized microscope type: " + scope)
     
+    # except: # if we can't load the image, just return
+    #     print("Skipping " + date + "_" + im_stub + "...")
+    #     return
+    
+    if len(im_stack.shape) < 3:
+        raise Exception("Incorrect image dimensions for " + date + "_" + im_stub) 
+    
+    if im_stack.shape[1] < im_stack.shape[2]:
+        im_stack = np.transpose(im_stack, (0, 2, 1))
+
     # get z window size    
     window_size = np.round(z_range_um / zres / 2).astype(int)
 
@@ -166,6 +193,7 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
 
     # crop out background
     dl_rad_px = int(np.ceil(dl_rad_um / outscale))
+
     # noise_array = np.random.normal(px_mean, px_std, outshape)
     noise_array_raw = np.reshape(truncnorm.rvs(-px_mean/px_std, 4, size=outshape[0]*outshape[1]), outshape)
     noise_array = noise_array_raw*px_std + px_mean
@@ -241,7 +269,13 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
         metadata_list.append(df_temp)
 
     z_meta_df = pd.concat(metadata_list, axis=1, ignore_index=True).T
-    return z_meta_df
+
+    # save stripped-down data
+    z_meta_simp = z_meta_df.loc[:, ["snip_id", "z_res_um", "z_ind", "z_pos_rel"]]
+    snip_name = z_meta_simp.loc[0, "snip_id"]
+    z_meta_simp.to_csv(os.path.join(metadata_temp_dir, snip_name + ".csv"), index=False)
+
+    # return z_meta_df
 
 
 
@@ -263,7 +297,6 @@ def extract_embryo_z_snips(root, outscale=5.66, overwrite_flag=False, par_flag=F
 
     # make directory for embryo snips
     im_snip_dir = os.path.join(root, 'training_data', f'bf_embryo_snips_z{n_z_max:02}', '')
-    cat_flag = False
     if not os.path.isdir(im_snip_dir):
         os.makedirs(im_snip_dir)
         export_indices = range(embryo_metadata_df.shape[0])
@@ -271,41 +304,42 @@ def extract_embryo_z_snips(root, outscale=5.66, overwrite_flag=False, par_flag=F
         export_indices = range(embryo_metadata_df.shape[0])
     else: # if directory exists, check for previously-exported images
         extant_images = sorted(glob.glob(im_snip_dir + "*.jpg"))
-        extant_images = [path_leaf(im)[:-8] for im in extant_images]
-        do_flags = ~np.isin(embryo_metadata_df["snip_id"].to_numpy(), np.asarray(extant_images))
-        export_indices = np.where(do_flags)[0]
+        extant_df = pd.DataFrame(np.asarray([path_leaf(im)[:-8] for im in extant_images]), columns=["snip_id"]).drop_duplicates()
+        embryo_metadata_df = embryo_metadata_df.merge(extant_df, on="snip_id", how="left", indicator=True)
+        export_indices = np.where(embryo_metadata_df["_merge"]=="left_only")[0]
+        embryo_metadata_df = embryo_metadata_df.drop(labels=["_merge"], axis=1)
 
-        # load previous metadata
-        embryo_metadata_df_z_prev = pd.read_csv(os.path.join(metadata_path, f"embryo_metadata_z{n_z_max:02}_df.csv"))
-        cat_flag = True
+        # # load previous metadata
+        # embryo_metadata_df_z_prev = pd.read_csv(os.path.join(metadata_path, f"embryo_metadata_z{n_z_max:02}_df.csv"))
+        # cat_flag = True
 
     # draw random sample to estimate background
     px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
 
     if par_flag:
         n_workers = 8 #np.ceil(os.cpu_count() / 2).astype(int)
-        frame_df_list = process_map(partial(export_embryo_snips_z, root=root, embryo_metadata_df=embryo_metadata_df, experiment_log=experiment_log_df,
+        process_map(partial(export_embryo_snips_z, root=root, embryo_metadata_df=embryo_metadata_df, experiment_log=experiment_log_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape, device=device, n_z_max=n_z_max, z_range_um=z_range_um,
                                       px_mean=0.1*px_mean, px_std=0.1*px_std),
-                    range(len(export_indices)), max_workers=n_workers, chunksize=10)
+                                      export_indices, max_workers=n_workers, chunksize=1)
 
         
     else:
-        frame_df_list = []
+        # frame_df_list = []
         for r in tqdm(export_indices, "Exporting snips..."):
-            frame_df = export_embryo_snips_z(r, root=root, embryo_metadata_df=embryo_metadata_df, experiment_log=experiment_log_df,
+            export_embryo_snips_z(r, root=root, embryo_metadata_df=embryo_metadata_df, experiment_log=experiment_log_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape, device=device, n_z_max=n_z_max, z_range_um=z_range_um,
                                       px_mean=0.1*px_mean, px_std=0.1*px_std)
 
-            frame_df_list.append(frame_df)
+            # frame_df_list.append(frame_df)
     
     # combine metadata
-    embryo_metadata_df_z = pd.concat(frame_df_list, axis=0, ignore_index=True)
-    if cat_flag:
-        embryo_metadata_df_z = pd.concat([embryo_metadata_df_z, embryo_metadata_df_z_prev], axis=0, ignore_index=True)
+    # embryo_metadata_df_z = pd.concat(frame_df_list, axis=0, ignore_index=True)
+    # if cat_flag:
+    #     embryo_metadata_df_z = pd.concat([embryo_metadata_df_z, embryo_metadata_df_z_prev], axis=0, ignore_index=True)
     
-    # save
-    embryo_metadata_df_z.to_csv(os.path.join(metadata_path, f"embryo_metadata_z{n_z_max:02}_df.csv"), index=False)
+    # # save
+    # embryo_metadata_df_z.to_csv(os.path.join(metadata_path, f"embryo_metadata_z{n_z_max:02}_df.csv"), index=False)
 
 
 if __name__ == "__main__":
@@ -314,4 +348,4 @@ if __name__ == "__main__":
     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
     
     # print('Compiling well metadata...')
-    extract_embryo_z_snips(root, par_flag=False, overwrite_flag=True, dl_rad_um=10)
+    extract_embryo_z_snips(root, par_flag=False, overwrite_flag=False, dl_rad_um=10)
