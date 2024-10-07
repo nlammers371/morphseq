@@ -179,7 +179,7 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     #######################
     # Crop
     #######################
-    im_cropped, emb_mask_cropped, yolk_mask_cropped = crop_embryo_image(im_ff_rotated, emb_mask_rotated, im_yolk_rotated)
+    im_cropped, emb_mask_cropped, yolk_mask_cropped = crop_embryo_image(im_ff_rotated, emb_mask_rotated, im_yolk_rotated, outshape=outshape)
     
     # fill holes in embryo and yolk masks
     emb_mask_cropped2 = scipy.ndimage.binary_fill_holes(emb_mask_cropped).astype(np.uint8)
@@ -255,6 +255,7 @@ def make_well_names():
 
     return well_name_list
 
+
 def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_flag):
 
     # get list of image files that need to be processed
@@ -280,13 +281,17 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
     for e, experiment_path in enumerate(experiment_list):
         ename = path_leaf(experiment_path)
         date_indices = np.where(well_date_list == ename)[0]
+
         # get channel info
         image_list_full = sorted(glob.glob(os.path.join(experiment_path, "*.jpg")))
         im_name_test = path_leaf(image_list_full[0])
         image_suffix = im_name_test[9:]
+
         # get list of image prefixes
         im_names = [os.path.join(experiment_path, well_id_list[i] + f"_t{well_time_list[i]:04}" + image_suffix) for i in date_indices]
         images_to_process += im_names
+
+
         # for im in image_list:
         #     # check if well-date combination already exists. I'm treating all time
         #     iname = path_leaf(im)
@@ -298,9 +303,8 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
         #     wdt_indices = [wdt for wdt in wd_indices if well_time_list[wdt] == t_index]
         #     if len(wdt_indices) == 0:
         #         images_to_process += [im]
-             
 
-        df_diff.reset_index(inplace=True, drop=True)
+    df_diff.reset_index(inplace=True, drop=True)
 
     # get list of FF and mask sizes
     
@@ -334,7 +338,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
     iname = path_leaf(image_path)
     iname = iname.replace("ff_", "")
     ename = path_leaf(os.path.dirname(image_path))
-    ename = ename[:8]       
+    # ename = ename[:8]       
 
     # extract metadata from image name
     dash_index = iname.find("_")
@@ -342,7 +346,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
     t_index = int(iname[dash_index + 2:dash_index + 6])
 
     entry_filter = (master_df_update["time_int"].values == t_index) & \
-                   (master_df_update["well"].values == well) & (master_df_update["experiment_date"].values == int(ename))
+                   (master_df_update["well"].values == well) & (master_df_update["experiment_date"].astype(str) == ename)
     master_index = master_df_update.index[entry_filter] #[i for i in t_indices if (i in well_indices) and (i in e_indices)]
     if len(master_index) != 1:
         raise Exception(
@@ -350,7 +354,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
     else:
         master_index = master_index[0]
 
-    row = master_df_update.loc[master_index].copy()
+    row = master_df_update.iloc[master_index].copy()
 
     ff_size = row['FOV_size_px']
 
@@ -648,7 +652,7 @@ def build_well_metadata_master(root, well_sheets=None):
 
     for p, readname in enumerate(project_list):
         pname = path_leaf(readname)
-        exp_date = pname[:8]
+        exp_date = pname.replace("_metadata.csv", "")
         if exp_date in exp_date_list:
             temp_table = pd.read_csv(readname)
             temp_table["experiment_date"] = exp_date
@@ -666,9 +670,10 @@ def build_well_metadata_master(root, well_sheets=None):
     # recast experiment_date variables
     master_well_table["experiment_date"] = master_well_table["experiment_date"].astype(str)
     exp_df["experiment_date"] = exp_df["experiment_date"].astype(str)
-    master_well_table = master_well_table.merge(exp_df, on="experiment_date", how='left')
-    if master_well_table['use_flag'].isnull().values.any():
+    master_well_table = master_well_table.merge(exp_df, on="experiment_date", how='left',indicator=True)
+    if not np.all(master_well_table["_merge"]=="both"):
         raise Exception("Error: mismatching experiment IDs between experiment- and well-level metadata")
+    master_well_table = master_well_table.drop(labels=["_merge"], axis=1)
 
     # pull metadata from individual well sheets
     project_list_well = sorted(glob.glob(well_meta_path))
@@ -677,7 +682,7 @@ def build_well_metadata_master(root, well_sheets=None):
     for p, project in enumerate(project_list_well):
         pname = path_leaf(project)
         if "$" not in pname:
-            date_string = pname[:8]
+            date_string = pname.replace("_well_metadata.xlsx", "")
             # read in excel file
             xl_temp = pd.ExcelFile(project)
             # sheet_names = xl_temp.sheet_names  # see all sheet names
@@ -702,10 +707,11 @@ def build_well_metadata_master(root, well_sheets=None):
     well_df_long = pd.concat(well_df_list, axis=0, ignore_index=True)
     well_df_long["experiment_date"] = well_df_long["experiment_date"].astype(str)
     # add to main dataset
-    master_well_table = master_well_table.merge(well_df_long, on=["well", "experiment_date"], how='left')
-
-    if master_well_table[well_sheets[0]].isnull().values.any():
+    master_well_table = master_well_table.merge(well_df_long, on=["well", "experiment_date"], how='left', indicator=True)
+    if not np.all(master_well_table["_merge"]=="both"):
         raise Exception("Error: missing well-specific metadata")
+    master_well_table = master_well_table.drop(labels=["_merge"], axis=1)
+
 
     # calculate approximate stage using linear formula from Kimmel et al 1995 (is there a better formula out there?)
     # dev_time = actual_time*(0.055 T - 0.57) where T is in Celsius...
@@ -727,9 +733,6 @@ def build_well_metadata_master(root, well_sheets=None):
         os.makedirs(out_path)
     master_well_table.to_csv(os.path.join(out_path, 'master_well_metadata.csv'))
 
-    # if np.any(master_well_table["master_perturbation"].astype(str) == "nan"):
-    #     raise Exception("Error: missing master perturbation info")
-
     print("Done.")
     return {}
 
@@ -746,7 +749,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
 
     # load well-level metadata
     master_df = pd.read_csv(os.path.join(metadata_path, 'master_well_metadata.csv'), index_col=0)
-    experiments_to_use = np.unique(master_df["experiment_date"]).astype(str)
+    experiments_to_use = np.unique(master_df["experiment_date"].astype(str))
 
     # get list of segmentation directories
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
@@ -758,10 +761,10 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
 
     emb_path = [m for m in seg_dir_list if "mask" in m][0]
 
-    # get list of experiments
+    # cross-reference with segmentation data to find experiments that are ready to process
     experiment_list = sorted(glob.glob(os.path.join(emb_path, "*")))
     experiment_name_list = [path_leaf(e) for e in experiment_list]
-    experiment_list = [experiment_list[e] for e in range(len(experiment_list)) if "ignore" not in experiment_list[e] and experiment_name_list[e][:8] in experiments_to_use ]
+    experiment_list = [experiment_list[e] for e in range(len(experiment_list)) if "ignore" not in experiment_list[e] and experiment_name_list[e] in experiments_to_use ]
 
     ckpt1_path = os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv")
 
@@ -849,7 +852,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
     return {}
 
 
-def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale_um=150):
+def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale_um=150, par_flag=False):
 
     metadata_path = os.path.join(root, 'metadata', "combined_metadata_files", '')
     # segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
@@ -871,6 +874,9 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
     embryo_metadata_df["frame_flag"] = False
     embryo_metadata_df["dead_flag"] = False
     embryo_metadata_df["no_yolk_flag"] = False
+
+    # make stable embryo ID
+    embryo_metadata_df["snip_id"] = embryo_metadata_df["embryo_id"] + "_t" + embryo_metadata_df["time_int"].astype(str).str.zfill(4)
 
     # check for existing embryo metadata
     if os.path.isfile(os.path.join(metadata_path, "embryo_metadata_df.csv")) and not overwrite_flag:
@@ -894,23 +900,28 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
         indices_to_process = range(embryo_metadata_df.shape[0])
 
 
+    embryo_metadata_df.reset_index(inplace=True, drop=True)
 
-    # print("Extracting embryo stats")
-    # if False: #par_flag:
-    #     emb_df_list = pmap(get_embryo_stats, indices_to_process,
-    #                             (embryo_metadata_df, qc_scale_um, ld_rat_thresh), rP=0.75)
-    # else:
-    emb_df_list = []
-    for index in tqdm(indices_to_process, "Extracting embryo stats..."):
-        df_temp = get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh)
-        emb_df_list.append(df_temp)
+    if par_flag:
+        n_workers = np.ceil(os.cpu_count() / 2).astype(int)
+        emb_df_list = process_map(partial(get_embryo_stats, root=root, embryo_metadata_df=embryo_metadata_df,
+                                            qc_scale_um=qc_scale_um, ld_rat_thresh=ld_rat_thresh),
+                                            indices_to_process, max_workers=n_workers, chunksize=10)
+        
+ 
+    else:
+        emb_df_list = []
+        for index in tqdm(indices_to_process, "Extracting embryo stats..."):
+            df_temp = get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh)
+            emb_df_list.append(df_temp)
 
-    # updating data frame
-    for i, ind in enumerate(indices_to_process):
-        row_df = emb_df_list[i]
-        for nc in new_cols:
-            embryo_metadata_df.loc[ind, nc] = row_df[nc].values
-
+    # update metadata
+    emb_df = pd.concat(emb_df_list, axis=0, ignore_index=True)
+    emb_df = emb_df.loc[:, ["snip_id"] + new_cols]
+    full_skeleton = embryo_metadata_df.loc[:, ["snip_id"]]
+    emb_df_long = full_skeleton.merge(emb_df, how="left", on=["snip_id"])
+    embryo_metadata_df.loc[indices_to_process, new_cols] = np.nan # unfortunately, this is the only thing I can get to work
+    embryo_metadata_df.update(emb_df_long, overwrite=True)
 
     # make master flag
     embryo_metadata_df["use_embryo_flag"] = ~(
@@ -939,13 +950,6 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     if not os.path.isdir(mask_snip_dir):
         os.makedirs(mask_snip_dir)
 
-    # make stable embryo ID
-    embryo_metadata_df["snip_id"] = ''
-    for r in range(embryo_metadata_df.shape[0]):
-        embryo_id = embryo_metadata_df["embryo_id"].iloc[r]
-        time_id = embryo_metadata_df["time_int"].iloc[r]
-        embryo_metadata_df.loc[r, "snip_id"] = embryo_id + f'_t{time_id:04}'
-
     #embryo_metadata_df["embryo_id"] + "_" + embryo_metadata_df["time_int"].astype(str)
 
     if not os.path.isdir(im_snip_dir):
@@ -959,12 +963,14 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         embryo_metadata_df["snip_um_per_pixel"] = outscale
     else: 
         extant_images = sorted(glob.glob(im_snip_dir + "*.jpg"))
-        extant_images = [path_leaf(im)[:-4] for im in extant_images]
-        do_flags = ~np.isin(embryo_metadata_df["snip_id"].to_numpy(), np.asarray(extant_images))
-        export_indices = np.where(do_flags)[0]
-        embryo_metadata_df.loc[update_indices, "out_of_frame_flag"] = False
-        embryo_metadata_df.loc[update_indices, "snip_um_per_pixel"] = outscale
+        extant_df = pd.DataFrame(np.asarray([path_leaf(im)[:-4] for im in extant_images]), columns=["snip_id"]).drop_duplicates()
+        embryo_metadata_df = embryo_metadata_df.merge(extant_df, on="snip_id", how="left", indicator=True)
+        export_indices = np.where(embryo_metadata_df["_merge"]=="left_only")[0]
+        embryo_metadata_df = embryo_metadata_df.drop(labels=["_merge"], axis=1)
+        embryo_metadata_df.loc[export_indices, "out_of_frame_flag"] = False
+        embryo_metadata_df.loc[export_indices, "snip_um_per_pixel"] = outscale
 
+        
     # draw random sample to estimate background
     # print("Estimating background...")
     px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
@@ -976,7 +982,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         n_workers = np.ceil(os.cpu_count() / 2).astype(int)
         out_of_frame_flags = process_map(partial(export_embryo_snips, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
-                                      px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag),
+                                      px_mean=0.1*px_mean, px_std=0.1*px_std),
                     export_indices, max_workers=n_workers, chunksize=10)
 
 
@@ -984,7 +990,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         for r in tqdm(export_indices, "Exporting snips..."):
             oof = export_embryo_snips(r, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
-                                      px_mean=0.1*px_mean, px_std=0.1*px_std, overwrite_flag=overwrite_flag)
+                                      px_mean=0.1*px_mean, px_std=0.1*px_std)
 
             out_of_frame_flags.append(oof)
         
