@@ -132,15 +132,17 @@ def perform_embryo_qc(root, dead_lead_time=2):
     curation_df = embryo_metadata_df[keep_cols].copy()
 
     # add additional curation cols
-    curation_df.loc[:, "confinement_flag"] = False
-    curation_df.loc[:, "segmentation_flag"] = False
-    curation_df.loc[:, "hq_flag"] = curation_df.loc[:, "use_embryo_flag"].copy()
+    curation_df.loc[:, "confinement_flag"] = np.nan
+    curation_df.loc[:, "segmentation_flag"] = np.nan
+    curation_df.loc[:, "hq_flag"] = np.nan
     curation_df.loc[:, "manual_stage_hpf"] = np.nan
+    curation_df.loc[:, "use_embryo_manual"] = np.nan
     curation_df.loc[:, "dv_orientation"] = np.nan
     curation_df.loc[:, "head_orientation"] = np.nan
     curation_df.loc[:, "manual_update_flag"] = 0
 
     # Check for previous version of the curation dataset
+    print("Building frame curation dataset...")
     curation_df_path = os.path.join(curation_path, "curation_df.csv")
     dt_string = str(int(np.round(time.time())))
     if os.path.exists(curation_df_path):
@@ -151,11 +153,11 @@ def perform_embryo_qc(root, dead_lead_time=2):
         # preserve only entries that have been manually updated
         curation_df_prev = curation_df_prev.loc[curation_df_prev["manual_update_flag"] == 1, :]
 
-        curation_prev = curation_df_prev.loc[:, ["snip_id", "use_embryo_flag"]].rename(columns={"use_embryo_flag" : "use_embryo_flag_frame"})
-        embryo_metadata_df = embryo_metadata_df.merge(curation_prev, how="left", on="snip_id", indicator=True)
-        embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_frame"] = True
-        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df["use_embryo_flag_frame"]
-        embryo_metadata_df.drop(labels=["use_embryo_flag_frame", "_merge"], axis=1, inplace=True)
+        # curation_prev = curation_df_prev.loc[:, ["snip_id", "use_embryo_flag"]].rename(columns={"use_embryo_flag" : "use_embryo_flag_frame"})
+        # embryo_metadata_df = embryo_metadata_df.merge(curation_prev, how="left", on="snip_id", indicator=True)
+        # embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_frame"] = True
+        # embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df["use_embryo_flag_frame"]
+        # embryo_metadata_df.drop(labels=["use_embryo_flag_frame", "_merge"], axis=1, inplace=True)
 
         # combine with new entries
         prev_snips = curation_df_prev["snip_id"].to_numpy()
@@ -173,29 +175,38 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     #######################################
     # Make embryo-level annotation DF
-    keep_cols = ["embryo_id", 'short_pert_name', 'temperature']
-    curation_df_emb = embryo_metadata_df[keep_cols].drop_duplicates().reset_index(drop=True)
+    print("Building embryo curation dataset...")
+    keep_cols = ["embryo_id", 'short_pert_name', 'phenotype', 'background', 'master_perturbation', 'temperature']
+    curation_df_emb = embryo_metadata_df.loc[:, keep_cols + ["use_embryo_flag"]].groupby(by=keep_cols).sum(["use_embryo_flag"]).reset_index()
+    curation_df_emb = curation_df_emb.rename(columns={"short_pert_name":"short_pert_name_orig", "phenotype":"phenotype_orig"})
 
+
+    curation_df_emb["short_pert_name"] = curation_df_emb["short_pert_name_orig"]
+    curation_df_emb["phenotype"] = curation_df_emb["phenotype_orig"]
     curation_df_emb["start_stage_manual"] = np.nan
-    curation_df_emb["hq_flag_emb"] = True
-    curation_df_emb["reference_flag"] = False
+    curation_df_emb["hq_flag_emb"] = np.nan
+    curation_df_emb["reference_flag"] = np.nan
+    curation_df_emb["use_embryo_flag_manual"] = np.nan
     curation_df_emb["manual_update_flag"] = False
 
     emb_curation_df_path = os.path.join(curation_path, "embryo_curation_df.csv")
     if os.path.exists(emb_curation_df_path):
+
         curr_emb_ids = curation_df_emb["embryo_id"].to_numpy()
         curation_df_emb_prev = pd.read_csv(emb_curation_df_path)
+
         # preserve only entries that have been manually updated
         curation_df_emb_prev = curation_df_emb_prev.loc[curation_df_emb_prev["manual_update_flag"] == 1, :]
-        curation_emb_prev = curation_df_emb_prev.loc[:, ["embryo_id", "reference_flag", "hq_flag_emb", "master_perturbation"]].rename(
-                columns={"hq_flag_emb" : "use_embryo_flag_emb", "master_perturbation":"manual_perturbation"})
-        embryo_metadata_df = embryo_metadata_df.merge(curation_emb_prev, how="left", on="embryo_id", indicator=True)
-        embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_emb"] = True
-        embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df["use_embryo_flag_emb"]
-        # update perturbation labels
-        embryo_metadata_df.loc["both"==embryo_metadata_df["_merge"], "short_pert_name"] = (
-                                    embryo_metadata_df.loc)["both"==embryo_metadata_df["_merge"], "manual_perturbation"]
-        embryo_metadata_df.drop(labels=["use_embryo_flag_emb", "manual_perturbation", "_merge"], axis=1, inplace=True)
+        # curation_df_emb_prev = curation_df_emb_prev.loc[:, ["embryo_id", "reference_flag", "hq_flag_emb", "master_perturbation"]].rename(
+        #         columns={"hq_flag_emb" : "use_embryo_flag_emb"})
+        # embryo_metadata_df = embryo_metadata_df.merge(curation_df_emb_prev, how="left", on="embryo_id", indicator=True)
+        # embryo_metadata_df.loc["left_only"==embryo_metadata_df["_merge"], "use_embryo_flag_emb"] = True
+        # embryo_metadata_df["use_embryo_flag"] = embryo_metadata_df["use_embryo_flag"] & embryo_metadata_df["use_embryo_flag_emb"]
+
+        # # update perturbation labels
+        # embryo_metadata_df.loc["both"==embryo_metadata_df["_merge"], "short_pert_name"] = (
+        #                             embryo_metadata_df.loc)["both"==embryo_metadata_df["_merge"], "manual_perturbation"]
+        # embryo_metadata_df.drop(labels=["use_embryo_flag_emb", "manual_perturbation", "_merge"], axis=1, inplace=True)
 
         prev_emb_ids = curation_df_emb_prev["embryo_id"].to_numpy()
 
@@ -203,7 +214,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
         keep_filter = ~np.isin(curr_emb_ids, prev_emb_ids)
         curation_df_emb = pd.concat([curation_df_emb.loc[keep_filter, :], curation_df_emb_prev], axis=0, ignore_index=True)
 
-        os.rename(curation_df_path, os.path.join(curation_path, "embryo_curation_df_" + dt_string + ".csv"))
+        os.rename(emb_curation_df_path, os.path.join(curation_path, "embryo_curation_df_" + dt_string + ".csv"))
 
     curation_df_emb.to_csv(emb_curation_df_path, index=False)
 
@@ -213,6 +224,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     #######
     # now, make perturbation-level keys to inform training inclusion/exclusion and metric comparisons
+    print("Building metric and perturbation keys...")
     pert_train_key = embryo_metadata_df.loc[:, ["short_pert_name"]].drop_duplicates()
     pert_train_key["start_hpf"] = 0
     pert_train_key["stop_hpf"] = 100
@@ -248,13 +260,14 @@ def perform_embryo_qc(root, dead_lead_time=2):
     # apply neutrality between embryos from mutant background with no phenotype (these encompass hets and homo wt)
     metric_array[np.ix_(wt_other_flags, wt_flags)] = -1
     metric_array[np.ix_(wt_flags, wt_other_flags)] = -1
-    # By default all phenotypes are positive references for themselves
+    # by default all phenotypes are positive references for themselves
     eye_array = np.eye(len(pert_u))
     metric_array[eye_array==1] = 1
-    
+    # save 
     pert_metric_key = pd.DataFrame(metric_array, columns=pert_u.tolist())
     pert_metric_key.set_index(pert_u, inplace=True)
     pert_metric_key.to_csv(os.path.join(curation_path, "perturbation_metric_key.csv"), index=True)
+    print("Done.")
 
 if __name__ == "__main__":
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"

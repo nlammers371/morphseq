@@ -12,8 +12,8 @@ import scipy
 
 def rotate_image(mat, angle):
     """
-        Rotates an image (angle in degrees) and expands image to avoid cropping
-        """
+    Rotates an image (angle in degrees) and expands image to avoid cropping
+    """
 
     height, width = mat.shape[:2]  # image shape has 3 dimensions
     image_center = (
@@ -80,8 +80,8 @@ def process_masks(im_mask, im_yolk, row, close_radius=15):
 
 def crop_embryo_image(im_ff_rotated, emb_mask_rotated, im_yolk_rotated, outshape):
 
-    y_indices = np.where(np.max(emb_mask_rotated, axis=1) == 1)[0]
-    x_indices = np.where(np.max(emb_mask_rotated, axis=0) == 1)[0]
+    y_indices = np.where(np.max(emb_mask_rotated, axis=1) > 0.5)[0]
+    x_indices = np.where(np.max(emb_mask_rotated, axis=0) > 0.5)[0]
     y_mean = int(np.mean(y_indices))
     x_mean = int(np.mean(x_indices))
 
@@ -103,11 +103,11 @@ def crop_embryo_image(im_ff_rotated, emb_mask_rotated, im_yolk_rotated, outshape
         im_cropped[:, to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
             im_ff_rotated[:, from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
         
-    emb_mask_cropped = np.zeros(outshape).astype(np.uint8)
+    emb_mask_cropped = np.zeros(outshape)#.astype(np.uint8)
     emb_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
         emb_mask_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
 
-    yolk_mask_cropped = np.zeros(outshape).astype(np.uint8)
+    yolk_mask_cropped = np.zeros(outshape)#.astype(np.uint8)
     yolk_mask_cropped[to_range_y[0]:to_range_y[1], to_range_x[0]:to_range_x[1]] = \
         im_yolk_rotated[from_range_y[0]:from_range_y[1], from_range_x[0]:from_range_x[1]]
 
