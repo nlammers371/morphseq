@@ -12,14 +12,14 @@ from src.functions.utilities import path_leaf
 
 def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age_penalty=2):
 
-    metadata_path = os.path.join(root, "metadata", '')
+    # metadata_path = os.path.join(root, "metadata", '')
     training_path = os.path.join(root, "training_data", train_name, '')
 
     # instance_path = os.path.join(training_path, instance_name)
     mode_vec = sorted(glob.glob(training_path + "*"))
 
     # read in metadata database
-    embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+    embryo_metadata_df = pd.read_csv(os.path.join(training_path, "embryo_metadata_df_train.csv"))
     seq_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "experiment_date", "predicted_stage_hpf", "master_perturbation"]]
 
     # The above dataset comprises all available images. Some training folders will only use a subset of these. Check
@@ -73,8 +73,8 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
 
     np.random.seed(r_seed)
 
-    if test_dates is None:
-        test_dates = ["20240418"]
+    # if test_dates is None:
+    #     test_dates = ["20240418"]
     # get list of training files
     image_list = seq_key["image_path"].to_numpy().tolist() 
     snip_id_list = [path_leaf(path) for path in image_list]
@@ -92,7 +92,7 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
     # check to see if there are any experiment dates or perturb ation types that should be left out of training (kept in test)
     test_constraints_flag = False
     emb_key = seq_key.loc[:, ["embryo_id", "master_perturbation", "experiment_date"]].drop_duplicates().reset_index(drop=True)
-    emb_id_vec = emb_key["embryo_id"].values
+    emb_id_vec = np.unique(emb_key["embryo_id"].values)
     if pert_time_key is not None:
         test_constraints_flag = True
         min_age_vec = np.asarray([pert_time_key.loc[pert_time_key["master_perturbation"]==pert, "start_hpf"].values[0]

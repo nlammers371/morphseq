@@ -20,6 +20,7 @@ import skimage.io as io
 import multiprocessing
 from functools import partial
 from tqdm.contrib.concurrent import process_map 
+from skimage.transform import rescale, resize
 import time
 from pathlib import Path
 
@@ -120,11 +121,17 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
 
     # write to file
     im_name = row["snip_id"]
+    exp_date = str(row["experiment_date"])
 
-    ff_save_path = os.path.join(im_snip_dir, im_name + ".jpg")
-    ff_save_path_uc = os.path.join(im_snip_dir[:-1] + "_uncropped", im_name + ".jpg")
-    if not os.path.isdir(im_snip_dir[:-1] + "_uncropped"):
-        os.makedirs(im_snip_dir[:-1] + "_uncropped")
+    ff_dir = os.path.join(im_snip_dir, exp_date)
+    ff_save_path = os.path.join(ff_dir, im_name + ".jpg")
+    if not os.path.isdir(ff_dir):
+        os.makedirs(ff_dir)
+
+    ff_dir_uc = os.path.join(im_snip_dir[:-1] + "_uncropped", exp_date)
+    ff_save_path_uc = os.path.join(ff_dir_uc, im_name + ".jpg")
+    if not os.path.isdir(ff_dir_uc):
+        os.makedirs(ff_dir_uc)
 
     well = row["well"]
     time_int = row["time_int"]
@@ -139,7 +146,6 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     im_emb_path = glob.glob(os.path.join(emb_path, date, im_stub))[0]
     im_mask = io.imread(im_emb_path)
     
-
     # load yolk mask
     im_yolk_path = glob.glob(os.path.join(yolk_path, date, im_stub))[0]
     im_yolk = io.imread(im_yolk_path)
@@ -161,20 +167,23 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
         im_ff = skimage.util.img_as_ubyte(im_ff)
 
     # rescale masks and image
-    im_ff_rs = cv2.resize(im_ff, None, fx=px_dim_raw / outscale, fy=px_dim_raw / outscale)
-    mask_emb_rs = cv2.resize(im_mask_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
-    mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+    im_ff_rs = rescale(im_ff, (px_dim_raw / outscale, px_dim_raw / outscale), order=1, preserve_range=True)
+    mask_emb_rs = resize(im_mask_ft.astype(float), im_ff_rs.shape, order=1)
+    mask_yolk_rs = resize(im_yolk.astype(float), im_ff_rs.shape, order=1)
 
+    # im_ff_rs = cv2.resize(im_ff, None, fx=px_dim_raw / outscale, fy=px_dim_raw / outscale)
+    # mask_emb_rs = cv2.resize(im_mask_ft, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+    # mask_yolk_rs = cv2.resize(im_yolk, im_ff_rs.shape[::-1], interpolation=cv2.INTER_NEAREST).astype(np.uint8)
     ###################
     # Rotate image
     ###################
 
     # get embryo mask orientation
-    angle_to_use = get_embryo_angle(mask_emb_rs, mask_yolk_rs)
+    angle_to_use = get_embryo_angle((mask_emb_rs > 0.5).astype(np.uint8),(mask_yolk_rs>0.5).astype(np.uint8))
 
     im_ff_rotated = rotate_image(im_ff_rs, np.rad2deg(angle_to_use))
-    emb_mask_rotated = rotate_image(mask_emb_rs.astype(np.uint8), np.rad2deg(angle_to_use))
-    im_yolk_rotated = rotate_image(mask_yolk_rs.astype(np.uint8), np.rad2deg(angle_to_use))
+    emb_mask_rotated = rotate_image(mask_emb_rs, np.rad2deg(angle_to_use))
+    im_yolk_rotated = rotate_image(mask_yolk_rs, np.rad2deg(angle_to_use))
 
     #######################
     # Crop
@@ -182,14 +191,14 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     im_cropped, emb_mask_cropped, yolk_mask_cropped = crop_embryo_image(im_ff_rotated, emb_mask_rotated, im_yolk_rotated, outshape=outshape)
     
     # fill holes in embryo and yolk masks
-    emb_mask_cropped2 = scipy.ndimage.binary_fill_holes(emb_mask_cropped).astype(np.uint8)
-    yolk_mask_cropped = scipy.ndimage.binary_fill_holes(yolk_mask_cropped).astype(np.uint8)
+    emb_mask_cropped2 = scipy.ndimage.binary_fill_holes(emb_mask_cropped > 0.5).astype(np.uint8)
+    yolk_mask_cropped = scipy.ndimage.binary_fill_holes(yolk_mask_cropped > 0.5).astype(np.uint8)
 
     # calculate the distance transform
-    im_dist_cropped = scipy.ndimage.distance_transform_edt(1 * (emb_mask_cropped2 == 0))
+    # im_dist_cropped = scipy.ndimage.distance_transform_edt(1 * (emb_mask_cropped2 == 0))
 
     # crop out background
-    dl_rad_px = int(np.ceil(dl_rad_um / outscale))
+    # dl_rad_px = int(np.ceil(dl_rad_um / outscale))
     # dl_rad_px = 0
     # im_dist_cropped = im_dist_cropped * dl_rad_px**-1
     # im_dist_cropped[np.where(im_dist_cropped > 2)] = 1
@@ -199,12 +208,17 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     noise_array[np.where(noise_array < 0)] = 0 # This is redundant, but just in case someone fiddles with the above distributioon
     # noise_array_scaled = np.multiply(noise_array, im_dist_cropped).astype(np.uint8)
 
-    im_masked_cropped = im_cropped.copy()
-    # im_masked_cropped += noise_array_scaled # [np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
-    im_masked_cropped[np.where(im_dist_cropped > dl_rad_px)] = np.round(noise_array[np.where(im_dist_cropped > dl_rad_px)]).astype(np.uint8)
-    # im_masked_cropped[np.where(im_masked_cropped < 0)] = 0
-    im_masked_cropped[np.where(im_masked_cropped > 255)] = 255    # NL: I think this is redundant but will leave it
-    im_masked_cropped = np.round(im_masked_cropped).astype(np.uint8)
+    # im_masked_cropped = im_cropped.copy()
+    # # im_masked_cropped += noise_array_scaled # [np.where(emb_mask_cropped == 0)] = np.random.choice(other_pixel_array, np.sum(emb_mask_cropped == 0)).astype(np.uint8)
+    # im_masked_cropped[np.where(im_dist_cropped > dl_rad_px)] = np.round(noise_array[np.where(im_dist_cropped > dl_rad_px)]).astype(np.uint8)
+    # # im_masked_cropped[np.where(im_masked_cropped < 0)] = 0
+    # im_masked_cropped[np.where(im_masked_cropped > 255)] = 255    # NL: I think this is redundant but will leave it
+    # im_masked_cropped = np.round(im_masked_cropped).astype(np.uint8)
+
+    # try distance-based taper 
+    im_cropped = skimage.exposure.equalize_adapthist(im_cropped)*255
+    mask_cropped_gauss = skimage.filters.gaussian(emb_mask_cropped2.astype(float), sigma=dl_rad_um / outscale)
+    im_cropped_gauss = np.multiply(im_cropped.astype(float), mask_cropped_gauss) + np.multiply(noise_array, 1-mask_cropped_gauss)
 
     # check whether we cropped out part of the embryo
     out_of_frame_flag = np.sum(emb_mask_cropped == 1) / np.sum(emb_mask_rotated == 1) < 0.99
@@ -212,8 +226,8 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     # write to file
     # im_name = row["snip_id"]
 
-    io.imsave(ff_save_path, im_masked_cropped, check_contrast=False)
-    io.imsave(ff_save_path_uc, im_cropped, check_contrast=False)
+    io.imsave(ff_save_path, im_cropped_gauss.astype(np.uint8), check_contrast=False)
+    io.imsave(ff_save_path_uc, im_cropped.astype(np.uint8), check_contrast=False)
     io.imsave(os.path.join(mask_snip_dir, "emb_" + im_name + ".jpg"), emb_mask_cropped2, check_contrast=False)
     io.imsave(os.path.join(mask_snip_dir, "yolk_" + im_name + ".jpg"), yolk_mask_cropped, check_contrast=False)
 
@@ -962,7 +976,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
         embryo_metadata_df["out_of_frame_flag"] = False
         embryo_metadata_df["snip_um_per_pixel"] = outscale
     else: 
-        extant_images = sorted(glob.glob(im_snip_dir + "*.jpg"))
+        extant_images = sorted(glob.glob(os.path.join(im_snip_dir, "**", "*.jpg"), recursive=True))
         extant_df = pd.DataFrame(np.asarray([path_leaf(im)[:-4] for im in extant_images]), columns=["snip_id"]).drop_duplicates()
         embryo_metadata_df = embryo_metadata_df.merge(extant_df, on="snip_id", how="left", indicator=True)
         export_indices = np.where(embryo_metadata_df["_merge"]=="left_only")[0]
@@ -979,11 +993,11 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     out_of_frame_flags = []
 
     if par_flag:
-        n_workers = np.ceil(os.cpu_count() / 2).astype(int)
+        n_workers = 4
         out_of_frame_flags = process_map(partial(export_embryo_snips, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
                                       px_mean=0.1*px_mean, px_std=0.1*px_std),
-                    export_indices, max_workers=n_workers, chunksize=10)
+                                      export_indices, max_workers=n_workers, chunksize=10)
 
 
     else:
