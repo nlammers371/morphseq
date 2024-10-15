@@ -21,7 +21,10 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     
     # read in metadata database
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df02.csv"), index_col=0)
-    
+
+    # remove extra columns
+    rm_cols = ['time_string', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Time (s)', 'embryos_per_well', 'region_label', 'time_of_addition']
+    embryo_metadata_df = embryo_metadata_df.drop(labels=rm_cols, axis=1)
 
     ###################
     # incorporate manual curation info
