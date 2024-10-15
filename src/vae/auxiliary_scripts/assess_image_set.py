@@ -181,7 +181,7 @@ def assess_image_set(image_path, metadata_path, trained_model_path, out_path, im
 
         for b in range(x.shape[0]):
 
-            # show results with normal sampler
+            # show results
             fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 10))
 
             axes[0].imshow(np.squeeze(np.squeeze(x.detach().cpu()[b, 0, :, :])), cmap='gray')

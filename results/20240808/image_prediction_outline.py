@@ -71,3 +71,5 @@ def assess_image_set(image_path, metadata_path, trained_model_path, out_path, im
         ).sum(dim=-1).detach().cpu()
         # x = x.detach().cpu()
         recon_x_out = recon_x_out.detach().cpu()
+
+

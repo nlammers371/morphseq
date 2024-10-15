@@ -695,6 +695,17 @@ if __name__ == "__main__":
     architecture_name = "MetricVAE_z100_ne100_beta_temp_sweep"
     mode_vec = ["train", "eval", "test"]
 
+
+class MyCustomDataset(datasets.ImageFolder):
+    def __init__(self, root, return_name=False, transform=None, target_transform=None):
+        self.return_name = return_name
+        super().__init__(root=root, transform=transform, target_transform=target_transform)
+
+    def __getitem__(self, index):
+        X, Y = super().__getitem__(index)
+
+        return DatasetOutput(data=X, label=self.samples[index], index=index)
+
     
 
 
