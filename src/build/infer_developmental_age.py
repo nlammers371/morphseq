@@ -10,10 +10,7 @@ from tqdm import tqdm
 import ntpath
 
 
-def infer_developmental_age(root, train_name, architecture_name, model_name, reference_perturbations=None, reference_datasets=None):
-
-    if reference_perturbations is None:
-        reference_perturbations =["DMSO", "wik", "ab", "ab-inj-ctrl", "wik-inj-ctrl", "wik-ctrl-inj"]
+def infer_developmental_age(root, train_name, architecture_name, model_name, reference_datasets=None):
 
     # set path to output dir
     train_dir = os.path.join(root, "training_data", train_name, '')
@@ -22,21 +19,21 @@ def infer_developmental_age(root, train_name, architecture_name, model_name, ref
     metadata_path = os.path.join(root, "metadata")
 
     embryo_df = pd.read_csv(os.path.join(data_path, "embryo_stats_df.csv"), index_col=0)
-    metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"), index_col=0)
+    metadata_df = pd.read_csv(os.path.join(train_dir, "embryo_metadata_df_train.csv"))
     metadata_df = metadata_df.loc[:, ["snip_id", "temperature", "embryo_id", "Time Rel (s)"]]
 
     # add temperature and 
     embryo_df = embryo_df.merge(metadata_df, on="snip_id", how="left")
-    embryo_df = get_embryo_age_predictions(embryo_df, reference_perturbations=reference_perturbations, reference_datasets=reference_datasets)
+    embryo_df.reset_index(inplace=True, drop=True)
+    embryo_df = get_embryo_age_predictions(embryo_df, reference_datasets=reference_datasets)
 
     # make a lightweight age key
-    age_key_df = embryo_df.loc[:, ["snip_id", "experiment_date", "embryo_id", "temperature", "predicted_stage_hpf", "inferred_stage_hpf_reg", "Time Rel (s)", "master_perturbation"]]
+    age_key_df = embryo_df.loc[:, ["snip_id", "experiment_date", "embryo_id", "temperature", "predicted_stage_hpf", "inferred_stage_hpf_reg", "Time Rel (s)", "short_pert_name"]]
     age_key_df["Time Rel (s)"] = age_key_df["Time Rel (s)"] / 3600
     age_key_df.rename(columns={"predicted_stage_hpf": "calc_stage_hpf", "Time Rel (s)": "abs_time_hr"}, inplace=True)
     age_key_df["train_dir"] = train_name
     age_key_df["model_name"] = model_name
     age_key_df["architecture_name"] = architecture_name
-
 
 
     age_key_df.to_csv(os.path.join(metadata_path, "age_key_df.csv"))
@@ -45,18 +42,32 @@ def infer_developmental_age(root, train_name, architecture_name, model_name, ref
 
 
 
-def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_datasets):
+def get_embryo_age_predictions(embryo_df, reference_datasets):
 
     # get indices of latent var columns
     mu_indices = [i for i in range(embryo_df.shape[1]) if "z_mu" in embryo_df.columns[i]]
 
-    pert_vec_bool = np.asarray([embryo_df.loc[i, "master_perturbation"] in reference_perturbations for i in embryo_df.index])
+    pert_vec_bool = (embryo_df.loc[:, "phenotype"].to_numpy() == "wt") | (embryo_df.loc[:, "control_flag"].to_numpy() == 1)
     if reference_datasets is not None:
-        data_vec_bool = np.asarray([embryo_df.loc[i, "experiment_date"].astype(str) in reference_datasets for i in embryo_df.index])
+        data_vec_bool = np.isin(embryo_df.loc[:, "experiment_date"].astype(str), reference_datasets)
+        
+        train_indices = embryo_df.index[data_vec_bool & pert_vec_bool]
     else:
-        data_vec_bool = np.full(pert_vec_bool.shape, True)
+        # build a series of logical vectors to grab reference data for use in training
 
-    train_indices = embryo_df.index[data_vec_bool & pert_vec_bool]
+        # manual checks indicated that predicted stages for DMSO and WT embryos in 20240418 matched true stage almost exactly
+        ref_vec01 = (embryo_df.loc[:, "experiment_date"].astype(str)=="20240411") & ((embryo_df.loc[:, "phenotype"].to_numpy() == "wt") | (embryo_df.loc[:, "control_flag"].to_numpy() == 1))
+        # predicted stage for embryos in 20240626 matches to true stage well. All are WT ab. This set extends late
+        ref_vec02 = (embryo_df.loc[:, "experiment_date"].astype(str)=="20240626")
+        # in general I am avoiding using Keyence datasets for staging, since they were not temp-controlled. But 20240620 has earliest start point
+        ref_vec03 = (embryo_df.loc[:, "experiment_date"].astype(str)=="20230620") & (embryo_df.loc[:, "Time Rel (s)"] <= 7200)
+        # another well-synced experiment
+        ref_vec04 = (embryo_df.loc[:, "experiment_date"].astype(str)=="20231218") & (embryo_df.loc[:, "phenotype"].to_numpy() == "wt") 
+
+        data_vec_bool = (ref_vec01 | ref_vec02 | ref_vec03 | ref_vec04).to_numpy()
+
+        train_indices = embryo_df.index[data_vec_bool]
+    
     # test_indices = embryo_df.index[~(data_vec_bool & pert_vec_bool)]
 
     # extract target vector
@@ -75,12 +86,14 @@ def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_dat
     ###################
     # get predictions across all datasets for the matching phenotypes
     # this will create maps from absolute experimental time to developmental time
-    X_ref = embryo_df.iloc[np.where(pert_vec_bool)[0], mu_indices].to_numpy().astype(float)
+    pd_indices = np.where(pert_vec_bool | data_vec_bool)[0] # 20240626 contains some "uncertain" phenotypes that we include in age ref set
+    X_ref = embryo_df.iloc[pd_indices, mu_indices].to_numpy().astype(float)
 
     y_ref_pd = clf_age_nonlin.predict(X_ref)
 
     # make stage lookup DF
-    stage_lookup_df = embryo_df.loc[pert_vec_bool, ["snip_id", "experiment_date", "master_perturbation", "predicted_stage_hpf", "temperature", "embryo_id", "Time Rel (s)"]]
+    stage_lookup_df = embryo_df.loc[pd_indices, ["snip_id", "experiment_date", "short_pert_name", "predicted_stage_hpf", "temperature", "embryo_id", "Time Rel (s)"]]
+    stage_lookup_df["experiment_date"] = stage_lookup_df["experiment_date"].astype(str)
     stage_lookup_df["Time Rel (s)"] = stage_lookup_df["Time Rel (s)"] / 3600
     stage_lookup_df.rename(columns={"predicted_stage_hpf":"calc_stage_hpf", "Time Rel (s)":"abs_time_hr"}, inplace=True)
     stage_lookup_df["inferred_stage_hpf_reg"] = y_ref_pd
@@ -89,9 +102,12 @@ def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_dat
     n_ref = 5
     max_stage_delta = 2
 
+    embryo_df["experiment_date"] = embryo_df["experiment_date"].astype(str)
     date_index = np.unique(embryo_df["experiment_date"])
     embryo_df["inferred_stage_hpf_reg"] = np.nan
-    for d, date in enumerate(tqdm(date_index, "Predicting standardized embryo stages...")):
+    i_iter = 0
+    j_iter = 0
+    for _, date in enumerate(tqdm(date_index, "Predicting standardized embryo stages...")):
 
         # get indexing vectors
         ref_bool_vec = stage_lookup_df["experiment_date"]==date
@@ -107,12 +123,15 @@ def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_dat
         temp_pd_stage_vec = stage_lookup_df.loc[temp_ref_bool_vec, "inferred_stage_hpf_reg"].to_numpy() 
 
         for to_ind in to_index_vec:
+            i_iter += 1
+
             calc_stage = embryo_df.loc[to_ind, "predicted_stage_hpf"]
             stage_diffs = np.abs(date_calc_stage_vec - calc_stage)
-            if np.sum(stage_diffs <= max_stage_delta) >= n_ref:
-                ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
-                ref_calc_stage = date_calc_stage_vec[ref_indices]
-                ref_pd_stage = date_pd_stage_vec[ref_indices]
+            date_bool_vec = stage_diffs <= max_stage_delta
+            if np.sum(date_bool_vec) >= n_ref:
+                # ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
+                ref_calc_stage = date_calc_stage_vec[date_bool_vec]
+                ref_pd_stage = date_pd_stage_vec[date_bool_vec]
 
             else: # if not enough comps, use lookups from other experiments at the same temperature
                 stage_diffs = np.abs(temp_calc_stage_vec - calc_stage)
@@ -123,10 +142,14 @@ def get_embryo_age_predictions(embryo_df, reference_perturbations, reference_dat
                 ref_calc_stage = temp_calc_stage_vec[ref_indices]
                 ref_pd_stage = temp_pd_stage_vec[ref_indices]
 
+                j_iter += 1
+                print(j_iter / i_iter)
              # fit linear regression
             reg = LinearRegression(fit_intercept=False).fit(ref_calc_stage[:, np.newaxis], ref_pd_stage[:, np.newaxis])
             age_pd = reg.predict(np.asarray([calc_stage])[:, np.newaxis])
             embryo_df.loc[to_ind, "inferred_stage_hpf_reg"] = age_pd[0][0]
+
+            
     # y_score_nonlin = clf_age_nonlin.score(X_test, y_test)
 
     return embryo_df
