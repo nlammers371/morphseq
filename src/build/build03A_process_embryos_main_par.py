@@ -23,6 +23,7 @@ from tqdm.contrib.concurrent import process_map
 from skimage.transform import rescale, resize
 import time
 from pathlib import Path
+from sklearn.decomposition import PCA
 
 def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100):
 
@@ -322,7 +323,8 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
 
     # get list of FF and mask sizes
     
-    image_size_vec = np.empty(len(images_to_process))
+    # image_size_vec = np.empty(len(images_to_process))
+    image_shape_array = np.empty((len(images_to_process), 2))
     mask_size_vec = np.empty(len(images_to_process))
 
     if len(images_to_process) > 0:
@@ -339,10 +341,10 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
             sample_image = io.imread(ff_images[0])
             sample_mask = io.imread(images_to_process[date_indices[0]])
 
-            image_size_vec[date_indices] = sample_image.size
+            image_shape_array[date_indices] = sample_image.shape
             mask_size_vec[date_indices] = sample_mask.size
 
-    return images_to_process, df_diff, master_df_to_update, image_size_vec, mask_size_vec
+    return images_to_process, df_diff, master_df_to_update, image_shape_array, mask_size_vec
 
 
 def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_um):
@@ -424,7 +426,7 @@ def count_embryo_regions(index, image_list, master_df_update, max_sa_um, min_sa_
 def do_embryo_tracking(well_id, master_df, master_df_update):
 
     well_indices = np.where(master_df_update[["well_id"]].values == well_id)[0]
-    temp_cols = master_df.columns.tolist() + ["FOV_size_px"]
+    temp_cols = master_df.columns.tolist() + ["FOV_size_px", "FOV_height_px", "FOV_width_px"]
     # check how many embryos we are dealing with
     n_emb_col = master_df_update.loc[well_indices, ["n_embryos_observed"]].values.ravel()
 
@@ -576,13 +578,18 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     im_yolk_path = glob.glob(os.path.join(yolk_path, date, "*" + im_stub + "*"))[0] #os.path.join(yolk_path, date, im_name)
     im_yolk = io.imread(im_yolk_path)
     im_yolk = np.round(im_yolk / 255 * 2 - 1).astype(int)
-    # im_yolk = remove_small_objects(label(im_yolk), 128)
-    # im_yolk[im_yolk > 0] = 1
+    
+    # rescale masks to accord with original aspec ratio
+    ff_shape = tuple(row[["FOV_height_px", "FOV_width_px"]].to_numpy().astype(int))
+    im_mask_lb = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
+    im_bubble = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
+    im_focus = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
+    im_yolk = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
 
     # get surface area
-    px_dim_raw = row["Height (um)"] / row["Height (px)"]   # to adjust for size reduction (need to automate this)
-    size_factor = np.sqrt(ff_size / im_yolk.size) #row["Width (px)"] / 640 * 630/320
-    px_dim = px_dim_raw * size_factor
+    px_dim = row["Height (um)"] / row["Height (px)"]   # to adjust for size reduction (need to automate this)
+    # size_factor = np.sqrt(ff_size / im_yolk.size) #row["Width (px)"] / 640 * 630/320
+    # px_dim = px_dim_raw * size_factor
     qc_scale_px = int(np.ceil(qc_scale_um / px_dim))
 
     lbi = row["region_label"]  # im_mask_lb[yi, xi]
@@ -592,10 +599,16 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     im_mask_lb = (im_mask_lb == lbi).astype(int)
 
     # calculate sa-related metrics
-    rg = regionprops(im_mask_lb)
-    row.loc["surface_area_um"] = rg[0].area_filled * px_dim ** 2
-    row.loc["length_um"] = rg[0].axis_major_length * px_dim
-    row.loc["width_um"] = rg[0].axis_minor_length * px_dim
+    yy, xx = np.indices(im_mask_lb.shape)
+    mask_coords = np.c_[xx[im_mask_lb==1], yy[im_mask_lb==1]]
+    pca = PCA(n_components=2)
+    mask_coords_rot = pca.fit_transform(mask_coords)
+    row.loc["length_um"], row.loc["width_um"] = (np.max(mask_coords_rot, axis=0) - np.min(mask_coords_rot, axis=0))*px_dim
+    row.loc["surface_area_um"] = np.sum(im_mask_lb) * px_dim ** 2
+    # rg = regionprops(im_mask_lb)
+    # row.loc["surface_area_um"] = rg[0].area_filled * px_dim ** 2
+    # row.loc["length_um"] = rg[0].axis_major_length * px_dim
+    # row.loc["width_um"] = rg[0].axis_minor_length * px_dim
 
     # calculate speed
     if (row["time_int"] > 1) and index > 0:
@@ -782,7 +795,7 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
 
     ckpt1_path = os.path.join(metadata_path, "embryo_metadata_df_ckpt1.csv")
 
-    images_to_process, df_to_process, prev_meta_df, image_size_vec, mask_size_vec\
+    images_to_process, df_to_process, prev_meta_df, image_shape_array, mask_size_vec\
          = get_images_to_process(ckpt1_path, experiment_list, master_df, overwrite_well_stats)
 
     assert len(images_to_process) == df_to_process.shape[0]
@@ -796,7 +809,9 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
         master_df_update = master_df_update.drop(labels=drop_cols, axis=1)
 
         master_df_update["n_embryos_observed"] = np.nan
-        master_df_update["FOV_size_px"] = image_size_vec
+        master_df_update["FOV_size_px"] = np.prod(image_shape_array, axis=1)
+        master_df_update["FOV_height_px"] = image_shape_array[:, 0]
+        master_df_update["FOV_width_px"] = image_shape_array[:, 1]
         for n in range(4): # allow for a maximum of 4 embryos per well
             master_df_update["e" + str(n) + "_x"] = np.nan
             master_df_update["e" + str(n) + "_y"] = np.nan
