@@ -42,7 +42,7 @@ def infer_developmental_age(root, train_name, architecture_name, model_name, ref
 
 
 
-def get_embryo_age_predictions(embryo_df, reference_datasets):
+def get_embryo_age_predictions(embryo_df, reference_datasets, max_stage_delta=2.5, n_ref=5):
 
     # get indices of latent var columns
     mu_indices = [i for i in range(embryo_df.shape[1]) if "z_mu" in embryo_df.columns[i]]
@@ -98,10 +98,6 @@ def get_embryo_age_predictions(embryo_df, reference_datasets):
     stage_lookup_df.rename(columns={"predicted_stage_hpf":"calc_stage_hpf", "Time Rel (s)":"abs_time_hr"}, inplace=True)
     stage_lookup_df["inferred_stage_hpf_reg"] = y_ref_pd
 
-    # map stage info to remaining embryos (mutant phenotypes)
-    n_ref = 5
-    max_stage_delta = 2
-
     embryo_df["experiment_date"] = embryo_df["experiment_date"].astype(str)
     date_index = np.unique(embryo_df["experiment_date"])
     embryo_df["inferred_stage_hpf_reg"] = np.nan
@@ -116,38 +112,47 @@ def get_embryo_age_predictions(embryo_df, reference_datasets):
         temp_ref_bool_vec = stage_lookup_df["temperature"] == exp_temperature
         
         # get stage ref vectors
-        date_calc_stage_vec = stage_lookup_df.loc[ref_bool_vec, "calc_stage_hpf"].to_numpy()
+        date_calc_stage_vec = stage_lookup_df.loc[ref_bool_vec, "calc_stage_hpf"].to_numpy() 
+        date_calc_time_vec = stage_lookup_df.loc[ref_bool_vec, "abs_time_hr"].to_numpy()
         temp_calc_stage_vec = stage_lookup_df.loc[temp_ref_bool_vec, "calc_stage_hpf"].to_numpy()
 
         date_pd_stage_vec = stage_lookup_df.loc[ref_bool_vec, "inferred_stage_hpf_reg"].to_numpy() 
         temp_pd_stage_vec = stage_lookup_df.loc[temp_ref_bool_vec, "inferred_stage_hpf_reg"].to_numpy() 
 
-        for to_ind in to_index_vec:
-            i_iter += 1
+        # if this is a timelapse experiment, do stage inference. If it's a snapshot, just ransfer the times directly
+        _, embryo_counts = np.unique(embryo_df.loc[to_index_vec, "embryo_id"], return_counts=True)
+        if np.max(embryo_counts) > 1:
+            for to_ind in to_index_vec:
+                i_iter += 1
 
-            calc_stage = embryo_df.loc[to_ind, "predicted_stage_hpf"]
-            stage_diffs = np.abs(date_calc_stage_vec - calc_stage)
-            date_bool_vec = stage_diffs <= max_stage_delta
-            if np.sum(date_bool_vec) >= n_ref:
-                # ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
-                ref_calc_stage = date_calc_stage_vec[date_bool_vec]
-                ref_pd_stage = date_pd_stage_vec[date_bool_vec]
+                calc_stage = embryo_df.loc[to_ind, "predicted_stage_hpf"]
+                calc_time = embryo_df.loc[to_ind, "Time Rel (s)"] / 3600
+                stage_diffs = np.abs(date_calc_stage_vec - calc_stage)
+                time_diffs = np.abs(date_calc_time_vec - calc_time)
+                date_bool_vec = (stage_diffs <= max_stage_delta) & (time_diffs <= max_stage_delta) # we want to match both biological and absolute timing
+                if np.sum(date_bool_vec) >= n_ref:
+                    # ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
+                    ref_calc_stage = date_calc_stage_vec[date_bool_vec]
+                    ref_pd_stage = date_pd_stage_vec[date_bool_vec]
 
-            else: # if not enough comps, use lookups from other experiments at the same temperature
-                stage_diffs = np.abs(temp_calc_stage_vec - calc_stage)
-                ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
-                if len(ref_indices) < n_ref:
-                    option_indices = np.argsort(stage_diffs)
-                    ref_indices = option_indices[:n_ref]
-                ref_calc_stage = temp_calc_stage_vec[ref_indices]
-                ref_pd_stage = temp_pd_stage_vec[ref_indices]
+                else: # if not enough comps, use lookups from other experiments at the same temperature
+                    stage_diffs = np.abs(temp_calc_stage_vec - calc_stage)
+                    ref_indices = np.where(stage_diffs <= max_stage_delta)[0]
+                    if len(ref_indices) < n_ref:
+                        option_indices = np.argsort(stage_diffs)
+                        ref_indices = option_indices[:n_ref]
+                    ref_calc_stage = temp_calc_stage_vec[ref_indices]
+                    ref_pd_stage = temp_pd_stage_vec[ref_indices]
 
-                j_iter += 1
-                print(j_iter / i_iter)
-             # fit linear regression
-            reg = LinearRegression(fit_intercept=False).fit(ref_calc_stage[:, np.newaxis], ref_pd_stage[:, np.newaxis])
-            age_pd = reg.predict(np.asarray([calc_stage])[:, np.newaxis])
-            embryo_df.loc[to_ind, "inferred_stage_hpf_reg"] = age_pd[0][0]
+                    j_iter += 1
+                    print(j_iter / i_iter)
+                # fit linear regression
+                reg = LinearRegression(fit_intercept=True).fit(ref_calc_stage[:, np.newaxis], ref_pd_stage[:, np.newaxis]) # NL: I allow for an intercept to account for mistakes with start frame stage assignment
+                age_pd = reg.predict(np.asarray([calc_stage])[:, np.newaxis])
+                embryo_df.loc[to_ind, "inferred_stage_hpf_reg"] = age_pd[0][0]
+        else:
+            for to_ind in to_index_vec:
+                embryo_df.loc[to_ind, "inferred_stage_hpf_reg"] = embryo_df.loc[to_ind, "predicted_stage_hpf"]
 
             
     # y_score_nonlin = clf_age_nonlin.score(X_test, y_test)
