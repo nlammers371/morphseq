@@ -21,7 +21,7 @@ import multiprocessing
 from functools import partial
 from tqdm.contrib.concurrent import process_map 
 from skimage.transform import rescale, resize
-import time
+from src.build.build01A_compile_keyence_images import trim_image
 from pathlib import Path
 from sklearn.decomposition import PCA
 
@@ -160,6 +160,13 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
     ############
     im_ff_path = glob.glob(os.path.join(ff_image_path, date, im_stub))[0]
     im_ff = io.imread(im_ff_path)
+    if date == "20231207": # spot fix for 2 problematic datasets
+        if im_ff.shape[1] < 1920:
+            im_ff = im_ff.transpose(1,0)
+        im_ff = trim_image(im_ff, np.asarray([3420, 1890]))
+    elif date == "20231208":
+        im_ff = trim_image(im_ff, np.asarray([1710, 945]))
+
     if im_ff.shape[0] < im_ff.shape[1]:
         im_ff = im_ff.transpose(1,0)
 
@@ -549,7 +556,7 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
 
     im_stub = well + f"_t{time_int:04}"
     im_name = glob.glob(os.path.join(emb_path, date, "*" + im_stub + "*"))
-    ff_size = row["FOV_size_px"]
+    # ff_size = row["FOV_size_px"]
 
     # # load masked images
     # im_emb_path = os.path.join(emb_path, date, im_name)
@@ -566,13 +573,15 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     im_bubble_path = glob.glob(os.path.join(bubble_path, date, "*" + im_stub + "*"))[0]
     im_bubble = io.imread(im_bubble_path)
     im_bubble = np.round(im_bubble / 255 * 2 - 1).astype(int)
-    im_bubble = remove_small_objects(label(im_bubble), 128)
+    if len(np.unique(label(im_bubble)) > 2):
+        im_bubble = remove_small_objects(label(im_bubble), 128)
     im_bubble[im_bubble > 0] = 1
 
     im_focus_path = glob.glob(os.path.join(focus_path, date, "*" + im_stub + "*"))[0] #os.path.join(focus_path, date, im_name)
     im_focus = io.imread(im_focus_path)
     im_focus = np.round(im_focus / 255 * 2 - 1).astype(int)
-    im_focus = remove_small_objects(label(im_focus), 128)
+    if len(np.unique(label(im_focus)) > 2):
+        im_focus = remove_small_objects(label(im_focus), 128)
     im_focus[im_focus > 0] = 1
 
     im_yolk_path = glob.glob(os.path.join(yolk_path, date, "*" + im_stub + "*"))[0] #os.path.join(yolk_path, date, im_name)
@@ -581,10 +590,12 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     
     # rescale masks to accord with original aspec ratio
     ff_shape = tuple(row[["FOV_height_px", "FOV_width_px"]].to_numpy().astype(int))
+    if row["experiment_date"] in ["20231207", "20231208"]: # handle two samll but problematic datasets
+        ff_shape = tuple([3420, 1890])
     im_mask_lb = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
-    im_bubble = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
-    im_focus = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
-    im_yolk = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
+    im_bubble = resize(im_bubble, ff_shape, order=0, preserve_range=True)
+    im_focus = resize(im_focus, ff_shape, order=0, preserve_range=True)
+    im_yolk = resize(im_yolk, ff_shape, order=0, preserve_range=True)
 
     # get surface area
     px_dim = row["Height (um)"] / row["Height (px)"]   # to adjust for size reduction (need to automate this)
@@ -1028,10 +1039,10 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     # add oof flag
     embryo_metadata_df.loc[export_indices, "out_of_frame_flag"] = out_of_frame_flags
     embryo_metadata_df.loc[export_indices, "use_embryo_flag_orig"] = embryo_metadata_df.loc[export_indices, "use_embryo_flag"].copy()
-    embryo_metadata_df.loc[export_indices, "use_embryo_flag"] = embryo_metadata_df.loc[export_indices, "use_embryo_flag"] & ~embryo_metadata_df["out_of_frame_flag"]
+    embryo_metadata_df.loc[export_indices, "use_embryo_flag"] = embryo_metadata_df.loc[export_indices, "use_embryo_flag"] & ~embryo_metadata_df.loc[export_indices, "out_of_frame_flag"]
 
     # save
-    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
+    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"))
 
 
 if __name__ == "__main__":
