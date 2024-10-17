@@ -1,6 +1,6 @@
 from src.build.build03A_process_embryos_main_par import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
 import multiprocessing
-from src.build.build02A_adjust_ff_contrast import adjust_contrast_wrapper
+from src.build._Archive.build02A_adjust_ff_contrast import adjust_contrast_wrapper
 from src.build.build02B_segment_bf_main import apply_unet
 def main():
     # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
