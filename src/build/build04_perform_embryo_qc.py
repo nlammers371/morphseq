@@ -6,25 +6,27 @@ import time
 from tqdm import tqdm
 import statsmodels.api as sm
 
-def infer_embryo_stage(embryo_metadata_df, ref_date="20240626"):
+
+def infer_embryo_stage_orig(embryo_metadata_df, ref_date="20240626"):
 
     # build the reference set
     stage_df = embryo_metadata_df.loc[embryo_metadata_df["experiment_date"]==ref_date, 
-                    ["snip_id", "embryo_id", "short_pert_name", "phenotype", "control_flag", "predicted_stage_hpf", "length_um", "use_embryo_flag"]].reset_index(drop=True)
+                    ["snip_id", "embryo_id", "short_pert_name", "phenotype", "control_flag", "predicted_stage_hpf",
+                     "surface_area_um", "use_embryo_flag"]].reset_index(drop=True)
     ref_bool = (stage_df.loc[:, "phenotype"].to_numpy() == "wt") | (stage_df.loc[:, "control_flag"].to_numpy() == 1)
     ref_bool = ref_bool | (stage_df.loc[:, "phenotype"].to_numpy() == "uncertain")
     ref_bool = ref_bool & stage_df["use_embryo_flag"]
     stage_df = stage_df.loc[ref_bool]
     stage_df["stage_group_hpf"] = np.round(stage_df["predicted_stage_hpf"])
     stage_df["stage_group_hpf"] = stage_df["stage_group_hpf"].astype(np.float)
-    stage_key_df = stage_df.loc[:, ["stage_group_hpf", "length_um"]].groupby('stage_group_hpf').quantile(.95).reset_index()
+    stage_key_df = stage_df.loc[:, ["stage_group_hpf", "surface_area_um"]].groupby('stage_group_hpf').quantile(.95).reset_index()
     # stage_key_df = stage_df.groupby('stage_group_hpf').quantile(.95).reset_index().loc[:, ["stage_group_hpf", "length_um"]]
     # add one entry for 72hpf taken from embryo poster 
-    row72 = pd.DataFrame([[72.01, 3.76*1000]], columns=["stage_group_hpf", "length_um"])
-    stage_key_df = pd.concat([stage_key_df, row72], axis=0, ignore_index=True)
+    # row72 = pd.DataFrame([[72.01, 3.76*1000]], columns=["stage_group_hpf", "length_um"])
+    # stage_key_df = pd.concat([stage_key_df, row72], axis=0, ignore_index=True)
 
     # get interpolator
-    stage_interpolator = scipy.interpolate.interp1d(stage_key_df["length_um"], stage_key_df["stage_group_hpf"], 
+    stage_interpolator = scipy.interpolate.interp1d(stage_key_df["surface_area_um"], stage_key_df["stage_group_hpf"],
                                     kind="linear", fill_value=np.nan, bounds_error=False)
     # iterate through dates
     date_index, date_indices = np.unique(embryo_metadata_df["experiment_date"], return_inverse=True)
@@ -34,7 +36,7 @@ def infer_embryo_stage(embryo_metadata_df, ref_date="20240626"):
 
     for d, date in enumerate(tqdm(date_index)):
         date_df = embryo_metadata_df.loc[date_indices==d, ["snip_id", "embryo_id", "time_int","short_pert_name", 
-                        "phenotype", "control_flag", "predicted_stage_hpf", "length_um", "use_embryo_flag"]].reset_index(drop=True)
+                        "phenotype", "control_flag", "predicted_stage_hpf", "surface_area_um", "use_embryo_flag"]].reset_index(drop=True)
 
         # check for multiple age cohorts
         min_t = np.min(date_df["time_int"])
@@ -52,18 +54,20 @@ def infer_embryo_stage(embryo_metadata_df, ref_date="20240626"):
             embryo_metadata_df["use_embryo_flag"] = True
         # calculate length percentiles
         ref_bool = (date_df.loc[:, "phenotype"].to_numpy() == "wt") | (date_df.loc[:, "control_flag"].to_numpy() == 1)
-        if date == "20240314": # special allowance for this one dataset
+        if date == "20240314":   # special allowance for this one dataset
             ref_bool = ref_bool | True
         ref_bool = ref_bool & date_df["use_embryo_flag"]
 
-        date_df = date_df.loc[ref_bool]
+        date_df_ref = date_df.loc[ref_bool]
         # date_df["length_um"] = date_df["length_um"]*1.5
-        date_df["stage_group_hpf"] = np.round(date_df["predicted_stage_hpf"])
-        date_key_df = date_df.loc[:, ["stage_group_hpf", "cohort_id", "length_um"]].groupby(['stage_group_hpf', "cohort_id"]).quantile(.95).reset_index()
+        date_df_ref["stage_group_hpf"] = np.round(date_df_ref["predicted_stage_hpf"])
+        date_key_df = date_df_ref.loc[:, ["stage_group_hpf", "cohort_id", "surface_area_um"]].groupby(['stage_group_hpf', "cohort_id"]).quantile(.95).reset_index()
 
         # get interp predictions
-        date_key_df["stage_hpf_interp"] = stage_interpolator(date_key_df["length_um"])
+        date_key_df["stage_hpf_interp"] = stage_interpolator(date_key_df["surface_area_um"])
 
+        # if date == "20240314":
+        #     print("check")
         if snapshot_flag:
             date_df["inferred_stage_hpf"] = stage_interpolator(date_df["predicted_stage_hpf"])
             # stage_skel = date_df.loc[:, ["snip_id", "stage_group_hpf"]]
@@ -81,10 +85,10 @@ def infer_embryo_stage(embryo_metadata_df, ref_date="20240626"):
             X = X.rename(columns={'stage_group_hpf':'stage'})
             X["stage2"] = X["stage"]**2
             X["interaction"] = np.prod(X[['stage', 'cohort_id']].to_numpy(), axis=1)
-            X["interaction2"] = np.prod(X[['stage2', 'cohort_id']].to_numpy(), axis=1)
+            # X["interaction2"] = np.prod(X[['stage2', 'cohort_id']].to_numpy(), axis=1)
 
             # Add a constant (intercept term) to the predictor matrix
-            # X = sm.add_constant(X)
+            # X = sm.add_constant(X, has_constant='add')
 
             X_ft = X[nan_ft]
             Y_ft = Y[nan_ft]
@@ -97,17 +101,206 @@ def infer_embryo_stage(embryo_metadata_df, ref_date="20240626"):
             X_full = X_full.rename(columns={'predicted_stage_hpf':'stage'})
             X_full["stage2"] = X_full["stage"]**2
             X_full["interaction"] = np.prod(X_full[['stage', 'cohort_id']].to_numpy(), axis=1)
-            X_full["interaction2"] = np.prod(X_full[['stage2', 'cohort_id']].to_numpy(), axis=1)
+
+            # X_full = sm.add_constant(X_full, has_constant='add')
+            # X_full["interaction2"] = np.prod(X_full[['stage2', 'cohort_id']].to_numpy(), axis=1)
 
             predictions_full = model.predict(X_full)
 
             # merge back to full df
             date_df["inferred_stage_hpf"] = predictions_full
 
-        embryo_metadata_df.loc[date_indices==d, "inferred_stage_hpf"] = date_df.loc[:,  "inferred_stage_hpf"]
+        embryo_metadata_df.loc[date_indices == d, "inferred_stage_hpf"] = date_df["inferred_stage_hpf"].to_numpy()
 
     return embryo_metadata_df
-       
+
+def stage_from_sa(params, sa_vec):
+    t_pd = params[3] * np.divide(sa_vec-params[0], params[1] - sa_vec + params[0])**(1/params[2])
+    return t_pd
+
+def infer_embryo_stage_sigoid(root, embryo_metadata_df):
+
+    # stage_key_df = pd.read_csv(os.path.join(root, "metadata", "stage_reg_key.csv"))
+    stage_params = pd.read_csv(os.path.join(root, "metadata", "stage_ref_params.csv"))
+
+    # iterate through dates
+    date_index, date_indices = np.unique(embryo_metadata_df["experiment_date"], return_inverse=True)
+
+    # initialize new field
+    embryo_metadata_df["inferred_stage_hpf"] = np.nan
+
+    for d, date in enumerate(tqdm(date_index)):
+        date_df = embryo_metadata_df.loc[date_indices==d, ["snip_id", "embryo_id", "time_int", "Time Rel (s)", "short_pert_name",
+                        "phenotype", "control_flag", "predicted_stage_hpf", "surface_area_um", "use_embryo_flag"]].reset_index(drop=True)
+
+        # check for multiple age cohorts
+        min_t = np.min(date_df["time_int"])
+        cohort_key = date_df.loc[date_df["time_int"]==min_t, ["embryo_id", "predicted_stage_hpf"]]
+        _, age_cohort = np.unique(np.round(cohort_key["predicted_stage_hpf"]/ 2.5) * 2.5, return_inverse=True)
+        cohort_key["cohort_id"] = age_cohort
+
+        date_df["abs_time_hr"] = date_df["Time Rel (s)"] / 3600
+
+        # join onto main df
+        date_df = date_df.merge(cohort_key.loc[:, ["embryo_id", "cohort_id"]], how="left", on="embryo_id")
+
+        # check to see if this is a timeseries dataset
+        _, embryo_counts = np.unique(date_df["embryo_id"], return_counts=True)
+        snapshot_flag = np.max(embryo_counts) == 1
+        if snapshot_flag:
+            embryo_metadata_df["use_embryo_flag"] = True
+        # calculate length percentiles
+        ref_bool = (date_df.loc[:, "phenotype"].to_numpy() == "wt") | (date_df.loc[:, "control_flag"].to_numpy() == 1)
+        if date == "20240314":   # special allowance for this one dataset
+            ref_bool = ref_bool | True
+        ref_bool = ref_bool & date_df["use_embryo_flag"]
+
+        date_df_ref = date_df.loc[ref_bool]
+        # date_df["length_um"] = date_df["length_um"]*1.5
+        date_df_ref["stage_group_hpf"] = np.round(date_df_ref["predicted_stage_hpf"])
+        date_key_df = date_df_ref.loc[:, ["stage_group_hpf", "cohort_id", "surface_area_um"]].groupby(
+            ['stage_group_hpf', "cohort_id"]).quantile(.90).reset_index()
+
+        # smooth
+        # sa_bound_sm = scipy.signal.savgol_filter(date_key_df["surface_area_um"], window_length=3, polyorder=2)
+
+        # use grouped percentiles to get interpolator
+        # sa_interpolator = scipy.interpolate.interp1d(date_key_df["stage_group_hpf"], sa_bound_sm,
+        #                                                 kind="linear", fill_value="nearest", bounds_error=False)
+        # sa_interp_full = sa_interpolator(date_df["predicted_stage_hpf"])
+        sa_interp_full = np.interp(x=date_df["predicted_stage_hpf"], xp=date_key_df["stage_group_hpf"], fp=date_key_df["surface_area_um"])
+        # get stage predictions
+        stage_predictions = stage_from_sa(stage_params.to_numpy()[0], sa_interp_full)
+        stage_predictions[stage_predictions > 96] = 96
+        stage_min = np.min(stage_predictions)
+        def reg_curve(params, intercept=stage_min, real_time_vec=date_df["abs_time_hr"].to_numpy()):
+            pd_time = intercept + params[0] * real_time_vec + params[1] * real_time_vec ** 2
+            return pd_time
+
+        def loss_fun(params, target_time_vec=stage_predictions):
+            pd_time = reg_curve(params)
+            return pd_time - target_time_vec
+
+        x0 = [1, 0.01]
+        # sigmoid(x0)
+        params_fit = scipy.optimize.least_squares(loss_fun, x0, bounds=[(0, 0), (2, 0.1)])
+        date_df["inferred_stage_hpf"] = reg_curve(params_fit.x)
+
+        embryo_metadata_df.loc[date_indices == d, "inferred_stage_hpf"] = date_df["inferred_stage_hpf"].to_numpy()
+
+    return embryo_metadata_df
+
+def infer_embryo_stage(root, embryo_metadata_df):
+
+    # load ref dataset
+    stage_key_df = pd.read_csv(os.path.join(root, "metadata", "stage_ref_df01.csv"))
+    # stage_key_df = stage_key_df.loc[stage_key_df["stage_hpf"] <= 72] # not reliable after this point
+
+    # get interpolator
+    stage_interpolator = scipy.interpolate.interp1d(stage_key_df["sa_um"], stage_key_df["stage_hpf"],
+                                    kind="linear", fill_value=np.nan, bounds_error=False)
+    # iterate through dates
+    date_index, date_indices = np.unique(embryo_metadata_df["experiment_date"], return_inverse=True)
+
+    # initialize new field
+    embryo_metadata_df["inferred_stage_hpf"] = np.nan
+
+    for d, date in enumerate(tqdm(date_index)):
+        date_df = embryo_metadata_df.loc[date_indices == d, ["snip_id", "embryo_id", "time_int", "Time Rel (s)", "short_pert_name",
+                        "phenotype", "control_flag", "predicted_stage_hpf", "surface_area_um", "use_embryo_flag"]].reset_index(drop=True)
+
+        date_df["abs_time_hr"] = date_df["Time Rel (s)"] / 3600
+        # check for multiple age cohorts
+        min_t = np.min(date_df["time_int"])
+        cohort_key = date_df.loc[date_df["time_int"] == min_t, ["embryo_id", "predicted_stage_hpf"]]
+        _, age_cohort = np.unique(np.round(cohort_key["predicted_stage_hpf"] / 5) * 5, return_inverse=True)
+        cohort_key["cohort_id"] = age_cohort
+
+        # join onto main df
+        date_df = date_df.merge(cohort_key.loc[:, ["embryo_id", "cohort_id"]], how="left", on="embryo_id")
+
+        # check to see if this is a timeseries dataset
+        _, embryo_counts = np.unique(date_df["embryo_id"], return_counts=True)
+        snapshot_flag = np.max(embryo_counts) == 1
+        if snapshot_flag:
+            embryo_metadata_df.loc[date_indices == d, "use_embryo_flag"] = True
+
+        # calculate length percentiles
+        ref_bool = (date_df.loc[:, "phenotype"].to_numpy() == "wt") | (date_df.loc[:, "control_flag"].to_numpy() == 1)
+        if date == "20240314":   # special allowance for this one dataset
+            ref_bool = ref_bool | True
+
+        # date_df["abs_time_hpf"] = np.round(date_df["predicted_stage_hpf"])
+
+        ref_bool = ref_bool & date_df["use_embryo_flag"]
+        date_df_ref = date_df.loc[ref_bool]
+        # date_df["length_um"] = date_df["length_um"]*1.5
+        date_df_ref["stage_group_hpf"] = np.round(date_df_ref["predicted_stage_hpf"])   # ["predicted_stage_hpf"])
+        date_key_df = date_df_ref.loc[:, ["stage_group_hpf", "cohort_id", "surface_area_um"]].groupby(
+                                                        ['stage_group_hpf', "cohort_id"]).quantile(.95).reset_index()
+
+        # get interp predictions
+        date_key_df["stage_hpf_interp"] = stage_interpolator(date_key_df["surface_area_um"])
+
+        if snapshot_flag:
+            date_df["inferred_stage_hpf"] = stage_interpolator(date_df["predicted_stage_hpf"])
+            # stage_skel = date_df.loc[:, ["snip_id", "stage_group_hpf"]]
+            # stage_skel = stage_skel.merge(date_key_df.loc[:, ["stage_group_hpf", "stage_hpf_interp"]], how="left", on="stage_group_hpf").rename(
+            #                 columns={"stage_hpf_interp":"inferred_stage_hpf"})
+            # embryo_metadata_df = embryo_metadata_df.merge(stage_skel.loc[:, ["snip_id", "inferred_stage_hpf"]], how="left", on="snip_id")
+
+        else:
+            # fit regression model of predicted stage vs. interpolated stage
+            Y = date_key_df['stage_hpf_interp']
+            T = date_key_df['stage_group_hpf'].to_numpy()
+            G = date_key_df['cohort_id'].to_numpy().astype(int)
+
+            nan_ft = ~np.isnan(Y)
+
+            Y = Y[nan_ft]
+            T = T[nan_ft]
+            G = G[nan_ft]
+
+            ignore_g = True
+            if len(np.unique(G)) > 1:
+                ignore_g = False
+            def stage_pd_fun(params, t_vec=T, g_vec=G, g_flag=ignore_g):
+                #   intercept + group_dummy +
+                if not g_flag:
+                    stage_pd = params[0] + params[1]*g_vec + params[2]*t_vec + params[3]*t_vec**2# + params[4]**3
+                else:
+                    stage_pd = params[0] + params[1] * t_vec + params[2] * t_vec ** 2
+                return stage_pd
+
+            # define loss
+            def loss_fun(params, y=Y):
+                loss = stage_pd_fun(params) - y
+                return loss
+
+            # intercept, group intercept, slope, quadratic slope, quad center
+            if not ignore_g:
+                x0 = [0, 0, 1, 0]  #, 0]
+                ub = (4, 72, 2.0, 0.005)  #, 0.005)
+                lb = (0, -72, 0.5, -0.005)  #, -0.005)
+            else:
+                x0 = [0, 1, 0]  # , 0]
+                ub = (4, 2.0, 0.005)  # , 0.005)
+                lb = (0, 0.5, -0.005)  # , -0.005)
+
+            params_fit = scipy.optimize.least_squares(loss_fun, x0,  bounds=[lb, ub])
+
+            # now predict all stages
+            T_full = date_df['predicted_stage_hpf'].to_numpy()
+            G_full = date_df['cohort_id'].to_numpy().astype(int)
+
+            predictions_full = stage_pd_fun(params_fit.x, t_vec=T_full, g_vec=G_full)
+
+            # merge back to full df
+            date_df["inferred_stage_hpf"] = predictions_full
+
+        embryo_metadata_df.loc[date_indices == d, "inferred_stage_hpf"] = date_df["inferred_stage_hpf"].to_numpy()
+
+    return embryo_metadata_df
 
 
 def perform_embryo_qc(root, dead_lead_time=2):
@@ -214,7 +407,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     
     # join on additional perturbation info
-    pert_name_key = pd.read_csv(os.path.join(root, 'metadata',"perturbation_name_key.csv"))
+    pert_name_key = pd.read_csv(os.path.join(root, 'metadata', "perturbation_name_key.csv"))
     embryo_metadata_df = embryo_metadata_df.merge(pert_name_key, how="left", on="master_perturbation", indicator=True)
     if np.any(embryo_metadata_df["_merge"] != "both"):
         problem_perts = np.unique(embryo_metadata_df.loc[embryo_metadata_df["_merge"] != "both", "master_perturbation"])
@@ -223,7 +416,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     ##################################
     # Infer standardized embryo stages
-    embryo_metadata_df = infer_embryo_stage(embryo_metadata_df)
+    embryo_metadata_df = infer_embryo_stage(root=root, embryo_metadata_df=embryo_metadata_df)
 
     # save
     embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df02.csv"), index=False)
