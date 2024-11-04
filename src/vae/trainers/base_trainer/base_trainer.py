@@ -5,6 +5,7 @@ import os
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Union
 import numpy as np
+import torch.nn as nn
 import pandas as pd
 from src.functions.utilities import path_leaf
 import torch
@@ -110,6 +111,12 @@ class BaseTrainer:
             self.amp_context = contextlib.nullcontext()
 
         self.device = device
+
+        # Check if multiple GPUs are available
+        # if torch.cuda.device_count() > 1:
+        #     print(f"Using {torch.cuda.device_count()} GPUs!")
+        #     # Wrap the model in DataParallel
+        #     model = nn.DataParallel(model)
 
         # place model on device
         model = model.to(device)
@@ -386,6 +393,10 @@ class BaseTrainer:
         loss = model_output.loss
 
         self.optimizer.zero_grad()
+
+        #### aggregate
+        loss = torch.mean(loss)
+
         loss.backward()
         self.optimizer.step()
 
@@ -679,16 +690,16 @@ class BaseTrainer:
 
             self._optimizers_step(model_output)
 
-            loss = model_output.loss
+            loss = torch.mean(model_output.loss)
             epoch_loss += loss.item()
 
             # get list of loss terms
             out_keys = model_output.keys()
             loss_keys = sorted([i for i in out_keys if "loss" in i])
             if input_i == 0:
-                epoch_loss_vec = torch.asarray([model_output[k].item() for k in loss_keys])
+                epoch_loss_vec = torch.asarray([torch.mean(model_output[k]).item() for k in loss_keys])
             else:
-                epoch_loss_vec += torch.asarray([model_output[k].item() for k in loss_keys])
+                epoch_loss_vec += torch.asarray([torch.mean(model_output[k]).item() for k in loss_keys])
 
             if epoch_loss != epoch_loss:
                 raise ArithmeticError("NaN detected in train loss")

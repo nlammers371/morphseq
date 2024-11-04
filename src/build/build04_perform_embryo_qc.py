@@ -118,7 +118,7 @@ def stage_from_sa(params, sa_vec):
     t_pd = params[3] * np.divide(sa_vec-params[0], params[1] - sa_vec + params[0])**(1/params[2])
     return t_pd
 
-def infer_embryo_stage_sigoid(root, embryo_metadata_df):
+def infer_embryo_stage_sigmoid(root, embryo_metadata_df):
 
     # stage_key_df = pd.read_csv(os.path.join(root, "metadata", "stage_reg_key.csv"))
     stage_params = pd.read_csv(os.path.join(root, "metadata", "stage_ref_params.csv"))
@@ -193,7 +193,7 @@ def infer_embryo_stage_sigoid(root, embryo_metadata_df):
 def infer_embryo_stage(root, embryo_metadata_df):
 
     # load ref dataset
-    stage_key_df = pd.read_csv(os.path.join(root, "metadata", "stage_ref_df01.csv"))
+    stage_key_df = pd.read_csv(os.path.join(root, "metadata", "stage_ref_df.csv"))
     # stage_key_df = stage_key_df.loc[stage_key_df["stage_hpf"] <= 72] # not reliable after this point
 
     # get interpolator
