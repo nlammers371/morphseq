@@ -71,10 +71,10 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
         model_config.make_dataset()
 
         # initialize contrastive data loader
-        if cache_data:
-            data_transform = ContrastiveLearningDataset.get_contrastive_transform_cache()
-        else:
-            data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
+        # if cache_data:
+        #     data_transform = ContrastiveLearningDataset.get_contrastive_transform_cache()
+        # else:
+        data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
 
     elif model_type == "MorphIAFVAE":
         # raise Error("Need to update dataloader architecture for seqVAE")
@@ -91,10 +91,10 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
         model_config.make_dataset()
 
         # initialize contrastive data loader
-        if cache_data:
-            data_transform = ContrastiveLearningDataset.get_contrastive_transform_cache()
-        else:
-            data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
+        # if cache_data:
+        #     data_transform = ContrastiveLearningDataset.get_contrastive_transform_cache()
+        # else:
+        data_transform = ContrastiveLearningDataset.get_simclr_pipeline_transform()
 
     else:
         raise Exception("Unrecognized model type: " + model_type)
@@ -182,7 +182,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
             encoder=encoder,
             decoder=decoder
         )
-
     elif model_type == "MorphIAFVAE":
         model = MorphIAFVAE(
             model_config=model_config,
@@ -192,7 +191,7 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
     else:
         raise Exception("Unrecognized model type: " + model_type)
 
-
+    # Initialize training pipeliene
     pipeline = TrainingPipeline(
         training_config=train_config,
         model=model
@@ -200,9 +199,10 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
 
     # inputs = next(iter(test_loader))
 
+    # Run pipeline
     pipeline(
         train_data=train_dataset,  # here we use the custom train dataset
-        eval_data=train_dataset  # here we use the custom eval dataset
+        eval_data=train_dataset  # same dataset, but we will use different image indices
     )
 
     return output_dir

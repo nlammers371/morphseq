@@ -2,8 +2,8 @@ import multiprocessing
 from src.build.build04_perform_embryo_qc import perform_embryo_qc
 
 def main():
-    root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
+    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
     # root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
     perform_embryo_qc(root)
 

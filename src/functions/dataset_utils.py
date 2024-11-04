@@ -154,24 +154,31 @@ class SeqPairDatasetCached(datasets.ImageFolder):
         self.train_config = train_config
         self.root = root
         self.cache_data = train_config.cache_data
+        self.cache = {}
         # self.mode = mode
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
-        if self.cache_data:
+        # if self.cache_data:
 
-            data_tensor = preload_data(self.root, self.train_config)
+        #     data_tensor = preload_data(self.root, self.train_config)
 
-            self.data = data_tensor
+        #     self.data = data_tensor
 
     def __getitem__(self, index):
         
-        if self.cache_data:
-            X = self.data[index, :, :].unsqueeze(0)
-        else:
-            X = Image.open(self.samples[index][0])
+        # if self.cache_data:
+        #     X = self.data[index, :, :].unsqueeze(0)
+        # else:
+        #     X = Image.open(self.samples[index][0])
 
-        if self.transform:
-            X = self.transform(X)
+        # if self.transform:
+        #     X = self.transform(X)
+        if index in self.cache:
+            X = self.cache[index]
+        else: 
+            X = Image.open(self.samples[index][0])
+            if self.transform:
+                X = self.transform(X)
 
         # determine if we're in train or eval partition
         train_flag = index in self.model_config.train_indices
@@ -216,13 +223,20 @@ class SeqPairDatasetCached(datasets.ImageFolder):
 
         #########
         # load sequential pair
-        if self.cache_data:
-            Y = self.data[seq_pair_index, :, :].unsqueeze(0)
-        else:
-            Y = Image.open(self.samples[seq_pair_index][0])
+        # if self.cache_data:
+        #     Y = self.data[seq_pair_index, :, :].unsqueeze(0)
+        # else:
+        #     Y = Image.open(self.samples[seq_pair_index][0])
         
-        if self.transform:
-            Y = self.transform(Y)
+        # if self.transform:
+        #     Y = self.transform(Y)
+        if (seq_pair_index in self.cache) and (seq_pair_index != index):
+            Y = self.cache[seq_pair_index]
+        else: 
+            Y = Image.open(self.samples[seq_pair_index][0])
+            if self.transform:
+                Y = self.transform(Y)
+            self.cache[seq_pair_index] = Y
 
         X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
         Y = torch.reshape(Y, (1, Y.shape[0], Y.shape[1], Y.shape[2]))
@@ -247,25 +261,33 @@ class TripletDatasetCached(datasets.ImageFolder):
         self.model_config = model_config
         self.root = root
         self.train_config = train_config
-        self.cache_data = cache_data
+        # self.cache_data = cache_data
+        self.cache = {}
 
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
-        if self.cache_data:
-            data_tensor = preload_data(self.root, self.train_config)
+        # if self.cache_data:
+        #     data_tensor = preload_data(self.root, self.train_config)
 
-            self.data = data_tensor
+        #     self.data = data_tensor
 
 
     def __getitem__(self, index):
+        
+        # if self.cache_data:
+        #     X = self.data[index, :, :].unsqueeze(0)
+        # else:
+        #     X = Image.open(self.samples[index][0])
 
-        if self.cache_data:
-            X = self.data[index, :, :].unsqueeze(0)
-        else:
+        if index in self.cache:
+            X = self.cache[index]
+        else: 
             X = Image.open(self.samples[index][0])
+            if self.transform:
+                X = self.transform(X)
 
-        if self.transform:
-            X = self.transform(X)
+        # if self.transform:
+        #     X = self.transform(X)
 
 
         # determine if we're in train or eval partition
@@ -325,19 +347,36 @@ class TripletDatasetCached(datasets.ImageFolder):
 
         #########
         # load positive and negative points
-        if self.cache_data:
-            YP = self.data[pos_pair_index, :, :].unsqueeze(0)
-        else:
-            YP = Image.open(self.samples[pos_pair_index][0])
-        if self.transform:
-            YP = self.transform(YP)
+        # if self.cache_data:
+        #     YP = self.data[pos_pair_index, :, :].unsqueeze(0)
+        # else:
+        #     YP = Image.open(self.samples[pos_pair_index][0])
+        # if self.transform:
+        #     YP = self.transform(YP)
 
-        if self.cache_data:
-            YN = self.data[neg_pair_index, :, :].unsqueeze(0)
-        else:
+        # if self.cache_data:
+        #     YN = self.data[neg_pair_index, :, :].unsqueeze(0)
+        # else:
+        #     YN = Image.open(self.samples[neg_pair_index][0])
+        # if self.transform:
+        #     YN = self.transform(YN)
+
+        if (pos_pair_index in self.cache) and (pos_pair_index != index):
+            YP = self.cache[pos_pair_index]
+        else: 
+            YP = Image.open(self.samples[pos_pair_index][0])
+            if self.transform:
+                YP = self.transform(YP)
+            self.cache[pos_pair_index] = YP
+
+        if neg_pair_index in self.cache:
+            YN = self.cache[neg_pair_index]
+        else: 
             YN = Image.open(self.samples[neg_pair_index][0])
-        if self.transform:
-            YN = self.transform(YN)
+            if self.transform:
+                YN = self.transform(YN)
+            self.cache[neg_pair_index] = YN
+        
 
         X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
         YP = torch.reshape(YP, (1, YP.shape[0], YP.shape[1], YP.shape[2]))
@@ -538,19 +577,19 @@ class ContrastiveLearningDataset:
         return data_transforms
 
     
-    # def get_contrastive_transform_cache():#(size, s=1):
-    #     """Return a set of data augmentation transformations as described in the SimCLR paper."""
-    #     color_jitter = transforms.ColorJitter(brightness=0.3)
-    #     data_transforms = transforms.Compose([#transforms.Grayscale(num_output_channels=1),
-    #                                           transforms.RandomAffine(degrees=15, scale=tuple([0.7, 1.3])),
-    #                                           transforms.RandomHorizontalFlip(),
-    #                                           transforms.RandomVerticalFlip(),
-    #                                           transforms.RandomApply([color_jitter], p=0.8),
-    #                                           #transforms.RandomGrayscale(p=0.2),
-    #                                           #GaussianBlur(kernel_size=5),
-    #                                           #transforms.ToTensor()
-    #                                           ])
-    #     return data_transforms
+    def get_contrastive_transform_cache():#(size, s=1):
+        """Return a set of data augmentation transformations as described in the SimCLR paper."""
+        color_jitter = transforms.ColorJitter(brightness=0.3)
+        data_transforms = transforms.Compose([#transforms.Grayscale(num_output_channels=1),
+                                              transforms.RandomAffine(degrees=15, scale=tuple([0.7, 1.3])),
+                                              transforms.RandomHorizontalFlip(),
+                                              transforms.RandomVerticalFlip(),
+                                              transforms.RandomApply([color_jitter], p=0.8),
+                                              #transforms.RandomGrayscale(p=0.2),
+                                              #GaussianBlur(kernel_size=5),
+                                              #transforms.ToTensor()
+                                              ])
+        return data_transforms
 
     def get_dataset(self, name, n_views):
         valid_datasets = {'cifar10': lambda: datasets.CIFAR10(self.root_folder, train=True,

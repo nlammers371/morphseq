@@ -20,7 +20,13 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
 
     # read in metadata database
     embryo_metadata_df = pd.read_csv(os.path.join(training_path, "embryo_metadata_df_train.csv"))
-    seq_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "experiment_date", "predicted_stage_hpf", "master_perturbation"]]
+    if "inferred_stage_hpf" in embryo_metadata_df.columns:
+        seq_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "experiment_date", "inferred_stage_hpf", "short_pert_name"]]
+        seq_key = seq_key.rename(columns={"inferred_stage_hpf":"stage_hpf"})
+    else:
+        print("Warning: no age inference info found. Using default stage estimages.")
+        seq_key = embryo_metadata_df.loc[:, ["snip_id", "experiment_id", "experiment_date", "predicted_stage_hpf", "short_pert_name"]]
+        seq_key = seq_key.rename(columns={"predicted_stage_hpf":"stage_hpf"})
 
     # The above dataset comprises all available images. Some training folders will only use a subset of these. Check
     # which images are in the present one (specified by "train name")
@@ -44,11 +50,11 @@ def make_seq_key(root, train_name): #, time_window=3, self_target=0.5, other_age
     seq_key = seq_key.merge(temp_df, how="inner", on="snip_id")
 
     # join on perturbation ID variables for convenience
-    pert_u = np.unique(seq_key["master_perturbation"].to_numpy())
+    pert_u = np.unique(seq_key["short_pert_name"].to_numpy())
     pert_index = np.arange(len(pert_u))
-    pert_df = pd.DataFrame(pert_u, columns=["master_perturbation"])
+    pert_df = pd.DataFrame(pert_u, columns=["short_pert_name"])
     pert_df["perturbation_id"] = pert_index
-    seq_key = seq_key.merge(pert_df, how="left", on="master_perturbation")
+    seq_key = seq_key.merge(pert_df, how="left", on="short_pert_name")
 
     emb_id_list = [snip_id[:-6] for snip_id in list(seq_key["snip_id"])]
     seq_key["embryo_id"] = emb_id_list
@@ -82,7 +88,7 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
     # randomly partition into train, eval, and test
     # this needs to be done at the level of embryos, not images
     if train_eval_test == None:
-        train_eval_test = [0.8, 0.20, 0.0]
+        train_eval_test = [0.7, 0.20, 0.1]
     train_eval_test = (np.asarray(train_eval_test)*frac_to_use).tolist()
 
     # snip_id_vec = embryo_metadata_df["snip_id"].values
@@ -91,14 +97,14 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
 
     # check to see if there are any experiment dates or perturb ation types that should be left out of training (kept in test)
     test_constraints_flag = False
-    emb_key = seq_key.loc[:, ["embryo_id", "master_perturbation", "experiment_date"]].drop_duplicates().reset_index(drop=True)
+    emb_key = seq_key.loc[:, ["embryo_id", "short_pert_name", "experiment_date"]].drop_duplicates().reset_index(drop=True)
     emb_id_vec = np.unique(emb_key["embryo_id"].values)
     if pert_time_key is not None:
         test_constraints_flag = True
-        min_age_vec = np.asarray([pert_time_key.loc[pert_time_key["master_perturbation"]==pert, "start_hpf"].values[0]
-                       for pert in emb_key["master_perturbation"].tolist()])
-        max_age_vec = np.asarray([pert_time_key.loc[pert_time_key["master_perturbation"] == pert, "stop_hpf"].values[0]
-                       for pert in emb_key["master_perturbation"].tolist()])
+        min_age_vec = np.asarray([pert_time_key.loc[pert_time_key["short_pert_name"]==pert, "start_hpf"].values[0]
+                       for pert in emb_key["short_pert_name"].tolist()])
+        max_age_vec = np.asarray([pert_time_key.loc[pert_time_key["short_pert_name"] == pert, "stop_hpf"].values[0]
+                       for pert in emb_key["short_pert_name"].tolist()])
     else:
         min_age_vec = np.zeros(emb_id_vec.shape)
         max_age_vec = np.zeros(emb_id_vec.shape) + np.Inf
@@ -115,8 +121,8 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
 
     if test_perturbations is not None:
         test_constraints_flag = True
-        min_age_vec[np.isin(emb_key[:, "master_perturbations"].to_numpy(), test_perturbations)] = np.inf
-        # eid_pert_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "master_perturbation"] in test_perturbations]
+        min_age_vec[np.isin(emb_key[:, "short_pert_names"].to_numpy(), test_perturbations)] = np.inf
+        # eid_pert_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "short_pert_name"] in test_perturbations]
         # eids_pert_test = np.unique(eid_pert_list).tolist()
         # if test_ids is not None:
         #     test_ids += eids_pert_test
@@ -137,7 +143,7 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
             min_age = min_age_vec[emb_id_vec == tid]
             # if tid[:8] not in morphseq_dates:
             emb_filter = (seq_key["embryo_id"].values == tid)
-            time_filter = (seq_key["inferred_stage_hpf_reg"].values > max_age) | (seq_key["inferred_stage_hpf_reg"].values < min_age)
+            time_filter = (seq_key["stage_hpf"].values > max_age) | (seq_key["stage_hpf"].values < min_age)
             df_ids = np.where(emb_filter & time_filter)[0]
                 
             # snip_list = seq_key["snip_id"].iloc[df_ids].tolist()
@@ -158,8 +164,8 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
         min_age = min_age_vec[emb_id_vec == eid]
         # extract embryos that match current eid
         emb_filter = (seq_key["embryo_id"].values == eid)
-        time_filter = (seq_key["inferred_stage_hpf_reg"].values <= max_age) & (
-                    seq_key["inferred_stage_hpf_reg"].values >= min_age)
+        time_filter = (seq_key["stage_hpf"].values <= max_age) & (
+                    seq_key["stage_hpf"].values >= min_age)
 
         df_ids = np.where(emb_filter & time_filter)[0]
         i_list = df_ids.tolist()

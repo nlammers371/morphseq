@@ -178,12 +178,10 @@ class MorphIAFVAE(BaseAE):
             zp, epsp = self._sample_gauss(mup, stdp)
             zn, epsn = self._sample_gauss(mun, stdn)
 
-
             # Pass encodings through normalizing flows
             z0a = za
             z0p = zp
             z0n = zn
-
 
             # Pass it through the Normalizing flows
             flow_outputa = self.af_flow.inverse(za)  # sampling
