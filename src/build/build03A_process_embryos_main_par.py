@@ -280,6 +280,7 @@ def make_well_names():
 
 def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_flag):
 
+    master_df["experiment_date"] = master_df["experiment_date"].astype(str)
     # get list of image files that need to be processed
     images_to_process = []
     if (not os.path.isfile(meta_df_path)) or overwrite_flag:
@@ -288,9 +289,10 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
 
     else:
         master_df_to_update = pd.read_csv(meta_df_path, index_col=0)
+        master_df_to_update["experiment_date"] = master_df_to_update["experiment_date"].astype(str)
         # master_df_update = master_df_update.iloc[:-250]
         # get list of row indices in new master table need to be processed
-        df_all = master_df.merge(master_df_to_update.drop_duplicates(), on=["well", "experiment_date", "time_int"],
+        df_all = master_df.merge(master_df_to_update.loc[:, ["well", "experiment_date", "time_int"]].drop_duplicates(), on=["well", "experiment_date", "time_int"],
                            how='left', indicator=True)
         diff_indices = np.where(df_all['_merge'].values == 'left_only')[0]
         df_diff = master_df.iloc[diff_indices].drop_duplicates()
@@ -769,6 +771,8 @@ def build_well_metadata_master(root, well_sheets=None):
     out_path = os.path.join(metadata_path, "combined_metadata_files", "")
     if not os.path.exists(out_path):
         os.makedirs(out_path)
+
+    master_well_table["experiment_date"] = master_well_table["experiment_date"].astype(str)
     master_well_table.to_csv(os.path.join(out_path, 'master_well_metadata.csv'))
 
     print("Done.")
@@ -861,6 +865,8 @@ def segment_wells(root, min_sa_um=250000, max_sa_um=2000000, par_flag=False, ove
         if isinstance(prev_meta_df, pd.DataFrame):
             # prev_table = pd.read_csv(ckpt1_path, index_col=0)
             master_df_update = pd.concat([prev_meta_df, master_df_update], ignore_index=True)
+
+        master_df_update["experiment_date"] = master_df_update["experiment_date"].astype(str)
         master_df_update.to_csv(ckpt1_path)
 
     else:
@@ -974,7 +980,7 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
     print("phew")
 
 
-def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=False, outshape=None, dl_rad_um=75):
+def extract_embryo_snips(root, outscale=6.5, overwrite_flag=False, par_flag=False, outshape=None, dl_rad_um=75):
 
     if outshape == None:
         outshape = [576, 256]
@@ -1042,7 +1048,7 @@ def extract_embryo_snips(root, outscale=5.66, overwrite_flag=False, par_flag=Fal
     embryo_metadata_df.loc[export_indices, "use_embryo_flag"] = embryo_metadata_df.loc[export_indices, "use_embryo_flag"] & ~embryo_metadata_df.loc[export_indices, "out_of_frame_flag"]
 
     # save
-    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"))
+    embryo_metadata_df.to_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"), index=False)
 
 
 if __name__ == "__main__":

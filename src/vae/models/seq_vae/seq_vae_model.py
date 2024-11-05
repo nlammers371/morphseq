@@ -343,12 +343,15 @@ class SeqVAE(BaseAE):
 
             age_deltas = torch.abs(age_vec.unsqueeze(-1) - age_vec.unsqueeze(0))
             age_bool = age_deltas <= (self.model_config.time_window + 1.5)  # add an extra neutral "buffer" of 1.5 hrs
-            if self.model_config.self_target_prob < 1.0:
+            if self.model_config.time_only_flag == 1:
+                pert_bool = torch.ones_like(age_bool, dtype=torch.bool)
+            elif self.model_config.self_target_prob < 1.0:
                 pert_vec = torch.cat([self_stats[2], other_stats[2]], axis=0)
                 pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
             else:
-                pert_vec = torch.cat([self_stats[0], other_stats[0]], axis=0)
-                pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid same embryo
+                # pert_vec = torch.cat([self_stats[0], other_stats[0]], axis=0)
+                # pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid same embryo
+                pert_bool = torch.ones_like(age_bool, dtype=torch.bool)
 
             cross_match_flags = age_bool & pert_bool  # things to keep out of the denomenator
             target_matrix[cross_match_flags] = 1

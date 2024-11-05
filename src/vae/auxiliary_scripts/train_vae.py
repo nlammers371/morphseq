@@ -4,8 +4,7 @@ sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 # sys.path.append("../src/")
 
-from src.functions.dataset_utils import make_dynamic_rs_transform, MyCustomDataset, ContrastiveLearningDataset, \
-    ContrastiveLearningViewGenerator, SeqPairDataset, SeqPairDatasetCached, TripletPairDataset, TripletDatasetCached, DatasetCached, grayscale_transform
+from src.functions.dataset_utils import make_dynamic_rs_transform, ContrastiveLearningDataset, SeqPairDatasetCached,  TripletDatasetCached, DatasetCached
 import os
 from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE, MorphIAFVAE, MorphIAFVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
@@ -111,7 +110,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
     train_config = BaseTrainerConfig(
         output_dir=output_dir,
         num_epochs=n_epochs,
-        cache_data=cache_data,
         **training_args
     )
 

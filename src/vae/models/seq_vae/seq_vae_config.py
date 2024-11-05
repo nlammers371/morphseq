@@ -40,7 +40,8 @@ class SeqVAEConfig(VAEConfig):
     # set sequential hyperparameters
     time_window: float = 1.5  # max permitted age difference between sequential pairs
     self_target_prob: float = 0.5  # fraction of time to load self-pair vs. alternative comparison
-    other_age_penalty: float = 1.0  # added similarity delta for cross-embryo comparisons
+    time_only_flag: float = 0 # binary flag. If 0, use only staging info for metric learning
+    other_age_penalty: float = 1.0  # added similarity delta for cross-embryo comparisons (currently not used)
 
     def __init__(self,
                  data_root=None,
@@ -65,7 +66,7 @@ class SeqVAEConfig(VAEConfig):
                  distance_metric="euclidean",
                  name="SeqVAEConfig",
                  uses_default_encoder=True, uses_default_decoder=True, reconstruction_loss='mse',
-                 time_window=2.0, self_target_prob=0.5, other_age_penalty=2.0, **kwargs):
+                 time_window=2.0, self_target_prob=0.5, time_only_flag=0, other_age_penalty=2.0, **kwargs):
 
         self.__dict__.update(kwargs)
 
@@ -95,6 +96,7 @@ class SeqVAEConfig(VAEConfig):
         self.metric_key_path = metric_key_path
         self.pert_time_key_path = pert_time_key_path
         self.self_target_prob = self_target_prob
+        self.time_only_flag = time_only_flag
         self.other_age_penalty = other_age_penalty
 
 
