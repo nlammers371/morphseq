@@ -153,7 +153,8 @@ class SeqPairDatasetCached(datasets.ImageFolder):
         self.model_config = model_config
         self.train_config = train_config
         self.root = root
-        self.cache_data = train_config.cache_data
+        self.time_only_flag = model_config.time_only_flag
+        # self.cache_data = train_config.cache_data
         self.cache = {}
         # self.mode = mode
         super().__init__(root=root, transform=transform, target_transform=target_transform)
@@ -204,6 +205,8 @@ class SeqPairDatasetCached(datasets.ImageFolder):
         age_hpf_input = age_hpf_vec[index]
 
         pert_match_array = pert_id_vec == pert_id_input
+        if self.time_only_flag:
+            pert_match_array = np.ones_like(pert_match_array, dtype=np.bool)
         e_match_array = e_id_vec == e_id_input
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
@@ -256,28 +259,19 @@ class SeqPairDatasetCached(datasets.ImageFolder):
 
 class TripletDatasetCached(datasets.ImageFolder):
 
-    def __init__(self, root, model_config, train_config, cache_data, return_name=False, transform=None, target_transform=None):
+    def __init__(self, root, model_config, train_config, return_name=False, transform=None, target_transform=None):
         self.return_name = return_name
         self.model_config = model_config
         self.root = root
         self.train_config = train_config
+        self.time_only_flag = model_config.time_only_flag
         # self.cache_data = cache_data
         self.cache = {}
 
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
-        # if self.cache_data:
-        #     data_tensor = preload_data(self.root, self.train_config)
-
-        #     self.data = data_tensor
-
 
     def __getitem__(self, index):
-        
-        # if self.cache_data:
-        #     X = self.data[index, :, :].unsqueeze(0)
-        # else:
-        #     X = Image.open(self.samples[index][0])
 
         if index in self.cache:
             X = self.cache[index]
@@ -288,7 +282,6 @@ class TripletDatasetCached(datasets.ImageFolder):
 
         # if self.transform:
         #     X = self.transform(X)
-
 
         # determine if we're in train or eval partition
         train_flag = index in self.model_config.train_indices
@@ -322,6 +315,8 @@ class TripletDatasetCached(datasets.ImageFolder):
 
         # generate arrays for selection
         pert_match_array = np.isin(pert_id_vec, pos_pert_ids)
+        if self.time_only_flag:
+            pert_match_array = np.ones_like(pert_match_array, dtype=np.bool)
         e_match_array = e_id_vec == e_id_input
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
@@ -393,12 +388,16 @@ class TripletDatasetCached(datasets.ImageFolder):
                              index=[index, pos_pair_index, neg_pair_index])
 
 
-class SeqPairDataset(datasets.ImageFolder):
+# class SeqPairDataset(datasets.ImageFolder):
 
-    def __init__(self, root, model_config, mode, return_name=False, transform=None, target_transform=None):
+    def __init__(self, root, model_config, train_config, time_only_flag=False, return_name=False, transform=None, target_transform=None):
         self.return_name = return_name
         self.model_config = model_config
-        self.mode = mode
+        self.root = root
+        self.train_config = train_config
+
+        self.time_only_flag = time_only_flag
+
         super().__init__(root=root, transform=transform, target_transform=target_transform)
 
     def __getitem__(self, index):

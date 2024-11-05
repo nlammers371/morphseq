@@ -26,7 +26,16 @@ from ..training_callbacks import (
     ProgressBarCallback,
     TrainingCallback,
 )
+from sklearn.linear_model import LogisticRegression
 from .base_trainer_config import BaseTrainerConfig
+
+# Import necessary libraries
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
+from imblearn.under_sampling import RandomUnderSampler
+
 
 logger = logging.getLogger(__name__)
 
@@ -780,6 +789,82 @@ class BaseTrainer:
 
         # save training config
         self.training_config.save_json(checkpoint_dir, "training_config")
+
+    
+    def logistic_regression_multiclass(self, z, c, pert_subset=None, test_size=.2, tol=1e-3, F1_calc="macro", balanced=False):
+        """
+        Perform logistic regression for a multiclass classification problem.
+        Parameters:
+        - z (np.ndarray): N x M embedding values, where N is the number of samples and M is the number of features.
+        - c (array-like): N x 1 class labels corresponding to each row in z.
+        - pert_subset (list, optional): Subset of perturbations to include. Defaults to None.
+        - test_size (float): size of test dataset F1 scores will be caclulated on this
+        - tol (float, optional): Tolerance for stopping criteria. Defaults to 1e-3.
+        - F1_calc (str, optional): Method for averaging F1 score ('macro' by default). Defaults to "macro".
+            -- Note: The default F1 score averaging method is 'macro', this method emphasizes classification of minority classes.
+            -- For other averaging methods, see sklearn.metrics.f1_score documentation.
+        - balanced (bool, optional): Whether to balance the classes in the training data. Defaults to False.
+        Returns:
+        - F1 (float): Calculated F1 score on the test set.
+        """
+        # from sklearn.linear_model import LogisticRegression
+        # Initialize Logistic Regression for multiclass classification
+        log_reg = LogisticRegression(
+            C=10,
+            l1_ratio=0.2,
+            penalty='elasticnet',
+            solver='saga',
+            max_iter=250,  # Increased max_iter for convergence
+            multi_class='multinomial',  # Important for multiclass problems
+            random_state=42,
+            tol=tol
+        )
+        # # Import necessary libraries
+        # from sklearn.impute import SimpleImputer
+        # from sklearn.preprocessing import StandardScaler
+        # from sklearn.model_selection import train_test_split
+        # from sklearn.metrics import f1_score
+        # Convert c to a numpy array if it's not already
+        c = np.array(c)
+        # Get unique perturbations
+        perts = list(set(c))
+        if pert_subset:
+            # Ensure all elements of pert_subset are in perts
+            missing_perts = [pert for pert in pert_subset if pert not in perts]
+            if missing_perts:
+                print(f"The following perturbations are not in the data: {missing_perts}")
+            # Update perts to pert_subset
+            perts = pert_subset
+        # Create a mapping for the perturbations to integer labels
+        perts_to_label = {pert: i for i, pert in enumerate(perts)}
+        # Subset data to only include specified perturbations
+        mask = np.isin(c, perts)
+        z = z[mask]
+        c = c[mask]
+        # Map class labels to integers
+        y = np.array([perts_to_label[pert] for pert in c])
+        # Handle missing values
+        imputer = SimpleImputer(strategy='mean')
+        X = imputer.fit_transform(z)
+        # Feature scaling
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        # Split data into training and test sets
+        X_train_scaled, X_test_scaled, y_train, y_test = train_test_split(
+            X_scaled, y, test_size=test_size, random_state=42, stratify=y
+        )
+        # Balance classes in the training set if balanced=True
+        if balanced:
+            # from imblearn.under_sampling import RandomUnderSampler
+            rus = RandomUnderSampler(random_state=42)
+            X_train_scaled, y_train = rus.fit_resample(X_train_scaled, y_train)
+        # Fit the model on the training data
+        log_reg.fit(X_train_scaled, y_train)
+        # Predict on the test set
+        y_pred = log_reg.predict(X_test_scaled)
+        # Calculate F1 score on the test set
+        F1_score = f1_score(y_test, y_pred, average=F1_calc)
+        return F1_score
 
 
     # def get_sequential_pairs(self, inputs, mode):
