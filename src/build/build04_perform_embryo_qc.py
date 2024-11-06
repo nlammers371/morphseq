@@ -215,7 +215,8 @@ def infer_embryo_stage(root, embryo_metadata_df):
         cohort_key = date_df.loc[date_df["time_int"] == min_t, ["embryo_id", "predicted_stage_hpf"]]
         _, age_cohort = np.unique(np.round(cohort_key["predicted_stage_hpf"] / 5) * 5, return_inverse=True)
         cohort_key["cohort_id"] = age_cohort
-
+        cohort_key = cohort_key.drop_duplicates(subset=["embryo_id"])
+        
         # join onto main df
         date_df = date_df.merge(cohort_key.loc[:, ["embryo_id", "cohort_id"]], how="left", on="embryo_id")
 
@@ -307,7 +308,7 @@ def perform_embryo_qc(root, dead_lead_time=2):
 
     # read in metadata
     metadata_path = os.path.join(root, 'metadata', "combined_metadata_files", '')
-    embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"), index_col=0)
+    embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"))
 
     ############
     # Clean up chemical perturbation variable and create a master perturbation variable
@@ -324,8 +325,13 @@ def perform_embryo_qc(root, dead_lead_time=2):
     
     # Manually re-label late time points from 20240626 experiment. This is because the temperature rose to above 30C
     # for the second day
-    relabel_flags = (embryo_metadata_df["experiment_date"].astype(str) == "20240626") & \
-                      ((embryo_metadata_df["Time Rel (s)"] / 3600) > 30)
+    # relabel_flags = (embryo_metadata_df["experiment_date"].astype(str) == "20240626") & \
+    #                   ((embryo_metadata_df["Time Rel (s)"] / 3600) > 30)
+    date_ft = embryo_metadata_df["experiment_date"].astype(str) == "20240411"
+    row_vec = embryo_metadata_df["well"].str[0]
+    row_ft = (row_vec=="A") | (row_vec=="B") | (row_vec=="C")
+    wt_ft = embryo_metadata_df["master_perturbation"] == "wik"
+    relabel_flags = date_ft & row_ft & wt_ft
     embryo_metadata_df.loc[relabel_flags, "master_perturbation"] = "Uncertain"  # this label just prevents these time points from being used for metric learning
 
     ############

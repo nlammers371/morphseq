@@ -652,13 +652,18 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     if np.any(im_focus):
         min_dist = np.min(im_dist[np.where(im_focus == 1)])
         row.loc["focus_flag"] = min_dist <= 2 * qc_scale_px
-        
+    else:
+        row.loc["focus_flag"] = False
+
     # is there bubble in the vicinity of embryo?
     if np.any(im_bubble == 1):
         min_dist_bubble = np.min(im_dist[np.where(im_bubble == 1)])
         row.loc["bubble_flag"] = min_dist_bubble <= 2 * qc_scale_px
+    else:
+        row.loc["bubble_flag"] = False
 
     row_out = pd.DataFrame(row).transpose()
+    
     return row_out
 
 
@@ -988,6 +993,7 @@ def extract_embryo_snips(root, outscale=6.5, overwrite_flag=False, par_flag=Fals
     # read in metadata
     metadata_path = os.path.join(root, 'metadata', "combined_metadata_files", '')
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
+    embryo_metadata_df = embryo_metadata_df.drop_duplicates(subset=["snip_id"])
 
     # make directory for embryo snips
     im_snip_dir = os.path.join(root, 'training_data', 'bf_embryo_snips', '')
@@ -1008,15 +1014,35 @@ def extract_embryo_snips(root, outscale=6.5, overwrite_flag=False, par_flag=Fals
         embryo_metadata_df["out_of_frame_flag"] = False
         embryo_metadata_df["snip_um_per_pixel"] = outscale
     else: 
+        # get list of exported images
         extant_images = sorted(glob.glob(os.path.join(im_snip_dir, "**", "*.jpg"), recursive=True))
         extant_df = pd.DataFrame(np.asarray([path_leaf(im)[:-4] for im in extant_images]), columns=["snip_id"]).drop_duplicates()
-        embryo_metadata_df = embryo_metadata_df.merge(extant_df, on="snip_id", how="left", indicator=True)
-        export_indices = np.where(embryo_metadata_df["_merge"]=="left_only")[0]
+        merge_skel0 = embryo_metadata_df.loc[:, "snip_id"].drop_duplicates().to_frame()
+        merge_skel0 = merge_skel0.merge(extant_df, on="snip_id", how="left", indicator=True)
+        export_indices_im = np.where(merge_skel0["_merge"]=="left_only")[0]
+        # embryo_metadata_df = embryo_metadata_df.drop(labels=["_merge"], axis=1)
+
+        # transfer info from previous version of df01
+        embryo_metadata_df01 = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"))
+        embryo_metadata_df01["snip_um_per_pixel"] = outscale
+        # merge_skel1 = embryo_metadata_df.loc[:, "snip_id"].drop_duplicates().to_frame() 
+        # embryo_df_new = merge_skel1.merge(embryo_metadata_df01, how="left", on="snip_id", indicator=True)
+        # export_indices_df = np.where(embryo_df_new["_merge"]=="left_only")[0]
+        # embryo_df_new = embryo_df_new.drop(labels=["_merge"], axis=1)
+
+        # embryo_df_new.update(embryo_metadata_df, overwrite=False)
+        embryo_metadata_df = embryo_metadata_df.merge(embryo_metadata_df01.loc[:, ["snip_id", "out_of_frame_flag", "snip_um_per_pixel"]], how="left", on="snip_id", indicator=True)
+        export_indices_df = np.where(embryo_metadata_df["_merge"]=="left_only")[0]
         embryo_metadata_df = embryo_metadata_df.drop(labels=["_merge"], axis=1)
+
+        # embryo_metadata_df = embryo_df_new.copy()
+        export_indices = np.union1d(export_indices_im, export_indices_df)
         embryo_metadata_df.loc[export_indices, "out_of_frame_flag"] = False
         embryo_metadata_df.loc[export_indices, "snip_um_per_pixel"] = outscale
 
-        
+
+    embryo_metadata_df["time_int"] = embryo_metadata_df["time_int"].astype(int)
+
     # draw random sample to estimate background
     # print("Estimating background...")
     px_mean, px_std = estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100)
@@ -1025,7 +1051,7 @@ def extract_embryo_snips(root, outscale=6.5, overwrite_flag=False, par_flag=Fals
     out_of_frame_flags = []
 
     if par_flag:
-        n_workers = 4
+        n_workers = 8
         out_of_frame_flags = process_map(partial(export_embryo_snips, root=root, embryo_metadata_df=embryo_metadata_df,
                                       dl_rad_um=dl_rad_um, outscale=outscale, outshape=outshape,
                                       px_mean=0.1*px_mean, px_std=0.1*px_std),
