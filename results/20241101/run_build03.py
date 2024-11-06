@@ -11,10 +11,10 @@ def main():
     # segment_wells(root, par_flag=True, overwrite_well_stats=False)
 
     print("Compiling stats...")
-    compile_embryo_stats(root, overwrite_flag=False, par_flag=True)
+    # compile_embryo_stats(root, overwrite_flag=False, par_flag=False)
     
     print("Extracting snips...")
-    extract_embryo_snips(root, par_flag=True, outscale=6.5, dl_rad_um=100, overwrite_flag=True)
+    extract_embryo_snips(root, par_flag=True, outscale=6.5, dl_rad_um=100, overwrite_flag=False)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
