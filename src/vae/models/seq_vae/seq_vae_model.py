@@ -311,7 +311,7 @@ class SeqVAE(BaseAE):
 
         return recon_loss_w + kld_loss_w + metric_loss_w, recon_loss_w, kld_loss_w, metric_loss_w
     
-    # NT-Xent addapted for euclidean distances
+    # NT-Xent adapted for euclidean distances
     def nt_xent_loss_euclidean(self, features, temp_weights, self_stats=None, other_stats=None, n_views=2):
 
         temperature = self.temperature
@@ -336,25 +336,35 @@ class SeqVAE(BaseAE):
         sigma = N # sigma^1 for an ND isotropic Gaussian
         dist_normed = (-(dist_matrix / sigma).pow(0.5) + 1) / temperature # Effectively a shifted z score. Note that large distances are permitted to go below -1
 
-        # Apply temperature parameter
+        # Generate matrix containing pos/neg pair info
         target_matrix = torch.zeros(pair_matrix.shape, dtype=torch.float32)
         if self_stats is not None:
             age_vec = torch.cat([self_stats[1], other_stats[1]], axis=0)
 
             age_deltas = torch.abs(age_vec.unsqueeze(-1) - age_vec.unsqueeze(0))
             age_bool = age_deltas <= (self.model_config.time_window + 1.5)  # add an extra neutral "buffer" of 1.5 hrs
+
+            pert_cross = torch.zeros_like(age_bool, dtype=torch.bool)
+            pert_bool = torch.ones_like(age_bool, dtype=torch.bool)
             if self.model_config.time_only_flag == 1:
-                pert_bool = torch.ones_like(age_bool, dtype=torch.bool)
+                pass
             elif self.model_config.self_target_prob < 1.0:
                 pert_vec = torch.cat([self_stats[2], other_stats[2]], axis=0)
-                pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
-            else:
-                # pert_vec = torch.cat([self_stats[0], other_stats[0]], axis=0)
-                # pert_bool = pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid same embryo
-                pert_bool = torch.ones_like(age_bool, dtype=torch.bool)
 
-            cross_match_flags = age_bool & pert_bool  # things to keep out of the denomenator
-            target_matrix[cross_match_flags] = 1
+                # get class relationships
+                metric_array = torch.tensor(self.model_config.metric_array).type(torch.int8)
+                metric_matrix = metric_array.clone()
+                metric_matrix = metric_matrix[pert_vec, :]
+                metric_matrix = metric_matrix[:, pert_vec]
+
+                pert_bool = metric_matrix == 1 # positive examples #pert_vec.unsqueeze(-1) == pert_vec.unsqueeze(0)  # avoid like perturbations
+                pert_cross = metric_matrix == -1
+            else:
+                pass
+
+            extra_match_flags = (age_bool & pert_bool).type(torch.bool)  # extra positives
+            target_matrix[extra_match_flags] = 1
+            target_matrix[pert_cross] = -1
 
         target_matrix[pair_matrix == 1] = 1
         target_matrix[pair_matrix == -1] = -1
@@ -368,8 +378,10 @@ class SeqVAE(BaseAE):
 
     def nt_xent_loss_multiclass(self, logits_tempered, target):
 
-        # Apply temperature parameter
+        # Exclude cross-matches from everything
         logits_tempered[target == -1] = -torch.inf # exclude flagged instances (self pair and cross-matched pairs)
+
+        # exclude negative pairs from numerator
         logits_num = logits_tempered.clone()
         logits_num[target == 0] = -torch.inf # exclude all negative pairs from numerator
 
