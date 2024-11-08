@@ -207,13 +207,12 @@ class SeqPairDatasetCached(datasets.ImageFolder):
         # load metric array
         metric_array = self.model_config.metric_array
         pos_pert_ids = np.where(metric_array[pert_id_input, :]==1)[0]
-        neg_pert_ids = np.where(metric_array[pert_id_input, :]==0)[0]
+        # neg_pert_ids = np.where(metric_array[pert_id_input, :]==0)[0]
 
-        pert_match_array = pert_id_vec == pert_id_input
-        if self.time_only_flag:
-            pert_match_array = np.ones_like(pert_match_array, dtype=np.bool)
+        pert_match_array = np.isin(pert_id_vec, pos_pert_ids)#torch.tensor(np.isin(pert_id_vec, pos_pert_ids)).type(torch.bool)
+        if self.time_only_flag: # if true, disregard class match info
+            pert_match_array = np.ones_like(pert_match_array, dtype=np.bool_) #torch.ones_like(pert_match_array, dtype=torch.bool)
 
-        
         e_match_array = e_id_vec == e_id_input
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
@@ -583,7 +582,7 @@ class ContrastiveLearningDataset:
         return data_transforms
 
     
-    def get_contrastive_transform_cache():#(size, s=1):
+    def get_contrastive_transform_cache(self):#(size, s=1):
         """Return a set of data augmentation transformations as described in the SimCLR paper."""
         color_jitter = transforms.ColorJitter(brightness=0.3)
         data_transforms = transforms.Compose([#transforms.Grayscale(num_output_channels=1),
