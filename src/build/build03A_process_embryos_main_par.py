@@ -24,6 +24,10 @@ from skimage.transform import rescale, resize
 from src.build.build01A_compile_keyence_images import trim_image
 from pathlib import Path
 from sklearn.decomposition import PCA
+import warnings 
+
+# Suppress the specific warning from skimage
+warnings.filterwarnings("ignore", message="Only one label was provided to `remove_small_objects`")
 
 def estimate_image_background(root, embryo_metadata_df, bkg_seed=309, n_bkg_samples=100):
 
@@ -570,7 +574,6 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     # im_mask = np.zeros(im.shape, dtype="uint8")
     # im_mask[np.where(im == 1)] = 1
     # im_mask[np.where(im == 2)] = 1
-    im_mask_lb = label(im_mask)
 
     im_bubble_path = glob.glob(os.path.join(bubble_path, date, "*" + im_stub + "*"))[0]
     im_bubble = io.imread(im_bubble_path)
@@ -590,26 +593,30 @@ def get_embryo_stats(index, root, embryo_metadata_df, qc_scale_um, ld_rat_thresh
     im_yolk = io.imread(im_yolk_path)
     im_yolk = np.round(im_yolk / 255 * 2 - 1).astype(int)
     
+    # filter for just the label of interest
+    im_mask_lb = label(im_mask)
+    lbi = row["region_label"]  # im_mask_lb[yi, xi]
+    assert lbi != 0  # make sure we're not grabbing empty space
+    im_mask_lb = (im_mask_lb == lbi).astype(int)
+
     # rescale masks to accord with original aspec ratio
     ff_shape = tuple(row[["FOV_height_px", "FOV_width_px"]].to_numpy().astype(int))
     if row["experiment_date"] in ["20231207", "20231208"]: # handle two samll but problematic datasets
         ff_shape = tuple([3420, 1890])
-    im_mask_lb = resize(im_mask_lb, ff_shape, order=0, preserve_range=True)
-    im_bubble = resize(im_bubble, ff_shape, order=0, preserve_range=True)
-    im_focus = resize(im_focus, ff_shape, order=0, preserve_range=True)
-    im_yolk = resize(im_yolk, ff_shape, order=0, preserve_range=True)
+
+    rs_factor = np.max([np.max(ff_shape) / 600, 1])
+    ff_shape = (ff_shape/rs_factor).astype(int)
+    
+    im_mask_lb = np.round(resize(im_mask_lb.astype(float), ff_shape, order=0, preserve_range=True)).astype(int)
+    im_bubble = np.round(resize(im_bubble.astype(float), ff_shape, order=0, preserve_range=True)).astype(int)
+    im_focus = np.round(resize(im_focus.astype(float), ff_shape, order=0, preserve_range=True)).astype(int)
+    im_yolk = np.round(resize(im_yolk.astype(float), ff_shape, order=0, preserve_range=True)).astype(int)
 
     # get surface area
-    px_dim = row["Height (um)"] / row["Height (px)"]   # to adjust for size reduction (need to automate this)
+    px_dim = row["Height (um)"] / row["Height (px)"] *rs_factor  # to adjust for size reduction (need to automate this)
     # size_factor = np.sqrt(ff_size / im_yolk.size) #row["Width (px)"] / 640 * 630/320
     # px_dim = px_dim_raw * size_factor
     qc_scale_px = int(np.ceil(qc_scale_um / px_dim))
-
-    lbi = row["region_label"]  # im_mask_lb[yi, xi]
-
-    assert lbi != 0  # make sure we're not grabbing empty space
-
-    im_mask_lb = (im_mask_lb == lbi).astype(int)
 
     # calculate sa-related metrics
     yy, xx = np.indices(im_mask_lb.shape)
@@ -931,7 +938,7 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
 
     # check for existing embryo metadata
     if os.path.isfile(os.path.join(metadata_path, "embryo_metadata_df.csv")) and not overwrite_flag:
-        embryo_metadata_df_prev = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"), index_col=0)
+        embryo_metadata_df_prev = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
         # First, check to see if there are new embryo-well-time entries (rows)
         merge_skel = embryo_metadata_df.loc[:, ["embryo_id", "time_int"]]
         df_all = merge_skel.merge(embryo_metadata_df_prev.drop_duplicates(), on=["embryo_id", "time_int"],
@@ -950,7 +957,6 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
     else:
         indices_to_process = range(embryo_metadata_df.shape[0])
 
-
     embryo_metadata_df.reset_index(inplace=True, drop=True)
 
     if par_flag:
@@ -959,7 +965,6 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
                                             qc_scale_um=qc_scale_um, ld_rat_thresh=ld_rat_thresh),
                                             indices_to_process, max_workers=n_workers, chunksize=10)
         
- 
     else:
         emb_df_list = []
         for index in tqdm(indices_to_process, "Extracting embryo stats..."):
@@ -969,10 +974,11 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
     # update metadata
     emb_df = pd.concat(emb_df_list, axis=0, ignore_index=True)
     emb_df = emb_df.loc[:, ["snip_id"] + new_cols]
-    full_skeleton = embryo_metadata_df.loc[:, ["snip_id"]]
-    emb_df_long = full_skeleton.merge(emb_df, how="left", on=["snip_id"])
-    embryo_metadata_df.loc[indices_to_process, new_cols] = np.nan # unfortunately, this is the only thing I can get to work
-    embryo_metadata_df.update(emb_df_long, overwrite=True)
+
+    snip1 = emb_df["snip_id"].to_numpy()
+    snip2 = embryo_metadata_df.loc[indices_to_process, "snip_id"].to_numpy()
+    assert np.all(snip1==snip2)
+    embryo_metadata_df.loc[indices_to_process, new_cols] = emb_df.loc[:, new_cols].values
 
     # make master flag
     embryo_metadata_df["use_embryo_flag"] = ~(
@@ -1025,10 +1031,6 @@ def extract_embryo_snips(root, outscale=6.5, overwrite_flag=False, par_flag=Fals
         # transfer info from previous version of df01
         embryo_metadata_df01 = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df01.csv"))
         embryo_metadata_df01["snip_um_per_pixel"] = outscale
-        # merge_skel1 = embryo_metadata_df.loc[:, "snip_id"].drop_duplicates().to_frame() 
-        # embryo_df_new = merge_skel1.merge(embryo_metadata_df01, how="left", on="snip_id", indicator=True)
-        # export_indices_df = np.where(embryo_df_new["_merge"]=="left_only")[0]
-        # embryo_df_new = embryo_df_new.drop(labels=["_merge"], axis=1)
 
         # embryo_df_new.update(embryo_metadata_df, overwrite=False)
         embryo_metadata_df = embryo_metadata_df.merge(embryo_metadata_df01.loc[:, ["snip_id", "out_of_frame_flag", "snip_um_per_pixel"]], how="left", on="snip_id", indicator=True)

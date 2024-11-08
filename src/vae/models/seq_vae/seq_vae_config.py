@@ -107,18 +107,12 @@ class SeqVAEConfig(VAEConfig):
         # get seq key
         seq_key = make_seq_key(self.data_root, self.train_folder)
 
-        # # load age info
-        # if self.age_key_path != '':
-        #     age_key_df = pd.read_csv(self.age_key_path, index_col=0)
-        #     age_key_df = age_key_df.loc[:, ["snip_id", "stage_hpf"]]
-        #     seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
-        # else:
-        #     raise Exception("No age key path provided")
-
         # load metric info
         if self.metric_key_path == '':
             self.metric_key_path = os.path.join(self.data_root, "metadata", "combined_metadata_files", "curation", "perturbation_metric_key.csv")
         metric_key_df = pd.read_csv(self.metric_key_path, index_col=0)
+
+        
         # age_key_df = age_key_df.loc[:, ["snip_id", "stage_hpf"]]
         self.metric_key = metric_key_df
         # seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
@@ -135,20 +129,6 @@ class SeqVAEConfig(VAEConfig):
         self.test_indices = test_indices
         self.train_indices = train_indices
 
-        # mode_vec = np.unique(seq_key["train_cat"])
-        # seq_key_dict = dict({})
-        # for m, mode in enumerate(mode_vec):
-        #     seq_key = self.seq_key
-        #     seq_key = seq_key.loc[seq_key["train_cat"] == mode]
-        #     seq_key = seq_key.reset_index()
-
-        #     pert_id_vec = seq_key["perturbation_id"].to_numpy()
-        #     e_id_vec = seq_key["embryo_id_num"].to_numpy()
-        #     age_hpf_vec = seq_key["stage_hpf"].to_numpy()
-
-        #     dict_entry = dict({"pert_id_vec": pert_id_vec, "e_id_vec":e_id_vec, "age_hpf_vec": age_hpf_vec})
-        #     seq_key_dict[mode] = dict_entry
-
         seq_key = self.seq_key
 
         pert_id_vec = seq_key["perturbation_id"].to_numpy()
@@ -162,14 +142,12 @@ class SeqVAEConfig(VAEConfig):
         metric_key = self.metric_key
         pert_id_key = seq_key.loc[:, ["short_pert_name", "perturbation_id"]].drop_duplicates().reset_index(drop=True)
         metric_array = metric_key.to_numpy()
-        # pert_list = metric_key.index.tolist()
-        # id_sort_vec = []
-        # for pert in pert_list:
-        #     ft = pert_id_key["short_pert_name"]==pert
-        #     if np.sum(ft) > 0:
-        #         pid = pert_id_key.loc[ft, "perturbation_id"].values[0]
-        # metric_array = metric_array[id_sort_vec, :]
-        self.metric_array = metric_array  # [:, id_sort_vec]
+        pert_skel = pd.DataFrame(metric_key.index.tolist(), columns=["short_pert_name"])
+        sort_skel = pert_skel.merge(pert_id_key, how="left", on="short_pert_name")
+        id_sort_vec = np.argsort(sort_skel["perturbation_id"])
+        
+        metric_array = metric_array[id_sort_vec, :]
+        self.metric_array = metric_array[:, id_sort_vec]
 
         # make boolean vactors for train, eval, and test groups
         self.train_bool = np.zeros(pert_id_vec.shape, dtype=np.bool_)

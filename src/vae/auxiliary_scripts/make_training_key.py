@@ -82,13 +82,13 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
     # if test_dates is None:
     #     test_dates = ["20240418"]
     # get list of training files
-    image_list = seq_key["image_path"].to_numpy().tolist() 
-    snip_id_list = [path_leaf(path) for path in image_list]
+    # image_list = seq_key["image_path"].to_numpy().tolist() 
+    # snip_id_list = [path_leaf(path) for path in image_list]
 
     # randomly partition into train, eval, and test
     # this needs to be done at the level of embryos, not images
     if train_eval_test == None:
-        train_eval_test = [0.7, 0.20, 0.1]
+        train_eval_test = [0.75, 0.15, 0.1]
     train_eval_test = (np.asarray(train_eval_test)*frac_to_use).tolist()
 
     # snip_id_vec = embryo_metadata_df["snip_id"].values
@@ -97,8 +97,12 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
 
     # check to see if there are any experiment dates or perturb ation types that should be left out of training (kept in test)
     test_constraints_flag = False
+    seq_key["embryo_id"] = seq_key["embryo_id"].astype(str)
+    seq_key["experiment_date"] = seq_key["experiment_date"].astype(str)
+    seq_key["short_pert_name"] = seq_key["short_pert_name"].astype(str)
+
     emb_key = seq_key.loc[:, ["embryo_id", "short_pert_name", "experiment_date"]].drop_duplicates().reset_index(drop=True)
-    emb_id_vec = np.unique(emb_key["embryo_id"].values)
+    emb_id_vec = np.unique(emb_key["embryo_id"].astype(str))
     if pert_time_key is not None:
         test_constraints_flag = True
         min_age_vec = np.asarray([pert_time_key.loc[pert_time_key["short_pert_name"]==pert, "start_hpf"].values[0]

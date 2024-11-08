@@ -204,9 +204,16 @@ class SeqPairDatasetCached(datasets.ImageFolder):
         e_id_input = e_id_vec[index]
         age_hpf_input = age_hpf_vec[index]
 
+        # load metric array
+        metric_array = self.model_config.metric_array
+        pos_pert_ids = np.where(metric_array[pert_id_input, :]==1)[0]
+        neg_pert_ids = np.where(metric_array[pert_id_input, :]==0)[0]
+
         pert_match_array = pert_id_vec == pert_id_input
         if self.time_only_flag:
             pert_match_array = np.ones_like(pert_match_array, dtype=np.bool)
+
+        
         e_match_array = e_id_vec == e_id_input
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
@@ -390,76 +397,76 @@ class TripletDatasetCached(datasets.ImageFolder):
 
 # class SeqPairDataset(datasets.ImageFolder):
 
-    def __init__(self, root, model_config, train_config, time_only_flag=False, return_name=False, transform=None, target_transform=None):
-        self.return_name = return_name
-        self.model_config = model_config
-        self.root = root
-        self.train_config = train_config
+    # def __init__(self, root, model_config, train_config, time_only_flag=False, return_name=False, transform=None, target_transform=None):
+    #     self.return_name = return_name
+    #     self.model_config = model_config
+    #     self.root = root
+    #     self.train_config = train_config
 
-        self.time_only_flag = time_only_flag
+    #     self.time_only_flag = time_only_flag
 
-        super().__init__(root=root, transform=transform, target_transform=target_transform)
+    #     super().__init__(root=root, transform=transform, target_transform=target_transform)
 
-    def __getitem__(self, index):
+    # def __getitem__(self, index):
 
-        X = Image.open(self.samples[index][0])
-        if self.transform:
-            X = self.transform(X)
+    #     X = Image.open(self.samples[index][0])
+    #     if self.transform:
+    #         X = self.transform(X)
 
-        key_dict = self.model_config.seq_key_dict[self.mode]
+    #     key_dict = self.model_config.seq_key_dict[self.mode]
 
-        pert_id_vec = key_dict["pert_id_vec"]
-        e_id_vec = key_dict["e_id_vec"]
-        age_hpf_vec = key_dict["age_hpf_vec"]
+    #     pert_id_vec = key_dict["pert_id_vec"]
+    #     e_id_vec = key_dict["e_id_vec"]
+    #     age_hpf_vec = key_dict["age_hpf_vec"]
 
-        time_window = self.model_config.time_window
-        self_target = self.model_config.self_target_prob
-        other_age_penalty = self.model_config.other_age_penalty
+    #     time_window = self.model_config.time_window
+    #     self_target = self.model_config.self_target_prob
+    #     other_age_penalty = self.model_config.other_age_penalty
 
-        #############3
-        # Select sequential pair
-        pert_id_input = pert_id_vec[index]
-        e_id_input = e_id_vec[index]
-        age_hpf_input = age_hpf_vec[index]
+    #     #############3
+    #     # Select sequential pair
+    #     pert_id_input = pert_id_vec[index]
+    #     e_id_input = e_id_vec[index]
+    #     age_hpf_input = age_hpf_vec[index]
 
-        pert_match_array = pert_id_vec == pert_id_input
-        e_match_array = e_id_vec == e_id_input
-        age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
-        age_match_array = age_delta_array <= time_window
+    #     pert_match_array = pert_id_vec == pert_id_input
+    #     e_match_array = e_id_vec == e_id_input
+    #     age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
+    #     age_match_array = age_delta_array <= time_window
 
-        # positive options
-        self_option_array = e_match_array & age_match_array
-        other_option_array = ~e_match_array & age_match_array & pert_match_array
+    #     # positive options
+    #     self_option_array = e_match_array & age_match_array
+    #     other_option_array = ~e_match_array & age_match_array & pert_match_array
 
-        if (np.random.rand() <= self_target) or (np.sum(other_option_array) == 0):
-            options = np.nonzero(self_option_array)[0]
-            seq_pair_index = np.random.choice(options, 1, replace=False)[0]
-            weight_hpf = age_delta_array[seq_pair_index] + 1
-        else:
-            options = np.nonzero(other_option_array)[0]
-            seq_pair_index = np.random.choice(options, 1, replace=False)[0]
-            weight_hpf = age_delta_array[seq_pair_index] + 1 + other_age_penalty
+    #     if (np.random.rand() <= self_target) or (np.sum(other_option_array) == 0):
+    #         options = np.nonzero(self_option_array)[0]
+    #         seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+    #         weight_hpf = age_delta_array[seq_pair_index] + 1
+    #     else:
+    #         options = np.nonzero(other_option_array)[0]
+    #         seq_pair_index = np.random.choice(options, 1, replace=False)[0]
+    #         weight_hpf = age_delta_array[seq_pair_index] + 1 + other_age_penalty
 
-        #########
-        # load sequential pair
-        Y = Image.open(self.samples[seq_pair_index][0])
-        if self.transform:
-            Y = self.transform(Y)
+    #     #########
+    #     # load sequential pair
+    #     Y = Image.open(self.samples[seq_pair_index][0])
+    #     if self.transform:
+    #         Y = self.transform(Y)
 
-        X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
-        Y = torch.reshape(Y, (1, Y.shape[0], Y.shape[1], Y.shape[2]))
-        XY = torch.cat([X, Y], axis=0)
+    #     X = torch.reshape(X, (1, X.shape[0], X.shape[1], X.shape[2]))
+    #     Y = torch.reshape(Y, (1, Y.shape[0], Y.shape[1], Y.shape[2]))
+    #     XY = torch.cat([X, Y], axis=0)
 
-        weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
-        # if not self.return_name:
-        #     return DatasetOutput(
-        #         data=X
-        #     )
-        # else:
-        return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index],
-                             weight_hpf=weight_hpf,
-                             self_stats=[e_id_input, age_hpf_input, pert_id_input],
-                             other_stats=[e_id_vec[seq_pair_index], age_hpf_vec[seq_pair_index], pert_id_vec[seq_pair_index]])
+    #     weight_hpf = torch.ones(weight_hpf.shape)  # ignore age-based weighting for now
+    #     # if not self.return_name:
+    #     #     return DatasetOutput(
+    #     #         data=X
+    #     #     )
+    #     # else:
+    #     return DatasetOutput(data=XY, label=[self.samples[index][0], seq_pair_index], index=[index, seq_pair_index],
+    #                          weight_hpf=weight_hpf,
+    #                          self_stats=[e_id_input, age_hpf_input, pert_id_input],
+    #                          other_stats=[e_id_vec[seq_pair_index], age_hpf_vec[seq_pair_index], pert_id_vec[seq_pair_index]])
 
 
 class TripletPairDataset(datasets.ImageFolder):

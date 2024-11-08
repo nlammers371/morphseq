@@ -20,7 +20,7 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     data_path = os.path.join(root, "training_data", "bf_embryo_snips", '')
     
     # read in metadata database
-    embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df02.csv"), index_col=0)
+    embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df02.csv"))
 
     # remove extra columns
     rm_cols = ['time_string', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Time (s)', 'embryos_per_well', 'region_label', 'time_of_addition']
