@@ -11,7 +11,7 @@ from tqdm import tqdm
 def main():
 
     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    train_folder = "20241021_ds"
+    train_folder = "20241107_ds"
 
     # Params that I will hold fixed for now
     # latent_dim = 100
@@ -25,6 +25,13 @@ def main():
     n_workers = 8
     train_suffix = "sweep01"
 
+    # set paths to metric key(s)
+    metric_key_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/combined_metadata_files/curation/perturbation_metric_key_sweep01.csv"
+
+    # path to file designating inclusion/exclusion of different perturbations
+    pert_key_path_list = ["/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/combined_metadata_files/curation/perturbation_train_key_sweep01.csv", 
+                          "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/combined_metadata_files/curation/perturbation_train_key_sweep01_no_gdf3_lmx1b.csv"]
+    
     # Read in table with params to test
     in_path = os.path.join(root, "metadata", "parameter_sweeps", "hyperparam_sweep01_df.csv")
     hyperparam_df = pd.read_csv(in_path)
@@ -33,16 +40,25 @@ def main():
     # Set index range to run (this is the only thing that should change)\
     script_path = __file__
     # Extract just the script name
-    increment = 60
+    increment = 50
     script_name = os.path.basename(script_path).replace(".py", "")
     sweep_num = int(script_name.replace("sweep01_", ""))
     index_list = np.arange(sweep_num*increment, (sweep_num+1)*increment)
     out_path = os.path.join(root, "metadata", "parameter_sweeps", "sweep01", f"sweep01_{sweep_num:02}.csv")
     ###################################################################
 
-    temp_df = hyperparam_df.loc[np.isin(hyperparam_df["process_id"].to_numpy(), index_list)].reset_index(drop=True)
+    if not os.path.exists(out_path):
+        temp_df = hyperparam_df.loc[np.isin(hyperparam_df["process_id"].to_numpy(), index_list)].reset_index(drop=True)
+        temp_df.to_csv(out_path, index=False)
+        run_indices = range(temp_df.shape[0])
+    else:
+        temp_df = pd.read_csv(out_path)
+        run_indices = np.where(temp_df["completed"]==0)[0]
 
-    for i in tqdm(range(temp_df.shape[0])):
+    for i in tqdm(run_indices):
+
+        temp_df = pd.read_csv(out_path)
+
         params_iter = temp_df.loc[i, :]
         
         metric_loss_type = params_iter["metric_loss_type"]
@@ -58,7 +74,11 @@ def main():
         learning_rate = params_iter["learning_rate"]
         zn_frac = params_iter["zn_frac"]
         
+        # set inclusion/exclusion key holdout flag
+        pert_key_path = pert_key_path_list[holdout_flag]
 
+        # set batch size based off of training type
+        # metric_loss_type = "triplet"
         if metric_loss_type == "triplet":
             batch_size = 256
         else:
@@ -66,12 +86,19 @@ def main():
         
         batch_size = 16
         
-        train_vae(root, train_folder, train_suffix=train_suffix, model_type=model_type, 
+        save_dir = train_vae(root, train_folder, train_suffix=train_suffix, model_type=model_type, 
                     latent_dim=latent_dim, batch_size=batch_size, input_dim=input_dim,
                     n_preload_workers=n_workers, n_load_workers=n_workers, metric_loss_type=metric_loss_type,
                     distance_metric=distance_metric, n_epochs=n_epochs, margin=margin, metric_weight=metric_weight, 
                     learning_rate=learning_rate, n_conv_layers=n_conv_layers, self_target_prob=self_target_prob,
-                    beta=beta, time_only_flag=time_only_flag, temperature=temperature, zn_frac=zn_frac)
+                    beta=beta, time_only_flag=time_only_flag, temperature=temperature, zn_frac=zn_frac,
+                    metric_key_path=metric_key_path, pert_time_key_path=pert_key_path)
+        
+        temp_df.loc[i, "model_path"] = save_dir
+        temp_df.loc[i, "completed"] = 1
+
+        temp_df.to_csv(out_path, index=False)
+
 
 
 if __name__ == '__main__':

@@ -214,7 +214,10 @@ def infer_embryo_stage(root, embryo_metadata_df):
         min_t = np.min(date_df["time_int"])
         cohort_key = date_df.loc[date_df["time_int"] == min_t, ["embryo_id", "predicted_stage_hpf"]]
         _, age_cohort = np.unique(np.round(cohort_key["predicted_stage_hpf"] / 5) * 5, return_inverse=True)
-        cohort_key["cohort_id"] = age_cohort
+        if date != "20240626":
+            cohort_key["cohort_id"] = age_cohort
+        else:
+            cohort_key["cohort_id"] = 0
         cohort_key = cohort_key.drop_duplicates(subset=["embryo_id"])
         
         # join onto main df
