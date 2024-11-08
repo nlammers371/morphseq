@@ -141,7 +141,6 @@ def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_da
         train_dataset = TripletDatasetCached(root=os.path.join(train_dir, "images"),
                                         model_config=model_config,
                                         train_config=train_config,
-                                        cache_data=cache_data,
                                         transform=data_transform,
                                         return_name=True
                                         )
