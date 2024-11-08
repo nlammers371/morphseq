@@ -550,6 +550,9 @@ def perform_embryo_qc(root, dead_lead_time=2):
     wt_wik_flag = np.where(pert_df_u.loc[:, "short_pert_name"]=="wt_wik")[0]
     wt_other_flags = np.where((pert_df_u.loc[:, "phenotype"]=="wt") & (pert_df_u.loc[:, "pert_type"]!="fluor") &
                               (pert_df_u.loc[:, "background"]!="ab") & (pert_df_u.loc[:, "background"]!="wik"))[0]
+
+    wt_fluo_flags = np.where((pert_df_u.loc[:, "phenotype"]=="wt") & (pert_df_u.loc[:, "pert_type"]=="fluor"))[0]
+
     # build in some basic relations to be refined manually
     metric_array = np.zeros((len(pert_u), len(pert_u)), dtype=np.int16)
     # tell model to leave metric relations amongst control subtypes unspecified
@@ -570,6 +573,10 @@ def perform_embryo_qc(root, dead_lead_time=2):
     # apply neutrality between embryos from mutant background with no phenotype (these encompass hets and homo wt)
     metric_array[np.ix_(wt_other_flags, wt_flags)] = -1
     metric_array[np.ix_(wt_flags, wt_other_flags)] = -1
+    # ditto for fluo markers
+    metric_array[np.ix_(wt_fluo_flags, wt_flags)] = -1
+    metric_array[np.ix_(wt_flags, wt_fluo_flags)] = -1
+
     # by default all phenotypes are positive references for themselves
     eye_array = np.eye(len(pert_u))
     metric_array[eye_array==1] = 1
