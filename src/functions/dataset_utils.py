@@ -322,7 +322,8 @@ class TripletDatasetCached(datasets.ImageFolder):
         # generate arrays for selection
         pert_match_array = np.isin(pert_id_vec, pos_pert_ids)
         if self.time_only_flag:
-            pert_match_array = np.ones_like(pert_match_array, dtype=np.bool)
+            pert_match_array = np.ones_like(pert_match_array, dtype=np.bool_)
+
         e_match_array = e_id_vec == e_id_input
         age_delta_array = np.abs(age_hpf_vec - age_hpf_input)
         age_match_array = age_delta_array <= time_window
