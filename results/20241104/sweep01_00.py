@@ -10,8 +10,8 @@ from tqdm import tqdm
 
 def main():
 
-    root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    # root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
+    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     train_folder = "20241107_ds"
 
     # Params that I will hold fixed for now
