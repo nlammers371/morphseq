@@ -284,8 +284,8 @@ def infer_embryo_stage(root, embryo_metadata_df):
             # intercept, group intercept, slope, quadratic slope, quad center
             if not ignore_g:
                 x0 = [0, 0, 1, 0]  #, 0]
-                ub = (4, 72, 2.0, 0.005)  #, 0.005)
-                lb = (0, -72, 0.5, -0.005)  #, -0.005)
+                ub = (4, 72, 2.0, 1e-5)  #, 0.005)
+                lb = (0, -72, 0.5, -1e-5)  #, -0.005)
             else:
                 x0 = [0, 1, 0]  # , 0]
                 ub = (4, 2.0, 0.005)  # , 0.005)
