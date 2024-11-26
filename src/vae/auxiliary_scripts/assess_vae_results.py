@@ -126,6 +126,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
 
         print("Done.")
+        return figure_path
 
 
 def clean_path_names(path_list):

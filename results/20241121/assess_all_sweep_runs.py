@@ -2,11 +2,13 @@ import pandas as pd
 import os
 import numpy as np
 from src.vae.auxiliary_scripts.assess_vae_results import assess_vae_results
+from tqdm import tqdm 
 
 # set key path parameters
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/" # path to top of the data directory
 train_folder = "20241107_ds" # name of 'master' training folder that contains all runs
 sweep_df_path = os.path.join(root, "metadata", "parameter_sweeps", "sweep01", "")
+out_df_path = os.path.join(root, "metadata", "parameter_sweeps", "")
 
 # load dataframes for each component of the sweep--I've broken it up into 6 chunks, 5 of which are currently running on the cluster (other is on workstation)
 df_list = []
@@ -21,37 +23,41 @@ for block_num in range(0, 5):
 # combine
 sweep_df = pd.concat(df_list, axis=0, ignore_index=True)
 
-# ok, now we can filter for sweeps of interest using the fields in the dataframe
-# metric_loss_type: nt-xent or triplet
-# margin: sets length scale for metric loss in latent space
-# metric_weight: relative weight of metric loss in the overall objective
-# self_target_prob: fraction of self-comparisons vs other-comparisons
-# time_only_flag: if 1, only uses time for metric loss
-# holdout_flag: 0 if all data, 1 if lmx/gdf3 held out
-# beta: weight of gaussian normalization term in the loss
+out_df_name = out_df_path + "sweep01_compeleted_runs.csv"
+if os.path.isdir(out_df_name):
+    out_df = pd.read_csv(out_df_name)
 
-# an example
-metric_loss_type = "triplet"
-margin = 0.1
-metric_weight = 25
-self_target_prob = 0.5
-time_only_flag = 0
-holdout_flag = 0 
-beta = 1
+    # remove cases where assessment has already been run
+    sweep_df = sweep_df.merge(out_df.loc[:, ["process_id"]], how="left", on="process_id", indicator=True)
+    sweep_df = sweep_df.loc[sweep_df["_merge"]==False, :]
+    sweep_df.drop(labels=["_merge"], axis=1, inplace=True)
+    sweep_df.reset_index(inplace=True, drop=True)
 
-# boolean filter. NOTE THAT SOME COMBOS WILL NOT BE PRESENT (yet)
-df_filter = (sweep_df["metric_loss_type"] == metric_loss_type) & (sweep_df["margin"] == margin) & (sweep_df["metric_weight"] == metric_weight) & \
-            (sweep_df["self_target_prob"] == self_target_prob) & (sweep_df["time_only_flag"] == time_only_flag) & (sweep_df["holdout_flag"] == holdout_flag) & \
-            (sweep_df["beta"] == beta)
+    df_list = [out_df]
+else:
+    df_list = []
 
 # now, get training folder path
-if np.any(df_filter):
-    model_path = sweep_df.loc[df_filter, "model_path"].values[0]
+for i in tqdm(range(sweep_df.shape[0])):
+
+    row = sweep_df.loc[[i], :]
+    model_path = row["model_path"].values[0]
     model_name = os.path.basename(model_path)
 
     # a couple of parameters for the model assessment script
     overwrite_flag = False # will skip if it detects the exprected output data already
     n_image_figures = 100  # make qualitative side-by-side reconstruction figures
 
-    assess_vae_results(root, train_folder, model_name, n_image_figures=n_image_figures,
-                    overwrite_flag=overwrite_flag, batch_size=64)
+    results_path = assess_vae_results(root, train_folder, model_name, n_image_figures=n_image_figures,
+                                                overwrite_flag=overwrite_flag, batch_size=64)
+    
+    # update 
+    row["results_path"] = results_path
+    df_list.append(row)
+
+    # save
+    out_df = pd.concat(df_list, axis=0, ignore_index=True)
+    out_df.to_csv(out_df_name, index=False)
+
+    
+
