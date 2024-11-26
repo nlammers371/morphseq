@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.append('/projects/morphseq')
 from src.vae.auxiliary_scripts.train_vae import train_vae
 import multiprocessing
 import pandas as pd
