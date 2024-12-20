@@ -22,12 +22,14 @@ class SeqVAEConfig(VAEConfig):
 
     temperature: float = 0.1
     metric_weight: float = 1.0  # tunes weight of contastive loss within the loss function
-    margin: float = 1.0 # sets tolerance/scale for metric loss
+    margin: float = 1.0  # sets tolerance/scale for metric loss
     beta: float = 1.0  # tunes the weight of the Gaussian prior term
     zn_frac: float = 0.1
+
     orth_flag: bool = True
     n_conv_layers: int = 5  # number of convolutional layers
     n_out_channels: int = 16  # number of layers to convolutional kernel
+
     distance_metric: str = "euclidean"
     name: str = "SeqVAEConfig"
     metric_loss_type: str = "NT-Xent"
