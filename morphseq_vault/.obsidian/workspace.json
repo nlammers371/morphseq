@@ -4,37 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "78c7ead44eb4ea0a",
+        "id": "7ab87a1a256d21b5",
         "type": "tabs",
         "children": [
           {
-            "id": "cfaaec1f027d782d",
+            "id": "f969ca78014b9f20",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Welcome.md",
+                "file": "parameter sweep/Parameter sweep next steps.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Welcome"
-            }
-          }
-        ]
-      },
-      {
-        "id": "3164ab8d01dd8c16",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "dad2a7a77228924e",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "title": "Parameter sweep next steps"
             }
           }
         ]
@@ -109,6 +93,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "parameter sweep/Parameter sweep next steps.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +103,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for Parameter sweep next steps"
             }
           },
           {
@@ -127,11 +112,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "parameter sweep/Parameter sweep next steps.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from Parameter sweep next steps"
             }
           },
           {
@@ -152,9 +138,11 @@
             "type": "leaf",
             "state": {
               "type": "outline",
-              "state": {},
+              "state": {
+                "file": "parameter sweep/Parameter sweep next steps.md"
+              },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of Parameter sweep next steps"
             }
           }
         ]
@@ -174,16 +162,18 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "e2c7d713fb273333",
+  "active": "f969ca78014b9f20",
   "lastOpenFiles": [
+    "lmx1b_analysis/lmx1b planning.md",
     "Welcome.md",
-    "morphseq planning notes/MorphSeq Param Sweep with Splines;Dec-17-2024.md",
-    "morphseq planning notes/Lmx1b analysis.md",
-    "morphseq planning notes/MorphSeq Param Sweep with Splines;Dec-17-2024.pdf",
+    "parameter sweep/Parameter sweep next steps.md",
+    "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.pdf",
+    "mind maps/morphseq map.canvas",
+    "parameter sweep",
+    "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.md",
     "mind maps/Pec fin map.canvas",
     "mind maps/Fin ideas.canvas",
-    "mind maps/morphseq map.canvas",
-    "morphseq planning notes",
+    "lmx1b_analysis",
     "mind maps"
   ]
 }
