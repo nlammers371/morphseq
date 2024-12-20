@@ -1,0 +1,37 @@
+{
+	"nodes":[
+		{"id":"892d6c4fcb8133b0","type":"group","x":-1040,"y":258,"width":630,"height":293,"label":"Hotfish + morphseq"},
+		{"id":"12bc355fb475faeb","type":"group","x":-800,"y":-420,"width":607,"height":271,"label":"Through winter 2024"},
+		{"id":"ae2a0d1e3a091a89","type":"group","x":265,"y":-480,"width":620,"height":252,"label":"model improvement tasks (outstanding)"},
+		{"id":"462575b1e8ea3227","x":531,"y":306,"width":655,"height":125,"type":"group","label":"Partial penetrance + morphseq"},
+		{"id":"162d13d18a234872","x":-190,"y":476,"width":590,"height":125,"type":"group","label":"Crispant + morphseq"},
+		{"id":"a5e0e82155f79da7","type":"group","x":-25,"y":-70,"width":290,"height":210,"label":"Fall 2024"},
+		{"id":"31340529bd7ffa56","type":"group","x":-1020,"y":311,"width":590,"height":100,"label":"Fall 2024"},
+		{"id":"8529d415041a0fa9","type":"group","x":400,"y":-65,"width":575,"height":100,"label":"Tools for morph space analysis"},
+		{"id":"eaaf4d4d83337a4a","type":"text","text":"Build training dataset","x":-780,"y":-400,"width":250,"height":60,"color":"4"},
+		{"id":"283a16af60fc86f6","type":"text","text":"Build morphVAE v1","x":-463,"y":-398,"width":250,"height":60,"color":"#4973b6"},
+		{"id":"f4c4526b52e14fd6","type":"text","text":"Basic image processing pipeline","x":-463,"y":-229,"width":250,"height":60,"color":"#4973b6"},
+		{"id":"ba65965d2e2fd522","type":"text","text":"lmx1b morphseq pilot","x":-780,"y":-229,"width":250,"height":60,"color":"4"},
+		{"id":"311aea1385a7758d","type":"text","text":"Latent trajectory inference ( #Marz)","x":420,"y":-45,"width":250,"height":60,"color":"#4973b6"},
+		{"id":"ca9618ce10ba003d","type":"text","text":"Revise latent space visualization app","x":705,"y":-45,"width":250,"height":60,"color":"#4973b6"},
+		{"id":"804551284ce51bfa","type":"text","text":"Incrorporate z slices into morphVAE","x":563,"y":-308,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"d655c9c7790e459e","type":"text","text":"Improve morphVAE image reconstruction","x":285,"y":-368,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"23086a376072d90b","type":"text","text":"De novo image generation","x":585,"y":-458,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"a59be8f6e773cacd","type":"text","text":"Improve image processing pipeline","x":-5,"y":-50,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"d490f9d8c8de0191","type":"text","text":"morphVAE model selection ( #Marz)","x":-5,"y":60,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"d31abbaf8b4ec78d","type":"text","text":"Hotfish morphseq","x":-1000,"y":331,"width":230,"height":60,"color":"4"},
+		{"id":"d6465e3969c22e2b","type":"text","text":"AB reference timelapse","x":-700,"y":331,"width":250,"height":60,"color":"4"},
+		{"id":"e2cc2c92541012ab","type":"text","text":"SeaHub crispant analysis","x":130,"y":521,"width":250,"height":60,"color":"6"},
+		{"id":"b045de824b118190","type":"text","text":"lmx1b re-analysis","x":-170,"y":521,"width":250,"height":60,"color":"6"},
+		{"id":"806baadd0909687f","x":551,"y":326,"width":279,"height":85,"color":"#4973b6","type":"text","text":"Request/receive/raise cep290 and related lines ( #David)"},
+		{"id":"ea00801063365aa1","x":880,"y":333,"width":286,"height":57,"type":"text","text":"Increase imaging throughput"},
+		{"id":"e6526c4c7ab21bf3","x":-530,"y":-62,"width":300,"height":95,"type":"text","text":"### Build out seq-to-morph modeling framework"},
+		{"id":"7ecd9c6bceecee4a","type":"text","text":"34C timelapse","x":-1010,"y":461,"width":250,"height":60,"color":"4"}
+	],
+	"edges":[
+		{"id":"162fa01a93237eab","fromNode":"12bc355fb475faeb","fromSide":"right","toNode":"a5e0e82155f79da7","toSide":"top"},
+		{"id":"7b66f9d285e38715","fromNode":"d490f9d8c8de0191","fromSide":"right","toNode":"311aea1385a7758d","toSide":"left","fromEnd":"arrow"},
+		{"id":"c98b406e6720e107","fromNode":"a59be8f6e773cacd","fromSide":"bottom","toNode":"d490f9d8c8de0191","toSide":"top"},
+		{"id":"046fd1cc9b8ad2ee","fromNode":"a5e0e82155f79da7","fromSide":"left","toNode":"892d6c4fcb8133b0","toSide":"top"}
+	]
+}
