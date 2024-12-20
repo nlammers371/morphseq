@@ -11,14 +11,17 @@
             "id": "f969ca78014b9f20",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "canvas",
               "state": {
-                "file": "parameter sweep/Parameter sweep next steps.md",
-                "mode": "source",
-                "source": false
+                "file": "mind maps/morphseq map.canvas",
+                "viewState": {
+                  "x": 177.70850237380023,
+                  "y": -100.36298203630453,
+                  "zoom": -0.6766419176568932
+                }
               },
-              "icon": "lucide-file",
-              "title": "Parameter sweep next steps"
+              "icon": "lucide-layout-dashboard",
+              "title": "morphseq map"
             }
           }
         ]
@@ -93,7 +96,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "parameter sweep/Parameter sweep next steps.md",
+                "file": "mind maps/morphseq map.canvas",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +106,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Parameter sweep next steps"
+              "title": "Backlinks for morphseq map"
             }
           },
           {
@@ -112,12 +115,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "parameter sweep/Parameter sweep next steps.md",
+                "file": "mind maps/morphseq map.canvas",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from Parameter sweep next steps"
+              "title": "Outgoing links from morphseq map"
             }
           },
           {
@@ -139,10 +142,10 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "parameter sweep/Parameter sweep next steps.md"
+                "file": "mind maps/morphseq map.canvas"
               },
               "icon": "lucide-list",
-              "title": "Outline of Parameter sweep next steps"
+              "title": "Outline of morphseq map"
             }
           }
         ]
@@ -164,13 +167,13 @@
   },
   "active": "f969ca78014b9f20",
   "lastOpenFiles": [
+    "parameter sweep/Parameter sweep next steps.md",
+    "mind maps/morphseq map.canvas",
+    "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.pdf",
+    "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.md",
     "lmx1b_analysis/lmx1b planning.md",
     "Welcome.md",
-    "parameter sweep/Parameter sweep next steps.md",
-    "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.pdf",
-    "mind maps/morphseq map.canvas",
     "parameter sweep",
-    "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.md",
     "mind maps/Pec fin map.canvas",
     "mind maps/Fin ideas.canvas",
     "lmx1b_analysis",
