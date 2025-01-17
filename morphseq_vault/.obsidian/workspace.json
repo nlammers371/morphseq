@@ -11,17 +11,14 @@
             "id": "f969ca78014b9f20",
             "type": "leaf",
             "state": {
-              "type": "canvas",
+              "type": "markdown",
               "state": {
-                "file": "mind maps/morphseq map.canvas",
-                "viewState": {
-                  "x": 177.70850237380023,
-                  "y": -100.36298203630453,
-                  "zoom": -0.6766419176568932
-                }
+                "file": "parameter sweep/Parameter sweep next steps.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "lucide-layout-dashboard",
-              "title": "morphseq map"
+              "icon": "lucide-file",
+              "title": "Parameter sweep next steps"
             }
           }
         ]
@@ -167,8 +164,8 @@
   },
   "active": "f969ca78014b9f20",
   "lastOpenFiles": [
-    "parameter sweep/Parameter sweep next steps.md",
     "mind maps/morphseq map.canvas",
+    "parameter sweep/Parameter sweep next steps.md",
     "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.pdf",
     "parameter sweep/MorphSeq Param Sweep with Splines;Dec-17-2024.md",
     "lmx1b_analysis/lmx1b planning.md",
