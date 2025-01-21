@@ -48,7 +48,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         embryo_df = embryo_metadata_df[
             ["snip_id", "embryo_id", "Time Rel (s)", "experiment_date", "temperature", "medium", "short_pert_name", "control_flag", "phenotype", "predicted_stage_hpf", "surface_area_um",
              "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        embryo_df = embryo_df.rename({"Time Rel (s)":"experiment_time"})
+        embryo_df = embryo_df.rename(columns={"Time Rel (s)":"experiment_time"})
         
         # embryo_df.loc[embryo_df["reference_flag"].astype(str)=="nan", "reference_flag"] = False
         embryo_df = embryo_df.reset_index()
