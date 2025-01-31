@@ -122,6 +122,34 @@ col_df$mean_nn_time <- as.numeric(col_df$mean_nn_time)
 
 write.csv(col_df, file = file.path(data_path, "col_data.csv"), row.names = FALSE)
 
+# lok at 19C
+temp_bolean19 <- colData(hot_cds)$temp == 19
+
+u_19c <- plot_ly(
+  x = ~umap_coords[, 1],  # UMAP dimension 1
+  y = ~umap_coords[, 2],  # UMAP dimension 2
+  z = ~umap_coords[, 3],  # UMAP dimension 3
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 3, color = as.numeric(temp_bolean19),  # Use the boolean vector for colors
+    colorscale = list(
+      list(0, boolean_colors["FALSE"]),  # Color for FALSE
+      list(1, boolean_colors["TRUE"])   # Color for TRUE
+    ),
+    colorbar = list(title = "Boolean")
+  ),
+  text = ~paste("Cell:", rownames(cell_metadata))  # Add hover text
+) %>%
+  layout(
+    title = "3D UMAP Plot",
+    scene = list(
+      xaxis = list(title = "UMAP1"),
+      yaxis = list(title = "UMAP2"),
+      zaxis = list(title = "UMAP3")
+    )
+  )
+
+
 # # first group by 
 # emb_stage_df <- col_df %>% 
 #                 group_by(embryo_ID, timepoint, temp) %>%
