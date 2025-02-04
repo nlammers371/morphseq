@@ -4,7 +4,6 @@ library(BPCells)
 library(dplyr)
 library(hooke)
 library(tidyr)
-library(spline)
 
 # temp dir to store BP cell files
 temp_path <- "/net/trapnell/vol1/home/nlammers/tmp_files/nobackup/"
@@ -82,40 +81,47 @@ ccs = ccs[, !is.na(ccs$timepoint)]
 # infer WT developmental kinetics
 start_time = 12
 stop_time = 72
-time_formula = build_interval_formula(ccs, num_breaks = 3, interval_start = start_time, interval_stop = stop_time)
+time_formula = build_interval_formula(ccs, num_breaks = 5, interval_start = start_time, interval_stop = stop_time)
 
 
-# main_string = paste0(time_formula, batch_var_string)
+# Run 3 different versions of WT dev regression
+
+############
+# no nuisance variables
+wt_expt_naive_ccm = new_cell_count_model(ccs,
+                                   main_model_formula_str = time_formula,
+                                covariance_type="full",
+                                   num_threads=4)
+# save key model info
+m1_dir = file.path(model_dir, "wt_naive")
+dir.create(m1_dir, showWarnings = FALSE, recursive = TRUE) 
+saveRDS(wt_expt_naive_ccm@best_full_model, file = file.path(m1_dir, "best_full_model.rds"))
+write.csv(wt_expt_naive_ccm@best_full_model$latent, file = file.path(m1_dir, "latents.csv"))
+write.csv(wt_expt_naive_ccm@best_full_model$latent_pos, file = file.path(m1_dir, "zi.csv"))
+write.csv(as.data.frame(wt_expt_naive_ccm@best_full_model$Sigma) file = file.path(m1_dir, "COV.csv"))
+write.csv(as.data.frame(wt_expt_naive_ccm@best_full_model$Sigma) file = file.path(m1_dir, "COV.csv"))
 
 wt_expt_naive_ccm = new_cell_count_model(ccs,
                                    main_model_formula_str = time_formula,
-                                #    nuisance_model_formula_str = batch_var_string0, 
                                 covariance_type="full",
-                                   num_threads=4)#,
-                                #    verbose = TRUE)
-
+                                   num_threads=4)
+                                   
+# linear offsets for disociation and experiment
 wt_expt_batch_ccm = new_cell_count_model(ccs,
-                                   main_model_formula_str = paste0(time_formula, "+ dis_protocol + expt + fix_protocol + strain"), 
+                                   main_model_formula_str = paste0(time_formula, "+ dis_protocol + expt"), 
                                    covariance_type="full",
-                                   num_threads=4)#
+                                   num_threads=4)
 
-# saveRDS(wt_expt_naive_ccm, file.path(model_dir, "wt_time_naive_ccm.rds"))
+# linear offsets for experiment and interaction terms for disociation 
+wt_expt_batch_inter_ccm = new_cell_count_model(ccs,
+                                   main_model_formula_str = paste0(time_formula, "*dis_protocol + expt"), 
+                                   covariance_type="full",
+                                   num_threads=4)
 
-# hot_ccs = new_cell_count_set(hot_cds_28, 
-#                          sample_group = "embryo_ID", 
-#                          cell_group = "cell_type_broad")
 
-# ref_ccs = new_cell_count_set(ref_cds, 
-#                          sample_group = "embryo_ID", 
-#                          cell_group = "cell_type_broad")
 
-# ref1_ccs = new_cell_count_set(ref1_cds, 
-#                          sample_group = "embryo_ID", 
-#                          cell_group = "cell_type_broad")
 
-# ref2_ccs = new_cell_count_set(ref2_cds,  
-#                          sample_group = "embryo_ID", 
-#                          cell_group = "cell_type_broad") 
+
 
 print("Done.")                                                                        
 
