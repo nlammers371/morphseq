@@ -5,19 +5,79 @@ library(hooke)
 # temp dir to store BP cell files
 temp_path <- "/net/trapnell/vol1/home/nlammers/tmp_files/nobackup/"
 # make output dir
-ccs_dir <- "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/sci-PLEX/ccs_data/"
+ccs_dir <- "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/sci-PLEX/ccs_data_cell_type_broad/"
 dir.create(ccs_dir, showWarnings = FALSE, recursive = TRUE) 
 
-##### Now do same for hotfish experiment
+# load coarse cell type labels
+ct_broad = read.csv("/net/trapnell/vol1/home/elizab9/projects/projects/CHEMFISH/resources/unique_ct_full.csv")
+
+# export most recent hotfish experiment
+# ct_broad_filt <- as.data.frame(ct_broad) %>% select("cell_type", "cell_type_broad") %>% drop_na(cell_type) %>% distinct("cell_type", .keep_all = TRUE)
+ct_broad_filt <- as.data.frame(ct_broad) %>%
+                        count(cell_type, cell_type_broad) %>%
+                        group_by(cell_type) %>%
+                        slice_max(n, with_ties = FALSE) %>%
+                        ungroup() %>%
+                        select(cell_type, cell_type_broad)
+################
+# iterate through list of cds files
+seahub_root <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/"
+
+cds_name_list <- c("CHEM1.0","CHEM1.1","CHEM9", "HF","REF1","REF2",
+                    "LMX1B", "GENE1", "GENE2", "GENE3")
+
+for(c in seq_len(length(cds_name_list))) {
+
+    cds_name = cds_name_list[c]
+    cds_path = file.path(seahub_root, cds_name, paste0(cds_name, "_projected_cds_v2.2.0/"))
+
+    cds = load_monocle_objects(cds_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
+
+    if (!("cell_type_broad" %in% colnames(colData(cds)))) {
+        col_data <- as.data.frame(colData(cds)) 
+        col_data <- col_data %>%
+                        left_join(ct_broad_filt, by = "cell_type")
+        colData(cds)$cell_type_broad <- col_data$cell_type_broad
+    }
+    ccs = new_cell_count_set(cds, 
+                         sample_group = "embryo_ID",
+                         keep_cds = FALSE, 
+                         cell_group = "cell_type_broad")
+
+    # get simple counts matrix
+    ref_counts = as.matrix(counts(ccs))
+    write.csv(ref_counts, file.path(ccs_dir, paste0(cds_name, "_counts_table.csv")))
+
+    # extract and save reduced version of metadata
+    ref_col_data <- colData(ccs)
+    write.csv(ref_col_data, file.path(ccs_dir, paste0(cds_name, "_metadata.csv")))
+}
+
+########
+# new hotfish
 # root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/"
 hot_path <- "/net/trapnell/vol1/home/hklee206/sci_3lvl/240813_hotfish2_run3_novaseq/hotfish2/hotfish2_projected_cds_v2.2.0"
 hot_cds = load_monocle_objects(hot_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
+
+hot_col_data <- as.data.frame(colData(hot_cds)) 
+valid_indices <- which(!is.na(hot_col_data$cell_type))
+hot_col_data <- hot_col_data[valid_indices, ]
+
+
+
+# Perform left join to add "cell_type_broad"
+hot_col_data <- hot_col_data %>%
+  left_join(ct_broad_filt, by = "cell_type")
+
+# Convert back to DataFrame and assign back to CDS
+hot_cds <- hot_cds[, valid_indices]
+colData(hot_cds)$cell_type_broad <- hot_col_data$cell_type_broad
 
 # generate cell count set
 hot_ccs = new_cell_count_set(hot_cds, 
                          sample_group = "embryo_ID", 
                          keep_cds=FALSE,
-                         cell_group = "cell_type")
+                         cell_group = "cell_type_broad")
 
 # get simple counts matrix
 hot_counts = as.matrix(counts(hot_ccs))
@@ -26,13 +86,6 @@ write.csv(hot_counts, file.path(ccs_dir, "hot2_counts_table.csv"))
 # extract and save reduced version of metadata
 hot_col_data <- colData(hot_ccs)
 write.csv(hot_col_data, file.path(ccs_dir, "hot2_embryo_metadata.csv"))
-
-
-# save_monocle_objects(
-#   cds = hot_ccs, 
-#   directory_path = file.path(ccs_dir, "hot2_ccs.rds")
-# )
-#saveRDS(hot_ccs, file = file.path(ccs_dir, "hot2_ccs.rds"))
 
 ########################
 # REF orig
@@ -43,7 +96,7 @@ ref_cds = load_monocle_objects(ref_path, matrix_control = list(matrix_class="BPC
 ref_ccs = new_cell_count_set(ref_cds, 
                          sample_group = "embryo_ID",
                          keep_cds = FALSE, 
-                         cell_group = "cell_type")
+                         cell_group = "cell_type_broad")
 
 # get simple counts matrix
 ref_counts = as.matrix(counts(ref_ccs))
@@ -52,62 +105,3 @@ write.csv(ref_counts, file.path(ccs_dir, "ref_orig_counts_table.csv"))
 # extract and save reduced version of metadata
 ref_col_data <- colData(ref_ccs)
 write.csv(ref_col_data, file.path(ccs_dir, "ref_orig_embryo_metadata.csv"))
-
-# save_monocle_objects(
-#   cds = ref_ccs, 
-#   directory_path = file.path(ccs_dir, "ref_orig_ccs.rds")
-# )
-#saveRDS(ref_ccs, file = file.path(ccs_dir, "ref_orig_ccs.rds"))
-
-#######################
-# REF 1
-ref1_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF1/REF1_projected_cds_v2.2.0"
-ref1_cds = load_monocle_objects(ref1_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
-
-# generate cell count set
-ref1_ccs = new_cell_count_set(ref1_cds, 
-                         sample_group = "embryo_ID", 
-                         keep_cds = FALSE,
-                         cell_group = "cell_type")
-
-# get simple counts matrix
-ref1_counts = as.matrix(counts(ref1_ccs))
-write.csv(ref1_counts, file.path(ccs_dir, "ref1_counts_table.csv"))
-
-# extract and save reduced version of metadata
-ref1_col_data <- colData(ref1_ccs)
-write.csv(ref1_col_data, file.path(ccs_dir, "ref1_embryo_metadata.csv"))
-
-# Assuming you have these objects
-# save_monocle_objects(
-#   cds = ref1_ccs, 
-#   directory_path = file.path(ccs_dir, "ref1_ccs.rds")
-# )
-
-# REF 2
-ref2_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF2/REF2_projected_cds_v2.2.0"
-ref2_cds = load_monocle_objects(ref2_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
-
-# generate cell count set
-ref2_ccs = new_cell_count_set(ref2_cds, 
-                         sample_group = "embryo_ID", 
-                         cell_group = "cell_type")
-
-# # Assuming you have these objects
-# save_monocle_objects(
-#   cds = ref2_ccs, 
-#   directory_path = file.path(ccs_dir, "ref2_ccs.rds")
-# )
-
-# get simple counts matrix
-ref2_counts = as.matrix(counts(ref2_ccs))
-write.csv(ref2_counts, file.path(ccs_dir, "ref2_counts_table.csv"))
-
-# extract and save reduced version of metadata
-ref2_col_data <- colData(ref2_ccs)
-write.csv(ref2_col_data, file.path(ccs_dir, "ref2_embryo_metadata.csv"))
-# saveRDS(ccs, file = file.path(ccs_dir, "ref1_ccs.rds"))
-
-
-
-                         
