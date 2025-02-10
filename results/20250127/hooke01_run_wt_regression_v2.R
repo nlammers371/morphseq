@@ -34,8 +34,8 @@ ref1_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF1/REF1_projected_c
 ref1_cds = load_monocle_objects(ref1_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
 
 # REF 2
-ref2_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF2/REF2_projected_cds_v2.2.0"
-ref2_cds = load_monocle_objects(ref2_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
+# ref2_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF2/REF2_projected_cds_v2.2.0"
+# ref2_cds = load_monocle_objects(ref2_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
 
 print("Done.")
 
@@ -67,15 +67,15 @@ hot_cds <- hot_cds[, valid_indices]
 colData(hot_cds)$cell_type_broad <- hot_col_data$cell_type_broad
 
 # filter for ctrl temps in hotfish
-hot_cds_28 = hot_cds[, colData(hot_cds)$temp == 28]
-
+hot_cds_28 <- hot_cds[, colData(hot_cds)$temp == 28]
 
 #############
 # make ccs structures
 print("Making combined cds...")
-master_cds <- combine_cds(list(hot_cds_28, ref_cds, ref1_cds, ref2_cds), 
+master_cds <- combine_cds(list(hot_cds_28, ref_cds, ref1_cds), #, ref2_cds), 
                             keep_all_genes=FALSE, 
                             keep_reduced_dims=TRUE)   # required to prevent error when running ccm
+
 
 print("Making ccs structures...")
 ccs <- new_cell_count_set(master_cds, 
@@ -86,11 +86,10 @@ ccs <- ccs[, !is.na(ccs$timepoint)]
 
 # save
 all_counts <- as.data.frame(as.matrix(counts(ccs)))
-write.csv(all_counts, file.path(ccs_dir, "mdl_counts_table.csv"))
 
-# extract and save reduced version of metadata
+# # extract and save reduced version of metadata
 all_col_data <- as.data.frame(colData(ccs))
-write.csv(all_col_data, file.path(ccs_dir, "mdl_embryo_metadata.csv"))
+
 
 # infer WT developmental kinetics
 start_time <- min(ccs$timepoint)
@@ -99,13 +98,13 @@ num_spline_breaks <- 5
 spline_names <- lapply(seq_len(num_spline_breaks-1), function(x) paste0("t_spline_", x))
 time_formula = build_interval_formula(ccs, num_breaks = num_spline_breaks, interval_start = start_time, interval_stop = stop_time)
 
-mdl_name_list <- c("t_spline_only2", "t_spline_lin2", "t_spline_inter2")
+mdl_name_list <- c("t_spline_only3", "t_spline_lin3", "t_spline_inter3")
 formula_list <- c(time_formula, paste0(time_formula, " + dis_protocol + expt"), paste0(time_formula, " * dis_protocol + expt"))
 
 
 ######
 # mdl 1
-m = 2
+m = 3
 
 formula_string <- formula_list[m]
 mdl_name <- mdl_name_list[m]
@@ -131,6 +130,9 @@ unique_combinations <- expand.grid(unique_levels, stringsAsFactors = FALSE)
 mdl_dir <- file.path(model_dir, mdl_name)
 dir.create(mdl_dir, showWarnings = FALSE, recursive = TRUE) 
 writeLines(formula_string, file.path(mdl_dir, "model_string.txt"))
+
+write.csv(all_col_data, file.path(mdl_dir, "mdl_embryo_metadata.csv"))
+write.csv(all_counts, file.path(mdl_dir, "mdl_counts_table.csv"))
 
 # no nuisance variables
 ccm <- new_cell_count_model(ccs,
