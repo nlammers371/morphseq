@@ -124,7 +124,7 @@ def label_embryo_images(root, label_type, overwrite_flag=False, start_i=None):
 if __name__ == '__main__':
 
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    label_type = "yolk"  # "via" "bubble" "focus"
+    label_type = "mask"  # "via" "bubble" "focus"
     start_i = None
 
     label_embryo_images(root, label_type, overwrite_flag=False, start_i=start_i)
