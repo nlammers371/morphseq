@@ -216,12 +216,12 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     meta_df.loc[:, "dummy_response"] = 0
 
     # model formula
-    with open(model_path + "model_string.txt", "r") as file:
-        formula_str = file.read()
-    formula_str = "dummy_response " + formula_str
-    formula_str = formula_str.replace("ns(", "cr(")
-    formula_str = formula_str.replace("c(", "(")
-    formula_str = formula_str.replace("\n", "")
+    # with open(model_path + "model_string.txt", "r") as file:
+    #     formula_str = file.read()
+    # formula_str = "dummy_response " + formula_str
+    # formula_str = formula_str.replace("ns(", "cr(")
+    # formula_str = formula_str.replace("c(", "(")
+    # formula_str = formula_str.replace("\n", "")
 
     # load hooke predictions (for comparison purposes)
     # latent_df = pd.read_csv(model_path + "latents.csv", index_col=0)
@@ -241,7 +241,6 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     # load in full counts table and metadata used for model inference
     mdl_counts_df = pd.read_csv(model_path + "mdl_counts_table.csv", index_col=0).T
     mdl_meta_df = pd.read_csv(model_path + "mdl_embryo_metadata.csv", index_col=0)
-
 
     ####################
     # load in ccs table
@@ -267,6 +266,9 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     # concatenate
     ccs_df = pd.concat(ccs_df_list, axis=0).drop_duplicates()
     meta_df = pd.concat(meta_df_list, axis=0).drop_duplicates()
+
+    ccs_df = ccs_df.loc[~ccs_df.index.duplicated(keep='first')]
+    meta_df = meta_df.loc[~meta_df.index.duplicated(keep='first')]
 
     # augment ccs table to incorporate missing cell types
     # mdl_cell_types = mdl_counts_df.columns
@@ -307,8 +309,11 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
 
     # print("Running inference")
     # run_inf_shared(10)
+    # for i in range(ccs_df.shape[0]):
+    #     run_inf_shared(i)
+
     results = process_map(run_inf_shared, range(ccs_df.shape[0]), max_workers=max_threads,
-                          chunksize=1, desc="Running Inference")
+                          chunksize=10, desc="Running Inference")
 
     time_dfs, latent_dfs, latent_se_dfs = zip(*results)
 
