@@ -30,22 +30,26 @@ def run_inference(embryo_ind, ccs_df, meta_df, cov_col_list, spline_lookup_df, P
     dis = meta_df.loc[embryo_id, "dis_protocol"]
     expt = meta_df.loc[embryo_id, "expt"]
     stage = meta_df.loc[embryo_id, "timepoint"]
+    size_factor_log = np.log(meta_df.loc[embryo_id, "Size_Factor"])
 
     # construct initial covariate vec
     X0 = construct_X(20, dis, expt, cov_col_list=cov_col_list, spline_lookup_df=spline_lookup_df)
 
-    def call_logL(params, raw_counts=raw_counts, X0=X0, THETA=THETA, PHI=PHI, spline_lookup_df=spline_lookup_df,
+    def call_logL(params, raw_counts=raw_counts, offset=size_factor_log, X0=X0, THETA=THETA, PHI=PHI, spline_lookup_df=spline_lookup_df,
                   cov_cols=cov_col_list):
         spline_cols = [col for col in cov_cols if "ns(" in col]
-        loss = calculate_PLN_logL(params, raw_counts, X0, THETA, PHI, spline_lookup_df=spline_lookup_df, spline_cols=spline_cols)
+        loss = calculate_PLN_logL(params, raw_counts, size_factor_log, X0, THETA, PHI, spline_lookup_df=spline_lookup_df, spline_cols=spline_cols)
         return loss
 
     # initialize time
     dt = np.random.normal(loc=0, scale=5)
     t0 = np.min([np.max([stage+ dt, 6]), 96])
     zi0_vec = [0] * PHI.shape[0]
+    params_init = np.asarray([t0] + zi0_vec)
+    result = minimize(call_logL, params_init, args=(raw_counts,),  options=dict({"maxiter": maxiter}))
+    # result = call_logL(params_init)
 
-    result = minimize(call_logL, [t0] + zi0_vec, args=(raw_counts,),  options=dict({"maxiter": maxiter}))
+
     t_hat = result.x[0]
     z_hat = result.x[1:]
 
@@ -61,7 +65,7 @@ def run_inference(embryo_ind, ccs_df, meta_df, cov_col_list, spline_lookup_df, P
     # save output
     latent_df = pd.DataFrame(latents[None, :], index=[embryo_id], columns=ccs_df.columns)
     latent_se_df = pd.DataFrame(z_sig[None, :], index=[embryo_id], columns=ccs_df.columns)
-    time_df = pd.DataFrame(np.c_[t_hat, t_sig], index=[embryo_id], columns=["pseudostage", "se"])
+    time_df = pd.DataFrame(np.c_[t_hat, t_sig], index=[embryo_id], columns=["pseudostage", "pseudostage_se"])
 
     return time_df, latent_df, latent_se_df
 
@@ -155,13 +159,12 @@ def calc_logL_gauss(PHI, Zi): # note that the leaves out the normalization facto
     logL = -0.5 * (Zi[None, :] @ PHI @ Zi[:, None])
     return logL[0][0]
 
-def calc_logL_poiss(raw_counts, log_lambda):
+def calc_logL_poiss(raw_counts, log_lambda, log_offset):
     # logL = np.sum(np.multiply(raw_counts, log_lambda) - np.exp(log_lambda) - factorial(raw_counts))
-    log_pmf = poisson.logpmf(raw_counts, np.exp(log_lambda))
+    log_pmf = poisson.logpmf(raw_counts, np.exp(log_lambda + log_offset))
     return np.sum(log_pmf)
 
-
-def calculate_PLN_logL(params, raw_counts, X0, THETA, PHI, spline_lookup_df, spline_cols):
+def calculate_PLN_logL(params, raw_counts, log_offset, X0, THETA, PHI, spline_lookup_df, spline_cols):
 
     # extract params
     t = params[0]
@@ -178,7 +181,9 @@ def calculate_PLN_logL(params, raw_counts, X0, THETA, PHI, spline_lookup_df, spl
 
     # caculate Poisson logL
     L = Zi + mu
-    logL_p = calc_logL_poiss(raw_counts, L)
+    logL_p = calc_logL_poiss(raw_counts, L, log_offset)
+    if np.isnan(logL_p) or np.isinf(logL_p):
+        print("wtf")
 
     return -(logL_g + logL_p) / len(raw_counts)
 
@@ -309,11 +314,11 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
 
     # print("Running inference")
     # run_inf_shared(10)
-    # for i in range(ccs_df.shape[0]):
+    # for i in tqdm(range(ccs_df.shape[0])):
     #     run_inf_shared(i)
 
     results = process_map(run_inf_shared, range(ccs_df.shape[0]), max_workers=max_threads,
-                          chunksize=10, desc="Running Inference")
+                          chunksize=3, desc="Running Inference")
 
     time_dfs, latent_dfs, latent_se_dfs = zip(*results)
 
@@ -327,7 +332,7 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     latent_se_df.to_csv(out_dir + "latent_projections_se.csv")
 
     # add time info
-    time_df = time_df.merge(meta_df.loc[:, ["timepoint", "mean_nn_time",  "expt", "dis_protocol", "inference_flag", "oos_expt_flag"]],
+    time_df = time_df.merge(meta_df.loc[:, ["timepoint", "mean_nn_time",  "expt", "dis_protocol", "inference_flag", "oos_expt_flag", "temp"]],
                             how="left", left_index=True, right_index=True)
     time_df.to_csv(out_dir + "time_predictions.csv")
 
