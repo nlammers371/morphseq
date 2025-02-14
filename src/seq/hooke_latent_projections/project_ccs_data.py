@@ -43,7 +43,7 @@ def run_inference(embryo_ind, ccs_df, meta_df, cov_col_list, spline_lookup_df, P
 
     # initialize time
     dt = np.random.normal(loc=0, scale=5)
-    t0 = np.min([np.max([stage+ dt, 6]), 96])
+    t0 = np.min([np.max([stage + dt, 6]), 96])
     zi0_vec = [0] * PHI.shape[0]
     params_init = np.asarray([t0] + zi0_vec)
     result = minimize(call_logL, params_init, args=(raw_counts,),  options=dict({"maxiter": maxiter}))
@@ -219,14 +219,6 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     # make stripped-down metadata df
     meta_df = hooke_counts_df[cov_cols].copy()
     meta_df.loc[:, "dummy_response"] = 0
-
-    # model formula
-    # with open(model_path + "model_string.txt", "r") as file:
-    #     formula_str = file.read()
-    # formula_str = "dummy_response " + formula_str
-    # formula_str = formula_str.replace("ns(", "cr(")
-    # formula_str = formula_str.replace("c(", "(")
-    # formula_str = formula_str.replace("\n", "")
 
     # load hooke predictions (for comparison purposes)
     # latent_df = pd.read_csv(model_path + "latents.csv", index_col=0)
