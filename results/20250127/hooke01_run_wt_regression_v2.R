@@ -34,8 +34,8 @@ ref1_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF1/REF1_projected_c
 ref1_cds = load_monocle_objects(ref1_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
 
 # REF 2
-# ref2_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF2/REF2_projected_cds_v2.2.0"
-# ref2_cds = load_monocle_objects(ref2_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
+ref2_path <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/REF2/REF2_projected_cds_v2.2.0"
+ref2_cds = load_monocle_objects(ref2_path, matrix_control = list(matrix_class="BPCells", matrix_path=temp_path))
 
 print("Done.")
 
@@ -72,9 +72,9 @@ hot_cds_28 <- hot_cds[, colData(hot_cds)$temp == 28]
 #############
 # make ccs structures
 print("Making combined cds...")
-master_cds <- combine_cds(list(hot_cds_28, ref_cds, ref1_cds), #, ref2_cds), 
-                            keep_all_genes=FALSE, 
-                            keep_reduced_dims=TRUE)   # required to prevent error when running ccm
+master_cds <- combine_cds(list(hot_cds_28, ref_cds, ref1_cds, ref2_cds), 
+                              keep_all_genes=FALSE, 
+                              keep_reduced_dims=TRUE)   # required to prevent error when running ccm
 
 
 print("Making ccs structures...")
