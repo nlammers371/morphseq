@@ -22,18 +22,19 @@ from tqdm.contrib.concurrent import process_map
 import time
 
 
-def run_inference(embryo_ind, ccs_df, meta_df, cov_col_list, spline_lookup_df, PHI, THETA, maxiter):
+def run_inference(embryo_ind, ccs_df, meta_df, cov_factors, cov_col_list, spline_lookup_df, PHI, THETA, maxiter):
 
     # get embryo info
     embryo_id = ccs_df.index[embryo_ind]
     raw_counts = ccs_df.loc[embryo_id, :].to_numpy()
-    dis = meta_df.loc[embryo_id, "dis_protocol"]
-    expt = meta_df.loc[embryo_id, "expt"]
+    # dis = meta_df.loc[embryo_id, "dis_protocol"]
+    # expt = meta_df.loc[embryo_id, "expt"]
+    cov_dict = dict({cov: meta_df.loc[embryo_id, cov] for cov in cov_factors})
     stage = meta_df.loc[embryo_id, "timepoint"]
     size_factor_log = np.log(meta_df.loc[embryo_id, "Size_Factor"])
 
     # construct initial covariate vec
-    X0 = construct_X(20, dis, expt, cov_col_list=cov_col_list, spline_lookup_df=spline_lookup_df)
+    X0 = construct_X(20, cov_dict, cov_col_list=cov_col_list, spline_lookup_df=spline_lookup_df)
 
     def call_logL(params, raw_counts=raw_counts, offset=size_factor_log, X0=X0, THETA=THETA, PHI=PHI, spline_lookup_df=spline_lookup_df,
                   cov_cols=cov_col_list):
@@ -58,7 +59,11 @@ def run_inference(embryo_ind, ccs_df, meta_df, cov_col_list, spline_lookup_df, P
     z_sig = standard_errors[1:]
 
     # calculate latent projection (removing experiment effects and shift to bead reference
-    X = construct_X(timepoint=t_hat, dis=2, expt="NA", cov_col_list=cov_col_list, spline_lookup_df=spline_lookup_df)
+    null_dict = cov_dict
+    for key in list(null_dict.keys()):
+        null_dict[key] = "NA"
+
+    X = construct_X(timepoint=t_hat, cov_dict=null_dict, cov_col_list=cov_col_list, spline_lookup_df=spline_lookup_df)
     mu = (X @ THETA.T).to_numpy().ravel()
     latents = mu + z_hat
 
@@ -128,16 +133,24 @@ def update_spline_cols(X, query_times, spline_lookup_df, spline_cols):
 
     return X, spline_vals
 
-def construct_X(timepoint, dis, expt, cov_col_list, spline_lookup_df):
+def construct_X(timepoint, cov_dict, cov_col_list, spline_lookup_df):
 
     spline_cols = [col for col in cov_col_list if "ns(" in col]
 
+    cov_keys = list(cov_dict.keys())
+
     X = pd.DataFrame(np.zeros((1, len(cov_col_list))), columns=cov_col_list)
     X["Intercept"] = 1.0
-    X["dis_protocol"] = dis
-    expt_i = [i for i in range(len(cov_col_list)) if expt in cov_col_list[i]]
-    if len(expt_i) > 0:
-        X[cov_col_list[expt_i[0]]] = 1.0
+    for key in cov_keys:
+        val = cov_dict[key]
+        vi = [i for i in range(len(cov_col_list)) if val in cov_col_list[i]]
+        if len(vi) > 0:
+            # print(cov_col_list[vi[0]])
+            X.iloc[0, vi[0]] = 1.0
+
+    # expt_i = [i for i in range(len(cov_col_list)) if expt in cov_col_list[i]]
+    # if len(expt_i) > 0:
+    #     X[cov_col_list[expt_i[0]]] = 1.0
 
     X, _ = update_spline_cols(X, np.asarray([timepoint]), spline_lookup_df, spline_cols)
 
@@ -189,7 +202,6 @@ def calculate_PLN_logL(params, raw_counts, log_offset, X0, THETA, PHI, spline_lo
 
 def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     # set data path and model name parameter
-
     fig_folder = os.path.join(root, "figures/seq_data/PLN/", model_name, "")
     os.makedirs(fig_folder, exist_ok=True)
 
@@ -235,6 +247,18 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     beta_array.columns = cols_from_clean
     beta_array.head()
 
+    # model formula
+    with open(model_path + "model_string.txt", "r") as file:
+        formula_str = file.read().strip()
+    model_desc = patsy.ModelDesc.from_formula(formula_str)
+    # Extract covariate names from the right-hand side terms.
+    cov_factors = []
+    for term in model_desc.rhs_termlist:
+        for factor in term.factors:
+            # factor is a EvalFactor, convert it to string.
+            cov_factors.append(str(factor).replace("EvalFactor('","").replace("')",""))
+    cov_factors = np.unique([cov for cov in cov_factors if "ns(" not in cov]).tolist()
+
     # load in full counts table and metadata used for model inference
     mdl_counts_df = pd.read_csv(model_path + "mdl_counts_table.csv", index_col=0).T
     mdl_meta_df = pd.read_csv(model_path + "mdl_embryo_metadata.csv", index_col=0)
@@ -265,7 +289,17 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     meta_df = pd.concat(meta_df_list, axis=0).drop_duplicates()
 
     ccs_df = ccs_df.loc[~ccs_df.index.duplicated(keep='first')]
-    meta_df = meta_df.loc[~meta_df.index.duplicated(keep='first')]
+    meta_df = meta_df.loc[~meta_df.index.duplicated(keep='first')].set_index("sample")
+
+    meta_df["pert_collapsed"] = meta_df["perturbation"].copy()
+    conv_list = np.asarray(["ctrl-uninj", "reference", "novehicle"])
+    meta_df.loc[np.isin(meta_df["pert_collapsed"], conv_list), "pert_collapsed"] = "ctrl"
+
+    # keep only embryos from experiments that were included in model inference
+    exp_vec = mdl_meta_df.loc[:, "expt"].unique()
+    exp_filter = np.isin(meta_df["expt"], exp_vec)
+    meta_df = meta_df.loc[exp_filter, :]
+    ccs_df = ccs_df.loc[exp_filter, :]
 
     # augment ccs table to incorporate missing cell types
     # mdl_cell_types = mdl_counts_df.columns
@@ -301,6 +335,7 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     run_inf_shared = partial(run_inference,
                              ccs_df=ccs_df,
                              meta_df=meta_df,
+                             cov_factors=cov_factors,
                              cov_col_list=cov_col_list,
                              spline_lookup_df=time_splines, THETA=THETA, PHI=PHI, maxiter=maxiter)
 
@@ -337,6 +372,6 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
 
 if __name__ == "__main__":
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    model_name = "t_spline_inter3"
+    model_name = "bead_expt_linear"
     max_threads = 40
     time_df, latent_df, latent_se_df = do_latent_projections(root=root, model_name=model_name, max_threads=max_threads)
