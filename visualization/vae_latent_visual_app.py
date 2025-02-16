@@ -474,14 +474,15 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
 if __name__ == '__main__':
     # set parameters
-    dataRoot = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20231106_ds/"
+    # root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20241107_ds/"
+    root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
     model_architecture = "SeqVAE_z100_ne150_sweep_01_block01_iter030"
     training_instance = "SeqVAE_training_2024-11-11_15-45-40"
 
     preload_flag = False
 
     # load image data
-    visualize_latent_space(dataRoot, model_architecture, training_instance, preload_flag=preload_flag)
+    visualize_latent_space(root, model_architecture, training_instance, preload_flag=preload_flag)
 
 # if __name__ == "__main__":
 #     app.run(debug=True)
