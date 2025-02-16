@@ -1,8 +1,6 @@
 import io
 import base64
-from dash import Input, Output, no_update, callback
 # import plotly.graph_objects as go
-from PIL import Image
 import os
 # from sklearn.manifold import TSNE
 from src.functions.dataset_utils import *
@@ -10,7 +8,7 @@ import pandas as pd
 import plotly.express as px
 # from _archive.functions_folder.utilities import path_leaf
 # import skimage
-from dash import dcc, html
+from dash import dcc, html, Input, Output, no_update, callback
 import glob2 as glob
 import numpy as np
 import dash
