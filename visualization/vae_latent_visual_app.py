@@ -57,21 +57,21 @@ def parse_model_options(dataRoot):
     return model_list
 
 def get_image_sampler(train_dir):   #, main_dims=None):
-    mode_vec = ["train", "eval", "test"]
+    # mode_vec = ["train", "eval", "test"]
     # if main_dims is None:
     #     main_dims = (576, 256)
 
     data_transform = make_dynamic_rs_transform()
     data_sampler_vec = []
-    for mode in mode_vec:
-        ds_temp = MyCustomDataset(
-            root=os.path.join(train_dir, mode),
-            transform=data_transform,
-            return_name=True
-        )
-        data_sampler_vec.append(ds_temp)
+    # for mode in mode_vec:
+    data_sampler = MyCustomDataset(
+        root=os.path.join(train_dir, mode),
+        transform=data_transform,
+        return_name=True
+    )
+        # data_sampler_vec.append(ds_temp)
 
-    return data_sampler_vec
+    return data_sampler
 
 
 def visualize_latent_space(dataRoot, model_architecture, training_instance, preload_flag=False):
@@ -80,15 +80,15 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
     figurePath = os.path.join(dataRoot, model_architecture, training_instance, "figures", '')
 
-    def load_nucleus_dataset(dataRoot, model_architecture, training_instance):
+    def load_latents_dataset(dataRoot, model_architecture, training_instance):
 
         df = pd.read_csv(os.path.join(dataRoot, model_architecture, training_instance, "figures", "umap_df.csv"),
                          index_col=0)
-        image_sampler_list = get_image_sampler(dataRoot)
+        image_sampler = get_image_sampler(dataRoot)
 
-        return {"df": df, "image_sampler_list": image_sampler_list}
+        return {"df": df, "image_sampler": image_sampler_list}
 
-    df_dict = load_nucleus_dataset(dataRoot, model_architecture, training_instance)
+    df_dict = load_latents_dataset(dataRoot, model_architecture, training_instance)
 
     global plot_label_list, plot_partition_list  # , image_sampler_list
 
@@ -97,9 +97,9 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
 
     model_list = parse_model_options(dataRoot)
-    key_training_dict = {"SeqVAE_z100_ne250_triplet_loss_test_self_and_other":"SeqVAE_training_2024-01-06_03-55-23",
-                         }
-    model_name = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other"
+    # key_training_dict = {"SeqVAE_z100_ne250_triplet_loss_test_self_and_other":"SeqVAE_training_2024-01-06_03-55-23",
+    #                      }
+    # model_name = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other"
 
 
     # now select initial values to display
@@ -124,7 +124,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
     perturbation_list = perturbation_index.tolist()
 
     # wt_ind = np.where(perturbation_index == 'wck-AB')[0][0]
-    # image_sampler_list = df_dict["image_sampler_list"]
+    # image_sampler_list = df_dict["image_sampler"]
 
     ########################
     # App
@@ -330,7 +330,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
         global f
 
-        df_dict = load_nucleus_dataset(dataRoot, model_architecture, training_instance)
+        df_dict = load_latents_dataset(dataRoot, model_architecture, training_instance)
         df = df_dict["df"]
 
         f = create_figure(df, plot_labels=plot_labels, plot_partition=plot_partition, plot_dim=plot_dim,
@@ -390,7 +390,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             # changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
             mode_vec = ["train", "eval", "test"]
 
-            df_dict = load_nucleus_dataset(dataRoot, model_architecture, training_instance)
+            df_dict = load_latents_dataset(dataRoot, model_architecture, training_instance)
             df = df_dict["df"]
 
             if plot_class_list is not None:
@@ -399,7 +399,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             else:
                 plot_indices = np.arange(df.shape[0])
 
-            image_sampler_list = df_dict["image_sampler_list"]
+            image_sampler_list = df_dict["image_sampler"]
 
             # demo only shows the first point, but other points may also be available
             hover_data = hoverData["points"][0]
@@ -475,8 +475,8 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 if __name__ == '__main__':
     # set parameters
     dataRoot = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20231106_ds/"
-    model_architecture = "SeqVAE_z100_ne250_triplet_loss_test_self_and_other"
-    training_instance = "SeqVAE_training_2024-01-06_03-55-23"
+    model_architecture = "SeqVAE_z100_ne150_sweep_01_block01_iter030"
+    training_instance = "SeqVAE_training_2024-11-11_15-45-40"
 
     preload_flag = False
 
