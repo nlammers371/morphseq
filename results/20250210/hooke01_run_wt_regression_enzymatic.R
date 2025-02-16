@@ -96,7 +96,7 @@ all_counts <- as.data.frame(as.matrix(counts(ccs)))
 # # extract and save reduced version of metadata
 all_col_data <- as.data.frame(colData(ccs))
 
-print("Initializing model params...")
+
 print("Setting up Hooke regression(s)...")
 # infer WT developmental kinetics
 start_time <- min(ccs$timepoint)
@@ -105,18 +105,17 @@ num_spline_breaks <- 5
 spline_names <- lapply(seq_len(num_spline_breaks-1), function(x) paste0("t_spline_", x))
 time_formula = build_interval_formula(ccs, num_breaks = num_spline_breaks, interval_start = start_time, interval_stop = stop_time)
 
-mdl_name_list <- c("enz_linear", "enz_pert_inter", "enz_all_inter")
-formula_list <- c(paste0(time_formula, " + pert_collapsed + expt"), 
-                  paste0(time_formula, " * pert_collasped + expt")
-                  paste0(time_formula, " * (pert_collasped + expt)"))
+mdl_name_list <- c("enz_expt_linear", "enz_expt_inter")
+formula_list <- c(paste0(time_formula, " + expt"),
+                  paste0(time_formula, " * expt"))
 
 # initialize the progress bar (style = 3 shows a percentage bar)
-pb <- txtProgressBar(min = 0, max = length(formula_list), style = 3)
+# pb <- txtProgressBar(min = 0, max = length(formula_list), style = 3)
 ######
 # mdl 1
 for (m in seq_along(formula_list)) {
 
-    setTxtProgressBar(pb, m-1)
+    # setTxtProgressBar(pb, m-1)
 
     formula_string <- formula_list[m]
     mdl_name <- mdl_name_list[m]
@@ -160,6 +159,7 @@ for (m in seq_along(formula_list)) {
     interior_knots <- c(as.numeric(unlist(strsplit(knots_str, ","))))
     boundary_knots <- c(start_time, stop_time)
     B <- ns(t_grid, knots = interior_knots, Boundary.knots = boundary_knots)
+
     # Combine the time values and the basis matrix into a data frame.
     lookup_df <- data.frame(timepoint = t_grid, as.data.frame(B))
     col_names_vec <- c("timepoint", spline_names)
@@ -198,7 +198,6 @@ for (m in seq_along(formula_list)) {
     write.csv(as.data.frame(best_full_model$model_par$Theta), file = file.path(mdl_dir, "Theta.csv"))
 
 }
-
 
 
 # # linear offsets for disociation and experiment
