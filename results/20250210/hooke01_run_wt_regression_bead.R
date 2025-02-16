@@ -17,9 +17,9 @@ dir.create(ccs_dir, showWarnings = FALSE, recursive = TRUE)
 # iterate through list of cds files (bead experiments only)
 seahub_root <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/"
 
-cds_name_list <- c("REF1", "REF2", "GENE1", "GENE2", "GENE3")
+cds_name_list <- c("REF1", "GENE1", "GENE2", "GENE3") # "REF2"
 
-# dewsignate list of control labels
+# dewsignate list of controlR labels
 ctrl_labels <- c("EtOH", "DMSO", "ctrl-inj", "reference", "ctrl-uninj", "novehicle")
 
 # load coarse cell type labels
@@ -60,8 +60,6 @@ for (i in seq_along(cds_name_list)) {
 
 print("Done.")
 
-
-
 print("Adding HF2 data...")
 ########
 # new hotfish
@@ -100,14 +98,17 @@ ccs <- new_cell_count_set(master_cds,
                          sample_group = "embryo_ID", 
                          cell_group = "cell_type_broad")
 
-ccs <- ccs[, !is.na(ccs$timepoint)]
-
 # Create a new column 'perturbation_collapsed'
 colData(ccs)$pert_collapsed <- ifelse(
   colData(ccs)$perturbation %in% c("ctrl-uninj", "reference", "novehicle"),
   "ctrl",
   colData(ccs)$perturbation
 )
+
+ccs <- ccs[, !is.na(ccs$timepoint)]
+ccs <- ccs[, !is.na(ccs$expt)]
+ccs <- ccs[, !is.na(ccs$pert_collapsed)]
+
 
 # save
 all_counts <- as.data.frame(as.matrix(counts(ccs)))
@@ -124,18 +125,17 @@ num_spline_breaks <- 5
 spline_names <- lapply(seq_len(num_spline_breaks-1), function(x) paste0("t_spline_", x))
 time_formula = build_interval_formula(ccs, num_breaks = num_spline_breaks, interval_start = start_time, interval_stop = stop_time)
 
-mdl_name_list <- c("bead_linear", "bead_pert_inter", "bead_all_inter")
-formula_list <- c(paste0(time_formula, " + pert_collapsed + expt"),
-                  paste0(time_formula, " * pert_collasped + expt"), 
-                  paste0(time_formula, " * (pert_collasped + expt)"))
+mdl_name_list <- c("bead_expt_linear", "bead_expt_inter")
+formula_list <- c(paste0(time_formula, " + expt"),
+                  paste0(time_formula, " * expt"))
 
 # initialize the progress bar (style = 3 shows a percentage bar)
-pb <- txtProgressBar(min = 0, max = length(formula_list), style = 3)
+# pb <- txtProgressBar(min = 0, max = length(formula_list), style = 3)
 ######
 # mdl 1
 for (m in seq_along(formula_list)) {
 
-    setTxtProgressBar(pb, m-1)
+    # setTxtProgressBar(pb, m-1)
 
     formula_string <- formula_list[m]
     mdl_name <- mdl_name_list[m]
@@ -179,6 +179,7 @@ for (m in seq_along(formula_list)) {
     interior_knots <- c(as.numeric(unlist(strsplit(knots_str, ","))))
     boundary_knots <- c(start_time, stop_time)
     B <- ns(t_grid, knots = interior_knots, Boundary.knots = boundary_knots)
+
     # Combine the time values and the basis matrix into a data frame.
     lookup_df <- data.frame(timepoint = t_grid, as.data.frame(B))
     col_names_vec <- c("timepoint", spline_names)
