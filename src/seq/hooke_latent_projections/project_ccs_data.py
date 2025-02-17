@@ -372,6 +372,6 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
 
 if __name__ == "__main__":
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
-    model_name = "bead_expt_linear"
+    model_name = "enz_expt_linear"
     max_threads = 40
     time_df, latent_df, latent_se_df = do_latent_projections(root=root, model_name=model_name, max_threads=max_threads)
