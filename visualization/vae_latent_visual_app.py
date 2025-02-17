@@ -93,7 +93,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
     global plot_label_list, plot_partition_list  # , image_sampler_list
 
     plot_label_list = ["predicted_stage_hpf",
-                       "master_perturbation"]
+                       "short_pert_name"]
 
 
     model_list = parse_model_options(dataRoot)
@@ -120,7 +120,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
     plot_partition_list = ["all", "biological", "non-biological"]
     df = df_dict["df"]
-    perturbation_index = np.unique(df["master_perturbation"])
+    perturbation_index = np.unique(df["short_pert_name"])
     perturbation_list = perturbation_index.tolist()
 
     # wt_ind = np.where(perturbation_index == 'wck-AB')[0][0]
@@ -137,14 +137,14 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
         if plot_labels == "predicted_stage_hpf":
             cmap_plot = "magma"
-        elif plot_labels == "master_perturbation":
+        elif plot_labels == "short_pert_name":
             cmap_plot = "plotly"
 
         marker_opacity = 0.5
 
         if plot_class_list is not None:
             plot_indices = np.asarray(
-                [i for i in range(df.shape[0]) if df.loc[i, "master_perturbation"] in plot_class_list])
+                [i for i in range(df.shape[0]) if df.loc[i, "short_pert_name"] in plot_class_list])
         else:
             plot_indices = np.arange(df.shape[0])
 
@@ -201,7 +201,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
         if plot_labels == "predicted_stage_hpf":
             fig.update_traces(marker=dict(size=4))
-        elif plot_labels == "master_perturbation":
+        elif plot_labels == "short_pert_name":
             fig.update_traces(marker=dict(size=4, line=dict(width=0.5, color='rgba(70,70,70,0.2)')))
         # selector=dict(mode='markers'))
         fig.update_traces(
@@ -395,7 +395,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
             if plot_class_list is not None:
                 plot_indices = np.asarray(
-                    [i for i in range(df.shape[0]) if df.loc[i, "master_perturbation"] in plot_class_list])
+                    [i for i in range(df.shape[0]) if df.loc[i, "short_pert_name"] in plot_class_list])
             else:
                 plot_indices = np.arange(df.shape[0])
 
@@ -414,7 +414,7 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
             # look the point up in the data frame
             snip_id = df["snip_id"].iloc[num]
             age_hpf = df["predicted_stage_hpf"].iloc[num]
-            pert = df["master_perturbation"].iloc[num]
+            pert = df["short_pert_name"].iloc[num]
             train_cat = df["train_cat"].iloc[num]
 
             if not preload_flag:
@@ -474,8 +474,8 @@ def visualize_latent_space(dataRoot, model_architecture, training_instance, prel
 
 if __name__ == '__main__':
     # set parameters
-    # root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20241107_ds/"
-    root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+    root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick//morphseq/training_data/20241107_ds/"
+    # root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
     model_architecture = "SeqVAE_z100_ne150_sweep_01_block01_iter030"
     training_instance = "SeqVAE_training_2024-11-11_15-45-40"
 
