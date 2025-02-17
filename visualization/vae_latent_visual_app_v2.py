@@ -7,9 +7,7 @@ import pandas as pd
 import plotly.express as px
 from dash import dcc, html, Input, Output, Dash, no_update
 from src.functions.dataset_utils import *
-# from src.functions.utilities import os.path.basename, make_dynamic_rs_transform, MyCustomDataset
 from PIL import Image
-from skimage.transform import resize
 
 # Global variable for image sampler so we load it only once.
 global_image_sampler = None
@@ -24,7 +22,6 @@ def np_image_to_base64(im_matrix):
     im.save(buffer, format="jpeg")
     encoded_image = base64.b64encode(buffer.getvalue()).decode()
     return "data:image/jpeg;base64," + encoded_image
-
 
 def parse_model_options(dataRoot):
     model_dirs = [m for m in glob.glob(os.path.join(dataRoot, "*VAE*")) if os.path.isdir(m)]
@@ -77,16 +74,27 @@ def create_figure(df, label_col="predicted_stage_hpf", plot_partition="biologica
     else:
         plot_df = plot_df
 
-    if dim == "3D UMAP":
-        plot_dict = dict({"all": ["UMAP_00_3", "UMAP_01_3", "UMAP_02_3"],
-                          "biological": ["UMAP_00_bio_3", "UMAP_01_bio_3", "UMAP_02_bio_3"],
-                          "non-biological": ["UMAP_00_n_3", "UMAP_01_n_3", "UMAP_02_n_3"]})
+    if (label_col == "predicted_stage_hpf") or (label_col == "temperature"):
+        cscale = "magma"
+    else:
+        cscale = "plotly"
+
+    if "3D" in dim:
+        if dim == "3D UMAP":
+            plot_dict = dict({"all": ["UMAP_00_3", "UMAP_01_3", "UMAP_02_3"],
+                              "biological": ["UMAP_00_bio_3", "UMAP_01_bio_3", "UMAP_02_bio_3"],
+                              "non-biological": ["UMAP_00_n_3", "UMAP_01_n_3", "UMAP_02_n_3"]})
+        elif dim == "3D PCA":
+            plot_dict = dict({"all": ["PCA_00_all", "PCA_01_all", "PCA_02_all"],
+                              "biological": ["PCA_00_bio", "PCA_01_bio", "PCA_02_bio"],
+                              "non-biological": ["PCA_00_nbio", "PCA_01_nbio", "PCA_02_nbio"]})
 
         plot_variables = plot_dict[plot_partition]
         fig = px.scatter_3d(plot_df, x=plot_variables[0], y=plot_variables[1], z=plot_variables[2],
-                            color=label_col, opacity=0.5,
-                            color_continuous_scale="magma" if label_col == "predicted_stage_hpf" else "plotly",
-                            custom_data = ["snip_id"]
+                            color=label_col, opacity=0.75,
+                            color_continuous_scale=cscale,
+                            custom_data=["snip_id"],
+                            hover_data=["snip_id"]
                             )
         fig.update_layout(scene=dict(
             xaxis_title="UMAP 1",
@@ -102,9 +110,9 @@ def create_figure(df, label_col="predicted_stage_hpf", plot_partition="biologica
 
         fig = px.scatter(plot_df, x=plot_variables[0], y=plot_variables[1],
                          color=label_col, opacity=0.5,
-                         color_continuous_scale="magma" if label_col == "predicted_stage_hpf" else "plotly")
+                         color_continuous_scale=cscale)
         fig.update_layout(xaxis_title="UMAP 1", yaxis_title="UMAP 2")
-    fig.update_traces(marker=dict(size=4))
+    fig.update_traces(marker=dict(size=6))
     return fig
 
 
@@ -133,14 +141,14 @@ def create_app(dataRoot, model_architecture, training_instance):
     pert_options = sorted(df["short_pert_name"].unique().tolist())
 
     # make label vec. Check to see if temperature is included
-    label_options = ["predicted_stage_hpf", "short_pert_name", "experiment_date"]
-    if "temp" in df.columns.tolist():
-        label_options += ["temp"]
+    label_options = ["predicted_stage_hpf", "short_pert_name", "experiment_date", "temperature"]
+    # if "temperature" in df.columns.tolist():
+    #     label_options += ["temperature"]
     # check to see if we have PCA columns
     pca_cols = [col for col in df.columns.tolist() if "PCA" in col]
     dim_option_vec = ["2D UMAP", "3D UMAP"]
     if len(pca_cols) >= 3:
-        dim_option_vec += ["2D PCA", "3D PCA"]
+        dim_option_vec += ["3D PCA"]
 
     # Define dropdown options
     label_opts = [{"label": l, "value": l} for l in label_options]
@@ -309,7 +317,7 @@ def create_app(dataRoot, model_architecture, training_instance):
         im_url = np_image_to_base64(im_matrix)
         tooltip_children = html.Div([
             html.Img(src=im_url, style={"width": "100px", "display": "block", "margin": "0 auto"}),
-            html.P(f"{np.round(row['predicted_stage_hpf'].values[0], 1)} hpf | {row['short_pert_name'].values[0]} | {row['experiment_date'].values[0]}"
+            html.P(f"{int(row['predicted_stage_hpf'].values[0])} hpf | {row['short_pert_name'].values[0]} | {row['snip_id'].values[0]}"
                    , style={"font-weight": "bold"})
         ])
         return True, bbox, tooltip_children
