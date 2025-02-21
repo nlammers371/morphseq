@@ -39,7 +39,7 @@ def run_inference(embryo_ind, ccs_df, meta_df, cov_factors, cov_col_list, spline
     def call_logL(params, raw_counts=raw_counts, offset=size_factor_log, X0=X0, THETA=THETA, PHI=PHI, spline_lookup_df=spline_lookup_df,
                   cov_cols=cov_col_list):
         spline_cols = [col for col in cov_cols if "ns(" in col]
-        loss = calculate_PLN_logL(params, raw_counts, size_factor_log, X0, THETA, PHI, spline_lookup_df=spline_lookup_df, spline_cols=spline_cols)
+        loss = calculate_PLN_logL(params, raw_counts, offset, X0, THETA, PHI, spline_lookup_df=spline_lookup_df, spline_cols=spline_cols)
         return loss
 
     # initialize time
@@ -87,35 +87,6 @@ def get_spline_basis(new_time_vec, spline_lookup_df):
         # Evaluate the interpolation at the new time value.
         out_df[col] = f_interp(new_time_vec)
     return out_df
-
-# def construct_X_patsy(formula_str, meta_df, spline_lookup_df):
-#     meta_df["dummy_response"] = 0
-#     _, X = patsy.dmatrices(formula_str, meta_df, return_type='dataframe')
-#     col_list = list(X.columns)
-#     cols_to_clean = [col.replace("[T.", "") for col in col_list]
-#     cols_to_clean = [col.replace("]", "") for col in cols_to_clean]
-#     cols_to_clean = [col.replace("[", "") for col in cols_to_clean]
-#     cols_to_clean = [col.replace("cr", "ns") for col in cols_to_clean]
-#     cols_to_keep = [col for col in cols_to_clean if col in cols_from_clean]
-#     X.columns = cols_to_clean
-#     X = X.loc[:, cols_to_keep]
-#
-#     # replace spline cols with lookups (can't get patsy to match ns from R)
-#     spline_cols = [col for col in cols_to_keep if "ns(" in col]
-#     spline_df = get_spline_basis(meta_df.loc[:, "timepoint"].to_numpy(), spline_lookup_df)
-#     spline_vals = spline_df.iloc[:, 1:].to_numpy()
-#     spline_cols_split = [col.split(":") for col in spline_cols]
-#     for c, col in enumerate(spline_cols):
-#         col_s = spline_cols_split[c]
-#         spline_ind = int(col_s[0][-1]) - 1
-#         if len(col_s) == 1:
-#             X.loc[:, col] = spline_vals.iloc[:, spline_ind]
-#         else:
-#             sv = spline_vals.iloc[:, spline_ind][:, None]
-#             iv = X.loc[:, col_s[1]].to_numpy()[:, None]
-#             X.loc[:, col] = np.multiply(sv, iv)
-#
-#     return X, spline_vals
 
 def update_spline_cols(X, query_times, spline_lookup_df, spline_cols):
     spline_df = get_spline_basis(query_times, spline_lookup_df)
