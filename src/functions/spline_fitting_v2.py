@@ -1,31 +1,82 @@
 # Embryo Performance Metrics Script
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.linear_model import LinearRegression
 from scipy.interpolate import CubicSpline, interp1d
-import plotly.graph_objects as go
-import warnings
 import plotly.express as px
+import re
+from tqdm import tqdm
+import pandas as pd
 
+def spline_fit_wrapper(df, fit_cols=None, stage_col="predicted_stage_hpf", bandwidth=0.5, max_iter=2500, tol=1e-5,
+                       angle_penalty_exp=1, n_boots=10, boot_size=2500, n_spline_points=5000):
 
-# #example ussage of function to produce all the core perfomance metrics. 
-# # Call the function
-# core_performance_metrics, distance_metrics_intra_inter, metrics_inter_df = produce_perfomance_metrics(
-#     df_all,
-#     df_hld,
-#     pert_comparisons,
-#     logreg_tol=1e-3,
-#     subsample_fraction=0.05,
-#     subsample_fraction_jaccard=0.1,
-#     num_bins=20,
-#     max_hpf=40,
-#     random_state=100,
-#     plot=True,
-#     k_neighbors=5
-# )
+    if fit_cols is None:
+        # look for PCA cols
+        pattern = r"PCA_.*_bio"
+        fit_cols = [col for col in df.columns if re.search(pattern, col)]
+        
+    boot_size = np.min([df.shape[0], boot_size])
 
+    # Extract PCA coordinates
+    pert_array = df[fit_cols].values
+
+    # Compute average early stage point
+    min_time = df[stage_col].min()
+    early_mask = (df[stage_col] >= min_time) & \
+                 (df[stage_col] < min_time + 2)
+    early_points = df.loc[early_mask, fit_cols].values
+
+    early_options = np.arange(early_points.shape[0])
+
+    # Compute average late stage point
+    max_time = df[stage_col].max()
+    late_mask = (df[stage_col] >= (max_time - 2))
+    late_points = df.loc[late_mask, fit_cols].values
+    late_options = np.arange(late_points.shape[0])
+
+    # generate array to store spline fits
+    spline_boot_array = np.zeros((n_spline_points, len(fit_cols), n_boots))
+
+    # Randomly select a subset of points for fitting
+    rng = np.random.RandomState(42)
+
+    for n in tqdm(range(n_boots)):
+        subset_indices = rng.choice(len(pert_array), size=boot_size, replace=True)
+        pert_array_subset = pert_array[subset_indices, :]
+
+        start_ind = np.random.choice(early_options, 1)[0]
+        stop_ind = np.random.choice(late_options, 1)[0]
+        start_point = early_points[start_ind, :]
+        stop_point = late_points[stop_ind, :]
+
+        # Fit LocalPrincipalCurve
+        lpc = LocalPrincipalCurve(
+            bandwidth=bandwidth,
+            max_iter=max_iter,
+            tol=tol,
+            angle_penalty_exp=angle_penalty_exp
+        )
+
+        # Fit with the optional start_points/end_point to anchor the spline
+        lpc.fit(
+            pert_array_subset,
+            start_points=start_point[None, :],
+            end_point=stop_point[None, :],
+            num_points=n_spline_points
+        )
+
+        spline_boot_array[:, :, n] = lpc.cubic_splines[0]
+
+    # get mean and standard error
+    mean_spline = np.mean(spline_boot_array, axis=2)
+    se_spline = np.std(spline_boot_array, axis=2)
+
+    # make data frame
+    se_cols = [col + "_se" for col in fit_cols]
+    spline_df = pd.DataFrame(mean_spline, columns=fit_cols)
+    spline_df[se_cols] = se_spline
+
+    return spline_df
 
 def plot_trajectories_3d(splines_final, plot_cols=None, save_dir=None):
     """
@@ -355,494 +406,3 @@ class LocalPrincipalCurve:
                 continue
             spline_points = self.get_uniformly_spaced_points(eq, num_points)
             self.cubic_splines.append(spline_points)
-
-    # def plot_path_3d(self, path_idx=0, dataset=None):
-    #     dataset = np.array(dataset)
-    #     path = self.paths[path_idx]
-    #     fig = plt.figure()
-    #     ax = fig.add_subplot(111, projection='3d')
-    #     if dataset is not None:
-    #         ax.scatter(dataset[:,0], dataset[:,1], dataset[:,2], alpha=0.5, label='Data')
-    #     ax.plot(path[:,0], path[:,1], path[:,2], 'r-', label='Local Principal Curve')
-    #     ax.legend()
-    #     plt.show()
-    #
-    # def plot_cubic_spline_3d(self, path_idx, show_path=True):
-    #     if path_idx >= len(self.paths):
-    #         raise IndexError(f"Path index {path_idx} is out of range. Total paths: {len(self.paths)}.")
-    #     path = self.paths[path_idx]
-    #     spline_points = self.cubic_splines[path_idx]
-    #     fig = plt.figure()
-    #     ax = fig.add_subplot(111, projection="3d")
-    #     if show_path:
-    #         ax.scatter(path[:, 0], path[:, 1], path[:, 2], label="LPC Path", alpha=0.5)
-    #     ax.plot(spline_points[:, 0], spline_points[:, 1], spline_points[:, 2], color="red", label="Cubic Spline")
-    #     ax.legend()
-    #     plt.show()
-
-
-# def extract_spline(splines_df, dataset_label, perturbation):
-#     sdf = splines_df[(splines_df["dataset"] == dataset_label) & (splines_df["Perturbation"] == perturbation)]
-#     sdf = sdf.sort_values("point_index")
-#     pca_cols = [col for col in sdf.columns.tolist() if "PCA" in col]
-#     points = sdf[pca_cols].values
-#     return points
-#
-# def rmse(a, b):
-#     return np.sqrt(np.mean((a - b)**2))
-#
-# def mean_l1_error(a, b):
-# # a and b are Nx3 arrays of points.
-# # Compute L1 distance for each point pair: sum of absolute differences across coordinates
-# # Then take the mean over all points.
-#     return np.mean(np.sum(np.abs(a - b), axis=1))
-#
-# def centroid(X):
-#     return np.mean(X, axis=0)
-#
-# def rmsd(X, Y):
-#     return np.sqrt(np.mean(np.sum((X - Y)**2, axis=1)))
-
-# def quaternion_alignment(P, Q):
-#     """
-#     Compute the optimal rotation using quaternions that aligns Q onto P.
-#     Returns rotation matrix R and translation vector t.
-#     """
-#     # Ensure P and Q have the same shape
-#     assert P.shape == Q.shape, "P and Q must have the same shape"
-#
-#     # 1. Compute centroids and center the points
-#     P_cent = centroid(P)
-#     Q_cent = centroid(Q)
-#     P_prime = P - P_cent
-#     Q_prime = Q - Q_cent
-#
-#     # 2. Construct correlation matrix M
-#     M = Q_prime.T @ P_prime
-#
-#     # 3. Construct the Kearsley (Davenport) 4x4 matrix K
-#     # Refer to the equations above
-#     A = np.array([
-#         [ M[0,0]+M[1,1]+M[2,2],   M[1,2]-M[2,1],         M[2,0]-M[0,2],         M[0,1]-M[1,0]       ],
-#         [ M[1,2]-M[2,1],         M[0,0]-M[1,1]-M[2,2],  M[0,1]+M[1,0],         M[0,2]+M[2,0]       ],
-#         [ M[2,0]-M[0,2],         M[0,1]+M[1,0],         M[1,1]-M[0,0]-M[2,2],  M[1,2]+M[2,1]       ],
-#         [ M[0,1]-M[1,0],         M[0,2]+M[2,0],         M[1,2]+M[2,1],         M[2,2]-M[0,0]-M[1,1]]
-#     ], dtype=np.float64)
-#     A = A / 3.0
-#
-#     # 4. Find the eigenvector of A with the highest eigenvalue
-#     eigenvalues, eigenvectors = np.linalg.eigh(A)
-#     max_idx = np.argmax(eigenvalues)
-#     q = eigenvectors[:, max_idx]
-#     q = q / np.linalg.norm(q)
-#
-#     # 5. Convert quaternion q into rotation matrix R
-#     # Quaternion format: q = [q0, q1, q2, q3]
-#     q0, q1, q2, q3 = q
-#     R = np.array([
-#         [q0**2 + q1**2 - q2**2 - q3**2, 2*(q1*q2 - q0*q3),         2*(q1*q3 + q0*q2)],
-#         [2*(q2*q1 + q0*q3),             q0**2 - q1**2 + q2**2 - q3**2, 2*(q2*q3 - q0*q1)],
-#         [2*(q3*q1 - q0*q2),             2*(q3*q2 + q0*q1),             q0**2 - q1**2 - q2**2 + q3**2]
-#     ])
-#
-#     # 6. Compute translation
-#     t = P_cent - R @ Q_cent
-#
-#     return R, t
-
-# def _segment_direction_metrics(data_a, data_b, k=10):
-#     """
-#     Compute SegmentColinearity and SegmentCovariance for two given sets of points `data_a` and `data_b`.
-#     Both data_a and data_b are np.ndarray of shape (n, 3).
-#
-#     If there aren't enough points for k segments, returns (np.nan, np.nan).
-#     """
-#     min_len = min(len(data_a), len(data_b))
-#     data_a = data_a[:min_len]
-#     data_b = data_b[:min_len]
-#
-#     if min_len < k + 1 or min_len == 0:
-#         return (np.nan, np.nan)
-#
-#     # Define segments using data_b
-#     segment_indices = np.linspace(0, min_len - 1, k + 1, dtype=int)
-#
-#     aligned_segment_vecs = []
-#     all_segment_vecs = []
-#
-#     for i in range(k):
-#         start_idx = segment_indices[i]
-#         end_idx = segment_indices[i + 1]
-#
-#         start_b = data_b[start_idx]
-#         end_b = data_b[end_idx]
-#
-#         # Find closest points in data_a to start_b and end_b
-#         start_dists = np.linalg.norm(data_a - start_b, axis=1)
-#         closest_start_idx = np.argmin(start_dists)
-#         closest_start_a = data_a[closest_start_idx]
-#
-#         end_dists = np.linalg.norm(data_a - end_b, axis=1)
-#         closest_end_idx = np.argmin(end_dists)
-#         closest_end_a = data_a[closest_end_idx]
-#
-#         # Construct vectors
-#         vec_a = closest_end_a - closest_start_a
-#         vec_b = end_b - start_b
-#
-#         # Normalize
-#         norm_a = np.linalg.norm(vec_a)
-#         norm_b = np.linalg.norm(vec_b)
-#         if norm_a > 0:
-#             vec_a = vec_a / norm_a
-#         else:
-#             vec_a = np.zeros(3)
-#         if norm_b > 0:
-#             vec_b = vec_b / norm_b
-#         else:
-#             vec_b = np.zeros(3)
-#
-#         aligned_segment_vecs.append(vec_a)
-#         all_segment_vecs.append(vec_b)
-#
-#     aligned_segment_vecs = np.array(aligned_segment_vecs)
-#     all_segment_vecs = np.array(all_segment_vecs)
-#
-#     # Cosine similarities
-#     cos_sims = []
-#     for i in range(len(aligned_segment_vecs)):
-#         va = aligned_segment_vecs[i].reshape(1, -1)
-#         vb = all_segment_vecs[i].reshape(1, -1)
-#         sim = cosine_similarity(va, vb)[0][0]
-#         cos_sims.append(sim)
-#
-#     avg_cosine_sim = np.mean(cos_sims) if len(cos_sims) > 0 else np.nan
-#
-#     # Covariances
-#     covariances = []
-#     for dim_idx in range(3):
-#         dim_a = aligned_segment_vecs[:, dim_idx]
-#         dim_b = all_segment_vecs[:, dim_idx]
-#         if len(dim_a) > 1:
-#             cov = np.cov(dim_a, dim_b, bias=True)[0, 1]
-#         else:
-#             cov = np.nan
-#         covariances.append(cov)
-#     avg_cov = np.nanmean(covariances) if len(covariances) > 0 else np.nan
-#
-#     return (avg_cosine_sim, avg_cov)
-
-
-    # Split the dataset into 'all' and 'hld_aligned'
-    # splines_all = splines_final_df[splines_final_df["dataset"] == "all"]
-    # splines_hld_aligned = splines_final_df[splines_final_df["dataset"] == "hld_aligned"]
-
-# def segment_direction_consistency(splines_final_df, k=10):
-#     """
-#     Step 1 (Across): For each perturbation present in both datasets, compute SegmentColinearity and SegmentCovariance
-#     by comparing splines_hld_aligned and splines_all.
-#
-#     Step 2 (Within): Compute these metrics for all unique pairs of perturbations within each dataset
-#     (both splines_hld_aligned and splines_all separately).
-#     Then compute the mean and std of these pairwise metrics for each dataset.
-#
-#     Returns:
-#     - across_df: DataFrame with ['Perturbation', 'SegmentColinearity', 'SegmentCovariance']
-#     - within_hld_aligned_df: DataFrame with ['Metric', 'Mean', 'Std'] for pairwise metrics within splines_hld_aligned
-#     - within_all_df: DataFrame with ['Metric', 'Mean', 'Std'] for pairwise metrics within splines_all
-#     """
-#
-#     splines_all = splines_final_df[splines_final_df["dataset"] == "all"]
-#     splines_hld = splines_final_df[splines_final_df["dataset"] == "hld"]
-#     splines_hld_aligned = splines_final_df[splines_final_df["dataset"] == "hld_aligned"]
-#
-#     pca_columns = [col for col in splines_all.columns.tolist() if "PCA" in col]
-#     for col in pca_columns:
-#         if col not in splines_hld_aligned.columns or col not in splines_all.columns:
-#             raise ValueError(f"Missing required PCA column: {col}")
-#
-#
-#
-#     # Across computations
-#     perts_aligned = set(splines_hld_aligned["Perturbation"].unique())
-#     perts_all = set(splines_all["Perturbation"].unique())
-#     common_perts = perts_aligned.intersection(perts_all)
-#
-#     across_results = []
-#     for pert in common_perts:
-#         data_a_df = splines_hld_aligned[splines_hld_aligned["Perturbation"] == pert].sort_values("point_index")
-#         data_b_df = splines_all[splines_all["Perturbation"] == pert].sort_values("point_index")
-#         data_a = data_a_df[pca_columns].values
-#         data_b = data_b_df[pca_columns].values
-#
-#         sim, cov = _segment_direction_metrics(data_a, data_b, k=k)
-#         across_results.append({"Perturbation": pert, "SegmentColinearity": sim, "SegmentCovariance": cov})
-#
-#     across_df = pd.DataFrame(across_results)
-#
-#     # Calculate column means (excluding the Perturbation column)
-#     mean_row = across_df.iloc[:, 1:].mean()
-#     mean_row["Perturbation"] = "avg_pert"
-#
-#     # Append the mean row to the DataFrame
-#     across_df = pd.concat([across_df, pd.DataFrame([mean_row])], ignore_index=True)
-#
-#
-#     # Within computations for splines_hld
-#     perts_in_aligned = list(perts_aligned)
-#     within_values_colinearity_hld = []
-#     within_values_covariance_hld  = []
-#
-#     for i in range(len(perts_in_aligned)):
-#         for j in range(i+1, len(perts_in_aligned)):
-#             pert1 = perts_in_aligned[i]
-#             pert2 = perts_in_aligned[j]
-#
-#             data_pert1 = splines_hld[splines_hld["Perturbation"] == pert1].sort_values("point_index")[pca_columns].values
-#             data_pert2 = splines_hld[splines_hld["Perturbation"] == pert2].sort_values("point_index")[pca_columns].values
-#
-#             sim, cov = _segment_direction_metrics(data_pert1, data_pert2, k=k)
-#             if not np.isnan(sim):
-#                 within_values_colinearity_hld.append(sim)
-#             if not np.isnan(cov):
-#                 within_values_covariance_hld.append(cov)
-#
-#     metrics_hld = []
-#     for metric_name, vals in [("SegmentColinearity", within_values_colinearity_hld),
-#                               ("SegmentCovariance",  within_values_covariance_hld)]:
-#         mean_val = np.nanmean(vals) if len(vals) > 0 else np.nan
-#         std_val = np.nanstd(vals) if len(vals) > 0 else np.nan
-#         metrics_hld.append({"Metric": metric_name, "Mean": mean_val, "Std": std_val})
-#
-#     within_hld_df = pd.DataFrame(metrics_hld)
-#
-#     # Within computations for splines_all
-#     perts_in_all = list(perts_all)
-#     within_values_colinearity_all = []
-#     within_values_covariance_all = []
-#
-#     for i in range(len(perts_in_all)):
-#         for j in range(i+1, len(perts_in_all)):
-#             pert1 = perts_in_all[i]
-#             pert2 = perts_in_all[j]
-#
-#             data_pert1 = splines_all[splines_all["Perturbation"] == pert1].sort_values("point_index")[pca_columns].values
-#             data_pert2 = splines_all[splines_all["Perturbation"] == pert2].sort_values("point_index")[pca_columns].values
-#
-#             sim, cov = _segment_direction_metrics(data_pert1, data_pert2, k=k)
-#             if not np.isnan(sim):
-#                 within_values_colinearity_all.append(sim)
-#             if not np.isnan(cov):
-#                 within_values_covariance_all.append(cov)
-#
-#     metrics_all_list = []
-#     for metric_name, vals in [("SegmentColinearity", within_values_colinearity_all),
-#                               ("SegmentCovariance", within_values_covariance_all)]:
-#         mean_val = np.nanmean(vals) if len(vals) > 0 else np.nan
-#         std_val = np.nanstd(vals) if len(vals) > 0 else np.nan
-#         metrics_all_list.append({"Metric": metric_name, "Mean": mean_val, "Std": std_val})
-#
-#     within_all_df = pd.DataFrame(metrics_all_list)
-#
-#     return across_df, within_hld_df, within_all_df
-
-# def calculate_dispersion_metrics(splines_final_df, n=5):
-#     """
-#     Calculates dispersion metrics for each dataset, including:
-#     - Dispersion Coefficient (slope of dispersion vs. point_index, normalized to [0, 1])
-#     - Initial Dispersion (average dispersion of the first n points)
-#     - Last Dispersion (average dispersion of the last n points)
-#
-#     Parameters:
-#     - splines_final_df (pd.DataFrame): DataFrame containing all PCA trajectories with 'dataset' column.
-#     - n (int): Number of initial and last points to consider for initial and last dispersion.
-#
-#     Returns:
-#     - pd.DataFrame: DataFrame with columns ['Dataset', 'disp_coefficient', 'dispersion_first_n', 'dispersion_last_n'].
-#     """
-#     # Extract subsets
-#     # splines_all = splines_final_df[splines_final_df["dataset"] == "all"]
-#     # splines_hld = splines_final_df[splines_final_df["dataset"] == "hld"]
-#     # splines_hld_aligned = splines_final_df[splines_final_df["dataset"] == "hld_aligned"]
-#
-#     # Ensure PCA columns are present
-#     pca_columns = [col for col in splines_final_df.columns.tolist() if "PCA" in col]
-#     for col in pca_columns:
-#         if col not in splines_final_df.columns:
-#             raise ValueError(f"Missing required PCA column: {col}")
-#
-#     # Get unique datasets
-#     datasets = splines_final_df["dataset"].unique()
-#
-#     # Initialize list to store results
-#     results = []
-#
-#     for dataset in datasets:
-#         if dataset == "hld_aligned":
-#             continue
-#         # Filter data for the current dataset
-#         dataset_df = splines_final_df[splines_final_df["dataset"] == dataset]
-#
-#         # Get unique point_indices
-#         point_indices = sorted(dataset_df["point_index"].unique())
-#
-#         # Initialize lists to store dispersion and point_index
-#         dispersion_list = []
-#         point_index_list = []
-#
-#         # Initialize lists to store initial and last dispersions
-#         initial_dispersions = []
-#         last_dispersions = []
-#
-#         for pid in point_indices:
-#             # Filter data for the current point_index
-#             point_df = dataset_df[dataset_df["point_index"] == pid]
-#
-#             # Calculate dispersion: average Euclidean distance from centroid
-#             dispersion = compute_dispersion(point_df, pca_columns)
-#
-#             # Append to lists
-#             dispersion_list.append(dispersion)
-#             point_index_list.append(pid)
-#
-#             # If within first n points, store for initial dispersion
-#             if pid < n:
-#                 initial_dispersions.append(dispersion)
-#
-#             # If within last n points, store for last dispersion
-#             if pid >= max(point_indices) - n + 1:
-#                 last_dispersions.append(dispersion)
-#
-#         # Check if there are enough points for regression
-#         if len(point_index_list) < 2:
-#             print(f"Warning: Dataset '{dataset}' has less than 2 unique point_indices. Setting disp_coefficient to NaN.")
-#             disp_coefficient = np.nan
-#         else:
-#             # Prepare data for linear regression
-#             X = np.array(point_index_list).reshape(-1, 1)  # Shape: (num_points, 1)
-#             y = np.array(dispersion_list)  # Shape: (num_points,)
-#
-#             # Fit linear regression
-#             reg = LinearRegression().fit(X, y)
-#             disp_coefficient = reg.coef_[0]
-#             disp_coefficient *= len(point_indices)  # Normalize to [0, 1]
-#
-#         # Calculate average initial dispersion
-#         dispersion_first_n = np.mean(initial_dispersions) if initial_dispersions else np.nan
-#         if np.isnan(dispersion_first_n):
-#             print(f"Warning: Dataset '{dataset}' has no points within the first {n} point_indices.")
-#
-#         # Calculate average last dispersion
-#         dispersion_last_n = np.mean(last_dispersions) if last_dispersions else np.nan
-#         if np.isnan(dispersion_last_n):
-#             print(f"Warning: Dataset '{dataset}' has no points within the last {n} point_indices.")
-#
-#         # Append results
-#         results.append({
-#             "Dataset": dataset,
-#             "disp_coefficient": disp_coefficient,
-#             "dispersion_first_n": dispersion_first_n,
-#             "dispersion_last_n": dispersion_last_n
-#         })
-#
-#     # Convert results to DataFrame
-#     results_df = pd.DataFrame(results)
-#
-#
-#
-#     return results_df
-
-# def compute_dispersion(df, pca_columns):
-#     """
-#     Computes the average Euclidean distance of points from their centroid.
-#
-#     Parameters:
-#     - df (pd.DataFrame): DataFrame containing PCA coordinates.
-#     - pca_columns (list): List of PCA column names.
-#
-#     Returns:
-#     - float: Average Euclidean distance (dispersion).
-#     """
-#     if df.empty:
-#         return np.nan
-#
-#     # Calculate centroid
-#     centroid = df[pca_columns].mean().values
-#
-#     # Calculate Euclidean distances from centroid
-#     distances = np.linalg.norm(df[pca_columns].values - centroid, axis=1)
-#
-#     # Return average distance
-#     return distances.mean()
-
-# import pandas as pd
-#
-# # -------------------------------
-# # Helper Functions
-# # -------------------------------
-#
-# def rename_within_metrics(df, suffix, key):
-#     """Renames columns in within metrics DataFrame with a given suffix."""
-#     renamed_df = df[["Metric", "Mean"]].copy()
-#     renamed_df["Metric"] += suffix  # Add suffix
-#     renamed_df = renamed_df.set_index("Metric").T  # Transpose for easy appending
-#     renamed_df.insert(0, "model_index", key)  # Add model_index
-#     return renamed_df
-#
-# def process_dispersion_metrics(df, key):
-#     """Processes and renames dispersion metrics DataFrame."""
-#     disp_all = df[df["Dataset"] == "all"].drop("Dataset", axis=1)
-#     disp_all.columns = [col + "_all" for col in disp_all.columns]
-#     disp_hld = df[df["Dataset"] == "hld"].drop("Dataset", axis=1)
-#     disp_hld.columns = [col + "_hld" for col in disp_hld.columns]
-#
-#     combined_df = pd.concat([disp_all.reset_index(drop=True), disp_hld.reset_index(drop=True)], axis=1)
-#     combined_df.insert(0, "model_index", key)  # Add model_index
-#     return combined_df
-#
-# def process_segment_direction(splines_final_df, key):
-#     """Calculates and processes segment direction consistency metrics."""
-#     across_seg_df, within_hld_seg_df, within_all_seg_df = segment_direction_consistency(splines_final_df, k=100)
-#     across_seg_df.insert(0, "model_index", key)  # Add model_index
-#
-#     within_hld_renamed = rename_within_metrics(within_hld_seg_df, "_mean_within_hld", key)
-#     within_all_renamed = rename_within_metrics(within_all_seg_df, "_mean_within_all", key)
-#
-#     within_seg_measures = pd.concat([within_hld_renamed, within_all_renamed], axis=1)
-#     return across_seg_df, within_seg_measures
-#
-# def combine_results_dict(results_dict):
-#     """
-#     Combines the results dictionary into a single DataFrame.
-#     Handles duplicate 'model_index' columns by ensuring uniqueness during merge.
-#     """
-#     final_list_of_dfs = []
-#
-#     for model_index, metrics in results_dict.items():
-#         # Start with across_seg_df as the base since it has multiple perturbations
-#         if "across_seg_df" not in metrics:
-#             continue  # If for some reason this key doesn't have across_seg_df, skip
-#
-#         base_df = metrics["across_seg_df"].copy()
-#
-#         # Drop duplicate 'model_index' columns from other metrics before merging
-#         if "within_seg_measures" in metrics:
-#             temp_within = metrics["within_seg_measures"].copy()
-#             temp_within = temp_within.loc[:, ~temp_within.columns.duplicated()]  # Remove duplicate columns
-#             base_df = base_df.merge(temp_within, on="model_index", how="left")
-#
-#         if "dispersion_metrics" in metrics:
-#             temp_disp = metrics["dispersion_metrics"].copy()
-#             temp_disp = temp_disp.loc[:, ~temp_disp.columns.duplicated()]  # Remove duplicate columns
-#             base_df = base_df.merge(temp_disp, on="model_index", how="left")
-#
-#         # Append to list
-#         final_list_of_dfs.append(base_df)
-#
-#     # Concatenate all model results
-#     if final_list_of_dfs:
-#         final_results_df = pd.concat(final_list_of_dfs, ignore_index=True)
-#     else:
-#         final_results_df = pd.DataFrame()
-#
-#     return final_results_df
