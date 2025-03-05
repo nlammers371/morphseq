@@ -171,10 +171,11 @@ def calculate_PLN_logL(params, raw_counts, log_offset, X0, THETA, PHI, spline_lo
 
     return -(logL_g + logL_p) / len(raw_counts)
 
+
 def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     # set data path and model name parameter
-    fig_folder = os.path.join(root, "figures/seq_data/PLN/", model_name, "")
-    os.makedirs(fig_folder, exist_ok=True)
+    # fig_folder = os.path.join(root, "figures/seq_data/PLN/", model_name, "")
+    # os.makedirs(fig_folder, exist_ok=True)
 
     hooke_data_path = os.path.join(root, "seq_data/emb_projections/hooke_model_files", "")
     ccs_data_path = os.path.join(root, "seq_data/emb_projections/ccs_data_cell_type_broad", "")
@@ -277,7 +278,7 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
     # ccs_df = ccs_df.reindex(columns=mdl_cell_types, fill_value=0)
 
     # check which ones were included in inference
-    mdl_flags = np.isin(np.asarray(ccs_df.index),np.asarray(mdl_counts_df.index))
+    mdl_flags = np.isin(np.asarray(ccs_df.index), np.asarray(mdl_counts_df.index))
     meta_df["inference_flag"] = mdl_flags
 
     # flag experiments that were not included in inference
@@ -310,10 +311,6 @@ def do_latent_projections(root, model_name, max_threads=5, maxiter=300):
                              cov_col_list=cov_col_list,
                              spline_lookup_df=time_splines, THETA=THETA, PHI=PHI, maxiter=maxiter)
 
-    # print("Running inference")
-    # run_inf_shared(10)
-    # for i in tqdm(range(ccs_df.shape[0])):
-    #     run_inf_shared(i)
 
     results = process_map(run_inf_shared, range(ccs_df.shape[0]), max_workers=max_threads,
                           chunksize=3, desc="Running Inference")
