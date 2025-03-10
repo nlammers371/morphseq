@@ -8,13 +8,18 @@ from tqdm import tqdm
 import pandas as pd
 
 def spline_fit_wrapper(df, fit_cols=None, stage_col="predicted_stage_hpf", bandwidth=0.5, max_iter=2500, tol=1e-5,
-                       angle_penalty_exp=1, n_boots=10, boot_size=2500, n_spline_points=5000):
+                       angle_penalty_exp=1, n_boots=10, boot_size=2500, n_spline_points=500, time_window=2,
+                       obs_weights=None):
 
     if fit_cols is None:
         # look for PCA cols
         pattern = r"PCA_.*_bio"
         fit_cols = [col for col in df.columns if re.search(pattern, col)]
-        
+
+    if obs_weights is None:
+        obs_weights = np.ones((df.shape[0],))
+    obs_weights = obs_weights / np.sum(obs_weights)
+
     boot_size = np.min([df.shape[0], boot_size])
 
     # Extract PCA coordinates
@@ -23,14 +28,14 @@ def spline_fit_wrapper(df, fit_cols=None, stage_col="predicted_stage_hpf", bandw
     # Compute average early stage point
     min_time = df[stage_col].min()
     early_mask = (df[stage_col] >= min_time) & \
-                 (df[stage_col] < min_time + 2)
+                 (df[stage_col] < min_time + time_window)
     early_points = df.loc[early_mask, fit_cols].values
 
     early_options = np.arange(early_points.shape[0])
 
     # Compute average late stage point
     max_time = df[stage_col].max()
-    late_mask = (df[stage_col] >= (max_time - 2))
+    late_mask = (df[stage_col] >= (max_time - time_window))
     late_points = df.loc[late_mask, fit_cols].values
     late_options = np.arange(late_points.shape[0])
 
@@ -41,7 +46,7 @@ def spline_fit_wrapper(df, fit_cols=None, stage_col="predicted_stage_hpf", bandw
     rng = np.random.RandomState(42)
 
     for n in tqdm(range(n_boots)):
-        subset_indices = rng.choice(len(pert_array), size=boot_size, replace=True)
+        subset_indices = rng.choice(len(pert_array), size=boot_size, replace=True, p=obs_weights)
         pert_array_subset = pert_array[subset_indices, :]
 
         start_ind = np.random.choice(early_options, 1)[0]
