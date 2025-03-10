@@ -1,4 +1,11 @@
+import os
+import sys
+
+code_root = "/net/trapnell/vol1/home/nlammers/projects/repositories/morphseq"
+sys.path.insert(0, code_root)
+
 from src.build.build02B_segment_bf_main import apply_unet
+
 
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 # root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
