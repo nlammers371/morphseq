@@ -176,7 +176,11 @@ def export_embryo_snips(r, root, embryo_metadata_df, dl_rad_um, outscale, outsha
 
     # convert to 8 bit (format used for training)
     if im_ff.dtype != "uint8":
-        im_ff = skimage.util.img_as_ubyte(im_ff)
+
+        # Rescale intensity of the image to the range [0, 255]
+        im_ff_scaled = skimage.exposure.rescale_intensity(im_ff, in_range='image', out_range=(0, 255))
+        im_ff = im_ff_scaled.astype(np.uint8)
+        # im_ff = skimage.util.img_as_ubyte(im_ff)
 
     # rescale masks and image
     im_ff_rs = rescale(im_ff, (px_dim_raw / outscale, px_dim_raw / outscale), order=1, preserve_range=True)
@@ -941,7 +945,7 @@ def compile_embryo_stats(root, overwrite_flag=False, ld_rat_thresh=0.9, qc_scale
         embryo_metadata_df_prev = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df.csv"))
         # First, check to see if there are new embryo-well-time entries (rows)
         merge_skel = embryo_metadata_df.loc[:, ["embryo_id", "time_int"]]
-        df_all = merge_skel.merge(embryo_metadata_df_prev.drop_duplicates(), on=["embryo_id", "time_int"],
+        df_all = merge_skel.merge(embryo_metadata_df_prev.drop_duplicates(subset=["embryo_id", "time_int"]), on=["embryo_id", "time_int"],
                                  how='left', indicator=True)
         diff_indices = np.where(df_all['_merge'].values == 'left_only')[0].tolist()
 
