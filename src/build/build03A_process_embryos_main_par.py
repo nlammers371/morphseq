@@ -342,7 +342,7 @@ def get_images_to_process(meta_df_path, experiment_list, master_df, overwrite_fl
 
     if len(images_to_process) > 0:
         image_root = str(Path(images_to_process[0]).parents[3])
-        experiment_dates = [exp.split("/")[-2] for exp in images_to_process]
+        experiment_dates = [os.path.basename(os.path.dirname(exp)) for exp in images_to_process]
         date_index = np.unique(experiment_dates)
         # load the first FF image from each experiment folder
         for d, date in enumerate(date_index):
