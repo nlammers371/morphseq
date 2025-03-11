@@ -12,16 +12,16 @@ def main():
     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
     # root = "Y:\\projects\\data\\morphseq\\"
     # print("Rebuilding metadata...")
-    build_well_metadata_master(root)
+    # build_well_metadata_master(root)
     #
     # # print("Segmenting wells...")
-    segment_wells(root, par_flag=True, overwrite_well_stats=False)
+    # segment_wells(root, par_flag=True, overwrite_well_stats=False)
     #
     # # print("Compiling stats...")
-    compile_embryo_stats(root, overwrite_flag=True, par_flag=True)
+    # compile_embryo_stats(root, overwrite_flag=False, par_flag=True)
     
     print("Extracting snips...")
-    extract_embryo_snips(root, par_flag=False, outscale=6.5, dl_rad_um=100, overwrite_flag=False)
+    extract_embryo_snips(root, par_flag=True, outscale=6.5, dl_rad_um=100, overwrite_flag=False)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
