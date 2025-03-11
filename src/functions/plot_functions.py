@@ -2,6 +2,114 @@ import plotly.express as px
 import plotly.graph_objects as go
 import math
 
+
+def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
+                     theme="dark", dims=None, title="", show_gridlines=True):
+    """
+    Format a 2D Plotly figure (scatter plot) with consistent styling.
+
+    Parameters:
+      fig (go.Figure): A Plotly figure object.
+      axis_labels (list): A list with two strings for the x- and y-axis titles.
+      font_size (int): Global font size.
+      marker_size (int): Marker size for traces.
+      theme (str): "dark" or "light".
+      dims (list): [height, width] for the figure (default: [600, 800]).
+      title (str): Plot title.
+
+    Returns:
+      A formatted Plotly figure.
+    """
+    if dims is None:
+        dims = [600, 800]
+    if theme == "dark":
+        line_color = "white"
+        text_color = "white"
+        bk_color = "black"
+    elif theme == "light":
+        line_color = "black"
+        text_color = "black"
+        bk_color = "white"
+    else:
+        line_color = "black"
+        text_color = "black"
+        bk_color = "white"
+
+    if axis_labels is None:
+        axis_labels = ["", ""]
+
+    # Update marker settings for all traces.
+    fig.update_traces(marker=dict(size=marker_size,
+                                  line=dict(color=line_color, width=1)))
+
+    # Compute a slightly smaller tick font size.
+    tick_font_size = font_size#int(font_size * 6 / 7)
+
+    # Create a dictionary for axis formatting (for 2D, do not include 'showbackground').
+    axis_format_dict = dict(
+        showgrid=show_gridlines,
+        zeroline=True,
+        gridcolor=line_color,
+        linecolor=line_color,
+        zerolinecolor=line_color,
+        tickfont=dict(size=tick_font_size)
+    )
+
+    # Create separate dictionaries for x- and y-axes with titles.
+    xaxis_format = axis_format_dict.copy()
+    xaxis_format["title"] = axis_labels[0]
+    yaxis_format = axis_format_dict.copy()
+    yaxis_format["title"] = axis_labels[1]
+
+    # Check if axis ranges have been manually specified.
+    x_range = fig.layout.xaxis.range if fig.layout.xaxis and fig.layout.xaxis.range else None
+    y_range = fig.layout.yaxis.range if fig.layout.yaxis and fig.layout.yaxis.range else None
+
+    if x_range is not None and y_range is not None:
+        # Calculate extents.
+        x_extent = x_range[1] - x_range[0]
+        y_extent = y_range[1] - y_range[0]
+        # Set up equal scaling using scaleanchor and scaleratio.
+        fig.update_layout(
+            xaxis=dict(**xaxis_format, range=x_range, scaleanchor="y", scaleratio=x_extent / y_extent),
+            yaxis=dict(**yaxis_format, range=y_range)
+        )
+    else:
+        fig.update_layout(
+            xaxis=xaxis_format,
+            yaxis=yaxis_format
+        )
+
+    # Set overall layout parameters.
+    fig.update_layout(
+        width=dims[1],
+        height=dims[0],
+        title=title,
+        font=dict(color=text_color, family="Arial, sans-serif", size=font_size),
+        plot_bgcolor=bk_color,
+        paper_bgcolor=bk_color
+    )
+
+    try:
+        fig.update_traces(
+            error_x=dict(color="white", width=0),
+            error_y=dict(color="white", width=0)
+        )
+    except:
+        pass
+
+    # Optionally update the colorbar layout if using a continuous color mapping.
+    fig.update_layout(
+        coloraxis_colorbar=dict(
+            # title_standoff=20,
+            x=1,  # Horizontal position.
+            y=0.5,  # Vertical position.
+            len=0.5  # Length of the colorbar.
+        )
+    )
+
+    return fig
+
 def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
                      aspectmode="data", eye=None, theme="dark", dims=None, title=""):
 
@@ -63,7 +171,7 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
                                      yaxis=dict_list[1],
                                      zaxis=dict_list[2]
                           ))
-        
+
 
     fig.update_layout(width=dims[1], height=dims[0],
                       title=title,
