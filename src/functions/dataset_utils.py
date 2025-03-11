@@ -86,7 +86,53 @@ def grayscale_transform():#im_dims):
     ])
     return data_transform
 
+class PairedImageDataset(Dataset):
+    def __init__(self, blurry_dir, sharp_dir, transform=None, file_extension=".png"):
+        """
+        Args:
+            blurry_dir (str): Directory with blurry images.
+            sharp_dir (str): Directory with sharp images.
+            transform (callable, optional): A function/transform to apply to the images.
+            file_extension (str): Image file extension to consider.
+        """
+        self.blurry_dir = blurry_dir
+        self.sharp_dir = sharp_dir
+        
+        # List image files from both directories
+        self.blurry_files = sorted([
+            os.path.join(blurry_dir, f) 
+            for f in os.listdir(blurry_dir) 
+            if f.endswith(file_extension)
+        ])
+        self.sharp_files = sorted([
+            os.path.join(sharp_dir, f) 
+            for f in os.listdir(sharp_dir) 
+            if f.endswith(file_extension)
+        ])
+        
+        # Ensure that both directories contain the same number of files
+        if len(self.blurry_files) != len(self.sharp_files):
+            raise ValueError("The number of blurry and sharp images does not match.")
+        
+        self.transform = transform
 
+    def __len__(self):
+        return len(self.blurry_files)
+
+    def __getitem__(self, idx):
+        # Load images
+        blurry_image = Image.open(self.blurry_files[idx]).convert("RGB")
+        sharp_image = Image.open(self.sharp_files[idx]).convert("RGB")
+        
+        # Apply transform if provided
+        if self.transform:
+            blurry_image = self.transform(blurry_image)
+            sharp_image = self.transform(sharp_image)
+        
+        # Return a dictionary with both images
+        return {"blur": blurry_image, "sharp": sharp_image}
+    
+    
 class DatasetCached(datasets.ImageFolder):
 
     def __init__(self, root, training_config, return_name=False, transform=None, target_transform=None, load_batch_size=128):

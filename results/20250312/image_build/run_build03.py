@@ -19,9 +19,9 @@ def main():
     #
     # # print("Compiling stats...")
     compile_embryo_stats(root, overwrite_flag=False, par_flag=True)
-    git 
+    
     print("Extracting snips...")
-    extract_embryo_snips(root, par_flag=False, outscale=6.5, dl_rad_um=100, overwrite_flag=False)
+    extract_embryo_snips(root, par_flag=True, outscale=6.5, dl_rad_um=100, overwrite_flag=False)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
