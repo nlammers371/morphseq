@@ -33,3 +33,6 @@ train/20231204/beta_temp_sweep.py
 .Rproj.user
 
 src/build/__pychache__/
+
+**/data/__pycache__/
+__pycache__/
