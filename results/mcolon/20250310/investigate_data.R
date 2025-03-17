@@ -1,93 +1,850 @@
-
-library("monocle3")
+library("zscapetools")
 library("Matrix")
-library("hooke")
+library("dplyr")
+library("splines")
+library("purrr")
+# library("ggplot2")
 
 
-ref_cds = load_monocle_objects("/net/trapnell/vol1/home/duran/seahub/all_reference_v2.1.0/reference_cds_v2.1.0", matrix_control = list(matrix_class="BPCells", matrix_path="/net/gs/vol1/home/mdcolon/nobackups/mdcolon/BPCells/"))
-
-DEG_by_assembly_group <- hooke:::aggregated_expr_data(ref_cds, group_cells_by = "assembly_group")
-write.csv(DEG_by_assembly_group, "./data/ref_cds/DEG_by_assembly.csv", row.names = FALSE)
-
-counts  <- as(counts(ref_cds), 'dgCMatrix')
-Matrix::writeMM( t(counts), "./data/ref_cds/gene_count.mtx" )
-write.csv(data.frame(pData(ref_cds)), "./data/ref_cds/df_cell.csv")
-write.csv(data.frame(fData(ref_cds)), "./data/ref_cds/df_gene.csv")
+#load monocle object containing mseq transcriptomic 
+cds = load_monocle_objects("/net/seahub_zfish/vol1/data/annotated/v2.2.0/LMX1B/LMX1B_projected_cds_v2.2.0")
+subset_cds <- cds[, colData(cds)$perturbation %in% c("lmx1ba;lmx1bb", "ctrl-inj")]
+length(unique(colData(subset_cds)$embryo_ID))
 
 
+# look at morphseq/results/mcolon/20250310/lm1b_injctrl_poster_inv.ipynb for how it was generate
+morph_severity_key_path <- "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/mseq_lmx1b_snipid_to_distfromspline.csv"
+morph_severity_key      <- read.csv(morph_severity_key_path, stringsAsFactors = FALSE)
+# morph_severity_key      <- morph_severity_key %>% rename(embryo_ = sample)
 
 
+# Read the morphseq metadata file into a dataframe
+morphseq_metadata_key_path <- "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/morphseq_metadata.csv"
+morphseq_metadata <- read.csv(morphseq_metadata_key_path, stringsAsFactors = FALSE)
+## subset to values of morphseq_metadata we hace confident morph measurements of 
+morphseq_metadata <- morphseq_metadata[morphseq_metadata$snip_id %in% morph_severity_key$snip_id, ]
+## Change the column name from 'sample' to 'embryo_ID' colData(subset_cds)$embryo_ID <------> morphseq_metadata$sample  these have the same values (the key) 
+morphseq_metadata <- morphseq_metadata %>% rename(embryo_ID = sample)
 
-ref_cds = load_monocle_objects("/net/trapnell/vol1/home/duran/seahub/all_reference_v2.1.0/partition_CNS_progenitor_ref_cds_v2.1.0", matrix_control = list(matrix_class="BPCells", matrix_path="/net/gs/vol1/home/mdcolon/nobackups/mdcolon/BPCells"))
-counts  <- as(counts(ref_cds), 'dgCMatrix')
 
-ref_cds <- cluster_cells(ref_cds, resolution= .00020, verbose=TRUE) 
-
-ref_cds$clusters <-  clusters(ref_cds)
-plot <- plot_cells(ref_cds, color_cells_by = "clusters")
-ggsave("/net/gs/vol1/home/mdcolon/proj/zfish_spatial/results/progenitors_plot.png", plot = plot)
-
-ref_agr_exp_data <- hooke:::aggregated_expr_data(ref_cds, group_cells_by = "clusters")
-
-write.csv(ref_agr_exp_data, "./data/ref_cds/CNS_progenitor/DEG_37clusters.csv", row.names = FALSE)
-
-counts  <- as(counts(ref_cds), 'dgCMatrix')
-Matrix::writeMM(t(counts), "./data/ref_cds/CNS_progenitor/gene_count.mtx")
-write.csv(data.frame(pData(ref_cds)), "./data/ref_cds/CNS_progenitor/df_cell.csv")
-write.csv(data.frame(fData(ref_cds)), "./data/ref_cds/CNS_progenitor/df_gene.csv")
+# Subset the subset_cds again based on the embryo_ID column in morphseq_metadata
+subset_cds_mseq <- subset_cds[, colData(subset_cds)$embryo_ID %in% morphseq_metadata$embryo_ID]
 
 
 
+
+# Count the number of unique embryo_IDs for each perturbation
+subset_cds_mseq_df <- as.data.frame(colData(subset_cds_mseq))
+perturbation_counts <- subset_cds_mseq_df %>%
+  group_by(perturbation) %>%
+  summarise(unique_embryo_IDs = n_distinct(embryo_ID))
+print(perturbation_counts)
+
+
+# Merge the two data frames by 'embryo_ID'
+morphseq_metadata <- morphseq_metadata %>%
+  left_join(morph_severity_key %>% select(snip_id, hypotenuse), by = "snip_id") %>%
+  rename(dist_from_spline = hypotenuse)
+
+
+# add a new column to the dataset by for a give row in embryo_ID if add the corresponding embryo_ID value of dist_from_spline
+# essentuially the rows have a given embryo_ID value and i need to assigne a distfromspline value to the value, using a new column called dist_from_spline
+subset_cds_mseq$dist_from_spline <- morphseq_metadata$dist_from_spline[
+  match(subset_cds_mseq$embryo_ID, morphseq_metadata$embryo_ID)
+]
+
+cds_mseq <- subset_cds_mseq
+
+
+
+# # to start hooke we need a cell_count_set which is embryo X cell_count number
+# unique_cell_type <- unique(colData(cds_mseq)$cell_type)[1:10]
+# cds_mseq_subset <- cds_mseq[, colData(cds_mseq)$cell_type %in% unique_cell_type]
+# ccs_mseq = new_cell_count_set(cds_mseq_subset, 
+#                          sample_group = "embryo_ID", 
+#                          cell_group = "cell_type")
+
+
+ccs_mseq = new_cell_count_set(cds_mseq, 
+                         sample_group = "embryo_ID", 
+                         cell_group = "cell_type")
+
+# colData(ccs_mseq)$dist_from_spline
+
+median_ctrlinj_dist <- median(colData(ccs_mseq)$dist_from_spline[colData(ccs_mseq)$perturbation == "ctrl-inj"], na.rm = TRUE)
+
+
+# # Create the plot
+# p <- ggplot(df, aes(x = factor(timepoint), y = dist_from_spline, fill = perturbation)) +
+#   geom_violin() +
+#   theme_classic()
+
+# # Save the plot to a Pdf
+# ggsave(
+#   filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/dist_from_spline_by_timepoint_perturbation_noline.pdf",
+#   plot = p,
+#   width = 6,
+#   height = 4
+# )
+
+
+# # get the median control distance by subsetting for "ctrl-inj"
+
+# p <- ggplot(df, aes(x = factor(timepoint), y = dist_from_spline, fill = perturbation)) +
+#   geom_violin() +
+#   geom_hline(aes(yintercept = median_ctrlinj_dist, linetype = "Median dist for ctrl-inj"), color = "red") +
+#   scale_linetype_manual(name = "Reference Line", values = c("Median dist for ctrl-inj" = "dashed")) +
+#   theme_classic()
+
+# # Save the plot to a Pdf
+# ggsave(
+#   filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/dist_from_spline_by_timepoint_perturbation_ctrlline.pdf",
+#   plot = p,
+#   width = 6,
+#   height = 4
+# )
+
+
+
+colData(ccs_mseq)$m_severity <- ifelse(
+  colData(ccs_mseq)$dist_from_spline < median_ctrlinj_dist,
+  "not_severe",
+  "severe")
+
+
+
+reg_formula_1= "~ ns( timepoint , knots= c(48) ) + ns( timepoint , knots= c(48) ):perturbation + m_severity:perturbation + offset(log(Offset))"
+
+
+ccm_mseq  = new_cell_count_model(ccs_mseq, main_model_formula_str =reg_formula_1, num_threads = 6)
+
+
+# The two levels for perturbation
+
+# The two levels for perturbation
+perturbations <- c("ctrl-inj", "lmx1ba;lmx1bb")
+
+# The two levels for severity
+m_severities  <- c("not_severe", "severe")
+
+timepoints    <- unique(colData(ccs_mseq)$timepoint)
+
+# Create all combinations of these factors
+comparisons <- tidyr::expand_grid(
+  timepoint     = timepoints,
+  perturbation  = perturbations,
+  m_severity    = m_severities
+)
+
+# Now use that tibble to estimate abundances from your model:
+cond_estimates <- estimate_abundances(ccm_mseq, comparisons)
+
+# Check the first few rows
+head(cond_estimates)
+
+
+# --------------------------
+# 1) Compare ctrl-inj vs lmx1ba;lmx1bb for all timepoints and severities
+# --------------------------
+
+library(dplyr)
+library(tidyr)
+
+# We assume ccm_mseq is your cell_count_model
+# and cond_estimates is the tibble from estimate_abundances(ccm_mseq, ...)
+
+# Identify the relevant timepoints and severities
+timepoints    <- unique(cond_estimates$timepoint)
+m_severities  <- unique(cond_estimates$m_severity)
+
+comparison_list <- list()
+
+# Loop over each combination of timepoint and m_severity
+for(tpt in timepoints) {
+  for(msv in m_severities) {
+    cond_x <- cond_estimates %>%
+      filter(timepoint == tpt,
+             perturbation == "ctrl-inj",
+             m_severity == msv)
+    
+    cond_y <- cond_estimates %>%
+      filter(timepoint == tpt,
+             perturbation == "lmx1ba;lmx1bb",
+             m_severity == msv)
+    
+    # Skip if either side is empty
+    if(nrow(cond_x) == 0 || nrow(cond_y) == 0) {
+      next
+    }
+    
+    # Compare the two sets of abundances
+    cmp_tbl <- compare_abundances(ccm_mseq, cond_x, cond_y)
+    
+    # Add extra columns to record timepoint & severity
+    cmp_tbl <- cmp_tbl %>%
+      mutate(
+        timepoint = tpt,
+        m_severity = msv,
+        x_perturbation = "ctrl-inj",
+        y_perturbation = "lmx1ba;lmx1bb"
+      )
+    
+    # Store in a list
+    comparison_list[[paste0("t",tpt,"_",msv)]] <- cmp_tbl
+   }
+}
+
+# Combine into one data frame
+all_comparisons <- dplyr::bind_rows(comparison_list)
+
+
+# --------------------------
+# 2) Write out comparison + cond_estimates if desired
+# --------------------------
+
+# Write out the original cond_estimates
+write.csv(
+  cond_estimates,
+  "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/cond_estimates.csv",
+  row.names = FALSE
+)
+
+# Write out our new comparison table
+write.csv(
+  all_comparisons,
+  "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/cond_comparisons.csv",
+  row.names = FALSE
+)
+
+# --------------------------
+# 3) Example: plot contrast at timepoint=48 for not_severe vs. severe
+# --------------------------
+
+# Suppose you want to compare “not_severe” vs. “severe” at timepoint=48
+# (Regardless of perturbation, or filtered for a single perturbation—your choice.)
+
+
+
+# Create a single PDF file to contain all plots
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/lmx1b_all_timepoint_severe_vs_not.pdf", width = 8, height = 6)
+# Get unique timepoints
+unique_timepoints <- unique(cond_estimates$timepoint)[0]
+for(tp in unique_timepoints) {
+  # Filter the estimates for the current timepoint for each severity
+  cond_not <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "not_severe", perturbation == "lmx1ba;lmx1bb")
+  cond_sev <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "severe", perturbation == "lmx1ba;lmx1bb")
+  
+  # Skip this timepoint if either condition is missing
+  if(nrow(cond_not) == 0 || nrow(cond_sev) == 0) {
+    message(paste("Skipping timepoint", tp, "- insufficient data"))
+    next
+  }
+  
+  # Compare the abundances
+  cmp_contrast <- compare_abundances(ccm_mseq, cond_not, cond_sev)
+
+  # Option 1: If plot_contrast returns a ggplot object
+  p <- plot_contrast(ccm_mseq, cmp_contrast, q_value_thresh = 0.05) +
+    labs(title = paste("Difference: not_severe vs. severe (lmx1ba;lmx1bb) at", tp, "hpf"))
+  print(p)
+  
+  # Option 2: If plot_contrast is a base R plotting function (uncomment this block instead)
+  # plot_contrast(ccm_mseq, cmp_contrast, q_value_thresh = 0.05)
+  # title(main = paste("Difference: not_severe vs. severe (lmx1ba;lmx1bb) at", tp, "hpf"))
+}
+#Close the PDF device
+dev.off()
+
+
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)  # For text labels that don't overlap
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)  # For text labels that don't overlap
+
+# Get unique timepoints
+unique_timepoints <- unique(cond_estimates$timepoint)
+
+# Create a single PDF file to contain all scatter plots
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/lmx1b_abundance_scatter_plots.pdf", 
+    width = 8, height = 7)
+
+for(tp in unique_timepoints) {
+  # Filter the estimates for the current timepoint for each severity
+  cond_not <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "not_severe", perturbation == "lmx1ba;lmx1bb")
+  cond_sev <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "severe", perturbation == "lmx1ba;lmx1bb")
+  
+  # Skip this timepoint if either condition is missing
+  if(nrow(cond_not) == 0 || nrow(cond_sev) == 0) {
+    cat("Skipping timepoint", tp, "- insufficient data\n")
+    next
+  }
+  
+  # Compare the abundances
+  cmp_contrast <- compare_abundances(ccm_mseq, cond_not, cond_sev)
+  
+  # Identify top 5 cell groups with highest and lowest delta log abundances
+  top_high <- cmp_contrast %>%
+    arrange(desc(delta_log_abund)) %>%
+    slice_head(n = 5) %>%
+    pull(cell_group)
+    
+  top_low <- cmp_contrast %>%
+    arrange(delta_log_abund) %>%
+    slice_head(n = 5) %>%
+    pull(cell_group)
+    
+  # Combine them for labeling
+  to_label <- c(top_high, top_low)
+  
+  # Create a column for labeling
+  cmp_contrast <- cmp_contrast %>%
+    mutate(label = ifelse(cell_group %in% to_label, cell_group, ""))
+    
+  # Find the range for both axes to make them equal
+  max_val <- max(c(cmp_contrast$log_abund_x, cmp_contrast$log_abund_y), na.rm = TRUE)
+  min_val <- min(c(cmp_contrast$log_abund_x, cmp_contrast$log_abund_y), na.rm = TRUE)
+  
+  # Add a small buffer
+  buffer <- (max_val - min_val) * 0.05
+  plot_min <- min_val - buffer
+  plot_max <- max_val + buffer
+  
+  # Create the scatter plot
+  p <- ggplot(cmp_contrast, aes(x = log_abund_x, y = log_abund_y)) +
+    # Points with normal coloring
+    geom_point(data = filter(cmp_contrast, abs(delta_log_abund) <= 1), 
+               color = "grey50", alpha = 0.7) +
+    # Points with significant changes highlighted in red
+    geom_point(data = filter(cmp_contrast, abs(delta_log_abund) > 1), 
+               color = "red", alpha = 0.7) +
+    # Add labels only for significant points
+    geom_text_repel(
+      data = filter(cmp_contrast, abs(delta_log_abund) > 1),
+      aes(label = cell_group),
+      box.padding = 0.5,
+      max.overlaps = 20,
+      size = 3
+    ) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "blue") +
+    coord_fixed(xlim = c(plot_min, plot_max), ylim = c(plot_min, plot_max)) +
+    labs(
+      title = paste("Cell Type Abundance Comparison at", tp, "hpf"),
+      subtitle = "not_severe (x-axis) vs. severe (y-axis) in lmx1ba;lmx1bb",
+      x = "Log Abundance (not_severe)",
+      y = "Log Abundance (severe)"
+    ) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold")
+    )
+  
+  print(p)
+}
+
+# Close the PDF device
+dev.off()
+
+cat("All lmx1b abundance scatter plots saved to a single PDF file\n")
+
+
+
+
+
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/ctrl_inj_abundance_scatter_plots.pdf", 
+    width = 8, height = 7)
+
+for(tp in unique_timepoints) {
+  # Filter the estimates for the current timepoint for each severity
+  cond_not <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "not_severe", perturbation == "ctrl-inj")
+  cond_sev <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "severe", perturbation == "ctrl-inj")
+  
+  # Skip this timepoint if either condition is missing
+  if(nrow(cond_not) == 0 || nrow(cond_sev) == 0) {
+    cat("Skipping timepoint", tp, "- insufficient data\n")
+    next
+  }
+  
+  # Compare the abundances
+  cmp_contrast <- compare_abundances(ccm_mseq, cond_not, cond_sev)
+  
+  # Identify top 5 cell groups with highest and lowest delta log abundances
+  top_high <- cmp_contrast %>%
+    arrange(desc(delta_log_abund)) %>%
+    slice_head(n = 5) %>%
+    pull(cell_group)
+    
+  top_low <- cmp_contrast %>%
+    arrange(delta_log_abund) %>%
+    slice_head(n = 5) %>%
+    pull(cell_group)
+    
+  # Combine them for labeling
+  to_label <- c(top_high, top_low)
+  
+  # Create a column for labeling
+  cmp_contrast <- cmp_contrast %>%
+    mutate(label = ifelse(cell_group %in% to_label, cell_group, ""))
+    
+  # Find the range for both axes to make them equal
+  max_val <- max(c(cmp_contrast$log_abund_x, cmp_contrast$log_abund_y), na.rm = TRUE)
+  min_val <- min(c(cmp_contrast$log_abund_x, cmp_contrast$log_abund_y), na.rm = TRUE)
+  
+  # Add a small buffer
+  buffer <- (max_val - min_val) * 0.05
+  plot_min <- min_val - buffer
+  plot_max <- max_val + buffer
+  
+  # Create the scatter plot
+  p <- ggplot(cmp_contrast, aes(x = log_abund_x, y = log_abund_y)) +
+    # Points with normal coloring
+    geom_point(data = filter(cmp_contrast, abs(delta_log_abund) <= 1), 
+               color = "grey50", alpha = 0.7) +
+    # Points with significant changes highlighted in red
+    geom_point(data = filter(cmp_contrast, abs(delta_log_abund) > 1), 
+               color = "red", alpha = 0.7) +
+    # Add labels only for significant points
+    geom_text_repel(
+      data = filter(cmp_contrast, abs(delta_log_abund) > 1),
+      aes(label = cell_group),
+      box.padding = 0.5,
+      max.overlaps = 20,
+      size = 3
+    ) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "blue") +
+    coord_fixed(xlim = c(plot_min, plot_max), ylim = c(plot_min, plot_max)) +
+    labs(
+      title = paste("Cell Type Abundance Comparison at", tp, "hpf"),
+      subtitle = "not_severe (x-axis) vs. severe (y-axis) in ctrl-inj",
+      x = "Log Abundance (not_severe)",
+      y = "Log Abundance (severe)"
+    ) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold")
+    )
+  
+  print(p)
+}
+
+# Close the PDF device
+dev.off()
+
+cat("All ctrl-inj abundance scatter plots saved to a single PDF file\n")
+
+
+
+library(dplyr)
+library(ggplot2)
+library(VennDiagram)
+library(grid)
+
+# Get unique timepoints
+unique_timepoints <- unique(cond_estimates$timepoint)
+
+# Create a PDF for the Venn diagrams
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/affected_populations_venn.pdf", 
+    width = 8, height = 7)
+
+# To store results for CSV export
+all_results <- list()
+
+
+# Store all affected cell populations across timepoints
+all_lmx1b_affected <- c()
+all_ctrlinj_affected <- c()
+
+# For each timepoint, create a Venn diagram
+for(tp in unique_timepoints) {
+  # Get cell types affected in lmx1b
+  cond_not_lmx1b <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "not_severe", perturbation == "lmx1ba;lmx1bb")
+  cond_sev_lmx1b <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "severe", perturbation == "lmx1ba;lmx1bb")
+  
+  # Skip if data is missing
+  if(nrow(cond_not_lmx1b) == 0 || nrow(cond_sev_lmx1b) == 0) {next}
+  
+  # Compare abundances for lmx1b
+  cmp_lmx1b <- compare_abundances(ccm_mseq, cond_not_lmx1b, cond_sev_lmx1b)
+  
+  # Get affected cell types in lmx1b (|delta_log_abund| > 1)
+  lmx1b_affected <- cmp_lmx1b %>%
+    filter(abs(delta_log_abund) > 1) %>%
+    pull(cell_group)
+  
+  # Get cell types affected in ctrl-inj
+  cond_not_ctrl <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "not_severe", perturbation == "ctrl-inj")
+  cond_sev_ctrl <- cond_estimates %>%
+    filter(timepoint == tp, m_severity == "severe", perturbation == "ctrl-inj")
+  
+  # Skip if data is missing
+  if(nrow(cond_not_ctrl) == 0 || nrow(cond_sev_ctrl) == 0) {
+    next
+  }
+  
+  # Compare abundances for ctrl-inj
+  cmp_ctrl <- compare_abundances(ccm_mseq, cond_not_ctrl, cond_sev_ctrl)
+  
+  # Get affected cell types in ctrl-inj (|delta_log_abund| > 1)
+  ctrl_affected <- cmp_ctrl %>%
+    filter(abs(delta_log_abund) > 1) %>%
+    pull(cell_group)
+  
+  # Add to the all timepoints lists
+  all_lmx1b_affected <- c(all_lmx1b_affected, lmx1b_affected)
+  all_ctrlinj_affected <- c(all_ctrlinj_affected, ctrl_affected)
+  
+  # Create Venn diagram for this timepoint
+  venn_list <- list(
+    "lmx1ba;lmx1bb" = lmx1b_affected,
+    "ctrl-inj" = ctrl_affected
+  )
+  
+  # Calculate numbers for the Venn diagram
+  n_lmx1b <- length(lmx1b_affected)
+  n_ctrl <- length(ctrl_affected)
+  n_both <- length(intersect(lmx1b_affected, ctrl_affected))
+  
+  # Create the Venn diagram
+  venn <- venn.diagram(
+    x = venn_list,
+    filename = NULL,
+    category.names = c("lmx1ba;lmx1bb", "ctrl-inj"),
+    main = paste("Affected Cell Types at", tp, "hpf"),
+    sub = paste("Cell types with |log fold change| > 1"),
+    main.cex = 1.2,
+    sub.cex = 0.8,
+    fill = c("#B19CD9", "#93C6E7"),  # Soft purple and soft blue
+    alpha = 0.5,
+    cex = 1,
+    cat.cex = 0.8,
+    cat.pos = c(0, 0),
+    cat.dist = c(0.05, 0.05)
+  )
+  
+  # Print the Venn diagram to the PDF
+  grid.newpage()
+  grid.draw(venn)
+  
+  # Print the cell types in each section
+  grid.newpage()
+  
+  # Create a text representation of the Venn results
+  lmx1b_only <- setdiff(lmx1b_affected, ctrl_affected)
+  ctrl_only <- setdiff(ctrl_affected, lmx1b_affected)
+  both <- intersect(lmx1b_affected, ctrl_affected)
+  
+  # Add to results list for CSV export
+  all_results[[paste0("timepoint_", tp)]] <- list(
+    timepoint = tp,
+    lmx1b_only = lmx1b_only,
+    ctrl_only = ctrl_only,
+    both = both
+  )
+  
+  text_content <- paste0(
+    "Timepoint: ", tp, " hpf\n\n",
+    "lmx1ba;lmx1bb only (", length(lmx1b_only), " cell types):\n",
+    paste(lmx1b_only, collapse = ", "), "\n\n",
+    "ctrl-inj only (", length(ctrl_only), " cell types):\n",
+    paste(ctrl_only, collapse = ", "), "\n\n",
+    "Both (", length(both), " cell types):\n",
+    paste(both, collapse = ", ")
+  )
+  
+  grid.text(text_content, x = 0.5, y = 0.5, just = "center", gp = gpar(fontsize = 10))
+}
+
+# Create a Venn diagram for all timepoints
+# Remove duplicates
+all_lmx1b_affected <- unique(all_lmx1b_affected)
+all_ctrlinj_affected <- unique(all_ctrlinj_affected)
+
+# Create Venn diagram for all timepoints
+venn_list_all <- list(
+  "lmx1ba;lmx1bb" = all_lmx1b_affected,
+  "ctrl-inj" = all_ctrlinj_affected
+)
+
+# Calculate numbers for the Venn diagram
+n_lmx1b_all <- length(all_lmx1b_affected)
+n_ctrl_all <- length(all_ctrlinj_affected)
+n_both_all <- length(intersect(all_lmx1b_affected, all_ctrlinj_affected))
+
+# Create the Venn diagram
+venn_all <- venn.diagram(
+  x = venn_list_all,
+  filename = NULL,
+  category.names = c("lmx1ba;lmx1bb", "ctrl-inj"),
+  main = "Affected Cell Types Across All Timepoints",
+  sub = "Cell types with |log fold change| > 1",
+  main.cex = 1.2,
+  sub.cex = 0.8,
+  fill = c("#B19CD9", "#93C6E7"),  # Soft purple and soft blue
+  alpha = 0.5,
+  cex = 1,
+  cat.cex = 0.8,
+  cat.pos = c(0, 0),
+  cat.dist = c(0.05, 0.05)
+)
+
+# Print the Venn diagram to the PDF
+grid.newpage()
+grid.draw(venn_all)
+
+# Print the cell types in each section
+grid.newpage()
+
+# Create a text representation of the Venn results
+lmx1b_only_all <- setdiff(all_lmx1b_affected, all_ctrlinj_affected)
+ctrl_only_all <- setdiff(all_ctrlinj_affected, all_lmx1b_affected)
+both_all <- intersect(all_lmx1b_affected, all_ctrlinj_affected)
+
+# Add to results list for CSV export
+all_results[["all_timepoints"]] <- list(
+  timepoint = "all",
+  lmx1b_only = lmx1b_only_all,
+  ctrl_only = ctrl_only_all,
+  both = both_all
+)
+
+text_content_all <- paste0(
+  "All Timepoints Combined\n\n",
+  "lmx1ba;lmx1bb only (", length(lmx1b_only_all), " cell types):\n",
+  paste(lmx1b_only_all, collapse = ", "), "\n\n",
+  "ctrl-inj only (", length(ctrl_only_all), " cell types):\n",
+  paste(ctrl_only_all, collapse = ", "), "\n\n",
+  "Both (", length(both_all), " cell types):\n",
+  paste(both_all, collapse = ", ")
+)
+
+grid.text(text_content_all, x = 0.5, y = 0.5, just = "center", gp = gpar(fontsize = 10))
+
+# Close the PDF
+dev.off()
+
+# Create the directory if it doesn't exist
+dir.create("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/", 
+           showWarnings = FALSE, recursive = TRUE)
+
+# Export results to CSV files
+for (tp_name in names(all_results)) {
+  result <- all_results[[tp_name]]
+  
+  # Create data frames for each category
+  lmx1b_only_df <- data.frame(
+    timepoint = result$timepoint,
+    cell_group = result$lmx1b_only,
+    category = "lmx1b_only"
+  )
+  
+  ctrl_only_df <- data.frame(
+    timepoint = result$timepoint,
+    cell_group = result$ctrl_only,
+    category = "ctrl_only"
+  )
+  
+  both_df <- data.frame(
+    timepoint = result$timepoint,
+    cell_group = result$both,
+    category = "both"
+  )
+  
+  # Combine into one data frame
+  combined_df <- rbind(lmx1b_only_df, ctrl_only_df, both_df)
+  
+  # Create filename
+  if (tp_name == "all_timepoints") {
+    filename <- "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_all_timepoints.csv"
+  } else {
+    filename <- paste0("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_", result$timepoint, ".csv")
+  }
+  
+  # Write to CSV
+  write.csv(combined_df, filename, row.names = FALSE)
+}
+
+cat("Venn diagrams saved to affected_populations_venn.pdf\n")
+cat("CSV files with affected populations saved to the data/lmx1b_vs_ctrlinj_timepoints/ directory\n")
+
+#####
+
+
+# Subset the data into three lists by category
+lmx1b_only_list <- combined_df[combined_df$category == "lmx1b_only", ]$cell_group
+ctrl_only_list <- combined_df[combined_df$category == "ctrl_only", ]$cell_group
+both_list <- combined_df[combined_df$category == "both", ]$cell_group
+
+# Print the lists
+print(lmx1b_only_list)
+print(ctrl_only_list)
+print(both_list)
+
+severe_embryo_ID <- colData(ccs_mseq[ colData(ccs_mseq)$m_severity == "severe",])$sample
+
+cds_mseq_severe <- cds_mseq[,colData(cds_mseq)$embryo_ID %in% severe_embryo_ID]
+cds_mseq_severe <- cds_mseq_severe[, colData(cds_mseq_severe)$cell_type %in% combined_df$cell_group]
+
+
+ccm_mseq_severe = fit_mt_models(cds_mseq_severe, 
+                             sample_group = "embryo_ID", 
+                             cell_group = "cell_type", 
+                             perturbation_col = "perturbation", 
+                             ctrl_ids = c("ctrl-inj"),
+                             mt_ids = c("lmx1ba;lmx1bb"),
+                             num_threads=6)
+
+perturb_ccm_lmx1b <- ccm_mseq_severe$perturb_ccm[[1]]
+
+library(purrr)
+
+# Load necessary library
 library(ggplot2)
 
-loc = read.csv("/net/gs/vol1/home/mdcolon/proj/zfish_spatial/data/ref_cds/CNS_progenitor/df_cell_wloc.csv")
-ref_cds = load_monocle_objects("/net/trapnell/vol1/home/duran/seahub/all_reference_v2.1.0/partition_CNS_progenitor_ref_cds_v2.1.0")
-
-loc = loc[-(1)]
-
-for (colname in colnames(loc)) {
-  # Add the column from loc to colData of ref_cds
-  print(colname)
-  ref_cds@colData[[colname]] <- as.character(loc[[colname]])
-
-}
+p <- plot_cell_type_perturb_kinetics(perturb_ccm_lmx1b, 
+                                newdata = tibble("expt"= "LMX1B"), 
+                                raw_counts = F, 
+                                nrow = 5) + 
+                                xlab("time")
 
 
+# Define the filename and save the plot as a PDF
+ggsave(filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/plots/cell_type_perturb_kinetics.pdf", 
+       plot = p, 
+       device = "pdf", 
+       width = 20, 
+       height = 12)
 
-# Start recording plots to a PDF file
-pdf("/net/gs/vol1/home/mdcolon/proj/zfish_spatial/data/ref_cds/CNS_progenitor/plots_of_location.pdf", width=120)
-
-
-# Plot the initial cells
-plot_cells(ref_cds, color_cells_by = "cell_type", label_cell_group=FALSE)
-
-plot_cells(ref_cds, color_cells_by = "sub_clusters", label_cell_group=FALSE)
-
-# Loop through each column in loc and plot cells colored by each column
-for (colname in colnames(loc)) {
-  # Plot cells colored by the current column
-  print(colname)
-  p <- plot_cells(ref_cds, color_cells_by = colname, label_cell_group=FALSE) +
-    ggtitle(paste("Location:", colname)) 
-
-  print(p)
-
-}
-
-# End recording plots to the PDF file
-dev.off()
-
-ggsave("/net/gs/vol1/home/mdcolon/proj/zfish_spatial/results/progenitors_test_plot.png", plot = plot_cells(ref_cds, color_cells_by = "cell_type"))
-
-
-pdf("/net/gs/vol1/home/mdcolon/proj/zfish_spatial/data/ref_cds/CNS_progenitor/plots_celltypes.pdf", width=10)
-# Plot the initial cells
-plot_cells(ref_cds, color_cells_by = "cell_type", label_cell_group=FALSE)
-
-dev.off()
+# Print confirmation message
+message("Plot saved as cell_type_perturb_kinetics.pdf")
 
 
 
 
 
-library("monocle3", lib.loc="/net/gs/vol3/software/modules-sw/R/4.3.2/Linux/Ubuntu22.04/x86_64/lib/R/library")
+
+wt_expt_ccm = new_cell_count_model(wt_ccs, 
+                                   main_model_formula_str = "ns(timepoint, df=3)", 
+                                   nuisance_model_formula_str = "~ expt")
+
+
+comparisons <- tidyr::expand_grid(
+  timepoint     = timepoints,
+  perturbation  = perturbations,
+  m_severity    = m_severities
+)
+
+# Now use that tibble to estimate abundances from your model:
+cond_estimates <- estimate_abundances(ccm_mseq, comparisons)
+
+colnames(colData(ccs_mseq))
+colData(ccs_mseq)$perturbation + colData(ccs_mseq)$m_severity #add these like they are python strings
+
+batches = data.frame(batch = unique(colData(wt_ccs)$expt))                                   
+batches = batches %>% mutate(tp_preds = purrr::map(.f = function(batch) {
+ estimate_abundances_over_interval(wt_expt_ccm,
+                                            start_time,
+                                            stop_time,
+                                            knockout=FALSE,
+                                            interval_col="timepoint",
+                                            interval_step=2,
+                                            expt = batch)
+}, .x=batch))
+
+wt_timepoint_pred_df = batches %>% select(tp_preds) %>% tidyr::unnest(tp_preds)
+
+ggplot(wt_timepoint_pred_df, aes(x = timepoint)) +
+  geom_line(aes(y = exp(log_abund) + exp(log_abund_detection_thresh), color=expt)) +
+  facet_wrap(~cell_group, scales="free_y", nrow = 2) + monocle3:::monocle_theme_opts() + 
+  ggtitle("wild-type kinetics by expt")
+
+library(future)
+library(corrplot)
+library(factoextra)
+plan(multisession, workers = 6)
+
+
+ccs_mseq_pln_data <- PLNmodels::prepare_data(counts = counts(ccs_mseq) + 1,
+                                          covariates = colData(ccs_mseq) %>% as.data.frame,
+                                          offset = monocle3::size_factors(ccs_mseq))
+
+
+reg_formula_2= "~ ns( timepoint , knots= c(48) ) + ns( timepoint , knots= c(48) ):perturbation + offset(log(Offset))"
+
+
+
+PCA_models <- PLNmodels::PLNPCA(
+  # Abundance ~  ns(timepoint , knots= c(48) ) + ns(timepoin),t , knots= c(48) ):expt + ns( timepoint , knots= c(48) ):perturbation + offset(log(Offset)
+  Abundance ~  ns(timepoint , knots= c(48) ) + ns(timepoint, knots= c(48) ):expt + offset(log(Offset)),
+  data  = ccs_mseq_pln_data, 
+  ranks = 1:7
+)                                        
+
+
+# Save the plot to a PDF file
+ggsave(
+  filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/plots/PCA_models_selection.png",
+  plot = plot(PCA_models, reverse = TRUE),
+  device =  "png",
+  width = 8,
+  height = 6
+)
+
+myPCA_ICL <- getModel(PCA_models, 5)
+
+# Save the plot to a PDF file
+ggsave(
+  filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/plots/PCA_models_mseverity_plot.png",
+  plot = plot(myPCA_ICL, ind_cols = ccs_mseq_pln_data$m_severity),
+  device = "png",
+  width = 8,
+  height = 6
+)
+
+message("PCA models plot saved successfully.")
+
+# myPCA_ICL <- getBestModel(PCA_models, "ICL") 
+
+
+
+
+ggsave(
+  filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/plots/PCA_ICL_structure_models_plot_perturbation.png",
+  plot = plot(myPCA_ICL, ind_cols = ccs_mseq_pln_data$perturbation),
+  device = "png",
+  width = 8,
+  height = 6
+)
+
+## Variables
+
+
+
+
+
+# Ensure row names align before merging
+pc_scores <- as.data.frame(myPCA_ICL$scores)
+pc_scores$sample <- rownames(pc_scores)
+
+# Merge with ccs_mseq_pln_data based on sample names
+ccs_mseq_pln_data <- ccs_mseq_pln_data %>%
+  select(-starts_with("PC")) %>%
+  left_join(pc_scores, by = c("sample" = "sample"))
+
+# Save the updated data to a CSV file
+write.csv(ccs_mseq_pln_data, "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/ccs_mseq_pln_data_with_PCs.csv", row.names = FALSE)
+
+cat("Updated ccs_mseq_pln_data with PCs saved successfully.\n")
