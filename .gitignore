@@ -38,3 +38,5 @@ src/build/__pychache__/
 __pycache__/
 
 /models
+
+results/mcolon/**/plots/
