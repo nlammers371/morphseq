@@ -21,7 +21,7 @@ def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
       A formatted Plotly figure.
     """
     if dims is None:
-        dims = [600, 800]
+        dims = [600, 1000]
     if theme == "dark":
         line_color = "white"
         text_color = "white"
@@ -98,19 +98,29 @@ def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
     except:
         pass
 
-    # Optionally update the colorbar layout if using a continuous color mapping.
-    fig.update_layout(
-        coloraxis_colorbar=dict(
-            # title_standoff=20,
-            x=1,  # Horizontal position.
-            y=0.5,  # Vertical position.
-            len=0.5  # Length of the colorbar.
+    if any(hasattr(trace, "marker") and getattr(trace, "showlegend", True)
+           for trace in fig.data):
+        # Update the colorbar to be positioned in the bottom half of the y axis
+        fig.update_layout(
+            coloraxis_colorbar=dict(
+                x=1,  # move the colorbar to the right edge
+                y=0,  # position lower (bottom half)
+                len=0.5,  # adjust the length as needed
+                yanchor="bottom",
+            )
         )
-    )
+    else:
+        fig.update_layout(width=dims[1], height=dims[0],
+                          title=title,
+                          coloraxis_colorbar=dict(
+                              x=1,  # Increase x to move the colorbar rightwards
+                              y=0.5,  # Center vertically (default is often around 0.5)
+                              len=0.5  # Adjust the length if needed
+                          ))
 
     return fig
 
-def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
+def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6, show_gridlines=True,
                      aspectmode="data", eye=None, theme="dark", dims=None, title=""):
 
     if dims is None:
@@ -134,7 +144,7 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
 
     tick_font_size = int(font_size * 6 / 7)
     axis_format_dict = dict(showbackground=False,
-                            showgrid=True,
+                            showgrid=show_gridlines,
                             zeroline=True,
                             gridcolor=line_color,
                             linecolor=line_color,
@@ -172,14 +182,8 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
                                      zaxis=dict_list[2]
                           ))
 
+    # Check if any trace with a marker has its legend shown
 
-    fig.update_layout(width=dims[1], height=dims[0],
-                      title=title,
-                      coloraxis_colorbar=dict(
-                          x=1,  # Increase x to move the colorbar rightwards
-                          y=0.5,  # Center vertically (default is often around 0.5)
-                          len=0.5  # Adjust the length if needed
-                      ))
 
     fig.update_layout(
         font=dict(color=text_color, family="Arial, sans-serif", size=font_size),
@@ -192,6 +196,26 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
             eye=eye  # Adjust these values as needed.
         )
     )
+
+    if any(hasattr(trace, "marker") and getattr(trace, "showlegend", True)
+           for trace in fig.data):
+        # Update the colorbar to be positioned in the bottom half of the y axis
+        fig.update_layout(
+            coloraxis_colorbar=dict(
+                x=1,  # move the colorbar to the right edge
+                y=0,  # position lower (bottom half)
+                len=0.5,  # adjust the length as needed
+                yanchor="bottom",
+            )
+        )
+    else:
+        fig.update_layout(width=dims[1], height=dims[0],
+                      title=title,
+                      coloraxis_colorbar=dict(
+                          x=1,  # Increase x to move the colorbar rightwards
+                          y=0.5,  # Center vertically (default is often around 0.5)
+                          len=0.5  # Adjust the length if needed
+                      ))
 
     return fig
 

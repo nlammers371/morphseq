@@ -36,6 +36,12 @@
 
 *.ipynb_checkpoints
 
+# Ignore all __pycache__ directories anywhere in the repository
+**/__pycache__/
+
+# Ignore all compiled Python files
+*.py[cod]
+
 functions/.ipynb_checkpoints*
 functions/.ipynb_checkpoints/
 src/functions/.ipynb_checkpoints/

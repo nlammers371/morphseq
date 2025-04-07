@@ -34,6 +34,8 @@ for image_ind in range(len(image_list)):
     else:
         viewer.add_image(imData, colormap="Red", name=name, scale=tuple(scale_vec))
 
+    viewer.scale_bar.visible = True
+    viewer.scale_bar.unit = "um"
 # # labels_layer = viewer.add_labels(lbData, name='segmentation', scale=res_array)
 if __name__ == '__main__':
     napari.run()
