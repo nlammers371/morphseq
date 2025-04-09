@@ -23,8 +23,8 @@ class VAEConfig(BaseAEConfig):
     age_key_path: str = ''
     pert_time_key_path: str = ''
 
-    def __init__(self, data_root, train_folder, age_key_path, pert_time_key_path):
-        self.data_root = data_root
+    def __init__(self, model_cfg):
+        self.data_root = model_cfg[data_root
         self.train_folder = train_folder
         self.age_key_path = age_key_path
         self.pert_time_key_path = pert_time_key_path
