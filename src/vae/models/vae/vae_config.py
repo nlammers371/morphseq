@@ -1,4 +1,5 @@
 from pydantic.dataclasses import dataclass
+from dataclasses import asdict
 from typing_extensions import Literal
 from src.vae.auxiliary_scripts.make_training_key import make_seq_key, make_train_test_split
 from ..base.base_config import BaseAEConfig
@@ -18,42 +19,43 @@ class VAEConfig(BaseAEConfig):
     n_out_channels: int = 16
     beta: float = 1.0  # tunes the weight of the KL normalization term
     reconstruction_loss: Literal["bce", "mse"] = "mse"
-    data_root: str = ''
-    train_folder: str = ''
-    age_key_path: str = ''
-    pert_time_key_path: str = ''
+    # data_root: str = ''
+    # train_folder: str = ''
+    # age_key_path: str = ''
+    # pert_time_key_path: str = ''
 
-    def __init__(self, model_cfg):
-        self.data_root = model_cfg[data_root
-        self.train_folder = train_folder
-        self.age_key_path = age_key_path
-        self.pert_time_key_path = pert_time_key_path
+    def from_cfg(cls, model_cfg: dict):
+        # Start with the default field values.
+        cfg_data = asdict(cls())
+        # Update defaults with user-provided config entries.
+        cfg_data.update({k: v for k, v in model_cfg.items() if k in cfg_data})
+        return cls(**cfg_data)
 
-    def split_train_test(self):
-        """
-        Load the dataset from the specified file path using pandas.
-        """
-        # get seq key
-        seq_key = make_seq_key(self.data_root, self.train_folder)
-
-        if self.age_key_path != '':
-            age_key_df = pd.read_csv(self.age_key_path, index_col=0)
-            age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
-            seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
-        else:
-            # raise Warning("No age key path provided")
-            seq_key["inferred_stage_hpf_reg"] = 1
-
-        if self.pert_time_key_path != '':
-            pert_time_key = pd.read_csv(self.pert_time_key_path)
-        else:
-            pert_time_key = None
-
-        seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)
-
-        self.seq_key = seq_key
-        self.eval_indices = eval_indices
-        self.test_indices = test_indices
-        self.train_indices = train_indices
+    # def split_train_test(self):
+    #     """
+    #     Load the dataset from the specified file path using pandas.
+    #     """
+    #     # get seq key
+    #     seq_key = make_seq_key(self.data_root, self.train_folder)
+    #
+    #     if self.age_key_path != '':
+    #         age_key_df = pd.read_csv(self.age_key_path, index_col=0)
+    #         age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
+    #         seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
+    #     else:
+    #         # raise Warning("No age key path provided")
+    #         seq_key["inferred_stage_hpf_reg"] = 1
+    #
+    #     if self.pert_time_key_path != '':
+    #         pert_time_key = pd.read_csv(self.pert_time_key_path)
+    #     else:
+    #         pert_time_key = None
+    #
+    #     seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)
+    #
+    #     self.seq_key = seq_key
+    #     self.eval_indices = eval_indices
+    #     self.test_indices = test_indices
+    #     self.train_indices = train_indices
 
 

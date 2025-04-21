@@ -3,7 +3,24 @@ import os
 from glob2 import glob
 from omegaconf import OmegaConf
 from src.diffusion.ldm.util import instantiate_from_config
+import importlib
 
+def instantiate_from_config(config):
+    if not "target" in config:
+        if config == '__is_first_stage__':
+            return None
+        elif config == "__is_unconditional__":
+            return None
+        raise KeyError("Expected key `target` to instantiate.")
+    return get_obj_from_str(config["target"])(**config.get("params", dict()))
+
+
+def get_obj_from_str(string, reload=False):
+    module, cls = string.rsplit(".", 1)
+    if reload:
+        module_imp = importlib.import_module(module)
+        importlib.reload(module_imp)
+    return getattr(importlib.import_module(module, package=None), cls)
 
 def train_vae(root, cfg):
 
@@ -16,10 +33,14 @@ def train_vae(root, cfg):
         raise Exception("cfg argument dtype is not recognized")
 
     # get different components
-    lightning_config = config.pop("lightning", OmegaConf.create())
-    trainer_config = lightning_config.get("trainer", OmegaConf.create())
-    model_config = config.pop("model", OmegaConf.create())
-    data_config = config.pop("data", OmegaConf.create())
+    lightning_cfg = config.pop("lightning", OmegaConf.create())
+    trainer_cfg = lightning_cfg.get("trainer", OmegaConf.create())
+    model_cfg = config.pop("model", OmegaConf.create())
+    data_cfg = config.pop("data", OmegaConf.create())
+
+    # instantiate model config and model
+    mdl_config_str = importlib.import_module(model_cfg["config_target"])
+    mdl_cfg_class = instantiate_from_config(mdl_config_str)
 
     # training_keys = ["batch_size", "learning_rate", "n_load_workers"]  # optional training config kywords
     # training_args = dict({})
@@ -209,7 +230,7 @@ def train_vae(root, cfg):
     return output_dir
 if __name__ == "__main__":
 
-    cfg = "/Users/nick/Projects/morphseq/src/vae/test_config.yaml"
+    cfg = "/home/nick/projects/morphseq/src/vae/vae_base_config.yaml"
     train_vae(root="", cfg=cfg)
     # config = OmegaConf.load(cfg)
     #

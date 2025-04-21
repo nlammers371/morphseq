@@ -15,20 +15,14 @@ and named likewise the model. The following modules can be found in this folder:
 """
 
 from .base import BaseAE, BaseAEConfig
-from src.vae.models._Archive.metric_vae import MetricVAE, MetricVAEConfig
 from .vae import VAE, VAEConfig
 from .seq_vae import SeqVAE, SeqVAEConfig
-from src.vae.models._Archive.morph_iaf_vae import MorphIAFVAE, MorphIAFVAEConfig
 
 __all__ = [
     "BaseAE",
     "BaseAEConfig",
     "VAE",
     "VAEConfig",
-    "MetricVAE",
-    "MetricVAEConfig",
     "SeqVAE",
     "SeqVAEConfig",
-    "MorphIAFVAE",
-    "MorphIAFVAEConfig"
 ]

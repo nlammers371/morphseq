@@ -3,7 +3,7 @@ import importlib
 import torch
 import numpy as np
 from collections import abc
-from einops import rearrange
+from v import rearrange
 from functools import partial
 
 import multiprocessing as mp
