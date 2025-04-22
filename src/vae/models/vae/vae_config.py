@@ -1,12 +1,10 @@
-from pydantic.dataclasses import dataclass
-from dataclasses import asdict
-from typing_extensions import Literal
-from src.vae.auxiliary_scripts.make_training_key import make_seq_key, make_train_test_split
+from dataclasses import dataclass, fields, field
 from ..base.base_config import BaseAEConfig
-import pandas as pd
+from typing import Any, Dict, Optional
+from src.run.run_utils import deep_merge
 
 @dataclass
-class VAEConfig(BaseAEConfig):
+class VAEConfig():
     """VAE config class.
 
     Parameters:
@@ -14,22 +12,38 @@ class VAEConfig(BaseAEConfig):
         latent_dim (int): The latent space dimension. Default: None.
         reconstruction_loss (str): The reconstruction loss to use ['bce', 'mse']. Default: 'mse'
     """
-    orth_flag: bool = False
-    n_conv_layers: int = 5  # number of convolutional layers
-    n_out_channels: int = 16
-    beta: float = 1.0  # tunes the weight of the KL normalization term
-    reconstruction_loss: Literal["bce", "mse"] = "mse"
-    # data_root: str = ''
-    # train_folder: str = ''
-    # age_key_path: str = ''
-    # pert_time_key_path: str = ''
+    name: str = "VAE"
+    ddconfig: Dict[str, Any] = field(default_factory=
+                                lambda: { "latent_dim": 64,
+                                          "input_dim": (1, 288, 128),
+                                          "n_channels_out": 16,
+                                          "n_conv_layers": 5,
+                                })
+    # ── Dataset defaults (string path + kwargs) ────────────────────
+    # dataset_cls: str = "src.data.DatasetClasses.BasicDataset"
 
-    def from_cfg(cls, model_cfg: dict):
-        # Start with the default field values.
-        cfg_data = asdict(cls())
-        # Update defaults with user-provided config entries.
-        cfg_data.update({k: v for k, v in model_cfg.items() if k in cfg_data})
-        return cls(**cfg_data)
+    @classmethod
+    def from_cfg(cls, model_cfg: Dict[str, Any]) -> "ModelConfig":
+        # filter only the fields we know about
+        valid = {f.name for f in cls.__dataclass_fields__.values()}
+        clean = {k: v for k, v in model_cfg.items() if k in valid}
+
+        # 1) create a “base” instance with ALL your code‑defaults
+        inst = cls()
+
+        # 2) for each user key, merge or overwrite appropriately
+        for key, override in clean.items():
+            default = getattr(inst, key)
+
+            # If it's a dict‐default, do a deep merge
+            if isinstance(default, dict) and isinstance(override, dict):
+                merged = deep_merge(default, override)
+                setattr(inst, key, merged)
+            else:
+                setattr(inst, key, override)
+
+
+        return inst
 
     # def split_train_test(self):
     #     """
