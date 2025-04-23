@@ -1,10 +1,9 @@
 model:
   base_learning_rate: 1e-4
   target: vae.models.vae.vae_model.VAE
-  config_target: src.vae.models.vae.vae_config.VAEConfig
+  config_target: src.models.legacy_model_configs.VAEConfig
   name: "VAE"
-  params:
-    monitor: "val/rec_loss"
+  monitor: "val/rec_loss"
 #    latent_dim: 64
 #    n_conv_layers: 5
 #    n_out_channels: 16
@@ -13,9 +12,9 @@ model:
 #      params:
 #        beta: 1
 #        reconstruction_loss: "mse"
-    ddconfig:
-      input_dim: (1, 288, 128)
-      n_channels_out: 16
+  ddconfig:
+    input_dim: [1, 288, 128]
+    n_channels_out: 8
 #      n_conv_layers: 5
 #      resolution: 256
 #      in_channels: 1
@@ -26,13 +25,15 @@ model:
 #      attn_resolutions: [16,8]
 #      dropout: 0.0
 
-objective:
+  lossconfig:
+    kld_weight: 0.5
+#    target: "VAELossBasic"
 
-data:
-  target: #src.data.DatasetClasses.BasicDataset
-  num_workers: 1
-  wrap: True
-  params:
+  dataconfig:
+    target: "BasicDataset"
+    num_workers: 1
+    wrap: True
+    root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/images/"
 #    batch_size: 12
 
 #    train:

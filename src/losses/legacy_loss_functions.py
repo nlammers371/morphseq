@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class VAELossBasic(nn.Module):
 
-    def __init__(self, kl_weight=1.0, reconstuction_loss="mse"):
+    def __init__(self, kl_weight=1.0, reconstruction_loss="mse"):
         super().__init__()
 
         self.kl_weight = kl_weight
-        self.reconstruction_loss = reconstuction_loss
+        self.reconstruction_loss = reconstruction_loss
         # self.reduction = reduction
 
     def forward(self, x, recon_x, log_var, mu):

@@ -8,7 +8,6 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import DataLoader
 from pythae.data.datasets import collate_dataset_output
 
-
 class BasicDataset(datasets.ImageFolder):
 
     def __init__(self, root, return_name=False, transform=None, target_transform=None,

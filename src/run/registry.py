@@ -1,6 +1,6 @@
 import torch
 from src.losses import *
-from src.losses import vae_loss_basic
+from src.losses import legacy_loss_functions
 from src.vae.models import VAE
 
 # 1) your registry mapping names → classes

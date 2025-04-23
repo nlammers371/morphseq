@@ -2,7 +2,7 @@ from src.functions.dataset_utils import make_dynamic_rs_transform, ContrastiveLe
 import os
 from glob2 import glob
 from omegaconf import OmegaConf
-from run_utils import parse_dataset_options
+# from run_utils import parse_dataset_options
 import importlib
 
 
@@ -34,19 +34,26 @@ def train_vae(train_data_path, cfg):
     else:
         raise Exception("cfg argument dtype is not recognized")
 
+    config_full = config.copy()
     # get different components
     lightning_cfg = config.pop("lightning", OmegaConf.create())
     trainer_cfg = lightning_cfg.get("trainer", OmegaConf.create())
     model_cfg = config.pop("model", OmegaConf.create())
     data_cfg = config.pop("data", OmegaConf.create())
 
-    # instantiate model config and model
+    # instantiate config for specified model type
     target = model_cfg["config_target"]
     model_config = get_obj_from_str(target)
-    model_config = model_config.from_cfg(model_cfg=model_cfg)
+    model_config = model_config.from_cfg(cfg=config_full)
+
+    # initialize loss
+    loss_mdl = model_config.lossconfig.create_module()
 
     # parse dataset related options and merge with defaults as needed
-    # initialize dataset
+    data_config = model_config.dataconfig
+    Dataset = data_config.create_dataset()
+
+
     data_config = parse_dataset_options(model_config, data_cfg)
     DataCls = data_config.target
     Dataset = DataCls(root=os.path.join(train_data_path, "images"), transform=data_config.transform)
