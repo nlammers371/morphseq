@@ -4,6 +4,9 @@ from glob2 import glob
 from omegaconf import OmegaConf
 # from run_utils import parse_dataset_options
 import importlib
+from src.models.factories import build_from_config
+from src.lightning.pl_wrappers import LitModel
+import pytorch_lightning as pl
 
 
 #########################
@@ -47,18 +50,29 @@ def train_vae(train_data_path, cfg):
     model_config = model_config.from_cfg(cfg=config_full)
 
     # initialize loss
-    loss_mdl = model_config.lossconfig.create_module()
+
 
     # parse dataset related options and merge with defaults as needed
     data_config = model_config.dataconfig
-    Dataset = data_config.create_dataset()
+    # get train/test/eval indices
+    data_config.split_train_test()
 
+    # initialize model
+    model = build_from_config(model_config)
+    loss_fn = model_config.lossconfig.create_module() # or model.compute_loss
 
-    data_config = parse_dataset_options(model_config, data_cfg)
-    DataCls = data_config.target
-    Dataset = DataCls(root=os.path.join(train_data_path, "images"), transform=data_config.transform)
-    # ds = DatasetCls(**model_config.dataset_kwargs)
+    # 2) wrap it
+    lit = LitModel(
+        model=model,
+        loss_fn=loss_fn,
+        data_cfg=data_cfg,
+        lr=model_config.base_learning_rate,
+        batch_key="data",
+    )
 
+    # 3) train with Lightning
+    trainer = pl.Trainer(gpus=1, max_epochs=10)
+    trainer.fit(lit)
     # initialize loss function
 
     # initialize model

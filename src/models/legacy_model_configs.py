@@ -7,14 +7,7 @@ from omegaconf import OmegaConf, DictConfig
 # from src.losses.legacy_loss_functions import VAELossBasic
 from src.losses.loss_configs import BasicLoss
 from src.data.dataset_configs import BaseDataConfig
-
-@dataclass
-class LegacyArchitecture:
-    latent_dim: int = 64
-    n_channels_out: int = 16
-    n_conv_layers: int = 5
-    input_dim: Tuple[int, int, int] = (1, 288, 128)
-
+from src.models.model_components.legacy_components import LegacyArchitecture
 
 @dataclass
 class VAEConfig:
@@ -28,7 +21,7 @@ class VAEConfig:
     ddconfig: LegacyArchitecture = field(default_factory=LegacyArchitecture)
     lossconfig: BasicLoss = field(default_factory=BasicLoss)
     dataconfig: BaseDataConfig = field(default_factory=BaseDataConfig)
-    name: str = "VAE"
+    name: Literal["VAE"] = "VAE"
     objective: Literal['vae_loss_basic'] = 'vae_loss_basic'
     base_learning_rate: float = 1e-4
 
@@ -47,6 +40,7 @@ class VAEConfig:
 
         # 4) re‐instantiate & validate in one shot
         return cls(**merged)
+
 
 class SeqVAEConfig(BaseModel):
     model_type:      Literal["SeqVAE"] = "SeqVAE"

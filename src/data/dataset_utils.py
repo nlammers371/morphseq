@@ -6,50 +6,20 @@ import pandas as pd
 from src.functions.utilities import path_leaf
 
 
-def split_train_test(self):
-    """
-    Load the dataset from the specified file path using pandas.
-    """
-    # get seq key
-    seq_key = make_seq_key(self.data_root, self.train_folder)
 
-    if self.age_key_path != '':
-        age_key_df = pd.read_csv(self.age_key_path, index_col=0)
-        age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
-        seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
-    else:
-        # raise Warning("No age key path provided")
-        seq_key["inferred_stage_hpf_reg"] = 1
+def make_seq_key(root):  # , time_window=3, self_target=0.5, other_age_penalty=2):
 
-    if self.pert_time_key_path != '':
-        pert_time_key = pd.read_csv(self.pert_time_key_path)
-    else:
-        pert_time_key = None
-
-    seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)
-
-    self.seq_key = seq_key
-    self.eval_indices = eval_indices
-    self.test_indices = test_indices
-    self.train_indices = train_indices
-
-
-def make_seq_key(training_path):  # , time_window=3, self_target=0.5, other_age_penalty=2):
-
-    # metadata_path = os.path.join(root, "metadata", '')
-    # training_path = os.path.join(root, "training_data", train_name, '')
-
-    # instance_path = os.path.join(training_path, instance_name)
-    mode_vec = sorted(glob.glob(training_path + "*"))
+    # instance_path = os.path.join(root, instance_name)
+    mode_vec = sorted(glob.glob(os.path.join(root, "images", "") + "*"))
 
     # read in metadata database
-    embryo_metadata_df = pd.read_csv(os.path.join(training_path, "embryo_metadata_df_train.csv"))
+    embryo_metadata_df = pd.read_csv(os.path.join(root, "metadata", "embryo_metadata_df_train.csv"))
     if "inferred_stage_hpf" in embryo_metadata_df.columns:
         seq_key = embryo_metadata_df.loc[:,
                   ["snip_id", "experiment_id", "experiment_date", "inferred_stage_hpf", "short_pert_name"]]
         seq_key = seq_key.rename(columns={"inferred_stage_hpf": "stage_hpf"})
     else:
-        print("Warning: no age inference info found. Using default stage estimages.")
+        print("Warning: no age inference info found. Using default stage estimates.")
         seq_key = embryo_metadata_df.loc[:,
                   ["snip_id", "experiment_id", "experiment_date", "predicted_stage_hpf", "short_pert_name"]]
         seq_key = seq_key.rename(columns={"predicted_stage_hpf": "stage_hpf"})
@@ -60,7 +30,7 @@ def make_seq_key(training_path):  # , time_window=3, self_target=0.5, other_age_
     image_path_list = []
     mode_list = []
     for mode in mode_vec:
-        lb_folder_list = glob.glob(os.path.join(training_path, mode, '') + "*")
+        lb_folder_list = glob.glob(os.path.join(root, "images", mode, '') + "*")
         for subdir in lb_folder_list:
             image_list_temp = glob.glob(os.path.join(subdir, '') + "*.jpg")
             image_names = [path_leaf(path)[:-4] for path in image_list_temp]
@@ -98,26 +68,15 @@ def make_seq_key(training_path):  # , time_window=3, self_target=0.5, other_age_
 #########
 # STEP 2
 
-def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
-                          frac_to_use=1.0, test_dates=None, test_perturbations=None,
-                          pert_time_key=None, overwrite_flag=False):
+def make_train_test_split(seq_key, r_seed=371, train_eval_test=None, frac_to_use=1.0, test_dates=None, 
+                          test_perturbations=None, pert_time_key=None):
+    
     np.random.seed(r_seed)
-
-    # if test_dates is None:
-    #     test_dates = ["20240418"]
-    # get list of training files
-    # image_list = seq_key["image_path"].to_numpy().tolist()
-    # snip_id_list = [path_leaf(path) for path in image_list]
-
-    # randomly partition into train, eval, and test
+    
     # this needs to be done at the level of embryos, not images
     if train_eval_test == None:
         train_eval_test = [0.75, 0.15, 0.1]
     train_eval_test = (np.asarray(train_eval_test) * frac_to_use).tolist()
-
-    # snip_id_vec = embryo_metadata_df["snip_id"].values
-    # good_snip_indices = np.where(embryo_metadata_df["use_embryo_flag"].values == True)[0]
-    # embryo_id_index = np.unique(seq_key["embryo_id"].values)
 
     # check to see if there are any experiment dates or perturb ation types that should be left out of training (kept in test)
     test_constraints_flag = False
@@ -136,27 +95,15 @@ def make_train_test_split(seq_key, r_seed=371, train_eval_test=None,
                                   for pert in emb_key["short_pert_name"].tolist()])
     else:
         min_age_vec = np.zeros(emb_id_vec.shape)
-        max_age_vec = np.zeros(emb_id_vec.shape) + np.Inf
+        max_age_vec = np.zeros(emb_id_vec.shape) + np.inf
 
     if test_dates is not None:
         test_constraints_flag = True
         min_age_vec[np.isin(emb_key.loc[:, "experiment_date"].astype(str).to_numpy(), np.asarray(test_dates))] = 200
-        # eid_date_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "experiment_date"].astype(str) in test_dates]
-        # eids_date_test = np.unique(eid_date_list).tolist()
-        # if test_ids is not None:
-        #     test_ids += eids_date_test
-        # else:
-        #     test_ids = eids_date_test
 
     if test_perturbations is not None:
         test_constraints_flag = True
         min_age_vec[np.isin(emb_key[:, "short_pert_names"].to_numpy(), test_perturbations)] = np.inf
-        # eid_pert_list = [seq_key.loc[e, "embryo_id"] for e in seq_key.index if seq_key.loc[e, "short_pert_name"] in test_perturbations]
-        # eids_pert_test = np.unique(eid_pert_list).tolist()
-        # if test_ids is not None:
-        #     test_ids += eids_pert_test
-        # else:
-        #     test_ids = eids_pert_test
 
     # shuffle and filter
     embryo_id_index_shuffle = np.random.choice(emb_id_vec, len(emb_id_vec), replace=False)

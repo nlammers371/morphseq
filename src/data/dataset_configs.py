@@ -1,15 +1,20 @@
 from torch.utils.data import Dataset
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import Literal, Type, Callable, Any, Dict
-from importlib import import_module
+from typing import Literal, List, Type, Callable, Any, Dict
+from src.data.dataset_utils import make_seq_key, make_train_test_split
 from src.data.data_transforms import make_dynamic_rs_transform
 from src.data.dataset_classes import BasicDataset
 import os
 import numpy as np
+import pandas as pd
+from pydantic   import ConfigDict
 
-@dataclass
+@dataclass# (config_wrapper=ConfigDict(arbitrary_types_allowed=True))
 class BaseDataConfig:
+
+    seq_key: List[Dict[str,Any]] = field(default_factory=list)
+
     batch_size:    int                     = 64
     num_workers:   int                     = 4
     shuffle:       bool                    = True
@@ -25,36 +30,58 @@ class BaseDataConfig:
     transform_name:   Literal["dynamic_rs"] = "dynamic_rs"
     transform_kwargs: Dict[str,Any]                = field(default_factory=dict)
 
-    ##########
-    # Paths to metadata
-
-    # an empty 1-D integer array
-    age_key_path: np.ndarray = field(
-        default_factory=lambda: np.array([], dtype=str)
-    )
-    # an empty 1-D string array (NumPy will pick a Unicode dtype)
-    pert_time_key_path: np.ndarray = field(
-        default_factory=lambda: np.array([], dtype=str)
-    )
-
-    # indices for sampling
-    train_indices: np.ndarray = field(
-        default_factory=lambda: np.array([], dtype=int)
-    )
-    # an empty 1-D string array (NumPy will pick a Unicode dtype)
-    eval_indices: np.ndarray = field(
-        default_factory=lambda: np.array([], dtype=int)
-    )
-
-    test_indices: np.ndarray = field(
-        default_factory=lambda: np.array([], dtype=int)
-    )
-
+    # … same primitives …
+    train_indices: List[int] = field(default_factory=list)
+    eval_indices: List[int] = field(default_factory=list)
+    test_indices: List[int] = field(default_factory=list)
 
     def __post_init__(self):
-        up_folder = os.path.dirname(self.root)
-        self.age_key_path = os.path.join(up_folder, "metadata", "age_key.csv")
-        self.pert_time_key_path = os.path.join(up_folder, "metadata", "pert_time_key.csv")
+        raw = self.seq_key
+        self.seq_key = pd.DataFrame(raw)
+        # now convert them to arrays
+        self.train_indices = np.array(self.train_indices, dtype=int)
+        self.eval_indices = np.array(self.eval_indices, dtype=int)
+        self.test_indices = np.array(self.test_indices, dtype=int)
+
+    @property
+    def image_path(self) -> str:
+        return os.path.join(self.root, "images")
+
+    @property
+    def age_key_path(self) -> str:
+        return os.path.join(self.root, "metadata", "age_key.csv")
+
+    @property
+    def pert_time_key_path(self) -> str:
+        return os.path.join(self.root, "metadata", "pert_time_key.csv")
+
+
+    def split_train_test(self):
+        """
+        Load the dataset from the specified file path using pandas.
+        """
+        # get seq key
+        seq_key = make_seq_key(self.root)
+
+        if os.path.isfile(self.age_key_path):
+            age_key_df = pd.read_csv(self.age_key_path)
+            age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
+            seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
+        else:
+            # raise Warning("No age key path provided")
+            seq_key["inferred_stage_hpf_reg"] = 1
+
+        if os.path.isfile(self.pert_time_key_path):
+            pert_time_key = pd.read_csv(self.pert_time_key_path)
+        else:
+            pert_time_key = None
+
+        seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)
+
+        self.seq_key = seq_key
+        self.eval_indices = eval_indices
+        self.test_indices = test_indices
+        self.train_indices = train_indices
 
 
     def create_dataset(self):
@@ -76,7 +103,7 @@ class BaseDataConfig:
 
         # instantiate your dataset with both fixed and configurable args
         return ds_cls(
-            root=self.root,
+            root=self.image_path,
             transform=transform,
             **self.target_kwargs
         )
