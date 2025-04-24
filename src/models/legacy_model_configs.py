@@ -7,7 +7,7 @@ from omegaconf import OmegaConf, DictConfig
 # from src.losses.legacy_loss_functions import VAELossBasic
 from src.losses.loss_configs import BasicLoss
 from src.data.dataset_configs import BaseDataConfig
-from src.models.model_components.legacy_components import LegacyArchitecture
+from src.models.model_components.arch_configs import LegacyArchitecture, SplitArchitecture
 from src.lightning.train_config import LitTrainConfig
 
 @dataclass
@@ -46,10 +46,32 @@ class VAEConfig:
         return cls(**merged)
 
 
-class SeqVAEConfig(BaseModel):
-    model_type:      Literal["SeqVAE"] = "SeqVAE"
-    # encoder:         EncoderConfig
-    # decoder:         DecoderConfig
-    # sequence_length: int = Field(..., gt=1)
-    objective:       Literal["seq_vae_loss"] = "seq_vae_loss"
+@dataclass
+class morphVAEConfig:
+
+    ddconfig: SplitArchitecture = field(default_factory=LegacyArchitecture) # Done
+    lossconfig: BasicLoss = field(default_factory=BasicLoss)
+    dataconfig: BaseDataConfig = field(default_factory=BaseDataConfig)
+    trainconfig: LitTrainConfig = field(default_factory=LitTrainConfig)
+
+    name: Literal["VAE"] = "VAE"
+    # objective: Literal['vae_loss_basic'] = 'vae_loss_basic'
+    # base_learning_rate: float = 1e-4
+
+    @classmethod
+    def from_cfg(cls, cfg):
+        # 1) pull in the raw user dict (OmegaConf or plain dict)
+        user_model = cfg.pop("model", {})
+        if isinstance(user_model, DictConfig):
+            user_model = OmegaConf.to_container(user_model, resolve=True)
+        user_model = prune_empty(user_model)
+        # 2) build a default instance and dump it to a plain dict
+        default_inst = cls()
+        base = asdict(default_inst)
+
+        # 3) deep‐merge user values on top of base
+        merged = deep_merge(base, user_model)
+
+        # 4) re‐instantiate & validate in one shot
+        return cls(**merged)
 

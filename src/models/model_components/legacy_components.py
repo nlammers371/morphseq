@@ -9,16 +9,8 @@ from typing import Tuple
 from pydantic.dataclasses import dataclass
 from src.functions.utilities import conv_output_shape
 from scipy.stats import ortho_group
+from src.models.model_components.arch_configs import LegacyArchitecture
 
-@dataclass
-class LegacyArchitecture:
-    latent_dim: int = 64
-    n_out_channels: int = 16
-    n_conv_layers: int = 5
-    orth_flag: bool = False
-    kernel_size: int = 4
-    stride: int = 2
-    input_dim: Tuple[int, int, int] = (1, 288, 128)
 
 # Define an encoder class with tuneable variables for the number of convolutional layers ad the depth of the conv kernels
 class EncoderConvVAE(nn.Module):
