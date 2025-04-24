@@ -1,4 +1,4 @@
-from src.vae.auxiliary_scripts.assess_vae_results import assess_vae_results
+from src._Archive.vae.auxiliary_scripts.assess_vae_results import assess_vae_results
 
 
 # set key path parameters

@@ -1,0 +1,21 @@
+model:
+  config_target: src.models.legacy_model_configs.morphVAEConfig
+
+  ddconfig:
+    input_dim: [1, 288, 128]
+    n_out_channels: 16
+
+  lossconfig:
+    kld_weight: 1.0
+
+  dataconfig:
+    target: "BasicDataset"
+    num_workers: 8
+    wrap: True
+    root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+
+  trainconfig:
+    benchmark: True
+    accumulate_grad_batches: 2
+    max_epochs: 10
+

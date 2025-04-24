@@ -9,11 +9,8 @@ from src.functions.utilities import path_leaf
 
 def make_seq_key(root):  # , time_window=3, self_target=0.5, other_age_penalty=2):
 
-    # instance_path = os.path.join(root, instance_name)
-    mode_vec = sorted(glob.glob(os.path.join(root, "images", "") + "*"))
-
     # read in metadata database
-    embryo_metadata_df = pd.read_csv(os.path.join(root, "metadata", "embryo_metadata_df_train.csv"))
+    embryo_metadata_df = pd.read_csv(os.path.join(root, "metadata", "embryo_metadata_df_train.csv"), low_memory=False)
     if "inferred_stage_hpf" in embryo_metadata_df.columns:
         seq_key = embryo_metadata_df.loc[:,
                   ["snip_id", "experiment_id", "experiment_date", "inferred_stage_hpf", "short_pert_name"]]
@@ -28,19 +25,18 @@ def make_seq_key(root):  # , time_window=3, self_target=0.5, other_age_penalty=2
     # which images are in the present one (specified by "train name")
     image_list = []
     image_path_list = []
-    mode_list = []
-    for mode in mode_vec:
-        lb_folder_list = glob.glob(os.path.join(root, "images", mode, '') + "*")
-        for subdir in lb_folder_list:
-            image_list_temp = glob.glob(os.path.join(subdir, '') + "*.jpg")
-            image_names = [path_leaf(path)[:-4] for path in image_list_temp]
-            image_list += image_names
-            image_path_list += image_list_temp
-            mode_list += [mode] * len(image_names)
+    lb_folder_list = glob.glob(os.path.join(root, "images", '') + "*")
+    subfolder_list = []
+    for subdir in lb_folder_list:
+        image_list_temp = glob.glob(os.path.join(subdir, '') + "*.jpg")
+        image_names = [path_leaf(path)[:-4] for path in image_list_temp]
+        image_list += image_names
+        image_path_list += image_list_temp
+        subfolder_list += [subdir] * len(image_list_temp)
 
     # make temporary dataframe for merge purposes
     temp_df = pd.DataFrame(np.asarray(image_list), columns=["snip_id"])
-    temp_df["image_folder"] = mode_list
+    # temp_df["image_folder"] = mode_list
     temp_df["train_cat"] = ""
     temp_df["image_path"] = image_path_list
     seq_key = seq_key.merge(temp_df, how="inner", on="snip_id")

@@ -1,5 +1,4 @@
-import os
-from src.vae.auxiliary_scripts.train_vae import train_vae
+from src._Archive.vae.auxiliary_scripts.train_vae import train_vae
 import multiprocessing
 
 #######################

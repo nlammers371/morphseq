@@ -44,15 +44,7 @@ class LitModel(pl.LightningModule):
         if hasattr(self.model, "compute_loss"):
             loss, *metrics = self.model.compute_loss(x, out)
         else:
-            # 2) otherwise assume out is a ModelOutput‐like object
-            #    and loss_fn expects (recon_x, x, log_var, mu, z)
-            loss, *metrics = self.loss_fn(
-                out.recon_x,
-                x,
-                out.log_covariance,
-                out.embedding,
-                getattr(out, "z", None),
-            )
+            loss, *metrics = self.loss_fn(out)
 
         # log the main loss
         self.log(f"{stage}/loss", loss, prog_bar=(stage=="train"))

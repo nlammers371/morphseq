@@ -1,0 +1,25 @@
+model:
+  base_learning_rate: 1e-4
+  target: vae.models.vae.vae_model.VAE
+  config_target: src.models.legacy_model_configs.VAEConfig
+
+  ddconfig:
+    input_dim: [1, 288, 128]
+    n_out_channels: 8
+
+
+  lossconfig:
+    kld_weight: 0.5
+#    target: "VAELossBasic"
+
+  dataconfig:
+    target: "BasicDataset"
+    num_workers: 1
+    wrap: True
+    root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+
+trainer:
+  benchmark: True
+  accumulate_grad_batches: 2
+  max_epochs: 10
+

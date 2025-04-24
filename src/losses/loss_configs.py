@@ -7,7 +7,7 @@ class BasicLoss:
     target_path: Literal[
         "src.losses.legacy_loss_functions.VAELossBasic"
     ] = "src.losses.legacy_loss_functions.VAELossBasic"
-    kl_weight: float = 1.0
+    kld_weight: float = 1.0
     reconstruction_loss: str = "mse"
 
     def create_module(self):
@@ -17,7 +17,7 @@ class BasicLoss:
         loss_cls  = getattr(mod, class_name)
         # instantiate with your validated kwargs
         return loss_cls(
-            kl_weight=self.kl_weight,
+            kld_weight=self.kld_weight,
             reconstruction_loss=self.reconstruction_loss,
         )
 

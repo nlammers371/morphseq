@@ -1,6 +1,6 @@
 # This script trains a generic VAE on old and new sets. Will be used primarily to sync developmental staging
 import os
-from src.vae.auxiliary_scripts.train_vae import train_vae
+from src._Archive.vae.auxiliary_scripts.train_vae import train_vae
 
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 train_folder = "20230204_ds_v1"

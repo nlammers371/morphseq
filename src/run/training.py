@@ -2,11 +2,12 @@ from src.functions.dataset_utils import make_dynamic_rs_transform, ContrastiveLe
 import os
 from glob2 import glob
 from omegaconf import OmegaConf
-# from run_utils import parse_dataset_options
+from pytorch_lightning.loggers import TensorBoardLogger
 import importlib
 from src.models.factories import build_from_config
 from src.lightning.pl_wrappers import LitModel
 import pytorch_lightning as pl
+from src.lightning.train_config import LitTrainConfig
 
 
 #########################
@@ -39,18 +40,16 @@ def train_vae(train_data_path, cfg):
 
     config_full = config.copy()
     # get different components
-    lightning_cfg = config.pop("lightning", OmegaConf.create())
-    trainer_cfg = lightning_cfg.get("trainer", OmegaConf.create())
     model_cfg = config.pop("model", OmegaConf.create())
-    data_cfg = config.pop("data", OmegaConf.create())
+
+    # # initialize training config
+    # train_config = LitTrainConfig()
+    # train_config = train_config.from_cfg(cfg=config_full)
 
     # instantiate config for specified model type
     target = model_cfg["config_target"]
     model_config = get_obj_from_str(target)
     model_config = model_config.from_cfg(cfg=config_full)
-
-    # initialize loss
-
 
     # parse dataset related options and merge with defaults as needed
     data_config = model_config.dataconfig
@@ -61,102 +60,40 @@ def train_vae(train_data_path, cfg):
     model = build_from_config(model_config)
     loss_fn = model_config.lossconfig.create_module() # or model.compute_loss
 
+    train_config = model_config.trainconfig
     # 2) wrap it
     lit = LitModel(
         model=model,
         loss_fn=loss_fn,
-        data_cfg=data_cfg,
-        lr=model_config.base_learning_rate,
+        data_cfg=data_config,
+        lr=train_config.learning_rate,
         batch_key="data",
     )
 
+    # make output directory
+    run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}"
+    save_dir = os.path.join(data_config.root, "output", "")
+
+    # 3) create your logger with a human‐readable version label
+    logger = TensorBoardLogger(
+        save_dir=save_dir,  # top-level folder
+        name=run_name,  # e.g. "VAE_ld64"
+        version=f"e{train_config.max_epochs}"  # e.g. "e50"
+    )
+
     # 3) train with Lightning
-    trainer = pl.Trainer(gpus=1, max_epochs=10)
+    trainer = pl.Trainer(logger=logger, accelerator="gpu", devices=1, max_epochs=train_config.max_epochs)
     trainer.fit(lit)
-    # initialize loss function
 
-    # initialize model
-    print("check")
-    # train_dir = os.path.join(root, "training_data", train_folder)
-    #
-    # # make output directory to save training results
-    # if train_suffix == '':
-    #     model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}'  # + f'gamma{int(model_config.gamme):04}_' + f'temp{int(model_config.temperature):04}'
-    # else:
-    #     model_name = model_type + f'_z{model_config.latent_dim:02}_' + f'ne{n_epochs:03}_' + train_suffix  # + f'gamma{int(model_config.gamma):04}_' + f'temp{int(model_config.temperature):04}'  + '_'
-    # output_dir = os.path.join(train_dir, model_name)
-
-    # initialize training configuration
-    # train_config = BaseTrainerConfig(
-    #     output_dir=output_dir,
-    #     num_epochs=n_epochs,
-    #     **training_args
-    # )
-
-    # get train and test indices
-    train_idx = model_config.train_indices
-    eval_idx = model_config.eval_indices
-
-    train_config.train_indices = train_idx
-    train_config.eval_indices = eval_idx
-
-
-
-
-
-    # Initialize encoder and decoder
-    encoder = Encoder_Conv_VAE(model_config)  # these are custom classes I wrote for this use case
-    decoder = Decoder_Conv_VAE(encoder)
-
-    # initialize model
-    # if model_type == "MetricVAE":
-    #     model = MetricVAE(
-    #         model_config=model_config,
-    #         encoder=encoder,
-    #         decoder=decoder
-    #     )
-    if model_type == "VAE":
-        model = VAE(
-            model_config=model_config,
-            encoder=encoder,
-            decoder=decoder
-        )
-    elif model_type == "SeqVAE":
-        model = SeqVAE(
-            model_config=model_config,
-            encoder=encoder,
-            decoder=decoder
-        )
-    elif model_type == "MorphIAFVAE":
-        model = MorphIAFVAE(
-            model_config=model_config,
-            encoder=encoder,
-            decoder=decoder
-        )
-    else:
-        raise Exception("Unrecognized model type: " + model_type)
-
-    # Initialize training pipeliene
-    pipeline = TrainingPipeline(
-        training_config=train_config,
-        model=model
-    )
-
-    # inputs = next(iter(test_loader))
-
-    # Run pipeline
-    pipeline(
-        train_data=train_dataset,  # here we use the custom train dataset
-        eval_data=train_dataset  # same dataset, but we will use different image indices
-    )
-
-    return output_dir
+    return {}
 
 
 if __name__ == "__main__":
     data_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
-    cfg = "/home/nick/projects/morphseq/src/vae/vae_base_config.yaml"
+    # cfg = "/home/nick/projects/morphseq/src/vae/vae_base_config.yaml"
+    cfg = "/home/nick/projects/morphseq/src/config_files/vae_test_run.yaml"
     train_vae(train_data_path=data_path, cfg=cfg)
+
     # config = OmegaConf.load(cfg)
     #
     # lightning_config = config.pop("lightning", OmegaConf.create())

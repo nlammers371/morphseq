@@ -45,6 +45,7 @@ class VAE(nn.Module):
             logvar=logvar,
             recon_x=recon_x,
             z=z,
+            x=x.detach()
         )
         return output
 

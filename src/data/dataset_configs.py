@@ -53,7 +53,7 @@ class BaseDataConfig:
 
     @property
     def pert_time_key_path(self) -> str:
-        return os.path.join(self.root, "metadata", "pert_time_key.csv")
+        return os.path.join(self.root, "metadata", "perturbation_train_key.csv")
 
 
     def split_train_test(self):
@@ -68,12 +68,12 @@ class BaseDataConfig:
             age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
             seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
         else:
-            # raise Warning("No age key path provided")
-            seq_key["inferred_stage_hpf_reg"] = 1
+            raise Exception("Stage key provided!")
 
         if os.path.isfile(self.pert_time_key_path):
             pert_time_key = pd.read_csv(self.pert_time_key_path)
         else:
+            # raise Exception("No perturbation-time key provided!")
             pert_time_key = None
 
         seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)

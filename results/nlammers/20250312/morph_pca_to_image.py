@@ -7,7 +7,7 @@ sys.path.insert(0, code_root)
 # import glob as glob
 # from src.functions.dataset_utils import *
 # import os
-from src.vae.models.auto_model import AutoModel
+from src._Archive.vae.models.auto_model import AutoModel
 # import umap.umap_ as umap
 # import numpy as np
 # from sklearn.preprocessing import StandardScaler
@@ -21,11 +21,9 @@ from src.vae.models.auto_model import AutoModel
 # from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pandas as pd
 from glob import glob
-import joblib 
 from tqdm import tqdm
 from sklearn.decomposition import PCA
 import numpy as np
-from src.vae.auxiliary_scripts.assess_vae_results import *
 import torch
 import skimage.io as io
 

@@ -5,16 +5,20 @@ import torch.nn.functional as F
 
 class VAELossBasic(nn.Module):
 
-    def __init__(self, kl_weight=1.0, reconstruction_loss="mse"):
+    def __init__(self, kld_weight=1.0, reconstruction_loss="mse"):
         super().__init__()
 
-        self.kl_weight = kl_weight
+        self.kld_weight = kld_weight
         self.reconstruction_loss = reconstruction_loss
-        # self.reduction = reduction
 
-    def forward(self, x, recon_x, log_var, mu):
+    def forward(self, model_output):
 
-        if self.model_config.reconstruction_loss == "mse":
+        x = model_output.x
+        recon_x = model_output.recon_x
+        logvar = model_output.logvar
+        mu = model_output.mu
+
+        if self.reconstruction_loss == "mse":
             recon_loss = (
                 0.5
                 * F.mse_loss(
@@ -24,7 +28,7 @@ class VAELossBasic(nn.Module):
                 ).sum(dim=-1)
             )
 
-        elif self.model_config.reconstruction_loss == "bce":
+        elif self.reconstruction_loss == "bce":
 
             recon_loss = F.binary_cross_entropy(
                 recon_x.reshape(x.shape[0], -1),
@@ -32,6 +36,6 @@ class VAELossBasic(nn.Module):
                 reduction="none",
             ).sum(dim=-1)
 
-        KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=-1)
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
 
-        return recon_loss.mean(dim=0) + self.beta*KLD.mean(dim=0),  recon_loss.mean(dim=0), KLD.mean(dim=0)
+        return recon_loss.mean(dim=0) + self.kld_weight*KLD.mean(dim=0),  recon_loss.mean(dim=0), KLD.mean(dim=0)
