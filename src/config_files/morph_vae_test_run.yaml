@@ -6,16 +6,19 @@ model:
     n_out_channels: 16
 
   lossconfig:
-    kld_weight: 1.0
+    kld_weight: 1
+    metric_weight: 10
+    temperature: .1
 
   dataconfig:
     target: "BasicDataset"
     num_workers: 8
+    batch_size: 512
     wrap: True
     root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
 
   trainconfig:
     benchmark: True
     accumulate_grad_batches: 2
-    max_epochs: 10
+    max_epochs: 250
 

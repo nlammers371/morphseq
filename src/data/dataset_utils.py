@@ -6,6 +6,22 @@ import pandas as pd
 from src.functions.utilities import path_leaf
 
 
+def smart_read_csv(path: str, **read_csv_kwargs) -> pd.DataFrame:
+    # 1) peek at the first header row
+    with open(path, 'r') as f:
+        first_line = f.readline()
+    header_cells = first_line.strip().split(',')
+
+    # 2) if the first cell is empty (or literally 'Unnamed: 0' or 'index'),
+    #    assume pandas did write out the index
+    first = header_cells[0].strip().lower()
+    if first in ("", "unnamed: 0", "index"):
+        # treat 1st column as the index
+        return pd.read_csv(path, index_col=0, **read_csv_kwargs)
+    else:
+        return pd.read_csv(path, **read_csv_kwargs)
+
+
 
 def make_seq_key(root):  # , time_window=3, self_target=0.5, other_age_penalty=2):
 
