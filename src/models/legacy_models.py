@@ -58,7 +58,7 @@ class VAE(nn.Module):
 
 
 class morphVAE(nn.Module):
-    """VAE that incporporates split latent space and metric learning."""
+    """VAE that incorporates split latent space and metric learning."""
 
     def __init__(
         self,

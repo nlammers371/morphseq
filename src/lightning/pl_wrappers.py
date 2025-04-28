@@ -1,9 +1,12 @@
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Dict
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.nn import functional as F
+from torch import nn
+from src.models.ldm_models import AutoencoderKLModel
+
 
 class LitModel(pl.LightningModule):
     def __init__(
@@ -126,3 +129,87 @@ class LitModel(pl.LightningModule):
             "mu": mu.cpu(),  # (B, D)
             "log_var": log_var.cpu(),  # (B, D)
         }
+
+
+
+
+
+class LitAutoencoderKL(pl.LightningModule):
+    """
+    Lightning wrapper that handles training, logging, checkpoints.
+    """
+    def __init__(
+        self,
+        model: AutoencoderKLModel,
+        loss_fn: nn.Module,
+        learning_rate: float,
+        monitor: Optional[str] = None,
+    ):
+        super().__init__()
+        # capture hyperparameters except large objects
+        self.save_hyperparameters(ignore=["model", "loss_fn"])
+        self.model = model
+        self.loss_fn = loss_fn
+        self.learning_rate = learning_rate
+        if monitor:
+            self.monitor = monitor
+
+    def forward(self, batch: Dict[str, Any]) -> Any:
+        x = self.model.get_input(batch)
+        return self.model(x)
+
+    def training_step(self, batch: Dict[str, Any], batch_idx: int, optimizer_idx: int = 0):
+        x = self.model.get_input(batch)
+        recon, posterior = self.model(x)
+        loss, logs = self.loss_fn(x, recon, posterior,
+                                  optimizer_idx, self.global_step,
+                                  last_layer=self.model.get_last_layer(),
+                                  split="train")
+        # log main and any extra
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log_dict(logs, on_step=True, on_epoch=False)
+        return loss
+
+    def validation_step(self, batch: Dict[str, Any], batch_idx: int):
+        x = self.model.get_input(batch)
+        recon, posterior = self.model(x)
+        loss, logs = self.loss_fn(x, recon, posterior,
+                                  0, self.global_step,
+                                  last_layer=self.model.get_last_layer(),
+                                  split="val")
+        self.log("val/loss", loss, on_step=False, on_epoch=True)
+        self.log_dict(logs)
+
+    def configure_optimizers(self):
+        lr = self.learning_rate
+        # separate optimizers as in original
+        opt_ae = torch.optim.Adam(
+            list(self.model.encoder.parameters()) +
+            list(self.model.decoder.parameters()) +
+            list(self.model.quant_conv.parameters()) +
+            list(self.model.post_quant_conv.parameters()),
+            lr=lr, betas=(0.5, 0.9)
+        )
+        opt_disc = torch.optim.Adam(
+            self.loss_fn.discriminator.parameters(),
+            lr=lr, betas=(0.5, 0.9)
+        )
+        return [opt_ae, opt_disc], []
+
+    @torch.no_grad()
+    def log_images(self, batch: Dict[str, Any], only_inputs: bool = False) -> None:
+        # example of logging images at epoch end
+        x = self.model.get_input(batch).to(self.device)
+        logs = {}
+        logs["inputs"] = x
+        if not only_inputs:
+            recon, posterior = self.model(x)
+            # optionally colorize here
+            logs["reconstructions"] = recon
+            logs["samples"] = self.model.decode(posterior.sample())
+        for k, v in logs.items():
+            # log image grids
+            self.logger.experiment.add_images(
+                f"{k}/{self.current_epoch}", v, self.current_epoch
+            )
+        return logs
