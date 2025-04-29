@@ -7,7 +7,7 @@ import importlib
 from src.models.factories import build_from_config
 from src.lightning.pl_wrappers import LitModel
 import pytorch_lightning as pl
-from src.run.run_utils import initialize_model, pick_devices
+from src.run.run_utils import initialize_model, initialize_ldm_model ,pick_devices
 from src.lightning.callbacks import SaveRunMetadata
 import torch
 
@@ -68,7 +68,7 @@ def train_ldm_ae(cfg, gpus: int | None = None):
     else:
         raise Exception("cfg argument dtype is not recognized")
 
-    model, model_config, data_config, loss_fn, train_config = initialize_model(config)
+    model, model_config, data_config, loss_fn, train_config = initialize_ldm_model(config)
 
     # 2) wrap it
     lit = LitModel(
@@ -103,8 +103,8 @@ def train_ldm_ae(cfg, gpus: int | None = None):
 
 
 if __name__ == "__main__":
-    cfg = "/home/nick/projects/morphseq/src/config_files/morph_vae_test_run.yaml"
-    train_vae(cfg=cfg)
+    cfg = "/home/nick/projects/morphseq/src/config_files/ldm_ae/autoencoder_kl_8x8x64_nl.yaml"
+    train_ldm_ae(cfg=cfg)
 
 
 

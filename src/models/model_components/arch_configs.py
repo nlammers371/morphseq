@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 import torch
@@ -6,6 +6,7 @@ import math
 
 @dataclass
 class LegacyArchitecture:
+
     latent_dim: int = 64
 
     n_out_channels: int = 16
@@ -17,6 +18,49 @@ class LegacyArchitecture:
 
 @dataclass
 class SplitArchitecture(LegacyArchitecture):
+
+    frac_nuisance_latents: float = 0.05
+
+    @property
+    def latent_dim_bio(self) -> int:
+        # at least 1, rounding up the nuisance count
+        bio = self.latent_dim - math.ceil(self.frac_nuisance_latents * self.latent_dim)
+        return max(bio, 1)
+
+    @property
+    def latent_dim_nuisance(self) -> int:
+        return self.latent_dim - self.latent_dim_bio #np.max([np.floor(self.frac_nuisance_latents * self.latent_dim), 1]).astype(int)
+
+    @property
+    def biological_indices(self):
+        return torch.arange(self.latent_dim_nuisance, self.latent_dim, dtype=torch.int64)
+
+    @property
+    def nuisance_indices(self):
+        return torch.arange(0, self.latent_dim_nuisance, dtype=torch.int64)
+
+
+@dataclass
+class ArchitectureAELDM: # wraps native attributes from LDM repo
+
+    # Attributes
+    double_z: bool = True
+    z_channels: int = 64
+    resolution: int = 256
+    in_channels: int = 1
+    out_ch: int = 1
+    ch: int = 128
+    ch_mult: List[int] = field(default_factory=lambda: [1, 1, 2, 2, 4, 4])
+    num_res_blocks: int = 2
+    attn_resolutions: List[int] = field(default_factory=lambda: [16, 8])
+    dropout: float = 0.0
+
+    # NL addition
+    embed_dim: int = 64
+
+
+@dataclass
+class SplitArchitectureAELDM(ArchitectureAELDM): # adds split logic
 
     frac_nuisance_latents: float = 0.05
 

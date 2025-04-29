@@ -34,7 +34,7 @@ def pick_devices(requested: int | None = None) -> dict:
 
 
 def parse_model_paths(model_config, train_config, data_config, version, ckpt):
-    run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}"
+    run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*model_config.lossconfig.kld_weight)}"
     # get version
     if version is None:  # find most recent version
         all_versions = glob(os.path.join(data_config.root, "output", run_name, "*"))
@@ -84,6 +84,31 @@ def initialize_model(config):
     data_config = model_config.dataconfig
     # get train/test/eval indices
     data_config.make_metadata()
+
+    # initialize model
+    model = build_from_config(model_config)
+    if hasattr(model_config.lossconfig, "metric_array"):
+        model_config.lossconfig.metric_array = data_config.metric_array
+    loss_fn = model_config.lossconfig.create_module()  # or model.compute_loss
+
+    train_config = model_config.trainconfig
+
+    return model, model_config, data_config, loss_fn, train_config
+
+
+
+def initialize_ldm_model(config):
+    # initialize the model
+    config_full = config.copy()
+    model_dict = config.pop("model", OmegaConf.create())
+    target = model_dict["config_target"]
+    model_config = get_obj_from_str(target)
+    model_config = model_config.from_cfg(cfg=config_full)
+
+    # parse dataset related options and merge with defaults as needed
+    # data_config = model_config.dataconfig
+    # # get train/test/eval indices
+    # data_config.make_metadata()
 
     # initialize model
     model = build_from_config(model_config)
