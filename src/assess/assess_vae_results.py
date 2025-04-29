@@ -183,7 +183,11 @@ def assess_image_reconstructions(
         sigmas = torch.exp(0.5 * log_var).numpy()
 
         # update dataframe in one shot
-        df_idx = embryo_df.index[embryo_df.snip_id.isin(snip_ids)]
+        # df_idx = embryo_df.index[embryo_df.snip_id.isin(snip_ids)]
+        # build your mapping once
+        mapping = dict(zip(embryo_df['snip_id'].values, embryo_df.index.values))
+        # then map your list of snip_ids in O(1) each
+        df_idx = np.array([mapping[snip] for snip in snip_ids])
         embryo_df.loc[df_idx, "train_cat"] = split
         embryo_df.loc[df_idx, "recon_loss"] = recon_loss
         embryo_df.loc[df_idx, "recon_loss_type"] = preds[0]["recon_loss_type"]
