@@ -19,7 +19,7 @@ class LegacyArchitecture:
 @dataclass
 class SplitArchitecture(LegacyArchitecture):
 
-    frac_nuisance_latents: float = 0.05
+    frac_nuisance_latents: float = 0.2
 
     @property
     def latent_dim_bio(self) -> int:
@@ -62,7 +62,7 @@ class ArchitectureAELDM: # wraps native attributes from LDM repo
 @dataclass
 class SplitArchitectureAELDM(ArchitectureAELDM): # adds split logic
 
-    frac_nuisance_latents: float = 0.05
+    frac_nuisance_latents: float = 0.2
 
     @property
     def latent_dim_bio(self) -> int:

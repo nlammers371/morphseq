@@ -82,7 +82,6 @@ def initialize_model(config):
 
     # parse dataset related options and merge with defaults as needed
     data_config = model_config.dataconfig
-    # get train/test/eval indices
     data_config.make_metadata()
 
     # initialize model

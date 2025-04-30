@@ -117,7 +117,6 @@ class NTXentLoss(nn.Module):
     def _nt_xent_loss_euclidean(self, features, self_stats=None, other_stats=None, n_views=2):
 
         temperature = self.cfg.temperature
-        # remove latent dimensions that are intended to capture nuisance variability--these should not factor
         # into the contrastive loss
         features = features[:, self.cfg.biological_indices]
         device = features.device
