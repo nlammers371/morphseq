@@ -152,3 +152,95 @@ class DecoderConvVAE(nn.Module):
         )
         recon = self.deconv_layers(x)
         return ModelOutput(reconstruction=recon)
+
+
+# Defines a "matched" decoder class that inherits key features from its paired encoder
+class DecoderConvVAEUpsamp(nn.Module):
+    def __init__(self, cfg: LegacyArchitecture) -> None:
+        super().__init__()
+        self.cfg = cfg
+
+        # 1) figure out the “base” spatial dimensions after encoding
+        self.h_base, self.w_base = self._infer_encoded_hw(
+            input_hw=cfg.input_dim[1:],
+            kernel_size=cfg.kernel_size,
+            stride=cfg.stride,
+            layers=cfg.n_conv_layers,
+        )
+
+        # 2) total feature dim coming out of the FC
+        self.feature_dim = (
+            cfg.n_out_channels * 2 ** (cfg.n_conv_layers - 1)
+            * self.h_base
+            * self.w_base
+        )
+
+        # 3) linear layer to expand z → feature vector
+        self.fc = nn.Linear(cfg.latent_dim, self.feature_dim)
+
+        # 4) build the deconv stack
+        self.deconv_layers = self._make_deconv_stack(
+            base_channels=cfg.n_out_channels,
+            layers=cfg.n_conv_layers,
+            kernel_size=3, # hard-coded to ensure proper recon sizing
+            stride=cfg.stride,
+            final_channels=cfg.input_dim[0],
+        )
+
+    def _infer_encoded_hw(
+        self,
+        input_hw: Tuple[int,int],
+        kernel_size: int,
+        stride: int,
+        layers: int,
+    ) -> Tuple[int,int]:
+        """Run the conv_output_shape formula up to 6 layers deep to get H, W."""
+        h, w = input_hw
+        for _ in range(min(layers, 6)):
+            h, w = conv_output_shape((h, w), kernel_size=kernel_size, stride=stride, pad=1)
+        return h, w
+
+    def _make_deconv_stack(
+        self,
+        base_channels: int,
+        layers: int,
+        kernel_size: int,
+        stride: int,
+        final_channels: int,
+    ) -> nn.Sequential:
+        blocks = []
+        for n in range(layers):
+            # index in reverse
+            idx = layers - n - 1
+            in_ch  = base_channels * 2 ** idx
+            out_ch = final_channels if (n == layers - 1) else base_channels * 2 ** (idx - 1)
+
+            # special 7-layer case
+            # if n == layers - 1 and layers == 7:
+            #     k, s, p = kernel_size, 1, 1
+            # else:
+            #     k, s, p = kernel_size, stride, 1
+
+            # blocks.append(nn.ConvTranspose2d(in_ch, out_ch, k, s, padding=p))
+            blocks.append(nn.Upsample(scale_factor=stride, mode='bilinear', align_corners=False))
+            blocks.append(nn.Conv2d(in_ch, out_ch, kernel_size=kernel_size, padding=1))
+
+            if n == layers - 1:
+                blocks.append(nn.Sigmoid())
+            else:
+                blocks.append(nn.BatchNorm2d(out_ch))
+                blocks.append(nn.ReLU())
+
+        return nn.Sequential(*blocks)
+
+    def forward(self, z: torch.Tensor) -> ModelOutput:
+        # expand z → feature map
+        batch = z.size(0)
+        x = self.fc(z).view(
+            batch,
+            self.cfg.n_out_channels * 2 ** (self.cfg.n_conv_layers - 1),
+            self.h_base,
+            self.w_base,
+        )
+        recon = self.deconv_layers(x)
+        return ModelOutput(reconstruction=recon)

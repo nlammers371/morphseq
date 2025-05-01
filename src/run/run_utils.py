@@ -5,6 +5,31 @@ from glob2 import glob
 import os
 import torch, warnings
 
+def ramp_weight(
+    step_curr: int,
+    *,
+    n_warmup: int,
+    n_rampup: int,
+    w_min: float = 0.0,
+    w_max: float = 1.0,
+) -> float:
+    """
+    Piece-wise schedule            (steps)
+        • warm-up   : 0 … n_warmup-1      → w_min
+        • ramp-up   : n_warmup … n_warmup+n_rampup-1
+                      linear   w_min → w_max
+        • plateau   : ≥ n_warmup+n_rampup → w_max
+    """
+    if step_curr < n_warmup:                     # ─── warm-up
+        return w_min
+
+    ramp_step = step_curr - n_warmup
+    if ramp_step < n_rampup:                     # ─── linear ramp
+        progress = ramp_step / max(n_rampup - 1, 1)
+        return w_min + progress * (w_max - w_min)
+
+    return w_max
+
 # ----------------------------------------------------------------------
 #  Utility: choose accelerator + devices
 # ----------------------------------------------------------------------
@@ -34,7 +59,7 @@ def pick_devices(requested: int | None = None) -> dict:
 
 
 def parse_model_paths(model_config, train_config, data_config, version, ckpt):
-    run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*model_config.lossconfig.kld_weight)}"
+    run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*model_config.lossconfig.kld_weight)}_percep"
     # get version
     if version is None:  # find most recent version
         all_versions = glob(os.path.join(data_config.root, "output", run_name, "*"))

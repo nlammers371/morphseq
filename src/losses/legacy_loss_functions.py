@@ -3,34 +3,35 @@ import torch.nn as nn
 import torch.nn.functional as F
 from src.losses.loss_configs import MetricLoss
 from src.models.model_utils import ModelOutput
+# from taming.modules.losses.vqperceptual import LPIPS
+import lpips
+from torch.amp import autocast
+
 
 # Adapted from LDM codebase (their loss sans discriminator)
-def L1PIPS(self, inputs, reconstructions, posteriors):
+def L1PIPS_module(self, x, recon_x) -> ModelOutput:
 
-    rec_loss = torch.abs(inputs.contiguous() - reconstructions.contiguous())
+    rec_loss = (torch.abs(x.contiguous() - recon_x.contiguous())).mean(dim=[-3, -2,-1])
 
-    if self.perceptual_weight > 0:
-        if inputs.shape[1] == 1:
-            in3 = inputs.repeat(1, 3, 1, 1)
-            out3 = reconstructions.repeat(1, 3, 1, 1)
-            p_loss = self.perceptual_loss(in3, out3)
+    if self.pips_weight > 0:
+        if x.shape[1] == 1:
+            in3 = x.repeat(1, 3, 1, 1)
+            out3 = recon_x.repeat(1, 3, 1, 1)
+            with autocast("cuda"):
+                p_loss = self.perceptual_loss(in3, out3)
         else:
-            p_loss = self.perceptual_loss(inputs.contiguous(), reconstructions.contiguous())
+            with autocast("cuda"):
+                p_loss = self.perceptual_loss(x.contiguous(), recon_x.contiguous())
+        rec_loss = rec_loss + self.pips_weight * p_loss.view(rec_loss.shape[0])
 
-        rec_loss = rec_loss + self.perceptual_weight * p_loss
     else:
-        p_loss = None
+        p_loss = torch.tensor([0.0])
 
-    nll_loss = rec_loss / torch.exp(self.logvar) + self.logvar
-    nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
-    kl_loss = posteriors.kl()
-    kl_loss = torch.sum(kl_loss) / kl_loss.shape[0]
+    nll_loss = rec_loss / torch.exp(self.recon_logvar) + self.recon_logvar
+    # nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
 
-    # disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
-    loss = nll_loss + self.kl_weight * kl_loss  # + d_weight * disc_factor * g_loss
+    return ModelOutput(nll_loss=nll_loss, recon_loss=rec_loss, pips_loss=p_loss)
 
-    return ModelOutput(loss=loss, nll_loss=nll_loss, KLD=self.kl_weight * kl_loss,
-                       recon_loss=rec_loss, pips_loss=p_loss)
 
 def recon_module(self, x, recon_x):
     if self.reconstruction_loss == "mse":
@@ -40,7 +41,7 @@ def recon_module(self, x, recon_x):
             recon_x.reshape(x.shape[0], -1),
             x.reshape(x.shape[0], -1),
             reduction="none",
-        ).sum(dim=-1)
+        ).mean(dim=-1)
         )
 
     elif self.reconstruction_loss == "bce":
@@ -49,18 +50,56 @@ def recon_module(self, x, recon_x):
             recon_x.reshape(x.shape[0], -1),
             x.reshape(x.shape[0], -1),
             reduction="none",
-        ).sum(dim=-1)
+        ).mean(dim=-1)
         
     return recon_loss
 
+def process_recon_loss(self, x, recon_x):
+    if self.pips_flag:
+        PIPS_loss = L1PIPS_module(self, x, recon_x)
+        recon_loss = PIPS_loss.nll_loss
+        px_loss = PIPS_loss.recon_loss
+        p_loss = PIPS_loss.pips_loss
+    elif (not self.pips_flag) and (self.reconstruction_loss == "L1"):  # we can also do just the L1 loss
+        self.pips_weight = 0
+        PIPS_loss = L1PIPS_module(self, x, recon_x)
+        recon_loss = PIPS_loss.nll_loss
+        px_loss = PIPS_loss.recon_los
+        p_loss = PIPS_loss.p_loss
+    elif self.reconstruction_loss in ["mse", "bce"]:
+        recon_loss = recon_module(self, x, recon_x)
+        px_loss = recon_loss
+        p_loss = torch.tensor([0.0])
+    else:
+        raise NotImplementedError
+
+    return recon_loss, px_loss, p_loss
 
 class VAELossBasic(nn.Module):
 
-    def __init__(self, kld_weight=1.0, reconstruction_loss="mse"):
+    def __init__(self, cfg, recon_logvar_init=0.0):
         super().__init__()
 
-        self.kld_weight = kld_weight
-        self.reconstruction_loss = reconstruction_loss
+        # self.kld_weight = cfg.kld_weight
+        self.reconstruction_loss = cfg.reconstruction_loss # only applies if we're not doing PIPS
+        self.pips_flag = cfg.pips_flag
+        self.schedule_pips = cfg.schedule_pips
+        self.pips_net = cfg.pips_net
+        self.pips_cfg = cfg.pips_cfg
+
+        self.schedule_kld = cfg.schedule_kld
+        self.kld_weight = cfg.kld_weight
+        self.kld_cfg = cfg.kld_cfg
+
+        # ---- set up LPIPS (AlexNet backbone) ----
+        self.perceptual_loss = lpips.LPIPS(net=self.pips_net)  # default is vgg, so net="alex"
+        # freeze *all* its parameters:
+        for p in self.perceptual_loss.parameters():
+            p.requires_grad = False
+        # put it in eval mode so BatchNorm / Dropout won’t update
+        self.perceptual_loss.eval()
+        # this is your learnable recon‐variance term:
+        self.recon_logvar = nn.Parameter(torch.tensor(recon_logvar_init))
 
     def forward(self, model_input, model_output, batch_key="data"):
 
@@ -69,32 +108,57 @@ class VAELossBasic(nn.Module):
         logvar = model_output.logvar
         mu = model_output.mu
 
-        recon_loss = recon_module(self, x, recon_x)
+        # get recon loss
+        recon_loss, px_loss, p_loss = process_recon_loss(self, x, recon_x)
 
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
+        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
+
+        recon_scale_factor = (128 * 288) #/ (x.shape[-1] * x.shape[-2])
+        kld_scale_factor = 100 #/ mu.shape[1]
+
+        # calculate weighted loss components
+        recon_loss_w = recon_loss.mean(dim=0) * recon_scale_factor
+        kld_loss_w = self.kld_weight * KLD.mean(dim=0) * kld_scale_factor
 
         output = ModelOutput(
-            loss=recon_loss.mean(dim=0) + self.kld_weight*KLD.mean(dim=0),
-            recon_loss=recon_loss.mean(dim=0),
+            loss=(recon_loss_w + kld_loss_w) / (recon_scale_factor + kld_scale_factor),
+            recon_loss=recon_loss.mean(dim=0), pips_loss=p_loss.mean(dim=0), pixel_loss=px_loss.mean(dim=0),
             KLD=KLD.mean(dim=0)
         )
 
         return output
+
     
 class NTXentLoss(nn.Module):
 
-    def __init__(self, cfg: MetricLoss):
+    def __init__(self, cfg: MetricLoss, recon_logvar_init=0.0):
         super().__init__()
 
         # stash the whole config if you need it later
         self.cfg = cfg
-        self.reconstruction_loss = cfg.reconstruction_loss
+        self.reconstruction_loss = cfg.reconstruction_loss  # only applies if we're not doing PIPS
+        self.pips_flag = cfg.pips_flag
+        self.pips_weight = cfg.pips_weight
         self.kld_weight = cfg.kld_weight
         self.bio_only_kld = cfg.bio_only_kld
+        self.pips_net = cfg.pips_net
+        self.pips_cfg = cfg.pips_cfg
+        self.kld_cfg = cfg.kld_cfg
 
-    def forward(self,  model_input, model_output, batch_key="data"):
+        # ---- set up LPIPS (AlexNet backbone) ----
+        self.perceptual_loss = lpips.LPIPS(net=self.pips_net)  # default is vgg, so net="alex"
+        # freeze *all* its parameters:
+        for p in self.perceptual_loss.parameters():
+            p.requires_grad = False
+        # put it in eval mode so BatchNorm / Dropout won’t update
+        self.perceptual_loss.eval()
 
-        # reshape inputs
+        self.recon_logvar = nn.Parameter(torch.tensor(recon_logvar_init))
+
+
+    def forward(self, model_input, model_output, batch_key="data"):
+
+        # reshape x
         x = model_input[batch_key]
         # 1) split out the two views
         x0, x1 = x.unbind(dim=1)  # each is (B, C, H, W)
@@ -112,9 +176,10 @@ class NTXentLoss(nn.Module):
         # hpf_deltas = model_output.hpf_deltas
 
         # calculate reconstruction error
-        recon_loss = recon_module(self, x_tall, recon_x)
-        recon_scale_factor = (128*288) / (x.shape[-1] * x.shape[-2])
-        kld_scale_factor = 64 / mu.shape[1] # does not account for possibility of bio-only. Simpler. Not sure which is better
+        recon_loss, px_loss, p_loss = process_recon_loss(self, x, recon_x)
+
+        recon_scale_factor = (128*288) #/ (x.shape[-1] * x.shape[-2])
+        kld_scale_factor = 100 #/ mu.shape[1] # does not account for possibility of bio-only. Simpler. Not sure which is better
         # Calculate cross-entropy wrpt a standard multivariate Gaussian
         if self.bio_only_kld:
             b_indices = self.cfg.biological_indices
@@ -133,10 +198,12 @@ class NTXentLoss(nn.Module):
         kld_loss_w = self.cfg.kld_weight * KLD.mean(dim=0) * kld_scale_factor  #* latent_weight
 
         output = ModelOutput(
-            loss=recon_loss_w + kld_loss_w + metric_loss_w,
-            recon_loss=recon_loss_w,
-            KLD=kld_loss_w,
-            metric_loss=metric_loss_w
+            loss=(recon_loss_w + kld_loss_w + metric_loss_w) / (recon_scale_factor + kld_scale_factor),
+            recon_loss=recon_loss.mean(dim=0),
+            KLD=KLD.mean(dim=0),
+            metric_loss=metric_loss,
+            pixel_loss=px_loss.mean(dim=0),
+            pips_loss=p_loss.mean(dim=0),
         )
 
         return output

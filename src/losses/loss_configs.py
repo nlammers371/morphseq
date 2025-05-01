@@ -13,6 +13,26 @@ class BasicLoss:
     ] = "src.losses.legacy_loss_functions.VAELossBasic"
     kld_weight: float = 1.0
     reconstruction_loss: str = "mse"
+    pips_net: Literal["vgg", "alex"] = "alex"
+
+    # get scheduler info
+    schedule_pips: bool = True
+    pips_warmup: int = 15
+    pips_rampup: int = 5
+    schedule_kld: bool = True
+    kld_warmup: int = 0
+    kld_rampup: int = 15
+
+    pips_flag: bool = True
+    pips_weight: float = 1.0
+
+    @property
+    def pips_cfg(self):
+        return dict(n_warmup=self.pips_warmup, n_rampup=self.pips_rampup, w_min=0, w_max=self.pips_weight)
+
+    @property
+    def kld_cfg(self):
+        return dict(n_warmup=self.kld_warmup, n_rampup=self.kld_rampup, w_min=0, w_max=self.kld_weight)
 
     def create_module(self):
         # dynamically import the module & class
@@ -21,8 +41,11 @@ class BasicLoss:
         loss_cls  = getattr(mod, class_name)
         # instantiate with your validated kwargs
         return loss_cls(
-            kld_weight=self.kld_weight,
-            reconstruction_loss=self.reconstruction_loss,
+            cfg=self,
+            # kld_weight=self.kld_weight,
+            # reconstruction_loss=self.reconstruction_loss,
+            # pips_flag=self.pips_flag,
+            # pips_weight=self.pips_weight,
         )
 
 
@@ -34,6 +57,18 @@ class MetricLoss:
     # base characeristics for VAE
     kld_weight: float = 1.0
     reconstruction_loss: str = "mse"
+
+    pips_flag: bool = True
+    pips_weight: float = 1.0
+    pips_net: Literal["vgg", "alex"] = "alex"
+
+    # get scheduler info
+    schedule_pips: bool = True
+    pips_warmup: int = 15
+    pips_rampup: int = 5
+    schedule_kld: bool = True
+    kld_warmup: int = 0
+    kld_rampup: int = 15
 
     # model arch info
     latent_dim_bio: Optional[int] = None
@@ -53,6 +88,14 @@ class MetricLoss:
 
     # apply KLD reg to bio latents only?
     bio_only_kld: bool = False
+
+    @property
+    def pips_cfg(self):
+        return dict(n_warmup=self.pips_warmup, n_rampup=self.pips_rampup, w_min=0, w_max=self.pips_weight)
+
+    @property
+    def kld_cfg(self):
+        return dict(n_warmup=self.kld_warmup, n_rampup=self.kld_rampup, w_min=0, w_max=self.kld_weight)
 
     @property
     def biological_indices(self):
