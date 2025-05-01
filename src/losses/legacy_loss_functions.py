@@ -4,6 +4,34 @@ import torch.nn.functional as F
 from src.losses.loss_configs import MetricLoss
 from src.models.model_utils import ModelOutput
 
+# Adapted from LDM codebase (their loss sans discriminator)
+def L1PIPS(self, inputs, reconstructions, posteriors):
+
+    rec_loss = torch.abs(inputs.contiguous() - reconstructions.contiguous())
+
+    if self.perceptual_weight > 0:
+        if inputs.shape[1] == 1:
+            in3 = inputs.repeat(1, 3, 1, 1)
+            out3 = reconstructions.repeat(1, 3, 1, 1)
+            p_loss = self.perceptual_loss(in3, out3)
+        else:
+            p_loss = self.perceptual_loss(inputs.contiguous(), reconstructions.contiguous())
+
+        rec_loss = rec_loss + self.perceptual_weight * p_loss
+    else:
+        p_loss = None
+
+    nll_loss = rec_loss / torch.exp(self.logvar) + self.logvar
+    nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
+    kl_loss = posteriors.kl()
+    kl_loss = torch.sum(kl_loss) / kl_loss.shape[0]
+
+    # disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
+    loss = nll_loss + self.kl_weight * kl_loss  # + d_weight * disc_factor * g_loss
+
+    return ModelOutput(loss=loss, nll_loss=nll_loss, KLD=self.kl_weight * kl_loss,
+                       recon_loss=rec_loss, pips_loss=p_loss)
+
 def recon_module(self, x, recon_x):
     if self.reconstruction_loss == "mse":
         recon_loss = (
