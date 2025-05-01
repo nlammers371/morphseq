@@ -50,6 +50,7 @@ def train_vae(cfg, gpus: int | None = None):
     # 3) train with Lightning
     trainer = pl.Trainer(logger=logger,
                          max_epochs=train_config.max_epochs,
+                         precision=16,
                          callbacks=[SaveRunMetadata(data_config)],
                          **device_kwargs)           # ← accelerator / devices injected here)
     trainer.fit(lit)

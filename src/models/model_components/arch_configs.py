@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Literal
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 import torch
@@ -7,6 +7,7 @@ import math
 @dataclass
 class LegacyArchitecture:
 
+    name: Literal["convAE"] = "convAE"
     latent_dim: int = 64
 
     n_out_channels: int = 16
@@ -19,6 +20,7 @@ class LegacyArchitecture:
 @dataclass
 class SplitArchitecture(LegacyArchitecture):
 
+    name: Literal["convAESplit"] = "convAESplit"
     frac_nuisance_latents: float = 0.2
 
     @property
@@ -43,6 +45,7 @@ class SplitArchitecture(LegacyArchitecture):
 @dataclass
 class ArchitectureAELDM: # wraps native attributes from LDM repo
 
+    name: Literal["ldmVAE"] = "ldmVAE"
     # Attributes
     double_z: bool = True
     z_channels: int = 64
@@ -56,12 +59,13 @@ class ArchitectureAELDM: # wraps native attributes from LDM repo
     dropout: float = 0.0
 
     # NL addition
-    embed_dim: int = 64
+    latent_dim: int = 64
 
 
 @dataclass
 class SplitArchitectureAELDM(ArchitectureAELDM): # adds split logic
 
+    name: Literal["ldmVAESplit"] = "ldmVAESplit"
     frac_nuisance_latents: float = 0.2
 
     @property

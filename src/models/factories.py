@@ -4,23 +4,52 @@ from dataclasses import asdict
 from src.models.model_components.legacy_components import (
     EncoderConvVAE, DecoderConvVAE
 )
+from src.models.model_components.ldm_components_ae import (WrappedLDMDecoder,
+                                                           WrappedLDMEncoderPool, WrappedLDMEncoderPool
+                                                           )
 
 
 def build_from_config(cfg):
     if cfg.name == "VAE":
-        encoder = EncoderConvVAE(cfg.ddconfig)
-        decoder = DecoderConvVAE(cfg.ddconfig)
+        if "convAE" in cfg.ddconfig.name:
+            encoder = EncoderConvVAE(cfg.ddconfig)
+            decoder = DecoderConvVAE(cfg.ddconfig)
+        elif "ldmAE" in cfg.ddconfig.name:
+            encoder = WrappedLDMEncoderPool(asdict(cfg.ddconfig))
+            decoder = WrappedLDMDecoder(asdict(cfg.ddconfig))
+        else:
+            raise NotImplementedError
         model = VAE(cfg, encoder=encoder, decoder=decoder)
 
     elif cfg.name == "morphVAE":
-        encoder = EncoderConvVAE(cfg.ddconfig)
-        decoder = DecoderConvVAE(cfg.ddconfig)
+        if "convAE" in cfg.ddconfig.name:
+            encoder = EncoderConvVAE(cfg.ddconfig)
+            decoder = DecoderConvVAE(cfg.ddconfig)
+        else:
+            raise NotImplementedError
         model = morphVAE(cfg, encoder=encoder, decoder=decoder)
 
-    elif cfg.name == "ldmAEkl":
-        model = AutoencoderKLModel(ddconfig=asdict(cfg.ddconfig), embed_dim=cfg.ddconfig.embed_dim)
+    elif cfg.name == "VAEFancy":
+        if "ldmVAE" in cfg.ddconfig.name:
+            encoder = WrappedLDMEncoderPool(asdict(cfg.ddconfig))
+            decoder = WrappedLDMDecoder(asdict(cfg.ddconfig))
+        else:
+            raise NotImplementedError
+        model = VAE(cfg, encoder=encoder, decoder=decoder)
+
+    elif cfg.name == "morphVAEFancy":
+        if "ldmVAE" in cfg.ddconfig.name:
+            encoder = WrappedLDMEncoderPool(asdict(cfg.ddconfig))
+            decoder = WrappedLDMDecoder(asdict(cfg.ddconfig))
+        else:
+            raise NotImplementedError
+
+        model = morphVAE(cfg, encoder=encoder, decoder=decoder)
+    # elif cfg.name == "ldmAEkl":
+    #     model = AutoencoderKLModel(ddconfig=asdict(cfg.ddconfig), embed_dim=cfg.ddconfig.embed_dim)
 
     else:
         raise NotImplementedError
+
 
     return model

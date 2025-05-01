@@ -23,10 +23,16 @@ def contrastive_transform():  # (size, s=1):
     return data_transforms
 
 
-def basic_transform():#im_dims):
-    data_transform = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1),
-        # transforms.Resize((im_dims[0], im_dims[1])),
-        transforms.ToTensor(),
-    ])
+def basic_transform(target_size=None):
+    if target_size is not None:
+        data_transform = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize((target_size[0], target_size[1])),
+            transforms.ToTensor(),
+        ])
+    else:
+        data_transform = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1),
+            transforms.ToTensor(),
+        ])
     return data_transform

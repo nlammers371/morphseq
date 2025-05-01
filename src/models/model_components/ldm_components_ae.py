@@ -3,7 +3,106 @@ import torch
 import torch.nn as nn
 import numpy as np
 from src.models.model_components.attention import LinearAttention
+from src.models.model_utils import ModelOutput
+from src.functions.utilities import conv_output_shape, deconv_output_shape # TODO: incorporate h/w info in enc/dec
 
+# NL additions for compatibility with existing pipeline code
+class WrappedLDMDecoder(nn.Module):
+    def __init__(self, ddconfig):
+        """
+        ddconfig must include:
+          - "resolution":  input image size H=W
+          - "ch_mult":     tuple of channel multipliers per level
+          - "z_channels":  number of latent channels
+          - "latent_dim":   dimensionality of your flat vector z
+        plus any other Decoder kwargs.
+        """
+        super().__init__()
+        # instantiate the core spatial decoder
+        self.decoder = Decoder(**ddconfig)
+
+        # compute the bottleneck spatial size H',W'
+        R = len(ddconfig["ch_mult"])
+        self.spatial_size = ddconfig["resolution"] // (2 ** (R - 1))  # H′ = W′
+
+        self.z_ch = ddconfig["z_channels"]
+        self.latent_dim = ddconfig["latent_dim"]
+
+        # a linear layer to inflate the vector back to spatial maps
+        self.inflate = nn.Linear(
+            self.latent_dim,
+            self.z_ch * self.spatial_size * self.spatial_size
+        )
+
+    def forward(self, z_vec: torch.Tensor) -> ModelOutput:
+        """
+        Args:
+          z_vec: (B, latent_dim)  — your flat latent vector
+        Returns:
+          recon: (B, out_ch, H, W) via self.decoder
+        """
+        B = z_vec.shape[0]
+        # 1) inflate to a big vector length = z_ch * H′ * W′
+        v = self.inflate(z_vec)  # → (B, z_ch * H′ * W′)
+
+        # 2) reshape to spatial latent map
+        z_spatial = v.view(B, self.z_ch, self.spatial_size, self.spatial_size)
+
+        # 3) decode back up to full image
+        recon = self.decoder(z_spatial)
+
+        return ModelOutput(reconstruction=recon)
+
+
+class WrappedLDMEncoderPool(nn.Module):
+    def __init__(self, ddconfig):
+        super().__init__()
+        self.enc = Encoder(**ddconfig)
+        self.to_vec = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1,1)),        # → (B, 2*z_ch, 1, 1)
+            nn.Flatten(),                       # → (B, 2*z_ch)
+            nn.Linear(2*ddconfig["z_channels"], ddconfig["latent_dim"] * 2)   # optional projection
+        )
+
+    def forward(self, x):
+        h = self.enc(x)                        # (B, 2*z_ch, H′, W′)
+        v = self.to_vec(h)                     # (B, 2*latent_dim)
+        mu, log_var = v.chunk(2, dim=1)         # each (B, latent_dim)
+        return ModelOutput(embedding=mu, log_covariance=log_var)
+
+class WrappedLDMEncoderFlatten(nn.Module):
+    def __init__(self, ddconfig):
+        """
+        ddconfig: dict-like with keys
+          - "z_channels": number of latent channels (per μ or logvar)
+          - "latent_dim":  desired vector latent dimension
+          plus whatever your Encoder needs.
+        """
+        super().__init__()
+        # 1) the original LDM encoder that outputs (B, 2*z_ch, H′, W′)
+        self.enc = Encoder(**ddconfig)
+
+        # 2) a tiny head that first flattens everything,
+        #    then projects to 2 * latent_dim
+        self.to_vec = nn.Sequential(
+            nn.Flatten(start_dim=1),            # → (B, 2*z_ch * H′ * W′)
+            nn.LazyLinear(2 * ddconfig["latent_dim"])
+        )
+
+    def forward(self, x: torch.Tensor):
+        """
+        Args:
+          x: (B, in_channels, H, W)
+        Returns:
+          mu:      (B, latent_dim)
+          log_var: (B, latent_dim)
+        """
+        h = self.enc(x)                       # h.shape == (B, 2*z_ch, H′, W′)
+        v = self.to_vec(h)                    # v.shape == (B, 2*latent_dim)
+        mu, log_var = v.chunk(2, dim=1)       # each (B, latent_dim)
+        return ModelOutput(embedding=mu, log_covariance=log_var)
+
+#################
 # NL: unless otherwise noted, these functions and classes are pulled directly from the ldm codebase
 
 def nonlinearity(x):
@@ -164,8 +263,7 @@ class Downsample(nn.Module):
 
 
 class ResnetBlock(nn.Module):
-    def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False,
-                 dropout, temb_channels=512):
+    def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False, dropout, temb_channels=512):
         super().__init__()
         self.in_channels = in_channels
         out_channels = in_channels if out_channels is None else out_channels
@@ -201,6 +299,29 @@ class ResnetBlock(nn.Module):
                                                     kernel_size=1,
                                                     stride=1,
                                                     padding=0)
+
+    def forward(self, x, temb):
+        h = x
+        h = self.norm1(h)
+        h = nonlinearity(h)
+        h = self.conv1(h)
+
+        if temb is not None:
+            h = h + self.temb_proj(nonlinearity(temb))[:, :, None, None]
+
+        h = self.norm2(h)
+        h = nonlinearity(h)
+        h = self.dropout(h)
+        h = self.conv2(h)
+
+        if self.in_channels != self.out_channels:
+            if self.use_conv_shortcut:
+                x = self.conv_shortcut(x)
+            else:
+                x = self.nin_shortcut(x)
+
+        return x + h
+
 
 class Encoder(nn.Module):
     def __init__(self, *, ch, out_ch, ch_mult=(1,2,4,8), num_res_blocks,

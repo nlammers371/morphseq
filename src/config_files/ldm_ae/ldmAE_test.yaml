@@ -1,0 +1,36 @@
+model:
+  config_target: src.models.legacy_model_configs.VAEFancyConfig
+
+  ddconfig:
+    name: "ldmVAE"
+    latent_dim: 100
+    double_z: True
+    z_channels: 3
+    resolution: 208
+    in_channels: 1
+    out_ch: 1
+    ch: 64 # OG: 128
+    ch_mult: [ 1,2,4 ]  # num_down = len(ch_mult)-1
+    num_res_blocks: 2
+    attn_resolutions: [ ]
+    dropout: 0.0
+
+  lossconfig:
+    kld_weight: 1
+#    metric_weight: 50
+#    temperature: .1
+#    self_target_prob: 0.25
+#    bio_only_kld: False
+
+  dataconfig:
+    target: "BasicDataset"
+    num_workers: 8
+    batch_size: 16
+    wrap: True
+    root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+
+  trainconfig:
+    benchmark: True
+    accumulate_grad_batches: 2
+    max_epochs: 10
+
