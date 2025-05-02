@@ -6,7 +6,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.nn import functional as F
 from torch import nn
 from src.models.ldm_models import AutoencoderKLModel
-from src.run.run_utils import ramp_weight
+from src.lightning.pl_utils import ramp_weight
 
 
 class LitModel(pl.LightningModule):

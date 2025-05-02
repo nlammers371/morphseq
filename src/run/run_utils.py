@@ -12,6 +12,7 @@ from src.lightning.pl_wrappers import LitModel
 import pytorch_lightning as pl
 from src.lightning.callbacks import SaveRunMetadata
 import torch
+from hydra.core.hydra_config import HydraConfig
 
 
 def train_vae(cfg, gpus: int | None = None):
@@ -36,13 +37,19 @@ def train_vae(cfg, gpus: int | None = None):
     )
 
     # make output directory
-    run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*loss_fn.kld_weight)}_percep"
-    save_dir = os.path.join(data_config.root, "output", "")
+    # run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*loss_fn.kld_weight)}_percep"
+    # save_dir = os.path.join(data_config.root, "output", ""
+    if HydraConfig.initialized():
+        # we’re inside a Hydra job
+        out_dir = HydraConfig.get().runtime.output_dir
+    else:
+        run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100 * loss_fn.kld_weight)}_percep"
+        out_dir = os.path.join(data_config.root, "output", run_name, "")
 
     # 3) create your logger with a human‐readable version label
     logger = TensorBoardLogger(
-        save_dir=save_dir,  # top-level folder
-        name=run_name,  # e.g. "VAE_ld64"
+        save_dir=out_dir,  # top-level folder
+        # name=run_name,  # e.g. "VAE_ld64"
         # version=f"  # e.g. "e50"
     )
 
@@ -58,31 +65,6 @@ def train_vae(cfg, gpus: int | None = None):
 
     return {}
 
-
-def ramp_weight(
-    step_curr: int,
-    *,
-    n_warmup: int,
-    n_rampup: int,
-    w_min: float = 0.0,
-    w_max: float = 1.0,
-) -> float:
-    """
-    Piece-wise schedule            (steps)
-        • warm-up   : 0 … n_warmup-1      → w_min
-        • ramp-up   : n_warmup … n_warmup+n_rampup-1
-                      linear   w_min → w_max
-        • plateau   : ≥ n_warmup+n_rampup → w_max
-    """
-    if step_curr < n_warmup:                     # ─── warm-up
-        return w_min
-
-    ramp_step = step_curr - n_warmup
-    if ramp_step < n_rampup:                     # ─── linear ramp
-        progress = ramp_step / max(n_rampup - 1, 1)
-        return w_min + progress * (w_max - w_min)
-
-    return w_max
 
 # ----------------------------------------------------------------------
 #  Utility: choose accelerator + devices
