@@ -1,7 +1,8 @@
 defaults:
   - _self_
   - model: vae_big_cluster
-  - hydra/launcher: basic
+  - override hydra/sweeper: basic
+  - override hydra/launcher: basic
 
 hydra:
   run:
