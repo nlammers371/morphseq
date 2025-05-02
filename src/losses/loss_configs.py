@@ -5,7 +5,6 @@ from importlib import import_module
 import torch
 import numpy as np
 from pydantic import ConfigDict
-import lpips
 
 @dataclass
 class BasicLoss:
@@ -42,17 +41,13 @@ class BasicLoss:
         mod       = import_module(module_name)
         loss_cls  = getattr(mod, class_name)
 
-        # initialize PIPS
-        if self.pips_flag and not hasattr(self, "perceptual_loss"):
-            self.perceptual_loss = (
-                lpips.LPIPS(net=self.pips_net)
-                .eval()
-                .requires_grad_(False)
-            )
-
         # instantiate with your validated kwargs
         return loss_cls(
             cfg=self,
+            # kld_weight=self.kld_weight,
+            # reconstruction_loss=self.reconstruction_loss,
+            # pips_flag=self.pips_flag,
+            # pips_weight=self.pips_weight,
         )
 
 
@@ -124,14 +119,6 @@ class MetricLoss:
         }
 
         loss_cls = loss_map[self.target]
-
-        # initialize PIPS
-        if self.pips_flag and not hasattr(self, "perceptual_loss"):
-            self.perceptual_loss = (
-                lpips.LPIPS(net=self.pips_net)
-                .eval()
-                .requires_grad_(False)
-            )
 
         # instantiate your dataset with both fixed and configurable args
         return loss_cls(

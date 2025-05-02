@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - model: vae_big_cluster
+  - hydra/launcher: basic
 
 hydra:
   run:

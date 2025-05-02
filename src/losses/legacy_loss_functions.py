@@ -93,7 +93,13 @@ class VAELossBasic(nn.Module):
         self.kld_cfg = cfg.kld_cfg
 
         # ---- set up LPIPS (AlexNet backbone) ----
-        self.perceptual_loss = cfg.perceptual_loss #lpips.LPIPS(net=self.pips_net)  # default is vgg, so net="alex"
+        self.perceptual_loss = lpips.LPIPS(net=self.pips_net)  # default is vgg, so net="alex"
+        # freeze *all* its parameters:
+        for p in self.perceptual_loss.parameters():
+            p.requires_grad = False
+        # put it in eval mode so BatchNorm / Dropout won’t update
+        self.perceptual_loss.eval()
+        # this is your learnable recon‐variance term:
         self.register_buffer('recon_logvar', torch.tensor(recon_logvar_init)) # NOPE. nn.Parameter(torch.tensor(recon_logvar_init))
 
     def forward(self, model_input, model_output, batch_key="data"):
@@ -141,7 +147,12 @@ class NTXentLoss(nn.Module):
         self.kld_cfg = cfg.kld_cfg
 
         # ---- set up LPIPS (AlexNet backbone) ----
-        self.perceptual_loss = cfg.perceptual_loss
+        self.perceptual_loss = lpips.LPIPS(net=self.pips_net)  # default is vgg, so net="alex"
+        # freeze *all* its parameters:
+        for p in self.perceptual_loss.parameters():
+            p.requires_grad = False
+        # put it in eval mode so BatchNorm / Dropout won’t update
+        self.perceptual_loss.eval()
 
         self.register_buffer('recon_logvar', torch.tensor(recon_logvar_init))
 
