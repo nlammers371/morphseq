@@ -53,14 +53,16 @@ def train_vae(cfg, gpus: int | None = None):
         # version=f"  # e.g. "e50"
     )
 
-    device_kwargs = pick_devices(gpus)
+    # device_kwargs = pick_devices(gpus)
 
     # 3) train with Lightning
     trainer = pl.Trainer(logger=logger,
                          max_epochs=train_config.max_epochs,
                          precision=16,
                          callbacks=[SaveRunMetadata(data_config)],
-                         **device_kwargs)           # ← accelerator / devices injected here)
+                         accelerator="auto",  # will pick 'gpu' if any GPUs are visible, else 'cpu'
+                         devices="auto",  # will use all available GPUs or 1 CPU
+                         strategy="auto",)           # ← accelerator / devices injected here)
     trainer.fit(lit)
 
     return {}
