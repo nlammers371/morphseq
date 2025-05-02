@@ -7,7 +7,7 @@ torch.set_float32_matmul_precision("medium")   # good default
 
 @hydra.main(version_base="1.1",
             config_path="/home/nick/projects/morphseq/src/hydra_configs",
-            config_name="vae_base")
+            config_name="vae_ldm_base")
 
 def main(cfg: DictConfig):
     # immediately turn it into a plain dict:

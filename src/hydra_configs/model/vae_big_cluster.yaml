@@ -12,6 +12,12 @@ lossconfig:
   pips_weight: 1.0
   pips_net: "vgg"
 
+  pips_warmup: 30
+  pips_rampup: 20
+  schedule_kld: True
+  kld_warmup: 10
+  kld_rampup: 20
+
 
 dataconfig:
   target: "BasicDataset"

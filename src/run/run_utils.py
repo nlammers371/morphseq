@@ -15,12 +15,44 @@ import torch
 from hydra.core.hydra_config import HydraConfig
 torch.set_float32_matmul_precision("medium")   # good default
 
-
 # Option B: match by message regex (if you want to be extra precise)
 warnings.filterwarnings(
     "ignore",
     message=r".*recommended to use `self\.log\('val/.*',.*sync_dist=True`.*"
 )
+
+def load_from_checkpoint(model, ckpt_path):
+
+    if ckpt_path is None:
+        ckpt = torch.load(
+            ckpt_path,
+            map_location="cpu")["state_dict"]
+
+        # Fix encoder sizing
+        w3 = ckpt["encoder.conv_in.weight"]  # shape [128, 3, 3, 3]
+        w1 = w3.mean(dim=1, keepdim=True)  # now [128, 1, 3, 3]
+        ckpt["encoder.conv_in.weight"] = w1
+
+        # Fix decoder sizing
+        w3 = ckpt["decoder.conv_out.weight"]
+        w1 = w3.mean(axis=0, keepdim=True)
+        ckpt["decoder.conv_out.weight"] = w1
+
+        w3 = ckpt["decoder.conv_out.bias"]
+        w1 = w3.mean(dim=0, keepdim=True)
+        ckpt["decoder.conv_out.bias"] = w1
+
+        enc_sd = {k.replace("encoder.", "enc."): v
+                  for k, v in ckpt.items() if k.startswith("encoder.")}
+        model.encoder.load_state_dict(enc_sd, strict=False)
+
+        dec_sd = {k: v
+                  for k, v in ckpt.items() if k.startswith("decoder.")}
+        model.decoder.load_state_dict(dec_sd, strict=False)
+    else:
+        print("No checkpoint found. Skipping ckpt load.")
+
+    return model
 
 def train_vae(cfg, gpus: int | None = None):
 
@@ -42,6 +74,9 @@ def train_vae(cfg, gpus: int | None = None):
         lr=train_config.learning_rate,
         batch_key="data",
     )
+
+    if hasattr(model_config, "ckpt_path"):
+        model = load_from_checkpoint(model=model, ckpt_path=model_config.ckpt_path)
 
     # make output directory
     # run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*loss_fn.kld_weight)}_percep"

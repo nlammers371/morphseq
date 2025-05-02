@@ -76,6 +76,7 @@ class VAEFancyConfig:
     trainconfig: LitTrainConfig = field(default_factory=LitTrainConfig)
 
     name: Literal["VAEFancy"] = "VAEFancy"
+    ckpt_path: Optional[str] = None
 
     @classmethod
     def from_cfg(cls, cfg):
