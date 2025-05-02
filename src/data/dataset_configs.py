@@ -99,7 +99,7 @@ class BaseDataConfig(UrrDataConfig):
             # "OtherDataset": OtherDataset,
         }
         tf_map = {
-            "basic": basic_transform(),
+            "basic": basic_transform,
             "simclr": contrastive_transform,
         }
 
