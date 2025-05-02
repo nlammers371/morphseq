@@ -62,6 +62,7 @@ def train_vae(cfg, gpus: int | None = None):
         accelerator = "cpu"
         devices = 1
         strategy = "ddp_cpu"  # uses Gloo on CPU
+
     # 3) train with Lightning
     trainer = pl.Trainer(logger=logger,
                          max_epochs=train_config.max_epochs,

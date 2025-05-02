@@ -84,7 +84,7 @@ class BaseDataConfig(UrrDataConfig):
     target_kwargs: Dict[str,Any]        = field(default_factory=dict)
 
     # similarly for transform
-    transform_name:   Literal["basic", "simclr"] = "basic"
+    transform_name:   Literal["basic", "simclr"] = "simclr"
     transform_kwargs: Dict[str,Any]                = field(default_factory=dict)
 
     return_sample_names: bool = False

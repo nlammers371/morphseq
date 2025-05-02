@@ -61,22 +61,22 @@ class LitModel(pl.LightningModule):
         bsz = x.size(0)
 
         # log weights, sync_dist=True
-        self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True, sync_dist=True)
-        self.log(f"{stage}/kld_weight", kld_w, on_step=False, on_epoch=True, sync_dist=True)
+        self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True)#, sync_dist=True)
+        self.log(f"{stage}/kld_weight", kld_w, on_step=False, on_epoch=True)#, sync_dist=True)
 
         # log the main loss
-        self.log(f"{stage}/loss", loss_output.loss, prog_bar=(stage=="train"), on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+        self.log(f"{stage}/loss", loss_output.loss, prog_bar=(stage=="train"), on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
 
         # self.log("train/loss", loss_output.loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log(f"{stage}/recon_loss", loss_output.recon_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
-        self.log(f"{stage}/pixel_loss", loss_output.pixel_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
-        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
-        self.log(f"{stage}/kld_loss", loss_output.KLD, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+        self.log(f"{stage}/recon_loss", loss_output.recon_loss, on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
+        self.log(f"{stage}/pixel_loss", loss_output.pixel_loss, on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
+        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
+        self.log(f"{stage}/kld_loss", loss_output.KLD, on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
 
         if "metric_loss" in loss_output:
-            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
         if "pips_loss" in loss_output:
-            self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+            self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz)#, sync_dist=True)
 
         return loss_output.loss
 

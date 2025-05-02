@@ -75,6 +75,7 @@ def process_recon_loss(self, x, recon_x):
 
     return recon_loss, px_loss, p_loss
 
+
 class VAELossBasic(nn.Module):
 
     def __init__(self, cfg, recon_logvar_init=0.0):
