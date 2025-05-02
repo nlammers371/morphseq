@@ -99,7 +99,7 @@ class VAELossBasic(nn.Module):
         # put it in eval mode so BatchNorm / Dropout won’t update
         self.perceptual_loss.eval()
         # this is your learnable recon‐variance term:
-        self.recon_logvar = nn.Parameter(torch.tensor(recon_logvar_init))
+        self.register_buffer('recon_logvar', torch.tensor(recon_logvar_init)) # NOPE. nn.Parameter(torch.tensor(recon_logvar_init))
 
     def forward(self, model_input, model_output, batch_key="data"):
 
@@ -153,7 +153,7 @@ class NTXentLoss(nn.Module):
         # put it in eval mode so BatchNorm / Dropout won’t update
         self.perceptual_loss.eval()
 
-        self.recon_logvar = nn.Parameter(torch.tensor(recon_logvar_init))
+        self.register_buffer('recon_logvar', torch.tensor(recon_logvar_init))
 
 
     def forward(self, model_input, model_output, batch_key="data"):
