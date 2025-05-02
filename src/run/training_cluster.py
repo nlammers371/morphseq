@@ -6,7 +6,7 @@ import torch
 torch.set_float32_matmul_precision("medium")   # good default
 
 @hydra.main(version_base="1.1",
-            config_path="/home/nick/projects/morphseq/src/hydra_configs",
+            config_path="/net/trapnell/vol1/home/nlammers/projects/repositories/morphseq/src/hydra_configs",
             config_name="vae_base_cluster")
 
 def main(cfg: DictConfig):
