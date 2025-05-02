@@ -23,8 +23,9 @@ def sequential_sweep():
     for idx, overrides in enumerate(sweeps):
         # 1) Tell Hydra where your config lives and give a job name for wandering working dirs
         with initialize(
-            config_path="/net/trapnell/vol1/home/nlammers/projects/repositories/morphseq/src/hydra_configs",
+            config_path="src/hydra_configs",
             job_name="vae_sweep",
+            version_base="1.1"
         ):
             # 2) Compose your base config + this override
             cfg = compose(
