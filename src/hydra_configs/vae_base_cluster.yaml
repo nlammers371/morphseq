@@ -21,8 +21,8 @@ hydra:
 #    - optuna         # etc
 
   # 2) force both sweeper and launcher to the built‑in basic classes
-  sweeper:
-    _target_: hydra.plugins.basic_sweeper.BasicSweeper
-
-  launcher:
-    _target_: hydra.plugins.basic_launcher.BasicLauncher
+#  sweeper:
+#    _target_: hydra.plugins.basic_sweeper.BasicSweeper
+#
+#  launcher:
+#    _target_: hydra.plugins.basic_launcher.BasicLauncher
