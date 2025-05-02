@@ -6,7 +6,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torch.nn import functional as F
 from torch import nn
 from src.models.ldm_models import AutoencoderKLModel
-from src.lightning.pl_utils import ramp_weight
+from src.lightning.pl_utils import ramp_weight, cosine_ramp_weight
 
 
 class LitModel(pl.LightningModule):
@@ -60,31 +60,30 @@ class LitModel(pl.LightningModule):
 
         bsz = x.size(0)
 
-        # log weights
-        self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True)
-        self.log(f"{stage}/kld_weight", kld_w, on_step=False, on_epoch=True)
-        if self.current_epoch == 16:
-            print("check")
+        # log weights, sync_dist=True
+        self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True, sync_dist=True)
+        self.log(f"{stage}/kld_weight", kld_w, on_step=False, on_epoch=True, sync_dist=True)
+
         # log the main loss
-        self.log(f"{stage}/loss", loss_output.loss, prog_bar=(stage=="train"), on_step=False, on_epoch=True, batch_size=bsz)
+        self.log(f"{stage}/loss", loss_output.loss, prog_bar=(stage=="train"), on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
 
         # self.log("train/loss", loss_output.loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log(f"{stage}/recon_loss", loss_output.recon_loss, on_step=False, on_epoch=True, batch_size=bsz)
-        self.log(f"{stage}/pixel_loss", loss_output.pixel_loss, on_step=False, on_epoch=True, batch_size=bsz)
-        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz)
-        self.log(f"{stage}/kld_loss", loss_output.KLD, on_step=False, on_epoch=True, batch_size=bsz)
+        self.log(f"{stage}/recon_loss", loss_output.recon_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+        self.log(f"{stage}/pixel_loss", loss_output.pixel_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
+        self.log(f"{stage}/kld_loss", loss_output.KLD, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
 
         if "metric_loss" in loss_output:
-            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz)
+            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
         if "pips_loss" in loss_output:
-            self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz)
+            self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, sync_dist=True)
 
         return loss_output.loss
 
     def _kld_weight(self) -> float:
         """Current β according to ramp-up schedule."""
         if self.loss_fn.schedule_kld:
-            return ramp_weight(
+            return cosine_ramp_weight(
                 step_curr=self.current_epoch,
                 **self.loss_fn.kld_cfg,
             )
@@ -94,7 +93,7 @@ class LitModel(pl.LightningModule):
     def _pips_weight(self) -> float:
         """Current β according to ramp-up schedule."""
         if self.loss_fn.schedule_pips:
-            return ramp_weight(
+            return cosine_ramp_weight(
                 step_curr=self.current_epoch,
                 **self.loss_fn.pips_cfg,
             )

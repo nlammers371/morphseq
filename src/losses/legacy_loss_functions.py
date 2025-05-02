@@ -163,7 +163,7 @@ class NTXentLoss(nn.Module):
         # 1) split out the two views
         x0, x1 = x.unbind(dim=1)  # each is (B, C, H, W)
         # 2) stack them into a single 2B batch, *block-wise*
-        x_tall = torch.cat([x0, x1], dim=0)
+        # x_tall = torch.cat([x0, x1], dim=0)
 
         # get model output
         recon_x = model_output.recon_x
@@ -176,7 +176,7 @@ class NTXentLoss(nn.Module):
         # hpf_deltas = model_output.hpf_deltas
 
         # calculate reconstruction error
-        recon_loss, px_loss, p_loss = process_recon_loss(self, x, recon_x)
+        recon_loss, px_loss, p_loss = process_recon_loss(self, x0, recon_x)
 
         recon_scale_factor = (128*288) #/ (x.shape[-1] * x.shape[-2])
         kld_scale_factor = 100 #/ mu.shape[1] # does not account for possibility of bio-only. Simpler. Not sure which is better

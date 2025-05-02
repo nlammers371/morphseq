@@ -105,7 +105,8 @@ class morphVAE(nn.Module):
             enc = self.encoder(x_all)
             mu = enc.embedding  # (2B, D)
             logvar = enc.log_covariance  # (2B, D)
-            z = self.reparametrize(mu, logvar)
+            B = x0.shape[0]
+            z = self.reparametrize(mu[:B], logvar[:B]) # we only need the actual samples (not positive pairs)
             recon_x = self.decoder(z)["reconstruction"]
 
         else:

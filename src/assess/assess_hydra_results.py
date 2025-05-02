@@ -25,6 +25,41 @@ import ast
 from tqdm import tqdm
 
 
+def get_hydra_runs(hydra_run_path):
+    # get list of runs
+    run_list = sorted(glob(os.path.join(hydra_run_path, "*")))
+    run_path_list = [f for f in run_list if os.path.isdir(f)]
+    run_name_list = [os.path.basename(f) for f in run_path_list]
+
+    # get override hyperparam values
+    rows = []
+    cfg_path_list = []
+    for run_name, run_path in zip(run_name_list, run_path_list):
+        # pull sweep params
+        param_path = os.path.join(run_path, ".hydra", "overrides.yaml")
+        overrides = yaml.safe_load(open(param_path))
+        h_params = {}
+        h_params["run_id"] = run_name
+        h_params["run_path"] = run_path
+        for o in overrides:
+            # split into “full.key.path” and “value_str”
+            key_path, value_str = o.split("=", 1)
+            # the basename is whatever comes after the last “.”
+            base_name = key_path.rsplit(".", 1)[-1]
+            # parse the right-hand side into a Python literal (int, float, list, etc.)
+            value = ast.literal_eval(value_str)
+            h_params[base_name] = value
+
+        rows.append(h_params)
+
+        # pull cfg path for later
+        cfg_path = os.path.join(run_path, ".hydra", "config.yaml")
+        cfg_path_list.append(cfg_path)
+
+    # write hyperaram df
+    hyper_df = pd.DataFrame(rows)
+
+    return hyper_df, cfg_path_list
 
 def parse_hydra_paths(run_path, version=None, ckpt=None):
 
@@ -198,6 +233,8 @@ def process_run(run_dir: Path) -> None:
         "total" :  ("train/loss",        "val/loss"),
         "recon" :  ("train/recon_loss",  "val/recon_loss"),
         "kld"   :  ("train/kld_loss",    "val/kld_loss"),
+        "pixel" : ("train/pixel_loss", "val/pixel_loss"),
+        "pips"  : ("train/pips_loss", "val/pips_loss"),
         "metric":  ("train/metric_loss", "val/metric_loss"),
     }
 
@@ -250,40 +287,11 @@ def assess_hydra_results(hydra_run_path,
                            n_image_figures=50,
                            overwrite_flag=False,
                            skip_figures_flag=False,
-                           batch_size=256,
-                           version=None,
-                           ckpt=None):
+                           batch_size=256):
 
+    hyper_df, cfg_path_list = get_hydra_runs(hydra_run_path)
 
-    # get list of runs
-    run_list = sorted(glob(hydra_run_path + "/*"))
-    run_path_list = [f for f in run_list if os.path.isdir(f)]
-    run_name_list = [os.path.basename(f) for f in run_path_list]
-
-    # get override hyperparam values
-    rows = []
-    cfg_path_list = []
-    for run_name, run_path in zip(run_name_list, run_path_list):
-        # pull sweep params
-        param_path = os.path.join(run_path, ".hydra", "overrides.yaml")
-        overrides = yaml.safe_load(open(param_path))
-        h_params = {}
-        h_params["run_id"] = run_name
-        h_params["run_path"] = run_path
-        for o in overrides:
-            # split into “full.key.path” and “value_str”
-            key_path, value_str = o.split("=", 1)
-            # the basename is whatever comes after the last “.”
-            base_name = key_path.rsplit(".", 1)[-1]
-            # parse the right-hand side into a Python literal (int, float, list, etc.)
-            value = ast.literal_eval(value_str)
-            h_params[base_name] = value
-
-        rows.append(h_params)
-
-        # pull cfg path for later
-        cfg_path = os.path.join(run_path, ".hydra", "config.yaml")
-        cfg_path_list.append(cfg_path)
+    hyper_df.to_csv(os.path.join(hydra_run_path, "hyperparam_df.csv"), index=False)
 
     for cfg in tqdm(cfg_path_list, "Processing training runs..."):
 

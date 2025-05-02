@@ -1,0 +1,26 @@
+config_target: src.models.legacy_model_configs.VAEConfig
+
+ddconfig:
+  input_dim: [1, 288, 128]
+  n_out_channels: 32 #16
+  latent_dim: 100
+  n_conv_layers: 5
+
+lossconfig:
+  kld_weight: 10.0
+  pips_flag: True
+  perceptual_weight: 1.0
+  pips_net: "vgg"
+
+
+dataconfig:
+  target: "BasicDataset"
+  num_workers: 8
+  batch_size: 512
+  wrap: True
+  root: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/"
+
+trainconfig:
+  benchmark: True
+  accumulate_grad_batches: 2
+  max_epochs: 150

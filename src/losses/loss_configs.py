@@ -17,11 +17,11 @@ class BasicLoss:
 
     # get scheduler info
     schedule_pips: bool = True
-    pips_warmup: int = 15
-    pips_rampup: int = 5
+    pips_warmup: int = 30
+    pips_rampup: int = 20
     schedule_kld: bool = True
-    kld_warmup: int = 0
-    kld_rampup: int = 15
+    kld_warmup: int = 10
+    kld_rampup: int = 20
 
     pips_flag: bool = True
     pips_weight: float = 1.0
