@@ -13,7 +13,14 @@ import pytorch_lightning as pl
 from src.lightning.callbacks import SaveRunMetadata
 import torch
 from hydra.core.hydra_config import HydraConfig
+torch.set_float32_matmul_precision("medium")   # good default
 
+
+# Option B: match by message regex (if you want to be extra precise)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*recommended to use `self\.log\('val/.*',.*sync_dist=True`.*"
+)
 
 def train_vae(cfg, gpus: int | None = None):
 
