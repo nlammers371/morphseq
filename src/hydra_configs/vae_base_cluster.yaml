@@ -13,3 +13,16 @@ hydra:
     dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
       # create sub-folder 0, 1, 2, … for each combination
     subdir: ${hydra.job.num}
+
+  # 1) turn off any non‑basic plugins you found
+  disable_plugins:
+    - submitit       # or whatever name showed up
+    - joblib         # ditto
+    - optuna         # etc
+
+  # 2) force both sweeper and launcher to the built‑in basic classes
+  sweeper:
+    _target_: hydra.plugins.basic_sweeper.BasicSweeper
+
+  launcher:
+    _target_: hydra.plugins.basic_launcher.BasicLauncher
