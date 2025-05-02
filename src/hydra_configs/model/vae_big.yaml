@@ -9,7 +9,7 @@ ddconfig:
 lossconfig:
   kld_weight: 10.0
   pips_flag: True
-  perceptual_weight: 1.0
+  pips_weight: 1.0
   pips_net: "vgg"
 
 

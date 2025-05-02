@@ -84,7 +84,7 @@ class BaseDataConfig(UrrDataConfig):
     target_kwargs: Dict[str,Any]        = field(default_factory=dict)
 
     # similarly for transform
-    transform_name:   Literal["simclr"] = "simclr"
+    transform_name:   Literal["basic", "simclr"] = "basic"
     transform_kwargs: Dict[str,Any]                = field(default_factory=dict)
 
     return_sample_names: bool = False
@@ -99,6 +99,7 @@ class BaseDataConfig(UrrDataConfig):
             # "OtherDataset": OtherDataset,
         }
         tf_map = {
+            "basic": basic_transform(),
             "simclr": contrastive_transform,
         }
 

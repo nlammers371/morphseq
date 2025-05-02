@@ -54,15 +54,22 @@ def train_vae(cfg, gpus: int | None = None):
     )
 
     # device_kwargs = pick_devices(gpus)
-
+    if torch.cuda.is_available():
+        accelerator = "gpu"
+        devices = "auto"  # all GPUs
+        strategy = "ddp"  # NCCL under the hood
+    else:
+        accelerator = "cpu"
+        devices = 1
+        strategy = "ddp_cpu"  # uses Gloo on CPU
     # 3) train with Lightning
     trainer = pl.Trainer(logger=logger,
                          max_epochs=train_config.max_epochs,
                          precision=16,
                          callbacks=[SaveRunMetadata(data_config)],
-                         accelerator="auto",  # will pick 'gpu' if any GPUs are visible, else 'cpu'
-                         devices="auto",  # will use all available GPUs or 1 CPU
-                         strategy="auto",)           # ← accelerator / devices injected here)
+                         accelerator=accelerator,  # will pick 'gpu' if any GPUs are visible, else 'cpu'
+                         devices=devices,  # will use all available GPUs or 1 CPU
+                         strategy=strategy,)           # ← accelerator / devices injected here)
     trainer.fit(lit)
 
     return {}
