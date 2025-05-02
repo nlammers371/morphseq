@@ -144,6 +144,8 @@ class morphVAEConfig:
         # inst.lossconfig.metric_array = inst.dataconfig.metric_array
 
         return inst
+    
+    
 
 class morphVAEFancyConfig(morphVAEConfig):
 
