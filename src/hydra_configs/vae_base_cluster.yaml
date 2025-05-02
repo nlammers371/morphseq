@@ -15,10 +15,10 @@ hydra:
     subdir: ${hydra.job.num}
 
   # 1) turn off any non‑basic plugins you found
-  disable_plugins:
-    - submitit       # or whatever name showed up
-    - joblib         # ditto
-    - optuna         # etc
+#  disable_plugins:
+#    - submitit       # or whatever name showed up
+#    - joblib         # ditto
+#    - optuna         # etc
 
   # 2) force both sweeper and launcher to the built‑in basic classes
   sweeper:
