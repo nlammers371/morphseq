@@ -66,6 +66,9 @@ def train_vae(cfg, gpus: int | None = None):
 
     model, model_config, data_config, loss_fn, train_config = initialize_model(config)
 
+    if hasattr(model_config, "ckpt_path"):
+        model = load_from_checkpoint(model=model, ckpt_path=model_config.ckpt_path)
+
     # 2) wrap it
     lit = LitModel(
         model=model,
@@ -74,9 +77,6 @@ def train_vae(cfg, gpus: int | None = None):
         lr=train_config.learning_rate,
         batch_key="data",
     )
-
-    if hasattr(model_config, "ckpt_path"):
-        model = load_from_checkpoint(model=model, ckpt_path=model_config.ckpt_path)
 
     # make output directory
     # run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*loss_fn.kld_weight)}_percep"

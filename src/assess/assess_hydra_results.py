@@ -47,7 +47,10 @@ def get_hydra_runs(hydra_run_path):
             # the basename is whatever comes after the last “.”
             base_name = key_path.rsplit(".", 1)[-1]
             # parse the right-hand side into a Python literal (int, float, list, etc.)
-            value = ast.literal_eval(value_str)
+            try:
+                value = ast.literal_eval(value_str)
+            except:
+                value = value_str
             h_params[base_name] = value
 
         rows.append(h_params)
@@ -414,7 +417,10 @@ def assess_hydra_results(hydra_run_path,
 
 if __name__ == "__main__":
 
-    hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/hydra_beta10_20250501_172222/"
+    hydra_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/nets_pip02_20250502_171421/"
+    assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
+
+    hydra_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/nets_pip05_20250502_170746/"
     assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
 
 
