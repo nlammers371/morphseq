@@ -24,11 +24,11 @@ lossconfig:
   pips_net: "vgg"
 
   # get scheduler info
-  schedule_pips: False
+  schedule_pips: True
   pips_warmup: 7
   pips_rampup: 5
 
-  schedule_kld: False
+  schedule_kld: True
   kld_warmup: 2
   kld_rampup: 5
 
