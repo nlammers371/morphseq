@@ -414,7 +414,7 @@ def assess_hydra_results(hydra_run_path,
 
 if __name__ == "__main__":
 
-    hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/ntxent_test_20250503_170712/"
+    hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/squeeze_test_20250503_231352/"
     assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
 
     # hydra_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/nets_pip05_20250502_170746/"
