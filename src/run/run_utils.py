@@ -99,9 +99,10 @@ def train_vae(cfg, gpus: int | None = None):
         dirpath=out_dir,  # same top‑level folder as your logger
         filename="epoch{epoch:02d}",  # e.g. epoch=05.ckpt
         save_top_k=-1,  # save all checkpoints, not just the best
-        every_n_epochs=model.trainconfig.save_every_n,
+        every_n_epochs=model_config.trainconfig.save_every_n,
         save_last=True,  # also keep 'last.ckpt'
     )
+
     # device_kwargs = pick_devices(gpus)
     if torch.cuda.is_available():
         accelerator = "gpu"
@@ -116,7 +117,7 @@ def train_vae(cfg, gpus: int | None = None):
     trainer = pl.Trainer(logger=logger,
                          max_epochs=train_config.max_epochs,
                          precision=16,
-                         callbacks=[SaveRunMetadata(data_config)],
+                         callbacks=[SaveRunMetadata(data_config), checkpoint_cb],
                          accelerator=accelerator,  # will pick 'gpu' if any GPUs are visible, else 'cpu'
                          devices=devices,  # will use all available GPUs or 1 CPU
                          strategy=strategy,)           # ← accelerator / devices injected here)

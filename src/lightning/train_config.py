@@ -7,3 +7,4 @@ class LitTrainConfig:
     accumulate_grad_batches: int=2
     max_epochs: int=100
     learning_rate: float=1e-4
+    save_every_n: int=50
