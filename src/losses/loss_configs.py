@@ -66,11 +66,16 @@ class MetricLoss:
 
     # get scheduler info
     schedule_pips: bool = True
-    pips_warmup: int = 15
-    pips_rampup: int = 5
+    pips_warmup: int = 30
+    pips_rampup: int = 20
+
     schedule_kld: bool = True
-    kld_warmup: int = 0
-    kld_rampup: int = 15
+    kld_warmup: int = 10
+    kld_rampup: int = 20
+
+    schedule_metric: bool = True
+    metric_warmup: int = 50
+    metric_rampup: int = 20
 
     # model arch info
     latent_dim_bio: Optional[int] = None
@@ -90,6 +95,10 @@ class MetricLoss:
 
     # apply KLD reg to bio latents only?
     bio_only_kld: bool = False
+
+    @property
+    def metric_cfg(self):
+        return dict(n_warmup=self.metric_warmup, n_rampup=self.metric_rampup, w_min=0, w_max=self.metric_weight)
 
     @property
     def pips_cfg(self):

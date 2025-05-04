@@ -412,9 +412,6 @@ def assess_hydra_results(hydra_run_path,
         process_run(run_dir=model_dir)
 
 
-
-
-
 if __name__ == "__main__":
 
     hydra_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/nets_pip02_20250502_171421/"

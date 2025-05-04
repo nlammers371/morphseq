@@ -100,6 +100,16 @@ class LitModel(pl.LightningModule):
         else:
             return self.loss_fn.pips_weight
 
+    def _metric_weight(self) -> float:
+        """Current β according to ramp-up schedule."""
+        if self.loss_fn.schedule_metric:
+            return cosine_ramp_weight(
+                step_curr=self.current_epoch,
+                **self.loss_fn.metric_cfg,
+            )
+        else:
+            return self.loss_fn.metric_weight
+
     def training_step(self, batch, batch_idx):
         return self._step(batch, batch_idx, "train")
 

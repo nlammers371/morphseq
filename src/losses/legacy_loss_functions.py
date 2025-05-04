@@ -138,13 +138,25 @@ class NTXentLoss(nn.Module):
         # stash the whole config if you need it later
         self.cfg = cfg
         self.reconstruction_loss = cfg.reconstruction_loss  # only applies if we're not doing PIPS
-        self.pips_flag = cfg.pips_flag
-        self.pips_weight = cfg.pips_weight
         self.kld_weight = cfg.kld_weight
         self.bio_only_kld = cfg.bio_only_kld
+
+        # PIPS stuff
+        self.schedule_pips = cfg.schedule_pips
+        self.pips_flag = cfg.pips_flag
+        self.pips_weight = cfg.pips_weight
         self.pips_net = cfg.pips_net
         self.pips_cfg = cfg.pips_cfg
+
+        # KLD
+        self.schedule_kld = cfg.schedule_kld
+        self.kld_weight = cfg.kld_weight
         self.kld_cfg = cfg.kld_cfg
+
+        # NT-Xent
+        self.schedule_metric = cfg.schedule_metric
+        self.metric_weight = cfg.metric_weight
+        self.metric_cfg = cfg.metric_cfg
 
         # ---- set up LPIPS (AlexNet backbone) ----
         self.perceptual_loss = lpips.LPIPS(net=self.pips_net)  # default is vgg, so net="alex"
