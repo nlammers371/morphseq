@@ -50,6 +50,8 @@ class LitModel(pl.LightningModule):
         self.loss_fn.kld_weight = kld_w
         pips_w = self._pips_weight()
         self.loss_fn.pips_weight = pips_w
+        metric_w = self._metric_weight()
+        self.loss_fn.metric_weight = metric_w
 
         if hasattr(self.model, "compute_loss"):
             loss_output = self.model.compute_loss(x, out)

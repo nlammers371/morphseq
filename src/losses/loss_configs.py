@@ -86,7 +86,7 @@ class MetricLoss:
     # metric learning
     temperature: float = 0.1 # sets sharpness of loss 'gradient'
     metric_weight: float = 1.0  # tunes weight of contastive loss within the loss function
-    margin: float = 1.0  # (Triplet only) sets tolerance/scale for metric loss.
+    margin: float = 1.0  #  sets tolerance/scale for metric loss.
     distance_metric: Literal["euclidean"] = "euclidean" # Could/should add cosine
 
     # params to structure interactions

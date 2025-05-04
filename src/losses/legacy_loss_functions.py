@@ -215,7 +215,6 @@ class NTXentLoss(nn.Module):
                                                    self_stats=self_stats,
                                                    other_stats=other_stats)
 
-
         # calculate weighted loss components
         metric_loss_w = self.cfg.metric_weight * metric_loss
         recon_loss_w = recon_loss.mean(dim=0) * recon_scale_factor
@@ -255,7 +254,7 @@ class NTXentLoss(nn.Module):
         N = self.cfg.latent_dim_bio / 2
         sigma = N  # sigma^1 for an ND isotropic Gaussian
         dist_normed = (-(dist_matrix / sigma).pow(
-            0.5) + 1) / temperature  # Effectively a shifted z score. Note that large distances are permitted to go below -1
+            0.5) + self.cfg.margin) / temperature  # Effectively a shifted z score. Note that large distances are permitted to go below -1
 
         # Generate matrix containing pos/neg pair info
         target_matrix = torch.zeros(pair_matrix.shape, dtype=torch.float32)

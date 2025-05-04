@@ -17,6 +17,7 @@ lossconfig:
   schedule_pips: True
   schedule_kld: True
   bio_only_kld: False
+  margin: 1.0
 
 dataconfig:
   target: "BasicDataset"
