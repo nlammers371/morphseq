@@ -24,11 +24,11 @@ lossconfig:
   pips_net: "vgg"
 
   # get scheduler info
-  schedule_pips: True
+  schedule_pips: False
   pips_warmup: 7
   pips_rampup: 5
 
-  schedule_kld: True
+  schedule_kld: False
   kld_warmup: 2
   kld_rampup: 5
 
@@ -45,4 +45,5 @@ trainconfig:
   benchmark: True
   accumulate_grad_batches: 2
   max_epochs: 25
+  save_every_n: 5
 

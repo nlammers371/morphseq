@@ -13,7 +13,10 @@ import pytorch_lightning as pl
 from src.lightning.callbacks import SaveRunMetadata
 import torch
 from hydra.core.hydra_config import HydraConfig
-torch.set_float32_matmul_precision("medium")   # good default
+from pytorch_lightning.callbacks import ModelCheckpoint
+
+torch.set_float32_matmul_precision("medium")
+# good default
 
 # Option B: match by message regex (if you want to be extra precise)
 warnings.filterwarnings(
@@ -79,14 +82,7 @@ def train_vae(cfg, gpus: int | None = None):
         lr=train_config.learning_rate,
         batch_key="data",
     )
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Total params:     {total_params:,}")
-    print(f"Trainable params: {trainable_params:,}   "
-          f"({100 * trainable_params / total_params:.2f}% of total)")
     # make output directory
-    # run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*loss_fn.kld_weight)}_percep"
-    # save_dir = os.path.join(data_config.root, "output", ""
     if HydraConfig.initialized():
         # we’re inside a Hydra job
         out_dir = HydraConfig.get().runtime.output_dir
@@ -97,10 +93,15 @@ def train_vae(cfg, gpus: int | None = None):
     # 3) create your logger with a human‐readable version label
     logger = TensorBoardLogger(
         save_dir=out_dir,  # top-level folder
-        # name=run_name,  # e.g. "VAE_ld64"
-        # version=f"  # e.g. "e50"
     )
 
+    checkpoint_cb = ModelCheckpoint(
+        dirpath=out_dir,  # same top‑level folder as your logger
+        filename="epoch{epoch:02d}",  # e.g. epoch=05.ckpt
+        save_top_k=-1,  # save all checkpoints, not just the best
+        every_n_epochs=model.trainconfig.save_every_n,
+        save_last=True,  # also keep 'last.ckpt'
+    )
     # device_kwargs = pick_devices(gpus)
     if torch.cuda.is_available():
         accelerator = "gpu"
