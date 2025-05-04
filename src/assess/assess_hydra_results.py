@@ -419,7 +419,7 @@ if __name__ == "__main__":
         p = argparse.ArgumentParser(description="Assess Hydra run results")
         p.add_argument("--hydra_run_name", "-p", type=str, required=True,
                        help="Path to the Hydra run directory")
-        p.add_argument("--location", "-p", type=str, required=True, default="cluster",
+        p.add_argument("--location", "-l", type=str, required=True, default="cluster",
                        help="Path to the Hydra run directory")
         p.add_argument("--overwrite_flag", "-o", action="store_true", default=True,
                        help="Whether to overwrite existing outputs")
