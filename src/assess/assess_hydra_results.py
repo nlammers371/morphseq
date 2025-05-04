@@ -26,16 +26,44 @@ from tqdm import tqdm
 import argparse
 
 
-def get_hydra_runs(hydra_run_path):
+def get_hydra_runs(hydra_run_path, run_type):
     # get list of runs
-    run_list = sorted(glob(os.path.join(hydra_run_path, "*")))
-    run_path_list = [f for f in run_list if os.path.isdir(f)]
-    run_name_list = [os.path.basename(f) for f in run_path_list]
+    if run_type == "multirun":
+        run_list = sorted(glob(os.path.join(hydra_run_path, "*")))
+        run_path_list = [f for f in run_list if os.path.isdir(f)]
+        run_name_list = [os.path.basename(f) for f in run_path_list]
 
-    # get override hyperparam values
-    rows = []
-    cfg_path_list = []
-    for run_name, run_path in zip(run_name_list, run_path_list):
+        # get override hyperparam values
+        rows = []
+        cfg_path_list = []
+        for run_name, run_path in zip(run_name_list, run_path_list):
+            # pull sweep params
+            param_path = os.path.join(run_path, ".hydra", "overrides.yaml")
+            overrides = yaml.safe_load(open(param_path))
+            h_params = {}
+            h_params["run_id"] = run_name
+            h_params["run_path"] = run_path
+            for o in overrides:
+                # split into “full.key.path” and “value_str”
+                key_path, value_str = o.split("=", 1)
+                # the basename is whatever comes after the last “.”
+                base_name = key_path.rsplit(".", 1)[-1]
+                # parse the right-hand side into a Python literal (int, float, list, etc.)
+                try:
+                    value = ast.literal_eval(value_str)
+                except:
+                    value = value_str
+                h_params[base_name] = value
+
+            rows.append(h_params)
+
+            # pull cfg path for later
+            cfg_path = os.path.join(run_path, ".hydra", "config.yaml")
+            cfg_path_list.append(cfg_path)
+    else:
+        run_path = hydra_run_path
+        run_name = "0"
+
         # pull sweep params
         param_path = os.path.join(run_path, ".hydra", "overrides.yaml")
         overrides = yaml.safe_load(open(param_path))
@@ -54,16 +82,17 @@ def get_hydra_runs(hydra_run_path):
                 value = value_str
             h_params[base_name] = value
 
-        rows.append(h_params)
+        rows = [h_params]
 
         # pull cfg path for later
         cfg_path = os.path.join(run_path, ".hydra", "config.yaml")
-        cfg_path_list.append(cfg_path)
+        cfg_path_list = [cfg_path]
 
     # write hyperaram df
     hyper_df = pd.DataFrame(rows)
 
     return hyper_df, cfg_path_list
+
 
 def parse_hydra_paths(run_path, version=None, ckpt=None):
 
@@ -288,12 +317,13 @@ def process_run(run_dir: Path) -> None:
 
 
 def assess_hydra_results(hydra_run_path,
+                         run_type,
                            n_image_figures=50,
                            overwrite_flag=False,
                            skip_figures_flag=False,
                            batch_size=256):
 
-    hyper_df, cfg_path_list = get_hydra_runs(hydra_run_path)
+    hyper_df, cfg_path_list = get_hydra_runs(hydra_run_path, run_type)
 
     hyper_df.to_csv(os.path.join(hydra_run_path, "hyperparam_df.csv"), index=False)
 
@@ -419,8 +449,10 @@ if __name__ == "__main__":
         p = argparse.ArgumentParser(description="Assess Hydra run results")
         p.add_argument("--hydra_run_name", "-p", type=str, required=True,
                        help="Path to the Hydra run directory")
+        p.add_argument("--run_type", "-r", type=str, required=False, default="run",
+                       help="mutlirun or run?")
         p.add_argument("--location", "-l", type=str, required=True, default="cluster",
-                       help="Path to the Hydra run directory")
+                       help="cluster or trap?")
         p.add_argument("--overwrite_flag", "-o", action="store_true", default=True,
                        help="Whether to overwrite existing outputs")
         args = p.parse_args()
@@ -435,6 +467,7 @@ if __name__ == "__main__":
         assess_hydra_results(
             hydra_run_path=hydra_run_path,
             overwrite_flag=args.overwrite_flag,
+            run_type=args.run_type
         )
 
     hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/squeeze_test_20250503_231352/"
