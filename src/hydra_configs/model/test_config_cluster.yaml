@@ -23,7 +23,7 @@ dataconfig:
   num_workers: 8
   batch_size: 512
   wrap: True
-  root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+  root: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/"
 
 trainconfig:
   benchmark: True
