@@ -12,7 +12,7 @@ lossconfig:
   metric_weight: 10
   pips_flag: True
   pips_weight: 0.8
-  pips_net: "squeeze"
+  pips_net: "vgg"
   schedule_metric: True
   schedule_pips: True
   schedule_kld: True
