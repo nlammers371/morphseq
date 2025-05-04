@@ -16,6 +16,7 @@ lossconfig:
   schedule_metric: True
   schedule_pips: True
   schedule_kld: True
+  bio_only_kld: False
 
 
 dataconfig:
