@@ -5,7 +5,7 @@ from src.models.model_components.legacy_components import (
     EncoderConvVAE, DecoderConvVAE, DecoderConvVAEUpsamp
 )
 from src.models.model_components.ldm_components_ae import (WrappedLDMDecoder,
-                                                           WrappedLDMEncoderPool, WrappedLDMEncoderPool
+                                                           WrappedLDMEncoderPool
                                                            )
 
 

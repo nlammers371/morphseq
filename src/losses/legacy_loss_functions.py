@@ -83,9 +83,11 @@ class VAELossBasic(nn.Module):
         super().__init__()
 
         # self.kld_weight = cfg.kld_weight
-        self.reconstruction_loss = cfg.reconstruction_loss # only applies if we're not doing PIPS
+        self.reconstruction_loss = cfg.reconstruction_loss
+        # only applies if we're not doing PIPS
         self.pips_flag = cfg.pips_flag
         self.schedule_pips = cfg.schedule_pips
+        self.pips_weight = cfg.pips_weight
         self.pips_net = cfg.pips_net
         self.pips_cfg = cfg.pips_cfg
 

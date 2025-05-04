@@ -1,6 +1,6 @@
 
 config_target: src.models.legacy_model_configs.VAEFancyConfig
-ckpt_path: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/outside_models/ldm-kl/ldm_kl4/model.ckpt"
+ckpt_path: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/outside_models/ldm-kl/ldm_kl4/model.ckpt"
 
 ddconfig:
   name: "ldmVAE"
@@ -39,7 +39,7 @@ dataconfig:
   num_workers: 8
   batch_size: 16
   wrap: True
-  root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+  root: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/"
 
 trainconfig:
   benchmark: True

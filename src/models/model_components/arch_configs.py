@@ -49,7 +49,7 @@ class ArchitectureAELDM: # wraps native attributes from LDM repo
     # Attributes
     double_z: bool = True
     z_channels: int = 64
-    resolution: int = 256
+    resolution: List[int] = field(default_factory=lambda: [288, 128])
     in_channels: int = 1
     out_ch: int = 1
     ch: int = 128
@@ -57,9 +57,10 @@ class ArchitectureAELDM: # wraps native attributes from LDM repo
     num_res_blocks: int = 2
     attn_resolutions: List[int] = field(default_factory=lambda: [16, 8])
     dropout: float = 0.0
-
     # NL addition
     latent_dim: int = 64
+
+    freeze_encoder_trunk: bool = True
 
 
 @dataclass

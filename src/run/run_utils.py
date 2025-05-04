@@ -23,7 +23,9 @@ warnings.filterwarnings(
 
 def load_from_checkpoint(model, ckpt_path):
 
-    if ckpt_path is None:
+    if ckpt_path is not None:
+        print("Loading checkpoint from {}".format(ckpt_path))
+
         ckpt = torch.load(
             ckpt_path,
             map_location="cpu")["state_dict"]
@@ -77,7 +79,11 @@ def train_vae(cfg, gpus: int | None = None):
         lr=train_config.learning_rate,
         batch_key="data",
     )
-
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total params:     {total_params:,}")
+    print(f"Trainable params: {trainable_params:,}   "
+          f"({100 * trainable_params / total_params:.2f}% of total)")
     # make output directory
     # run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100*loss_fn.kld_weight)}_percep"
     # save_dir = os.path.join(data_config.root, "output", ""

@@ -23,7 +23,10 @@ class WrappedLDMDecoder(nn.Module):
 
         # compute the bottleneck spatial size H',W'
         R = len(ddconfig["ch_mult"])
-        self.spatial_size = ddconfig["resolution"] // (2 ** (R - 1))  # H′ = W′
+        resolution = ddconfig["resolution"]
+        H, W = resolution
+        self.H_size = H // (2 ** (R - 1))  # H′ = W′
+        self.W_size = W // (2 ** (R - 1))
 
         self.z_ch = ddconfig["z_channels"]
         self.latent_dim = ddconfig["latent_dim"]
@@ -31,7 +34,7 @@ class WrappedLDMDecoder(nn.Module):
         # a linear layer to inflate the vector back to spatial maps
         self.inflate = nn.Linear(
             self.latent_dim,
-            self.z_ch * self.spatial_size * self.spatial_size
+            self.z_ch * self.H_size * self.W_size
         )
 
     def forward(self, z_vec: torch.Tensor) -> ModelOutput:
@@ -46,7 +49,7 @@ class WrappedLDMDecoder(nn.Module):
         v = self.inflate(z_vec)  # → (B, z_ch * H′ * W′)
 
         # 2) reshape to spatial latent map
-        z_spatial = v.view(B, self.z_ch, self.spatial_size, self.spatial_size)
+        z_spatial = v.view(B, self.z_ch, self.H_size, self.W_size)
 
         # 3) decode back up to full image
         recon = self.decoder(z_spatial)
@@ -327,6 +330,7 @@ class Encoder(nn.Module):
     def __init__(self, *, ch, out_ch, ch_mult=(1,2,4,8), num_res_blocks,
                  attn_resolutions, dropout=0.0, resamp_with_conv=True, in_channels,
                  resolution, z_channels, double_z=True, use_linear_attn=False, attn_type="vanilla",
+                 freeze_encoder_trunk=False,
                  **ignore_kwargs):
         super().__init__()
         if use_linear_attn: attn_type = "linear"
@@ -336,6 +340,7 @@ class Encoder(nn.Module):
         self.num_res_blocks = num_res_blocks
         self.resolution = resolution
         self.in_channels = in_channels
+        self.freeze_encoder_trunk = freeze_encoder_trunk
 
         # downsampling
         self.conv_in = torch.nn.Conv2d(in_channels,
@@ -344,7 +349,9 @@ class Encoder(nn.Module):
                                        stride=1,
                                        padding=1)
 
-        curr_res = resolution
+        # curr_res = resolution
+        curr_H, curr_W = resolution
+
         in_ch_mult = (1,)+tuple(ch_mult)
         self.in_ch_mult = in_ch_mult
         self.down = nn.ModuleList()
@@ -359,14 +366,16 @@ class Encoder(nn.Module):
                                          temb_channels=self.temb_ch,
                                          dropout=dropout))
                 block_in = block_out
-                if curr_res in attn_resolutions:
+                if curr_H in attn_resolutions:
                     attn.append(make_attn(block_in, attn_type=attn_type))
             down = nn.Module()
             down.block = block
             down.attn = attn
             if i_level != self.num_resolutions-1:
                 down.downsample = Downsample(block_in, resamp_with_conv)
-                curr_res = curr_res // 2
+                curr_H = curr_H // 2
+                curr_W = curr_W // 2
+
             self.down.append(down)
 
         # middle
@@ -389,23 +398,56 @@ class Encoder(nn.Module):
                                         stride=1,
                                         padding=1)
 
+
+        if self.freeze_encoder_trunk:
+            self._freeze_trunk()
+
+
     def forward(self, x):
         # timestep embedding
         temb = None
 
         # downsampling
-        hs = [self.conv_in(x)]
-        for i_level in range(self.num_resolutions):
-            for i_block in range(self.num_res_blocks):
-                h = self.down[i_level].block[i_block](hs[-1], temb)
-                if len(self.down[i_level].attn) > 0:
-                    h = self.down[i_level].attn[i_block](h)
-                hs.append(h)
-            if i_level != self.num_resolutions-1:
-                hs.append(self.down[i_level].downsample(hs[-1]))
+        if not self.freeze_encoder_trunk:
+            hs = [self.conv_in(x)]
+            for i_level in range(self.num_resolutions):
+                for i_block in range(self.num_res_blocks):
+                    h = self.down[i_level].block[i_block](hs[-1], temb)
+                    if len(self.down[i_level].attn) > 0:
+                        h = self.down[i_level].attn[i_block](h)
+                    hs.append(h)
+                if i_level != self.num_resolutions-1:
+                    hs.append(self.down[i_level].downsample(hs[-1]))
+            h = hs[-1]
 
+        else:
+            # ─── trunk: conv_in + downsampling ───
+            # 1) ensure any BN/Dropout in the trunk is in eval mode
+            self.conv_in.eval()
+            for lvl in self.down:
+                for blk in lvl.block:
+                    blk.eval()
+                for att in lvl.attn:
+                    att.eval()
+                if hasattr(lvl, "downsample"):
+                    lvl.downsample.eval()
+
+            # 2) run the entire trunk under no_grad → no activations are stored
+            with torch.no_grad():
+                hs = [self.conv_in(x)]
+                for i_level in range(self.num_resolutions):
+                    for i_block in range(self.num_res_blocks):
+                        h = self.down[i_level].block[i_block](hs[-1], temb)
+                        if len(self.down[i_level].attn) > 0:
+                            h = self.down[i_level].attn[i_block](h)
+                        hs.append(h)
+                    if i_level != self.num_resolutions - 1:
+                        hs.append(self.down[i_level].downsample(hs[-1]))
+
+            # 3) detach + re‑enable grad tracking at the bottleneck
+            h = hs[-1].detach().requires_grad_()
         # middle
-        h = hs[-1]
+
         h = self.mid.block_1(h, temb)
         h = self.mid.attn_1(h)
         h = self.mid.block_2(h, temb)
@@ -415,6 +457,37 @@ class Encoder(nn.Module):
         h = nonlinearity(h)
         h = self.conv_out(h)
         return h
+
+    def _freeze_trunk(self):
+        # freeze the very first conv
+        for p in self.conv_in.parameters():
+            p.requires_grad = False
+
+        # freeze every down‑sampling block
+        for level in self.down:
+            # each level.block is a ModuleList of ResnetBlocks
+            for block in level.block:
+                for p in block.parameters():
+                    p.requires_grad = False
+            # and any attention layers
+            for attn in level.attn:
+                for p in attn.parameters():
+                    p.requires_grad = False
+            # and the downsample layer if it exists
+            if hasattr(level, "downsample"):
+                for p in level.downsample.parameters():
+                    p.requires_grad = False
+
+    def trunk_eval_mode(self):
+        # put all the frozen layers in eval
+        self.conv_in.eval()
+        for lvl in self.down:
+            for blk in lvl.block:
+                blk.eval()
+            for att in lvl.attn:
+                att.eval()
+            if hasattr(lvl, "downsample"):
+                lvl.downsample.eval()
 
 
 
@@ -437,8 +510,12 @@ class Decoder(nn.Module):
         # compute in_ch_mult, block_in and curr_res at lowest res
         in_ch_mult = (1,)+tuple(ch_mult)
         block_in = ch*ch_mult[self.num_resolutions-1]
-        curr_res = resolution // 2**(self.num_resolutions-1)
-        self.z_shape = (1,z_channels,curr_res,curr_res)
+
+        H, W = resolution
+        curr_H = H // 2**(self.num_resolutions-1)
+        curr_W = W // 2 ** (self.num_resolutions - 1)
+        # curr_res = resolution // 2**(self.num_resolutions-1)
+        self.z_shape = (1,z_channels,curr_H,curr_W)
         print("Working with z of shape {} = {} dimensions.".format(
             self.z_shape, np.prod(self.z_shape)))
 
@@ -473,14 +550,16 @@ class Decoder(nn.Module):
                                          temb_channels=self.temb_ch,
                                          dropout=dropout))
                 block_in = block_out
-                if curr_res in attn_resolutions:
+                if curr_H in attn_resolutions:
                     attn.append(make_attn(block_in, attn_type=attn_type))
             up = nn.Module()
             up.block = block
             up.attn = attn
             if i_level != 0:
                 up.upsample = Upsample(block_in, resamp_with_conv)
-                curr_res = curr_res * 2
+                curr_H = curr_H * 2
+                curr_W = curr_W * 2
+
             self.up.insert(0, up) # prepend to get consistent order
 
         # end
