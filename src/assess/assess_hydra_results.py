@@ -153,9 +153,6 @@ def assess_image_reconstructions(
         log_var = torch.clamp(log_var, min=-10., max=10.)  # exp() now bounded
         sigmas = torch.exp(0.5 * log_var).numpy()
 
-        # update dataframe in one shot
-        # df_idx = embryo_df.index[embryo_df.snip_id.isin(snip_ids)]
-        # build your mapping once
         mapping = dict(zip(embryo_df['snip_id'].values, embryo_df.index.values))
         # then map your list of snip_ids in O(1) each
         df_idx = np.array([mapping[snip] for snip in snip_ids])
@@ -266,9 +263,12 @@ def process_run(run_dir: Path) -> None:
         "total" :  ("train/loss",        "val/loss"),
         "recon" :  ("train/recon_loss",  "val/recon_loss"),
         "kld"   :  ("train/kld_loss",    "val/kld_loss"),
+        "kld_weight": ("train/kld_weight", "val/kld_weight"),
         "pixel" : ("train/pixel_loss", "val/pixel_loss"),
         "pips"  : ("train/pips_loss", "val/pips_loss"),
+        "pips_weight": ("train/pips_weight", "val/pips_weight"),
         "metric":  ("train/metric_loss", "val/metric_loss"),
+        "metric_weight": ("train/metric_weight", "val/metric_weight"),
     }
 
     # 1) gather into a dict of DataFrames
