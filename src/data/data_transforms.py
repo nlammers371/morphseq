@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from pythae.data.datasets import collate_dataset_output
 
 
-def contrastive_transform():  # (size, s=1):
+def contrastive_transform(target_size=None):  # (size, s=1):
     """Return a set of data augmentation transformations as described in the SimCLR paper."""
     color_jitter = transforms.ColorJitter(brightness=0.3)
     data_transforms = transforms.Compose([transforms.Grayscale(num_output_channels=1),

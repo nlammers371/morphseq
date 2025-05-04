@@ -54,9 +54,10 @@ class LitModel(pl.LightningModule):
         if hasattr(self.model, "compute_loss"):
             loss_output = self.model.compute_loss(x, out)
         else:
+            # break_flag = self.current_epoch==3
             loss_output  = self.loss_fn(model_input=batch,
-                                          model_output=out,
-                                          batch_key=self.batch_key)
+                                        model_output=out,
+                                        batch_key=self.batch_key)
 
         bsz = x.size(0)
 
@@ -74,7 +75,10 @@ class LitModel(pl.LightningModule):
         self.log(f"{stage}/kld_loss", loss_output.KLD, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
 
         if "metric_loss" in loss_output:
-            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
+            self.log(f"{stage}/metric_weight", self.loss_fn.metric_weight, on_step=False, on_epoch=True, batch_size=bsz,
+                     rank_zero_only=True)
+            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)
+
         if "pips_loss" in loss_output:
             self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
 

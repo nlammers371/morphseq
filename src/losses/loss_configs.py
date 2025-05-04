@@ -13,7 +13,7 @@ class BasicLoss:
     ] = "src.losses.legacy_loss_functions.VAELossBasic"
     kld_weight: float = 1.0
     reconstruction_loss: str = "mse"
-    pips_net: Literal["vgg", "alex"] = "alex"
+    pips_net: Literal["vgg", "alex", "squeeze"] = "squeeze"
 
     # get scheduler info
     schedule_pips: bool = True
@@ -62,7 +62,7 @@ class MetricLoss:
 
     pips_flag: bool = True
     pips_weight: float = 1.0
-    pips_net: Literal["vgg", "alex"] = "alex"
+    pips_net: Literal["vgg", "alex", "squeeze"] = "squeeze"
 
     # get scheduler info
     schedule_pips: bool = True

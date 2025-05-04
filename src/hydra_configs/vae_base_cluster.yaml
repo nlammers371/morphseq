@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: vae_big_cluster
+  - model: morph_vae_big_cluster
   - override hydra/sweeper: basic
   - override hydra/launcher: basic
 

@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: vae
+  - model: morph_vae_big
 
 hydra:
   run:

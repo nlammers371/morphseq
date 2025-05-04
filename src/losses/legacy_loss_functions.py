@@ -22,7 +22,7 @@ def L1PIPS_module(self, x, recon_x) -> ModelOutput:
         else:
             with autocast("cuda"):
                 p_loss = self.perceptual_loss(x.contiguous(), recon_x.contiguous())
-        rec_loss = rec_loss + self.pips_weight * p_loss.view(rec_loss.shape[0])
+        rec_loss = (rec_loss + self.pips_weight * p_loss.view(rec_loss.shape[0])) / (1 + self.pips_weight) # keep scale the same
 
     else:
         p_loss = torch.tensor([0.0])
@@ -55,6 +55,7 @@ def recon_module(self, x, recon_x):
     return recon_loss
 
 def process_recon_loss(self, x, recon_x):
+
     if self.pips_flag:
         PIPS_loss = L1PIPS_module(self, x, recon_x)
         recon_loss = PIPS_loss.nll_loss
@@ -114,7 +115,10 @@ class VAELossBasic(nn.Module):
 
         KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
 
-        recon_scale_factor = (128 * 288) #/ (x.shape[-1] * x.shape[-2])
+        if not self.pips_flag:
+            recon_scale_factor = (128 * 288)
+        else:
+            recon_scale_factor = (128 * 288) / 10 # accounts for fact that L1 loss ~10x size of L2
         kld_scale_factor = 100 #/ mu.shape[1]
 
         # calculate weighted loss components
@@ -190,20 +194,25 @@ class NTXentLoss(nn.Module):
 
         # calculate reconstruction error
         recon_loss, px_loss, p_loss = process_recon_loss(self, x0, recon_x)
+        if self.pips_flag:
+            recon_scale_factor = (128*288)
+        else:
+            recon_scale_factor = (128 * 288) / 10
 
-        recon_scale_factor = (128*288) #/ (x.shape[-1] * x.shape[-2])
+        #/ (x.shape[-1] * x.shape[-2])
         kld_scale_factor = 100 #/ mu.shape[1] # does not account for possibility of bio-only. Simpler. Not sure which is better
         # Calculate cross-entropy wrpt a standard multivariate Gaussian
         if self.bio_only_kld:
             b_indices = self.cfg.biological_indices
-            KLD = -0.5 * torch.sum(1 + logvar[:, b_indices] - mu[:, b_indices].pow(2) -
+            KLD = -0.5 * torch.mean(1 + logvar[:, b_indices] - mu[:, b_indices].pow(2) -
                                    logvar[:, b_indices].exp(), dim=-1)
         else:
-            KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
+            KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
 
         metric_loss = self._nt_xent_loss_euclidean(features=mu,
                                                    self_stats=self_stats,
                                                    other_stats=other_stats)
+
 
         # calculate weighted loss components
         metric_loss_w = self.cfg.metric_weight * metric_loss
