@@ -50,8 +50,10 @@ class LitModel(pl.LightningModule):
         self.loss_fn.kld_weight = kld_w
         pips_w = self._pips_weight()
         self.loss_fn.pips_weight = pips_w
-        metric_w = self._metric_weight()
-        self.loss_fn.metric_weight = metric_w
+
+        if hasattr(self, "metric_weight"):
+            metric_w = self._metric_weight()
+            self.loss_fn.metric_weight = metric_w
 
         if hasattr(self.model, "compute_loss"):
             loss_output = self.model.compute_loss(x, out)
@@ -113,8 +115,7 @@ class LitModel(pl.LightningModule):
                 step_curr=self.current_epoch,
                 **self.loss_fn.metric_cfg,
             )
-        else:
-            return self.loss_fn.metric_weight
+
 
     def training_step(self, batch, batch_idx):
         return self._step(batch, batch_idx, "train")
