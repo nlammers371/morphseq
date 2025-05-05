@@ -2,7 +2,7 @@ config_target: src.models.legacy_model_configs.morphVAEConfig
 
 ddconfig:
   input_dim: [1, 288, 128]
-  n_out_channels: 32 #16
+  n_out_channels: 16 #16
   latent_dim: 100
   n_conv_layers: 5
   frac_nuisance_latents: 0.2
@@ -11,18 +11,18 @@ lossconfig:
   kld_weight: 10.0
   metric_weight: 10
   pips_flag: True
-  pips_weight: 1.0
-  pips_net: "squeeze"
+  pips_weight: 0.8
+  pips_net: "vgg"
   schedule_metric: True
   schedule_pips: True
   schedule_kld: True
   bio_only_kld: False
-
+  margin: 1.0
 
 dataconfig:
   target: "BasicDataset"
   num_workers: 8
-  batch_size: 512
+  batch_size: 256
   wrap: True
   root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
 

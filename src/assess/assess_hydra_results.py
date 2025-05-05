@@ -470,8 +470,8 @@ if __name__ == "__main__":
             run_type=args.run_type
         )
 
-    hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/squeeze_test_20250503_231352/"
-    assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
+    # hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/squeeze_test_20250503_231352/"
+    # assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
 
     # hydra_path = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/nets_pip05_20250502_170746/"
     # assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
