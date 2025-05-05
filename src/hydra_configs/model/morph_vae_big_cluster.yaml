@@ -8,10 +8,10 @@ ddconfig:
   frac_nuisance_latents: 0.2
 
 lossconfig:
-  kld_weight: 10.0
-  metric_weight: 10
+  kld_weight: 5.0
+  metric_weight: 50
   pips_flag: True
-  pips_weight: 0.8
+  pips_weight: 0.1
   pips_net: "vgg"
   schedule_metric: True
   schedule_pips: True
@@ -30,4 +30,4 @@ dataconfig:
 trainconfig:
   benchmark: True
   accumulate_grad_batches: 2
-  max_epochs: 125
+  max_epochs: 200
