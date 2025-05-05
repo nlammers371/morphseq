@@ -18,6 +18,7 @@ lossconfig:
   schedule_kld: True
   bio_only_kld: False
   margin: 1.0
+  temperature: 0.1
 
 dataconfig:
   target: "BasicDataset"

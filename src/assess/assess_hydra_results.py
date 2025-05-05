@@ -446,7 +446,7 @@ def assess_hydra_results(hydra_run_path,
 if __name__ == "__main__":
 
     p = argparse.ArgumentParser(description="Assess Hydra run results")
-    p.add_argument("--hydra_run_name", "-p", type=str, required=True,
+    p.add_argument("--hydra_run_name", "-p", nargs="+", type=str, required=True,
                    help="Path to the Hydra run directory")
     p.add_argument("--run_type", "-r", type=str, required=False, default="run",
                    help="mutlirun or run?")

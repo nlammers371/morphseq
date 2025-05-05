@@ -115,7 +115,8 @@ class LitModel(pl.LightningModule):
                 step_curr=self.current_epoch,
                 **self.loss_fn.metric_cfg,
             )
-
+        else:
+            return self.loss_fn.metric_weight
 
     def training_step(self, batch, batch_idx):
         return self._step(batch, batch_idx, "train")
