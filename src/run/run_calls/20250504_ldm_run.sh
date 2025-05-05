@@ -11,8 +11,8 @@ python -m src.run.training_ldm_cluster --run \
     model.trainconfig.max_epochs=40 \
     model.lossconfig.pips_warmup=10 \
     model.lossconfig.pips_rampup=5 \
-    model.lossconfig.kld_warmup= 5 \
-    model.lossconfig.kld_rampup= 5
+    model.lossconfig.kld_warmup=5 \
+    model.lossconfig.kld_rampup=5
 
 
 ## === Second run ===
