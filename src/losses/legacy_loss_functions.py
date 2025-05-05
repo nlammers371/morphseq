@@ -10,23 +10,48 @@ from torch.amp import autocast
 
 # Adapted from LDM codebase (their loss sans discriminator)
 def L1PIPS_module(self, x, recon_x) -> ModelOutput:
+    # --- reconstruction + perceptual ---
+    # pixel‐L1 per sample
+    rec_loss = torch.abs(x.contiguous() - recon_x.contiguous()).mean(dim=[1, 2, 3])
 
-    rec_loss = (torch.abs(x.contiguous() - recon_x.contiguous())).mean(dim=[-3, -2,-1])
-
+    # perceptual
     if self.pips_weight > 0:
         if x.shape[1] == 1:
             in3 = x.repeat(1, 3, 1, 1)
             out3 = recon_x.repeat(1, 3, 1, 1)
             with autocast("cuda"):
-                p_loss = self.perceptual_loss(in3, out3)
+                p_loss = self.perceptual_loss(in3, out3).view(rec_loss.shape[0])
         else:
             with autocast("cuda"):
-                p_loss = self.perceptual_loss(x.contiguous(), recon_x.contiguous())
-        rec_loss = (rec_loss + self.pips_weight * p_loss.view(rec_loss.shape[0])) / (1 + self.pips_weight) # keep scale the same
-
+                p_loss = self.perceptual_loss(
+                    x.contiguous(), recon_x.contiguous()
+                ).view(rec_loss.shape[0])
     else:
-        p_loss = torch.tensor([0.0])
+        p_loss = torch.zeros_like(rec_loss)
 
+    # total‑variation (TV) per sample
+    if self.tv_weight > 0:
+        # vertical diffs: shape [B, C, H-1, W]
+        tv_v = torch.abs(recon_x[:, :, 1:, :] - recon_x[:, :, :-1, :])
+        # horizontal diffs: shape [B, C, H, W-1]
+        tv_h = torch.abs(recon_x[:, :, :, 1:] - recon_x[:, :, :, :-1])
+        # mean over channel & spatial dims → [B]
+        tv_loss = (
+                tv_v.mean(dim=[1, 2, 3]) +
+                tv_h.mean(dim=[1, 2, 3])
+        )
+    else:
+        tv_loss = torch.zeros_like(rec_loss)
+
+    # combine them, normalizing so the scale stays comparable
+    total_weight = 1.0 + self.pips_weight + self.tv_weight
+    rec_loss = (
+                       rec_loss
+                       + self.pips_weight * p_loss
+                       + self.tv_weight * tv_loss
+               ) / total_weight
+
+    # now your usual NLL (or ELBO) step
     nll_loss = rec_loss / torch.exp(self.recon_logvar) + self.recon_logvar
     # nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
 
@@ -90,6 +115,7 @@ class VAELossBasic(nn.Module):
         self.pips_weight = cfg.pips_weight
         self.pips_net = cfg.pips_net
         self.pips_cfg = cfg.pips_cfg
+        self.tv_weight = cfg.tv_weight
 
         self.schedule_kld = cfg.schedule_kld
         self.kld_weight = cfg.kld_weight
@@ -154,6 +180,7 @@ class NTXentLoss(nn.Module):
         self.pips_net = cfg.pips_net
         self.pips_cfg = cfg.pips_cfg
 
+        self.tv_weight = cfg.tv_weight
         # KLD
         self.schedule_kld = cfg.schedule_kld
         self.kld_weight = cfg.kld_weight

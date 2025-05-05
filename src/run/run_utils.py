@@ -95,8 +95,9 @@ def train_vae(cfg, gpus: int | None = None):
         save_dir=out_dir,  # top-level folder
     )
 
+    ckpt_path = os.path.join(logger.log_dir, "checkpoints")
     checkpoint_cb = ModelCheckpoint(
-        dirpath=out_dir,  # same top‑level folder as your logger
+        dirpath=ckpt_path,  # same top‑level folder as your logger
         filename="epoch{epoch:02d}",  # e.g. epoch=05.ckpt
         save_top_k=-1,  # save all checkpoints, not just the best
         every_n_epochs=model_config.trainconfig.save_every_n,

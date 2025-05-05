@@ -13,7 +13,7 @@ class BasicLoss:
     ] = "src.losses.legacy_loss_functions.VAELossBasic"
     kld_weight: float = 1.0
     reconstruction_loss: str = "mse"
-    pips_net: Literal["vgg", "alex", "squeeze"] = "squeeze"
+    pips_net: Literal["vgg", "alex", "squeeze"] = "vgg"
 
     # get scheduler info
     schedule_pips: bool = True
@@ -24,7 +24,9 @@ class BasicLoss:
     kld_rampup: int = 20
 
     pips_flag: bool = True
-    pips_weight: float = 1.0
+    pips_weight: float = 0.1
+
+    tv_weight: float = 1e-5
 
 
     @property
@@ -61,8 +63,8 @@ class MetricLoss:
     reconstruction_loss: str = "mse"
 
     pips_flag: bool = True
-    pips_weight: float = 1.0
-    pips_net: Literal["vgg", "alex", "squeeze"] = "squeeze"
+    pips_weight: float = 0.1
+    pips_net: Literal["vgg", "alex", "squeeze"] = "vgg"
 
     # get scheduler info
     schedule_pips: bool = True
@@ -76,6 +78,8 @@ class MetricLoss:
     schedule_metric: bool = True
     metric_warmup: int = 50
     metric_rampup: int = 20
+
+    tv_weight: float = 1e-5
 
     # model arch info
     latent_dim_bio: Optional[int] = None
