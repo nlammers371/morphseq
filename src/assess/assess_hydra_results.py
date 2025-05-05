@@ -445,30 +445,29 @@ def assess_hydra_results(hydra_run_path,
 
 if __name__ == "__main__":
 
-    if __name__ == "__main__":
-        p = argparse.ArgumentParser(description="Assess Hydra run results")
-        p.add_argument("--hydra_run_name", "-p", type=str, required=True,
-                       help="Path to the Hydra run directory")
-        p.add_argument("--run_type", "-r", type=str, required=False, default="run",
-                       help="mutlirun or run?")
-        p.add_argument("--location", "-l", type=str, required=True, default="cluster",
-                       help="cluster or trap?")
-        p.add_argument("--overwrite_flag", "-o", action="store_true", default=True,
-                       help="Whether to overwrite existing outputs")
-        args = p.parse_args()
+    p = argparse.ArgumentParser(description="Assess Hydra run results")
+    p.add_argument("--hydra_run_name", "-p", type=str, required=True,
+                   help="Path to the Hydra run directory")
+    p.add_argument("--run_type", "-r", type=str, required=False, default="run",
+                   help="mutlirun or run?")
+    p.add_argument("--location", "-l", type=str, required=True, default="cluster",
+                   help="cluster or trap?")
+    p.add_argument("--overwrite_flag", "-o", action="store_true", default=True,
+                   help="Whether to overwrite existing outputs")
+    args = p.parse_args()
 
-        if args.location == "cluster":
-            root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/"
-        elif args.location == "trap":
-            root = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/"
-        else:
-            raise NotImplementedError
-        hydra_run_path = os.path.join(root, args.hydra_run_name, "")
-        assess_hydra_results(
-            hydra_run_path=hydra_run_path,
-            overwrite_flag=args.overwrite_flag,
-            run_type=args.run_type
-        )
+    if args.location == "cluster":
+        root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/"
+    elif args.location == "trap":
+        root = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/"
+    else:
+        raise NotImplementedError
+    hydra_run_path = os.path.join(root, args.hydra_run_name, "")
+    assess_hydra_results(
+        hydra_run_path=hydra_run_path,
+        overwrite_flag=args.overwrite_flag,
+        run_type=args.run_type
+    )
 
     # hydra_path = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/squeeze_test_20250503_231352/"
     # assess_hydra_results(hydra_run_path=hydra_path, overwrite_flag=True)
