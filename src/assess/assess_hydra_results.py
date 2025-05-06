@@ -1,7 +1,7 @@
 # from src.functions.dataset_utils import *
 import torch
 from torch.utils.data.sampler import SubsetRandomSampler
-from src.run.run_utils import initialize_model
+from src.run.run_utils import initialize_model, build_from_config, get_obj_from_str
 from torchvision.utils import save_image
 from pytorch_lightning import Trainer
 import umap.umap_ as umap
@@ -24,6 +24,24 @@ import yaml
 import ast
 from tqdm import tqdm
 import argparse
+
+def initialize_model_to_asses(config):
+
+    # initialize the model
+    config_full = config.copy()
+    model_dict = config.pop("model", OmegaConf.create())
+    target = model_dict["config_target"]
+    model_config = get_obj_from_str(target)
+    model_config = model_config.from_cfg(cfg=config_full)
+
+    # parse dataset related options and merge with defaults as needed
+    # data_config = model_config.dataconfig
+    # data_config.make_metadata()
+
+    # initialize model
+    model = build_from_config(model_config)
+
+    return model, model_config
 
 
 def get_hydra_runs(hydra_run_path, run_type):
@@ -316,13 +334,15 @@ def process_run(run_dir: Path) -> None:
 
 
 
-def assess_hydra_results(hydra_run_path,
+def assess_hydra_results(data_root,
+                         run_name,
                          run_type,
                            n_image_figures=50,
                            overwrite_flag=False,
                            skip_figures_flag=False,
                            batch_size=16):
 
+    hydra_run_path = os.path.join(data_root, "hydra_outputs", run_name)
     hyper_df, cfg_path_list = get_hydra_runs(hydra_run_path, run_type)
 
     hyper_df.to_csv(os.path.join(hydra_run_path, "hyperparam_df.csv"), index=False)
@@ -338,37 +358,36 @@ def assess_hydra_results(hydra_run_path,
             raise Exception("cfg argument dtype is not recognized")
 
         # initialize
-        model, model_config, train_data_config, loss_fn, train_config = initialize_model(config)
-
+        model, model_config = initialize_model_to_asses(config)
+        loss_fn = model_config.lossconfig.create_module()
         run_path = os.path.join(os.path.dirname(os.path.dirname(cfg)), "lightning_logs")
         model_dir, latest_ckpt = parse_hydra_paths(run_path=run_path)
+
 
         # load train/test/eval indices
         split_path = os.path.join(model_dir, "split_indices.pkl")
         with open(split_path, 'rb') as file:
             split_dict = pickle.load(file)
 
+        # load metadata
+        embryo_metadata_df = pd.read_csv(os.path.join(root, "metadata", "embryo_metadata_df_train.csv"),
+                                         low_memory=False)
+        embryo_metadata_df = embryo_metadata_df.loc[embryo_metadata_df["use_embryo_flag"]==True].reset_index(drop=True)
+        # look for indices not included in training. Add these to test set
+        train_indices = set(split_dict["train"] + split_dict["eval"] + split_dict["test"])
+        all_indices = set(embryo_metadata_df.index)
+        indices_to_add = sorted(list(all_indices - train_indices))
+
+        test_indices = split_dict["test"] + indices_to_add
         # initialize new data config for evaluation
         eval_data_config = BaseDataConfig(train_indices=np.asarray(split_dict["train"]),
-                                          test_indices=np.asarray(split_dict["test"]),
+                                          test_indices=np.asarray(test_indices),
                                           eval_indices=np.asarray(split_dict["eval"]),
-                                          root=train_data_config.root,
+                                          root=root,
                                           return_sample_names=True,
                                           transform_name="basic")
         eval_data_config.make_metadata()
 
-        # load model
-        lit_model = LitModel.load_from_checkpoint(latest_ckpt,
-                                              model=model,
-                                              loss_fn=loss_fn,
-                                              data_cfg=eval_data_config)
-
-        lit_model.eval()  # 1) turn off dropout / switch BN to eval
-        lit_model.freeze()
-
-        # load metadata
-        embryo_metadata_df = pd.read_csv(os.path.join(train_data_config.metadata_path, "embryo_metadata_df_train.csv"),
-                                         low_memory=False)
         # strip down the full dataset
         embryo_df = embryo_metadata_df[
             ["snip_id", "embryo_id", "Time Rel (s)", "experiment_date", "temperature", "medium", "short_pert_name",
@@ -378,6 +397,15 @@ def assess_hydra_results(hydra_run_path,
 
         # embryo_df.loc[embryo_df["reference_flag"].astype(str)=="nan", "reference_flag"] = False
         embryo_df = embryo_df.reset_index()
+
+        # load model
+        lit_model = LitModel.load_from_checkpoint(latest_ckpt,
+                                                  model=model,
+                                                  loss_fn=loss_fn,
+                                                  data_cfg=eval_data_config)
+
+        lit_model.eval()  # 1) turn off dropout / switch BN to eval
+        lit_model.freeze()
 
         figure_path = os.path.join(model_dir, "figures")
         if not os.path.isdir(figure_path):
@@ -445,30 +473,33 @@ def assess_hydra_results(hydra_run_path,
 
 if __name__ == "__main__":
 
-    p = argparse.ArgumentParser(description="Assess Hydra run results")
-    p.add_argument("--hydra_run_name", "-p", nargs="+", type=str, required=True,
-                   help="Path to the Hydra run directory")
-    p.add_argument("--run_type", "-r", type=str, required=False, default="run",
-                   help="mutlirun or run?")
-    p.add_argument("--location", "-l", type=str, required=True, default="cluster",
-                   help="cluster or trap?")
-    p.add_argument("--overwrite_flag", "-o", action="store_true", default=True,
-                   help="Whether to overwrite existing outputs")
-    p.add_argument("--batch_size", "-b", action="store_true", default=16,
-                   help="Whether to overwrite existing outputs")
-    args = p.parse_args()
-
-    if args.location == "cluster":
-        root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/"
-    elif args.location == "trap":
-        root = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/"
-    else:
-        raise NotImplementedError
-    hydra_run_path = os.path.join(root, args.hydra_run_name, "")
+    # p = argparse.ArgumentParser(description="Assess Hydra run results")
+    # p.add_argument("--hydra_run_name", "-p", nargs="+", type=str, required=True,
+    #                help="Path to the Hydra run directory")
+    # p.add_argument("--run_type", "-r", type=str, required=False, default="run",
+    #                help="mutlirun or run?")
+    # p.add_argument("--location", "-l", type=str, required=True, default="cluster",
+    #                help="cluster or trap?")
+    # p.add_argument("--overwrite_flag", "-o", action="store_true", default=True,
+    #                help="Whether to overwrite existing outputs")
+    # p.add_argument("--batch_size", "-b", action="store_true", default=16,
+    #                help="Whether to overwrite existing outputs")
+    # args = p.parse_args()
+    #
+    # if args.location == "cluster":
+    #     root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/"
+    # elif args.location == "trap":
+    #     root = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/"
+    # else:
+    #     raise NotImplementedError
+    root = "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+    run_name = "ntxent_256_20250504_091524"
+    hydra_run_path = os.path.join(root, run_name, "")
     assess_hydra_results(
-        hydra_run_path=hydra_run_path,
-        overwrite_flag=args.overwrite_flag,
-        run_type=args.run_type
+        data_root=root,
+        run_name=run_name,
+        overwrite_flag=True, #args.overwrite_flag,
+        run_type="run" #args.run_type
     )
 
 
