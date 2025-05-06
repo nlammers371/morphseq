@@ -8,17 +8,6 @@ sys.path.insert(0, code_root)
 # from src.functions.dataset_utils import *
 # import os
 from src._Archive.vae.models.auto_model import AutoModel
-# import umap.umap_ as umap
-# import numpy as np
-# from sklearn.preprocessing import StandardScaler
-# import torch.nn.functional as F
-# import pandas as pd
-# from tqdm import tqdm
-# from sklearn.neural_network import MLPRegressor
-# # from pythae.trainers.base_trainer_verbose import base_trainer_verbose
-# from pythae.data.datasets import collate_dataset_output
-# from torch.utils.data import DataLoader
-# from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import pandas as pd
 from glob import glob
 from tqdm import tqdm
