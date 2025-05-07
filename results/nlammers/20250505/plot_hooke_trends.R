@@ -63,7 +63,8 @@ hooke_counts_tissue <- hooke_counts_long %>%
                         filter(!is.na(tissue)) %>%
                         mutate(gl_tissue = interaction(germ.layer, tissue, sep=":")) %>%
                         arrange(stage_hpf, gl_tissue) %>%
-                        filter(stage_hpf>= 10 & stage_hpf <= 48) 
+                        filter((stage_hpf>= 0) & (stage_hpf <= 48) & (tissue != "periderm")) %>% 
+                        mutate(counts = exp(log_count)) 
 
 desired_levels <- hooke_counts_tissue %>%
   distinct(gl_tissue, germ.layer) %>%
@@ -106,7 +107,8 @@ n_cell_df2 <- n_cell_df %>%
 
 total_cells_df <- hooke_counts_tissue %>%
   group_by(stage_hpf) %>%
-  summarise(total_cells_base = logSumExp(log_count), .groups   = "drop" ) 
+  summarise(total_cells_base = sum(counts), .groups   = "drop" ) 
+
 
 # 2) Interpolate those counts onto your hooke stages:
 hooke_counts_tissue2 <- hooke_counts_tissue %>%
@@ -118,15 +120,14 @@ hooke_counts_tissue2 <- hooke_counts_tissue %>%
       rule = 2
     )$y
   ) %>%
-  # bring in your modeled total in log form, then exp → linear
-  left_join(total_cells_df, by = "stage_hpf") %>%
-  mutate(
-    total_cells_model = exp(total_cells_base),           # linear from your logSumExp
-    counts_model       = exp(log_count),                 # per‑tissue modeled counts
-    counts_norm        = 100 *counts_model 
-    / total_cells_model 
-    * total_cells_true          # rescale to “true” envelope
-  )
+  left_join(total_cells_df, by = "stage_hpf") # %>%
+  #mutate(
+   # total_cells_model = exp(total_cells_base),           # linear from your logSumExp
+    #counts_model       = exp(log_count),                 # per‑tissue modeled counts
+    #counts_norm        = 100 *counts_model 
+   # / total_cells_model 
+   # * total_cells_true          # rescale to “true” envelope
+ # )
 
 # 3) Plot the linear rescaled counts, with an optional log‑y axis:
 ggplot(hooke_counts_tissue2, 
