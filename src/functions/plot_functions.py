@@ -121,7 +121,7 @@ def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
     return fig
 
 def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6, show_gridlines=True,
-                     aspectmode="data", eye=None, theme="dark", dims=None, title=""):
+                     aspectmode="data", eye=None, theme="dark", dims=None, title="", marker_edge=True):
 
     if dims is None:
         dims = [600, 800]
@@ -140,7 +140,10 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6, show_gr
     if eye is None:
         eye = dict(x=1.5, y=1.5, z=1.5)
 
-    fig.update_traces(marker=dict(size=marker_size, line=dict(color=line_color, width=1)))
+    if marker_edge:
+        fig.update_traces(marker=dict(size=marker_size, line=dict(color=line_color, width=1)))
+    else:
+        fig.update_traces(marker=dict(size=marker_size))
 
     tick_font_size = int(font_size * 6 / 7)
     axis_format_dict = dict(showbackground=False,
