@@ -363,7 +363,6 @@ def assess_hydra_results(data_root,
         run_path = os.path.join(os.path.dirname(os.path.dirname(cfg)), "lightning_logs")
         model_dir, latest_ckpt = parse_hydra_paths(run_path=run_path)
 
-
         # load train/test/eval indices
         split_path = os.path.join(model_dir, "split_indices.pkl")
         with open(split_path, 'rb') as file:
