@@ -120,8 +120,9 @@ hooke_counts_tissue2 <- hooke_counts_tissue %>%
       rule = 2
     )$y
   ) %>%
-  left_join(total_cells_df, by = "stage_hpf") # %>%
-  #mutate(
+  left_join(total_cells_df, by = "stage_hpf")  %>%
+  mutate(counts_norm = counts * total_cells_true / total_cells_base) %>%
+  mutate(counts_plot = counts_norm + 1)
    # total_cells_model = exp(total_cells_base),           # linear from your logSumExp
     #counts_model       = exp(log_count),                 # per‑tissue modeled counts
     #counts_norm        = 100 *counts_model 
@@ -132,17 +133,19 @@ hooke_counts_tissue2 <- hooke_counts_tissue %>%
 # 3) Plot the linear rescaled counts, with an optional log‑y axis:
 ggplot(hooke_counts_tissue2, 
        aes(x = stage_hpf,
-           y = counts_norm,
+           y = counts_plot,
            group = gl_tissue,
            fill  = gl_tissue)) +
-  geom_stream(#type       = "mirror",
-              offset = "zero",
+  geom_stream(type       = "mirror",
+              #offset = "zero",
               extra_span = 0.2,
               bw         = 0.75,
               sorting    = "none") +
   scale_fill_manual(values = tissue_shades) +
-  coord_trans(y = "log10") +
-  # if you really want a log scale on the y‑axis:
-  # scale_y_log10(labels = scales::comma_format()) +
+  scale_y_log10(
+    labels = comma_format(),
+    breaks = log_breaks(base = 10),
+    expand = c(0, 0)
+  ) +
   theme_void() +
   theme(legend.position = "none")
