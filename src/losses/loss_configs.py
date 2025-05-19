@@ -123,7 +123,7 @@ class MetricLoss:
 
     def create_module(self):
         # import as needed to avoid circularity
-        from src.losses.legacy_loss_functions import NTXentLoss
+        from src.losses.loss_functions import NTXentLoss
         # map names→classes/functions
         loss_map = {
             "NT-Xent": NTXentLoss,

@@ -7,7 +7,7 @@ import math
 @dataclass
 class LegacyArchitecture:
 
-    name: Literal["convAE"] = "convAE"
+    name: Literal["convAE"] = "convVAE"
     latent_dim: int = 64
 
     n_out_channels: int = 16
@@ -20,7 +20,7 @@ class LegacyArchitecture:
 @dataclass
 class SplitArchitecture(LegacyArchitecture):
 
-    name: Literal["convAESplit"] = "convAESplit"
+    name: Literal["convAESplit"] = "convVAESplit"
     frac_nuisance_latents: float = 0.2
 
     @property

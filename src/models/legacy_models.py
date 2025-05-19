@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from pythae.data.datasets import BaseDataset
-from src.models.legacy_model_configs import VAEConfig, morphVAEConfig
+from src.models.model_configs import VAEConfig, morphVAEConfig
 from src.models.model_components.legacy_components import EncoderConvVAE, DecoderConvVAE
 from src.models.model_utils import ModelOutput
 

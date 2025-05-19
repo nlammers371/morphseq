@@ -14,39 +14,25 @@ def build_from_config(cfg):
         if "convAE" in cfg.ddconfig.name:
             encoder = EncoderConvVAE(cfg.ddconfig)
             decoder = DecoderConvVAEUpsamp(cfg.ddconfig)
+        elif "ldmVAE" in cfg.ddconfig.name:
+            encoder = WrappedLDMEncoderPool(asdict(cfg.ddconfig))
+            decoder = WrappedLDMDecoder(asdict(cfg.ddconfig))
         else:
             raise NotImplementedError
         model = VAE(cfg, encoder=encoder, decoder=decoder)
 
     elif cfg.name == "morphVAE":
-        if "convAE" in cfg.ddconfig.name:
+        if "convVAE" in cfg.ddconfig.name:
             encoder = EncoderConvVAE(cfg.ddconfig)
             decoder = DecoderConvVAEUpsamp(cfg.ddconfig)
-        else:
-            raise NotImplementedError
-        model = morphVAE(cfg, encoder=encoder, decoder=decoder)
-
-    elif cfg.name == "VAEFancy":
-        if "ldmVAE" in cfg.ddconfig.name:
+        elif "ldmVAE" in cfg.ddconfig.name:
             encoder = WrappedLDMEncoderPool(asdict(cfg.ddconfig))
             decoder = WrappedLDMDecoder(asdict(cfg.ddconfig))
         else:
             raise NotImplementedError
-        model = VAE(cfg, encoder=encoder, decoder=decoder)
-
-    elif cfg.name == "morphVAEFancy":
-        if "ldmVAE" in cfg.ddconfig.name:
-            encoder = WrappedLDMEncoderPool(asdict(cfg.ddconfig))
-            decoder = WrappedLDMDecoder(asdict(cfg.ddconfig))
-        else:
-            raise NotImplementedError
-
         model = morphVAE(cfg, encoder=encoder, decoder=decoder)
-    # elif cfg.name == "ldmAEkl":
-    #     model = AutoencoderKLModel(ddconfig=asdict(cfg.ddconfig), embed_dim=cfg.ddconfig.embed_dim)
 
     else:
         raise NotImplementedError
-
 
     return model
