@@ -14,6 +14,11 @@ from src.lightning.callbacks import SaveRunMetadata
 import torch
 from hydra.core.hydra_config import HydraConfig
 from pytorch_lightning.callbacks import ModelCheckpoint
+import json
+import yaml
+import pandas as pd
+from pathlib import Path
+from typing import List, Optional, Union
 
 torch.set_float32_matmul_precision("medium")
 # good default
@@ -23,6 +28,57 @@ warnings.filterwarnings(
     "ignore",
     message=r".*recommended to use `self\.log\('val/.*',.*sync_dist=True`.*"
 )
+
+
+
+def collect_results_recursive(
+    results_dir: str,
+    # output_csv: Union[str, Path],
+    # column_order: Optional[List[str]] = None
+) -> pd.DataFrame:
+    """
+    Recursively aggregates per-run overrides and metrics into a master CSV with enforced column order.
+
+    Args:
+        results_dir: Root directory containing nested run subfolders.
+        output_csv: Path to write the aggregated CSV.
+        column_order: List of column names to appear first in the DataFrame; any additional
+                      columns will follow in alphabetical order.
+
+    Returns:
+        A pandas DataFrame of the aggregated results.
+    """
+    results_dir = Path(results_dir)
+    # rows = []
+    train_dir_list = sorted(glob(os.path.join(results_dir, "*")))
+    train_dir_list = [td for td in train_dir_list if os.path.isdir(td)]
+
+    rows = []
+    # Search for all metrics.json files at any depth
+    for mdl_path in train_dir_list:
+        cfg_path = os.path.join(mdl_path, ".hydra", "config.yaml")
+        if not os.path.exists(cfg_path):
+            continue
+        with open(cfg_path, "r") as f:
+            text = f.read()
+        overrides = yaml.safe_load(text)
+        # metrics = json.loads(metrics_path.read_text())
+        # Use relative path from results_dir as run identifier
+        run_id = os.path.basename(mdl_path)
+        row = {"run": run_id}
+        if "model" in overrides.keys():
+            row.update(overrides["model"])
+        else:
+            row.update(overrides)
+
+        row["mdl_path"] = mdl_path
+        rows.append(row)
+
+    df = pd.json_normalize(rows, sep="_")
+    df.to_csv(os.path.join(results_dir, "job_summary_df.csv"), index=False)
+
+    return df
+
 
 def load_from_checkpoint(model, ckpt_path):
 

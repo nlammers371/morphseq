@@ -11,7 +11,7 @@ from src.models.model_components.ldm_components_ae import (WrappedLDMDecoder,
 
 def build_from_config(cfg):
     if cfg.name == "VAE":
-        if "convAE" in cfg.ddconfig.name:
+        if "convVAE" in cfg.ddconfig.name:
             encoder = EncoderConvVAE(cfg.ddconfig)
             decoder = DecoderConvVAEUpsamp(cfg.ddconfig)
         elif "ldmVAE" in cfg.ddconfig.name:

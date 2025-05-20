@@ -1,8 +1,8 @@
 defaults:
   - _self_
-  - model: morph_vae_big_cluster
-  - override hydra/sweeper: basic
-  - override hydra/launcher: basic
+#  - model: morph_vae_big_cluster
+#  - override hydra/sweeper: basic
+#  - override hydra/launcher: basic
 
 hydra:
   run:
@@ -10,9 +10,9 @@ hydra:
     dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
 
   sweep:
-    dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/hydra_outputs/"
       # create sub-folder 0, 1, 2, … for each combination
-    subdir: ${hydra.job.num}
+    subdir: "${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
 
   # 1) turn off any non‑basic plugins you found
 #  disable_plugins:

@@ -1,24 +1,26 @@
-config_target: src.models.legacy_model_configs.VAEConfig
+config_target: src.models.model_configs.VAEConfig
 
 ddconfig:
+  name: "convVAE"
   input_dim: [1, 288, 128]
   n_out_channels: 16
   latent_dim: 100
   n_conv_layers: 5
 
 lossconfig:
-  kld_weight: 1.0
+  kld_weight: 10.0
   pips_flag: True
   pips_weight: 1.0
+  pips_net: "vgg"
 
 dataconfig:
   target: "BasicDataset"
   num_workers: 8
   batch_size: 512
   wrap: True
-  root: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
+  root: ${ancestor:${hydra:run.dir},2} #"/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
 
 trainconfig:
   benchmark: True
   accumulate_grad_batches: 2
-  max_epochs: 100
+  max_epochs: 1

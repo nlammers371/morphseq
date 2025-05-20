@@ -7,17 +7,14 @@ from omegaconf import OmegaConf, DictConfig
 # from src.losses.legacy_loss_functions import VAELossBasic
 from src.losses.loss_configs import BasicLoss, MetricLoss
 from src.data.dataset_configs import BaseDataConfig, NTXentDataConfig
-from src.models.model_components.arch_configs import (LegacyArchitecture, SplitArchitecture,
-                                                      ArchitectureAELDM, SplitArchitectureAELDM)
+from src.models.model_components.arch_configs import (LegacyArchitecture, ArchitectureAELDM)
 from src.lightning.train_config import LitTrainConfig
 
 
 
 ARCH_REGISTRY: dict[str, type] = {"convVAE": LegacyArchitecture,
-                         "convVAESplit": SplitArchitecture,
-                         "ldmVAE": LegacyArchitecture,
-                         "ldmVAESplit": SplitArchitecture,
-                         }
+                                  "ldmVAE": LegacyArchitecture,
+                                 }
 
 def resolve_arch(dd: dict):
     """
@@ -63,9 +60,6 @@ class VAEConfig:
         # 3) build base dict and bake in the instantiated arch
         base = asdict(cls())
         base["ddconfig"] = arch
-
-        # 2) build a default instance and dump it to a plain dict
-        base = asdict(cls())
 
         # 3) deep‐merge user values on top of base
         merged = deep_merge(base, user_model)
@@ -117,7 +111,7 @@ class VAEConfig:
 @dataclass
 class morphVAEConfig:
 
-    ddconfig: Any = field(default_factory=SplitArchitecture) # Done
+    ddconfig: Any = field(default_factory=LegacyArchitecture) # Done
     lossconfig: MetricLoss = field(default_factory=MetricLoss)
     dataconfig: NTXentDataConfig = field(default_factory=NTXentDataConfig)
     trainconfig: LitTrainConfig = field(default_factory=LitTrainConfig)
@@ -150,8 +144,8 @@ class morphVAEConfig:
 
         # 5) update loss with necessary config options
         inst.lossconfig.latent_dim = inst.ddconfig.latent_dim
-        inst.lossconfig.latent_dim_bio = inst.ddconfig.latent_dim_bio
-        inst.lossconfig.latent_dim_nuisance = inst.ddconfig.latent_dim_nuisance
+        # inst.lossconfig.latent_dim_bio = inst.ddconfig.latent_dim_bio
+        # inst.lossconfig.latent_dim_nuisance = inst.ddconfig.latent_dim_nuisance
 
         # loss -> data
         inst.dataconfig.self_target_prob = inst.lossconfig.self_target_prob
@@ -164,8 +158,8 @@ class morphVAEConfig:
     
     
 
-class morphVAEFancyConfig(morphVAEConfig):
-
-    ddconfig: SplitArchitectureAELDM = field(default_factory=SplitArchitectureAELDM)
-
-    name: Literal["morphVAEFancy"] = "morphVAEFancy"
+# class morphVAEFancyConfig(morphVAEConfig):
+#
+#     ddconfig: SplitArchitectureAELDM = field(default_factory=SplitArchitectureAELDM)
+#
+#     name: Literal["morphVAEFancy"] = "morphVAEFancy"

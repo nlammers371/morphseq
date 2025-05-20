@@ -1,13 +1,14 @@
-config_target: src.models.legacy_model_configs.morphVAEConfig
+config_target: src.models.model_configs.morphVAEConfig
 
 ddconfig:
+  name: "convVAE"
   input_dim: [1, 288, 128]
   n_out_channels: 16 #16
   latent_dim: 100
   n_conv_layers: 5
-  frac_nuisance_latents: 0.2
 
 lossconfig:
+  frac_nuisance_latents: 0.2
   kld_weight: 5.0
   metric_weight: 50
   pips_flag: True

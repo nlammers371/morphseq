@@ -80,6 +80,7 @@ class BaseDataConfig(UrrDataConfig):
 
     # 1) pick by name, not by object
     target_name:   Literal["BasicDataset"] = "BasicDataset"
+
     # 2) a catch‐all for per‐dataset options
     target_kwargs: Dict[str,Any]        = field(default_factory=dict)
 

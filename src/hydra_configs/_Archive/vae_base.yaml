@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: morph_vae_big
+#  - model: morph_vae_big
 
 hydra:
   run:
@@ -8,6 +8,6 @@ hydra:
     dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
 
   sweep:
-    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/hydra_outputs/"
       # create sub-folder 0, 1, 2, … for each combination
-    subdir: ${hydra.job.num}
+    subdir: "${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
