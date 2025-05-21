@@ -101,6 +101,45 @@ def process_recon_loss(self, x, recon_x):
 
     return recon_loss, px_loss, p_loss
 
+class EVALPIPSLOSS(nn.Module):
+    def __init__(self, cfg, force_gpu: bool = False):
+        super().__init__()
+        self.pips_net = cfg.eval_pips_net
+        self.metric = lpips.LPIPS(net=self.pips_net)
+        # instantiated on CPU
+        if force_gpu and torch.cuda.is_available():
+            self.metric.cuda()
+            self._on_gpu = True
+        else:
+            self._on_gpu = False
+
+        # Lightning may move sub-modules to GPU; guard against that:
+    def _ensure_device(self):
+        """
+        Make sure the metric is back on the intended device (CPU by default)
+        after Lightning's automatic `.to(device)` calls.
+        """
+        if not self._on_gpu and next(self.metric.parameters()).is_cuda:
+            self.metric.cpu()
+
+    def forward(self, model_input, model_output, batch_key="data"):
+        """
+        recon  : (N,C,H,W) in [-1,1]  – model output
+        target : (N,C,H,W) in [-1,1]  – ground-truth image
+        Returns: scalar LPIPS distance (mean over batch).
+        """
+        self._ensure_device()  # <-- safety check
+
+        target = model_input[batch_key]
+        recon = model_output.recon_x
+
+        dev = next(self.metric.parameters()).device  # cpu *or* cuda
+        target = target.to(dev, non_blocking=True)
+        recon = recon.to(dev, non_blocking=True)
+
+        return self.metric(recon, target).mean()
+
+
 
 class VAELossBasic(nn.Module):
 

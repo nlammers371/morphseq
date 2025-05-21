@@ -7,7 +7,13 @@ from torch.nn import functional as F
 from torch import nn
 from src.models.ldm_models import AutoencoderKLModel
 from src.lightning.pl_utils import ramp_weight, cosine_ramp_weight
+import warnings
 
+warnings.filterwarnings(
+    "ignore",
+    message=r".*sync_dist=True.*",
+    category=UserWarning
+)
 
 class LitModel(pl.LightningModule):
     def __init__(
@@ -17,6 +23,7 @@ class LitModel(pl.LightningModule):
         data_cfg: Any,
         lr: float,
         batch_key: str = "data",
+        pips_fn: Optional[Callable[..., Any]] = None,
     ):
         """
         model:            any nn.Module whose forward(x) returns either
@@ -34,6 +41,7 @@ class LitModel(pl.LightningModule):
 
         self.model   = model
         self.loss_fn = loss_fn
+        self.pips_fn = pips_fn
         self.data_cfg = data_cfg
         self.lr       = lr
         self.batch_key = batch_key
@@ -64,6 +72,14 @@ class LitModel(pl.LightningModule):
                                         batch_key=self.batch_key)
 
         bsz = x.size(0)
+        # get perceptual loss
+        if (stage != "val") and (self.pips_fn is not None):
+            pips_output = self.pips_fn(model_input=batch,
+                                        model_output=out,
+                                        batch_key=self.batch_key)
+            self.log(f"{stage}/pips_eval_loss", pips_output, on_step=False, on_epoch=True,
+                     rank_zero_only=True)  # , sync_dist=True)
+
 
         # log weights, sync_dist=True
         self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True, rank_zero_only=True)#, sync_dist=True)

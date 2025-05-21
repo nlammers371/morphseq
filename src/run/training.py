@@ -27,8 +27,6 @@ def main(cfg: DictConfig):
     results_dir = os.path.join(cfg.model.dataconfig.root, "training_outputs", "")
     collect_results_recursive(results_dir=results_dir)
 
-
-
 if __name__ == "__main__":
     main()
 

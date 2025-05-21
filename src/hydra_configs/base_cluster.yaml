@@ -10,18 +10,6 @@ hydra:
     dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
 
   sweep:
-    dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/training_outputs/"
-    subdir: "${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    subdir: ${hydra.job.num}
 
-  # 1) turn off any non‑basic plugins you found
-#  disable_plugins:
-#    - submitit       # or whatever name showed up
-#    - joblib         # ditto
-#    - optuna         # etc
-
-  # 2) force both sweeper and launcher to the built‑in basic classes
-#  sweeper:
-#    _target_: hydra.plugins.basic_sweeper.BasicSweeper
-#
-#  launcher:
-#    _target_: hydra.plugins.basic_launcher.BasicLauncher

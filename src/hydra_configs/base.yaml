@@ -8,6 +8,24 @@ hydra:
     dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
 
   sweep:
-    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/"
-      # create sub-folder 0, 1, 2, … for each combination
-    subdir: "${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    subdir: ${hydra.job.num}
+
+
+wandb:
+  project: mdl-proto
+  #entity: nlammers-trap-zf-ml
+  # RUN NAMING & GROUPING
+  run_name: ${hydra:job.name}_${now:%Y%m%d_%H%M%S}_${hydra:job.num}
+  group: ${hydra:job.name}  # groups related runs (e.g. for a sweep)
+  job_type: train             # free‐form tag, e.g. "train", "eval", "debug"
+  tags: [ ]                # list of strings, e.g. ["vae","baseline"]
+  notes: ""                # markdown‐friendly notes about the run
+  # ───────────────────────────────────────────────────────────────────────
+  # BEHAVIOR
+  offline: false             # if true, logs only locally (sync later)
+  save_dir: ~/wandb           # where to write wandb files (overrides default)
+  log_model: true              # whether to upload your model checkpoint as an Artifact
+  reinit: false             # allow multiple wandb.init() in one process
+  anonymous: false             # “must” / “allow” / “never”—when you don’t want login
+  # ───────────────────────────────────────────────────────────────────────

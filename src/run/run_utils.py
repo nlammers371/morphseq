@@ -1,8 +1,11 @@
 import importlib
+from torch.fx import symbolic_trace
+from wandb import Html
 from omegaconf import OmegaConf
 from src.models.factories import build_from_config
 from glob2 import glob
-import os
+import wandb
+import io
 import torch, warnings
 import os
 from omegaconf import OmegaConf, DictConfig
@@ -18,7 +21,7 @@ import json
 import yaml
 import pandas as pd
 from pathlib import Path
-from typing import List, Optional, Union
+from pytorch_lightning.loggers import WandbLogger
 
 torch.set_float32_matmul_precision("medium")
 # good default
@@ -28,6 +31,26 @@ warnings.filterwarnings(
     "ignore",
     message=r".*recommended to use `self\.log\('val/.*',.*sync_dist=True`.*"
 )
+
+def update_rows(rows, mdl_path):
+    cfg_path = os.path.join(mdl_path, ".hydra", "config.yaml")
+    if os.path.exists(cfg_path):
+        with open(cfg_path, "r") as f:
+            text = f.read()
+        overrides = yaml.safe_load(text)
+        # metrics = json.loads(metrics_path.read_text())
+        # Use relative path from results_dir as run identifier
+        run_id = os.path.basename(mdl_path)
+        row = {"run": run_id}
+        if "model" in overrides.keys():
+            row.update(overrides["model"])
+        else:
+            row.update(overrides)
+
+        row["mdl_path"] = mdl_path
+        rows.append(row)
+
+    return rows
 
 
 
@@ -56,23 +79,13 @@ def collect_results_recursive(
     rows = []
     # Search for all metrics.json files at any depth
     for mdl_path in train_dir_list:
-        cfg_path = os.path.join(mdl_path, ".hydra", "config.yaml")
-        if not os.path.exists(cfg_path):
-            continue
-        with open(cfg_path, "r") as f:
-            text = f.read()
-        overrides = yaml.safe_load(text)
-        # metrics = json.loads(metrics_path.read_text())
-        # Use relative path from results_dir as run identifier
-        run_id = os.path.basename(mdl_path)
-        row = {"run": run_id}
-        if "model" in overrides.keys():
-            row.update(overrides["model"])
+        if os.path.isfile(os.path.join(mdl_path, "multirun.yaml")):
+            sub_dir_list = sorted(glob(os.path.join(mdl_path, "*")))
+            sub_dir_list = [td for td in sub_dir_list if os.path.isdir(td)]
+            for sub_path in sub_dir_list:
+                rows = update_rows(rows, sub_path)
         else:
-            row.update(overrides)
-
-        row["mdl_path"] = mdl_path
-        rows.append(row)
+            rows = update_rows(rows, mdl_path)
 
     df = pd.json_normalize(rows, sep="_")
     df.to_csv(os.path.join(results_dir, "job_summary_df.csv"), index=False)
@@ -115,7 +128,7 @@ def load_from_checkpoint(model, ckpt_path):
 
     return model
 
-def train_vae(cfg, gpus: int | None = None):
+def train_vae(cfg):
 
     if isinstance(cfg, str):
         # load config file
@@ -124,8 +137,10 @@ def train_vae(cfg, gpus: int | None = None):
         config = cfg
     else:
         raise Exception("cfg argument dtype is not recognized")
-
-    model, model_config, data_config, loss_fn, train_config = initialize_model(config)
+    full_config = config.copy()
+    dummy_config = config.copy()
+    model, model_config, data_config, loss_fn, pips_fn, train_config = initialize_model(config)
+    dummy_model, _, _, _, _, _= initialize_model(dummy_config)
 
     if hasattr(model_config, "ckpt_path"):
         model = load_from_checkpoint(model=model, ckpt_path=model_config.ckpt_path)
@@ -134,6 +149,7 @@ def train_vae(cfg, gpus: int | None = None):
     lit = LitModel(
         model=model,
         loss_fn=loss_fn,
+        pips_fn=pips_fn,
         data_cfg=data_config,
         lr=train_config.learning_rate,
         batch_key="data",
@@ -147,11 +163,25 @@ def train_vae(cfg, gpus: int | None = None):
         out_dir = os.path.join(data_config.root, "output", run_name, "")
 
     # 3) create your logger with a human‐readable version label
-    logger = TensorBoardLogger(
-        save_dir=out_dir,  # top-level folder
+    # — now swap in W&B:
+
+    tb_logger = TensorBoardLogger(
+        save_dir=out_dir,
+        name="tensorboard"
     )
 
-    ckpt_path = os.path.join(logger.log_dir, "checkpoints")
+    wb_conf = config["wandb"]
+    wandb_logger = WandbLogger(
+        project=wb_conf["project"],
+        entity=wb_conf.get("entity"),
+        name=wb_conf.get("run_name"),
+        config=full_config,
+        offline=wb_conf.get("offline", False),
+        save_dir=out_dir,
+        sync_tensorboard=True
+    )
+
+    ckpt_path = os.path.join(wandb_logger.save_dir, "checkpoints")
     checkpoint_cb = ModelCheckpoint(
         dirpath=ckpt_path,  # same top‑level folder as your logger
         filename="epoch{epoch:02d}",  # e.g. epoch=05.ckpt
@@ -171,14 +201,40 @@ def train_vae(cfg, gpus: int | None = None):
         strategy = "ddp_cpu"  # uses Gloo on CPU
 
     # 3) train with Lightning
-    trainer = pl.Trainer(logger=logger,
+    trainer = pl.Trainer(logger=[wandb_logger, tb_logger],
                          max_epochs=train_config.max_epochs,
                          precision=16,
                          callbacks=[SaveRunMetadata(data_config), checkpoint_cb],
                          accelerator=accelerator,  # will pick 'gpu' if any GPUs are visible, else 'cpu'
-                         devices=devices,  # will use all available GPUs or 1 CPU
-                         strategy=strategy,)           # ← accelerator / devices injected here)
+                         devices=devices,
+                         strategy=strategy,)
+
+    # wandb_run = trainer.logger.experiment
+    wandb_logger.experiment.watch(
+        lit.model, log="all"
+    )
+    dummy_input = torch.zeros((1, *model_config.ddconfig.input_dim))
+
+    torch.onnx.export(
+        model,  # underlying PyTorch model
+        dummy_input,  # representative input tensor
+        "model.onnx",  # output file
+        export_params=True,
+        opset_version=12,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}}
+    )
+
+    artifact = wandb.Artifact("model-architecture", type="model")
+    artifact.add_file("model.onnx")
+    wandb_logger.experiment.log_artifact(artifact)
+
+    # run it!
     trainer.fit(lit)
+
+    # tell logger to close
+    wandb_logger.experiment.finish()
 
     return {}
 
@@ -267,10 +323,11 @@ def initialize_model(config):
     if hasattr(model_config.lossconfig, "metric_array"):
         model_config.lossconfig.metric_array = data_config.metric_array
     loss_fn = model_config.lossconfig.create_module()  # or model.compute_loss
+    pips_fn = model_config.lossconfig.create_pips()
 
     train_config = model_config.trainconfig
 
-    return model, model_config, data_config, loss_fn, train_config
+    return model, model_config, data_config, loss_fn, pips_fn, train_config
 
 
 # def initialize_ldm_model(config):

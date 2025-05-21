@@ -16,7 +16,8 @@ class BasicLoss:
     kld_weight: float = 1.0
     reconstruction_loss: str = "mse"
     pips_net: Literal["vgg", "alex", "squeeze"] = "vgg"
-
+    eval_pips_net: Literal["vgg", "alex", "squeeze"] = "alex"
+    use_pips_eval: bool = True
     # get scheduler info
     schedule_pips: bool = True
     pips_warmup: int = 30
@@ -48,11 +49,17 @@ class BasicLoss:
         # instantiate with your validated kwargs
         return loss_cls(
             cfg=self,
-            # kld_weight=self.kld_weight,
-            # reconstruction_loss=self.reconstruction_loss,
-            # pips_flag=self.pips_flag,
-            # pips_weight=self.pips_weight,
         )
+    def create_pips(self):
+
+        # instantiate with your validated kwargs
+        if self.use_pips_eval:
+            from src.losses.loss_functions import EVALPIPSLOSS
+            return EVALPIPSLOSS(
+                cfg=self,
+            )
+        else:
+            return None
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))

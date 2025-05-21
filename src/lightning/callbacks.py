@@ -17,7 +17,7 @@ class SaveRunMetadata(Callback):
     def on_train_start(self, trainer, pl_module):
         if self._written:
             return
-        run_dir = trainer.logger.log_dir        # tb_logs/run_name/version_x
+        run_dir = trainer.logger.save_dir        # tb_logs/run_name/version_x
         index_dir  = os.path.join(run_dir, "split_indices.pkl")
         with open(index_dir, "wb") as file:
             pickle.dump(self.index_dict, file)
