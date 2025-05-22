@@ -1,7 +1,5 @@
 import importlib
-from torch.fx import symbolic_trace
-from wandb import Html
-from omegaconf import OmegaConf
+from pytorch_lightning.strategies import DDPStrategy
 from src.models.factories import build_from_config
 from glob2 import glob
 import wandb
@@ -149,7 +147,7 @@ def train_vae(cfg):
     lit = LitModel(
         model=model,
         loss_fn=loss_fn,
-        pips_fn=pips_fn,
+        eval_gpu_flag=train_config.eval_gpu_flag,
         data_cfg=data_config,
         lr=train_config.learning_rate,
         batch_key="data",
@@ -191,23 +189,24 @@ def train_vae(cfg):
     )
 
     # device_kwargs = pick_devices(gpus)
-    if torch.cuda.is_available():
-        accelerator = "gpu"
-        devices = "auto"  # all GPUs
-        strategy = "ddp"  # NCCL under the hood
-    else:
-        accelerator = "cpu"
-        devices = 1
-        strategy = "ddp_cpu"  # uses Gloo on CPU
+    # if torch.cuda.is_available():
+    #     accelerator = "gpu"
+    #     devices = "auto"  # all GPUs
+    #     strategy = "ddp"  # NCCL under the hood
+    # else:
+    #     accelerator = "cpu"
+    #     devices = 1
+    #     strategy = "ddp_cpu"  # uses Gloo on CPU
 
     # 3) train with Lightning
     trainer = pl.Trainer(logger=[wandb_logger, tb_logger],
                          max_epochs=train_config.max_epochs,
                          precision=16,
                          callbacks=[SaveRunMetadata(data_config), checkpoint_cb],
-                         accelerator=accelerator,  # will pick 'gpu' if any GPUs are visible, else 'cpu'
-                         devices=devices,
-                         strategy=strategy,)
+                         accelerator="gpu",
+                         strategy=DDPStrategy(find_unused_parameters=True),
+                         devices="auto",
+                         )
 
     # wandb_run = trainer.logger.experiment
     wandb_logger.experiment.watch(

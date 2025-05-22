@@ -8,3 +8,4 @@ class LitTrainConfig:
     max_epochs: int=100
     learning_rate: float=1e-4
     save_every_n: int=50
+    eval_gpu_flag: bool=True

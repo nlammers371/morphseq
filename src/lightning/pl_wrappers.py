@@ -8,6 +8,7 @@ from torch import nn
 from src.models.ldm_models import AutoencoderKLModel
 from src.lightning.pl_utils import ramp_weight, cosine_ramp_weight
 import warnings
+from src.losses.loss_helpers import lpips_score
 
 warnings.filterwarnings(
     "ignore",
@@ -23,7 +24,7 @@ class LitModel(pl.LightningModule):
         data_cfg: Any,
         lr: float,
         batch_key: str = "data",
-        pips_fn: Optional[Callable[..., Any]] = None,
+        eval_gpu_flag: bool = False,
     ):
         """
         model:            any nn.Module whose forward(x) returns either
@@ -36,12 +37,13 @@ class LitModel(pl.LightningModule):
         lr:              learning rate
         batch_key:       the key in your batch dict for inputs
         """
+
         super().__init__()                    # always call this first
         self.save_hyperparameters(ignore=["model", "loss_fn", "data_cfg"])
 
         self.model   = model
+        self.eval_gpu_flag = eval_gpu_flag
         self.loss_fn = loss_fn
-        self.pips_fn = pips_fn
         self.data_cfg = data_cfg
         self.lr       = lr
         self.batch_key = batch_key
@@ -73,12 +75,14 @@ class LitModel(pl.LightningModule):
 
         bsz = x.size(0)
         # get perceptual loss
-        if (stage != "val") and (self.pips_fn is not None):
-            pips_output = self.pips_fn(model_input=batch,
-                                        model_output=out,
-                                        batch_key=self.batch_key)
-            self.log(f"{stage}/pips_eval_loss", pips_output, on_step=False, on_epoch=True,
-                     rank_zero_only=True)  # , sync_dist=True)
+        if stage == "val":
+            if self.trainer.is_global_zero:  # log on one rank only
+                lp = lpips_score(model_input=batch,
+                                 model_output=out,
+                                 batch_key=self.batch_key,
+                                 use_gpu=self.eval_gpu_flag)  # helper moves tensors to CPU
+                self.log("val/lpips", lp, sync_dist=False, prog_bar=True)
+
 
 
         # log weights, sync_dist=True
