@@ -17,6 +17,33 @@ class LegacyArchitecture:
     stride: int = 2
     input_dim: Tuple[int, int, int] = (1, 288, 128)
 
+
+timm_dict = {
+    "Efficient-B0-RA": "efficientnet_b0.ra_in1k",   # E-B0-RA
+    "Efficient-B4": "efficientnet_b4",           # E-B4
+    "ConvNeXt-Tiny": "convnext_tiny_in22k_ft_in1k",
+    "Swin-Tiny": "swin_tiny_patch4_window7_224",
+    "MaxViT-Tiny": "maxvit_tiny_tf_512.in1k",
+    "DeiT-Tiny": "deit_tiny_patch16_224",  # alt
+    "RegNet-Y": "regnety_400mf ",
+    "ViT-Tiny": "vit_tiny_patch16_224"}
+# alt
+@dataclass
+class TimmArchitecture:
+
+    name: Literal["Efficient-B0-RA", "Efficient-B4", "ConvNeXt-Tiny",
+                  "Swin-Tiny", "MaxViT-Tiny", "DeiT-Tiny", "RegNet-Y", "ViT-Tiny"] = "Efficient-B0-RA"
+    latent_dim: int = 64
+    orth_flag: bool = False
+    use_pretrained_weights: bool = True
+    dec_use_local_attn: bool = False  # for decoder
+    input_dim: Tuple[int, int, int] = (1, 288, 128)
+
+    @property
+    def timm_name(self):
+        return timm_dict[self.name]
+
+
 # @dataclass
 # class SplitArchitecture(LegacyArchitecture):
 #
