@@ -47,7 +47,7 @@ hot_cds = aggregate_gene_score(hot_cds, upr_genes$gene_short_name, "upr_score")
 # pull relevant cols
 hotfish_upr_df = colData(hot_cds) %>%
                 as.data.frame() %>%
-                 select("cell", "Size_Factor", "embryo_ID", "timepoint",
+                 select("cell", "cell_type", "tissue", "log.n.umi", "Size_Factor", "embryo_ID", "timepoint",
                         "temp", "expt", "upr_score", "hash_plate", "hash_well",
                         "count_per_embryo", "mean_nn_time", "min_nn_dist", 
                         "max_nn_dist")

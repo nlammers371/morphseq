@@ -25,9 +25,11 @@ def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
     if theme == "dark":
         line_color = "white"
         text_color = "white"
+        grid_color = "white"
         bk_color = "black"
     elif theme == "light":
         line_color = "black"
+        grid_color = "Gray"
         text_color = "black"
         bk_color = "white"
     else:
@@ -49,7 +51,7 @@ def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
     axis_format_dict = dict(
         showgrid=show_gridlines,
         zeroline=True,
-        gridcolor=line_color,
+        gridcolor=grid_color,
         linecolor=line_color,
         zerolinecolor=line_color,
         tickfont=dict(size=tick_font_size)
@@ -128,9 +130,11 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6, show_gr
     if theme == "dark":
         line_color = "white"
         text_color = "white"
+        grid_color = "white"
         bk_color = "black"
     elif theme == "light":
-        line_color = "black"
+        grid_color = "Gray"
+        line_color = "#A9A9A9"
         text_color = "black"
         bk_color = "white"
 
@@ -140,16 +144,22 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6, show_gr
     if eye is None:
         eye = dict(x=1.5, y=1.5, z=1.5)
 
-    if marker_edge:
-        fig.update_traces(marker=dict(size=marker_size, line=dict(color=line_color, width=1)))
-    else:
-        fig.update_traces(marker=dict(size=marker_size))
+    try:
+        if marker_edge:
+            fig.update_traces(marker=dict(size=marker_size, line=dict(color=line_color, width=1)))
+        elif marker_size is not None:
+            fig.update_traces(marker=dict(size=marker_size))
+        else:
+            pass
+    except:
+        pass
 
     tick_font_size = int(font_size * 6 / 7)
     axis_format_dict = dict(showbackground=False,
                             showgrid=show_gridlines,
                             zeroline=True,
-                            gridcolor=line_color,
+                            gridcolor=grid_color,
+                            gridwidth=1,
                             linecolor=line_color,
                             zerolinecolor=line_color,
                             tickfont=dict(size=tick_font_size))
@@ -186,8 +196,6 @@ def format_3d_plotly(fig, axis_labels=None, font_size=14, marker_size=6, show_gr
                           ))
 
     # Check if any trace with a marker has its legend shown
-
-
     fig.update_layout(
         font=dict(color=text_color, family="Arial, sans-serif", size=font_size),
         plot_bgcolor=bk_color,  # Background inside the plotting area
