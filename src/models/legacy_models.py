@@ -8,6 +8,8 @@ import torch.nn as nn
 from pythae.data.datasets import BaseDataset
 from src.models.model_configs import VAEConfig, morphVAEConfig
 from src.models.model_components.legacy_components import EncoderConvVAE, DecoderConvVAE
+from src.models.model_components.timm_components import TimmEncoder, UniDecLite
+
 from src.models.model_utils import ModelOutput
 
 class VAE(nn.Module):
@@ -16,8 +18,8 @@ class VAE(nn.Module):
     def __init__(
         self,
         config: VAEConfig,
-        encoder: Optional[EncoderConvVAE] = None,
-        decoder: Optional[DecoderConvVAE] = None,
+        encoder: Optional[EncoderConvVAE, TimmEncoder] = None,
+        decoder: Optional[DecoderConvVAE, UniDecLite] = None,
     ):
         super().__init__()
         self.config = config
@@ -63,8 +65,8 @@ class morphVAE(nn.Module):
     def __init__(
         self,
         config: morphVAEConfig,
-        encoder: Optional[EncoderConvVAE] = None,
-        decoder: Optional[DecoderConvVAE] = None,
+        encoder: Optional[EncoderConvVAE, TimmEncoder] = None,
+        decoder: Optional[DecoderConvVAE, UniDecLite] = None,
     ):
         super().__init__()
         self.config = config
