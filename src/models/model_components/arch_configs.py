@@ -9,7 +9,7 @@ class LegacyArchitecture:
 
     name: Literal["convAE"] = "convVAE"
     latent_dim: int = 64
-
+    is_timm_arch: bool = False
     n_out_channels: int = 16
     n_conv_layers: int = 5
     orth_flag: bool = False
@@ -25,7 +25,7 @@ timm_dict = {
     "Swin-Tiny": "swin_tiny_patch4_window7_224",
     "MaxViT-Tiny": "maxvit_tiny_tf_512.in1k",
     "DeiT-Tiny": "deit_tiny_patch16_224",  # alt
-    "RegNet-Y": "regnety_400mf ",
+    "RegNet-Y": "regnety_400mf",
     "ViT-Tiny": "vit_tiny_patch16_224"}
 # alt
 @dataclass
@@ -33,6 +33,7 @@ class TimmArchitecture:
 
     name: Literal["Efficient-B0-RA", "Efficient-B4", "ConvNeXt-Tiny",
                   "Swin-Tiny", "MaxViT-Tiny", "DeiT-Tiny", "RegNet-Y", "ViT-Tiny"] = "Efficient-B0-RA"
+    is_timm_arch: bool = True
     latent_dim: int = 64
     orth_flag: bool = False
     use_pretrained_weights: bool = True
@@ -73,6 +74,7 @@ class TimmArchitecture:
 class ArchitectureAELDM: # wraps native attributes from LDM repo
 
     name: Literal["ldmVAE"] = "ldmVAE"
+    is_timm_arch: bool = False
     # Attributes
     double_z: bool = True
     z_channels: int = 64
