@@ -7,14 +7,22 @@ from omegaconf import OmegaConf, DictConfig
 # from src.losses.legacy_loss_functions import VAELossBasic
 from src.losses.loss_configs import BasicLoss, MetricLoss
 from src.data.dataset_configs import BaseDataConfig, NTXentDataConfig
-from src.models.model_components.arch_configs import (LegacyArchitecture, ArchitectureAELDM)
+from src.models.model_components.arch_configs import (LegacyArchitecture, ArchitectureAELDM, TimmArchitecture)
 from src.lightning.train_config import LitTrainConfig
 
 
 
 ARCH_REGISTRY: dict[str, type] = {"convVAE": LegacyArchitecture,
                                   "ldmVAE": LegacyArchitecture,
-                                 }
+                                    "Efficient-B0-RA": TimmArchitecture,   # E-B0-RA
+                                    "Efficient-B4": TimmArchitecture,           # E-B4
+                                    "ConvNeXt-Tiny": TimmArchitecture,
+                                    "Swin-Tiny": TimmArchitecture,
+                                    "MaxViT-Tiny": TimmArchitecture,
+                                    "DeiT-Tiny": TimmArchitecture,  # alt
+                                    "RegNet-Y": TimmArchitecture,
+                                    "ViT-Tiny": TimmArchitecture}
+
 
 def resolve_arch(dd: dict):
     """

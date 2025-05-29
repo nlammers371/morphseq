@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Union
 from torch import Tensor
 import numpy as np
 import torch
@@ -18,8 +18,8 @@ class VAE(nn.Module):
     def __init__(
         self,
         config: VAEConfig,
-        encoder: Optional[EncoderConvVAE, TimmEncoder] = None,
-        decoder: Optional[DecoderConvVAE, UniDecLite] = None,
+        encoder: Union[EncoderConvVAE, TimmEncoder] = EncoderConvVAE,
+        decoder: Union[DecoderConvVAE, UniDecLite] = UniDecLite,
     ):
         super().__init__()
         self.config = config
@@ -65,8 +65,8 @@ class morphVAE(nn.Module):
     def __init__(
         self,
         config: morphVAEConfig,
-        encoder: Optional[EncoderConvVAE, TimmEncoder] = None,
-        decoder: Optional[DecoderConvVAE, UniDecLite] = None,
+        encoder: Union[EncoderConvVAE, TimmEncoder] = EncoderConvVAE,
+        decoder: Union[DecoderConvVAE, UniDecLite] = DecoderConvVAE,
     ):
         super().__init__()
         self.config = config

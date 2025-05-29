@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: vae
+  - model: vae_timm
 
 hydra:
   run:
