@@ -29,12 +29,12 @@ class TimmEncoder(nn.Module):
         # -------- 1) build backbone --------
         if self._is_patch_family():
             # ViT-style backbone (tokens out)
-            self.backbone = create_model(self.encoder_name, pretrained=self.use_pretrained_weights)
+            self.backbone = create_model(self.model_name, pretrained=self.use_pretrained_weights, in_chans=self.cfg.input_dim[0])
             self.embed_dim = self.backbone.num_features  # e.g. 192 / 768
         else:
             # Conv / hierarchical backbone (maps out)
             self.backbone = create_model(
-                self.encoder_name, pretrained=self.use_pretrained_weights,
+                self.model_name, pretrained=self.use_pretrained_weights, in_chans=self.cfg.input_dim[0],
                 features_only=True, out_indices=None   # we’ll choose later
             )
             self.embed_dim = self.backbone.feature_info.channels()[-1]
@@ -80,7 +80,7 @@ class TimmEncoder(nn.Module):
             feats = self.backbone(x)                        # list of stage maps
             penult = feats[-1]                              # deepest
             vec = self.pool(penult).flatten(1)              # [B,C]
-            mu, logvar = self.embedding(vec), self.logvar(vec)
+            mu, logvar = self.embedding(vec), self.log_var(vec)
             # if self.return_skips:
             #     # pick the four deepest for UNet decoder (E4..E1)
             #     skips = feats[-5:-1] if len(feats) >= 5 else None
@@ -120,14 +120,13 @@ class UniDecLite(nn.Module):
 
         self.cfg = cfg
         self.enc_ch_last = enc_ch_last
-        H, W = self.cfg.input_size[1], self.cfg.input_size[2]
+        H, W = torch.tensor(self.cfg.input_dim[1]), torch.tensor(self.cfg.input_dim[2])
         self.lat_h, self.lat_w = torch.floor(H/32).int(), torch.floor(W/32).int()
         self.out_ch = cfg.input_dim[0] # for 288×128; compute if cfg varies
         # self.skip_weight = 0.0                 # <-- will be scheduled during train
         self.model_name = cfg.name.lower()
         self.use_pretrained_weights = cfg.use_pretrained_weights
         self.latent_dim = cfg.latent_dim
-        self.enc_ch_last = cfg.enc_ch_last
         self.use_local_attn = cfg.dec_use_local_attn
         # fc reshape from latent z
         self.fc = nn.Linear(self.latent_dim, self.enc_ch_last * self.lat_h * self.lat_w)
@@ -156,7 +155,7 @@ class UniDecLite(nn.Module):
         else:
             self.local_attn = None
 
-        self.to_rgb = nn.Conv2d(32, self.out_ch, 3, padding=1)
+        self.to_img = nn.Conv2d(32, self.out_ch, 3, padding=1, bias=False)
 
     # ---------- forward ----------
     def forward(self, z, skips: Optional[List[torch.Tensor]] = None):
@@ -170,11 +169,11 @@ class UniDecLite(nn.Module):
             x = up(x)
 
             # fuse skip i (if any) with current feature map
-            if skips and i < len(skips) and skips[i] is not None and \
-               self.skip_proj[i] is not None and self.skip_weight > 0:
-                skip = self.skip_proj[i](skips[i])
-                # linear blend → allows gradual fade-in
-                x = torch.cat([x, self.skip_weight * skip], dim=1)
+            # if skips and i < len(skips) and skips[i] is not None and \
+            #    self.skip_proj[i] is not None and self.skip_weight > 0:
+            #     skip = self.skip_proj[i](skips[i])
+            #     # linear blend → allows gradual fade-in
+            #     x = torch.cat([x, self.skip_weight * skip], dim=1)
 
             # optional local attention after UpBlock4 (idx 1) for GAN sharpness
             if self.local_attn and i == 1:
@@ -184,5 +183,5 @@ class UniDecLite(nn.Module):
                 x_attn = self.local_attn(x_norm) + x_flat
                 x = x_attn.transpose(1, 2).view(B, C, H, W)
 
-        recon = torch.tanh(self.to_rgb(x))
+        recon = torch.sigmoid(self.to_img(x))
         return ModelOutput(reconstruction=recon)
