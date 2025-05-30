@@ -13,6 +13,10 @@ lossconfig:
   pips_weight: 1.0
   pips_net: "vgg"
 
+  use_gan: True
+  gan_weight: 1.0
+  gan_net: "patch"
+
 dataconfig:
   target: "BasicDataset"
   num_workers: 8

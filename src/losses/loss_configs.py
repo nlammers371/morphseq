@@ -14,10 +14,23 @@ class BasicLoss:
         "src.losses.loss_functions.VAELossBasic"
     ] = "src.losses.loss_functions.VAELossBasic"
     kld_weight: float = 1.0
-    reconstruction_loss: str = "mse"
+    # PIXEL
+    reconstruction_loss: str = "L1"
+    # PIPS
     pips_net: Literal["vgg", "alex", "squeeze"] = "vgg"
-    eval_pips_net: Literal["vgg", "alex", "squeeze"] = "alex"
+    pips_flag: bool = True
+    pips_weight: float = 0.1
+
+
+    # ADVERSARIAL
+    use_gan: bool = False
+    gan_weight: float = 1.0
+    gan_net: Literal["ms_patch", "patch", "style2"] = "patch"
+
+    # Extra PIPS to monitor recon quality
     use_pips_eval: bool = True
+    eval_pips_net: Literal["vgg", "alex", "squeeze"] = "alex"
+
     # get scheduler info
     schedule_pips: bool = True
     pips_warmup: int = 30
@@ -26,8 +39,7 @@ class BasicLoss:
     kld_warmup: int = 10
     kld_rampup: int = 20
 
-    pips_flag: bool = True
-    pips_weight: float = 0.1
+
 
     tv_weight: float = 1e-5
 

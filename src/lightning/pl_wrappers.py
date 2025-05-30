@@ -39,6 +39,9 @@ class LitModel(pl.LightningModule):
         """
 
         super().__init__()                    # always call this first
+
+        self.automatic_optimization = False
+
         self.save_hyperparameters(ignore=["model", "loss_fn", "data_cfg"])
 
         self.model   = model
@@ -51,8 +54,9 @@ class LitModel(pl.LightningModule):
     def forward(self, x: torch.Tensor) -> Any:
         return self.model(x)
 
-    def _step(self, batch, batch_idx, stage: str):
+    def validation_step(self, batch,  batch_idx) -> torch.Tensor:
         x = batch[self.batch_key]
+
         out = self(x)
 
         # 1) compute kld and pips weights
@@ -65,48 +69,108 @@ class LitModel(pl.LightningModule):
             metric_w = self._metric_weight()
             self.loss_fn.metric_weight = metric_w
 
-        if hasattr(self.model, "compute_loss"):
-            loss_output = self.model.compute_loss(x, out)
-        else:
-            # break_flag = self.current_epoch==3
-            loss_output  = self.loss_fn(model_input=batch,
-                                        model_output=out,
-                                        batch_key=self.batch_key)
+        # compute loss
+        loss_output = self.loss_fn(model_input=batch,
+                                   model_output=out,
+                                   batch_key=self.batch_key)
 
+        if self.trainer.is_global_zero:  # log on one rank only
+            lp = lpips_score(model_input=batch,
+                             model_output=out,
+                             batch_key=self.batch_key,
+                             use_gpu=self.eval_gpu_flag)  # helper moves tensors to CPU
+            self.log("val/lpips_val", lp, sync_dist=False, prog_bar=True)
+
+        # get batch size
         bsz = x.size(0)
-        # get perceptual loss
-        if stage == "val":
-            if self.trainer.is_global_zero:  # log on one rank only
-                lp = lpips_score(model_input=batch,
-                                 model_output=out,
-                                 batch_key=self.batch_key,
-                                 use_gpu=self.eval_gpu_flag)  # helper moves tensors to CPU
-                self.log("val/lpips", lp, sync_dist=False, prog_bar=True)
+        # log
+        self._log_metrics(loss_output=loss_output, stage="val", pips_w=pips_w, kld_w=kld_w, bsz=bsz)
+
+            # return loss_output.loss
+    def training_step(self, batch, batch_idx) -> torch.Tensor:
+
+        # 1) get optimizers
+        opt_G, opt_D = self.optimizers()
 
 
+        # 2) update weights
+        kld_w = self._kld_weight()
+        self.loss_fn.kld_weight = kld_w
+        pips_w = self._pips_weight()
+        self.loss_fn.pips_weight = pips_w
+
+        if hasattr(self, "metric_weight"):
+            metric_w = self._metric_weight()
+            self.loss_fn.metric_weight = metric_w
+
+        # ------------------------------------------------
+        # a) GENERATOR / VAE update
+        # ------------------------------------------------
+        x = batch[self.batch_key]
+        out = self(x)  # forward VAE
+
+        # compute loss
+        loss_output = self.loss_fn(model_input=batch,
+                                   model_output=out,
+                                   batch_key=self.batch_key)
+
+        # get batch size
+        bsz = x.size(0)
+        # log
+        self._log_metrics(loss_output=loss_output, stage="train", pips_w=pips_w, kld_w=kld_w, bsz=bsz)
+
+        self.manual_backward(loss_output.loss)
+        opt_G.step()
+        opt_G.zero_grad()
+
+        # ------------------------------------------------
+        # b) DISCRIMINATOR update
+        # ------------------------------------------------
+        if self.loss_fn.use_gan:
+            with torch.no_grad():
+                x_hat = self(x).recon_x.detach()
+
+            pred_real = self.loss_fn.D(x)
+            pred_fake = self.loss_fn.D(x_hat)
+
+            loss_D = (F.relu(1 - pred_real).mean() +
+                      F.relu(1 + pred_fake).mean())
+
+            self.log("train/loss_D", loss_D, prog_bar=True)
+
+            self.manual_backward(loss_D)
+            opt_D.step()
+            opt_D.zero_grad()
+
+
+    def _log_metrics(self, loss_output, stage, pips_w, kld_w, bsz, gan_w=0):
 
         # log weights, sync_dist=True
-        self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True, rank_zero_only=True)#, sync_dist=True)
-        self.log(f"{stage}/kld_weight", kld_w, on_step=False, on_epoch=True, rank_zero_only=True)#, sync_dist=True)
+        self.log(f"{stage}/pips_weight", pips_w, on_step=False, on_epoch=True, rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/kld_weight", kld_w, on_step=False, on_epoch=True, rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/gan_weight", gan_w, on_step=False, on_epoch=True, rank_zero_only=True)
 
         # log the main loss
-        self.log(f"{stage}/loss", loss_output.loss, prog_bar=(stage=="train"), on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
-
+        self.log(f"{stage}/loss", loss_output.loss, prog_bar=(stage == "train"), on_step=False, on_epoch=True,
+                 batch_size=bsz, rank_zero_only=True)  # , sync_dist=True)
         # self.log("train/loss", loss_output.loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log(f"{stage}/recon_loss", loss_output.recon_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
-        self.log(f"{stage}/pixel_loss", loss_output.pixel_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
-        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
-        self.log(f"{stage}/kld_loss", loss_output.KLD, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
-
+        self.log(f"{stage}/recon_loss", loss_output.recon_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                 rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/pixel_loss", loss_output.pixel_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                 rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                 rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/gan_loss", loss_output.gan_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                 rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/kld_loss", loss_output.kld_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                 rank_zero_only=True)  # , sync_dist=True)
+        self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                 rank_zero_only=True)
         if "metric_loss" in loss_output:
             self.log(f"{stage}/metric_weight", self.loss_fn.metric_weight, on_step=False, on_epoch=True, batch_size=bsz,
                      rank_zero_only=True)
-            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)
-
-        if "pips_loss" in loss_output:
-            self.log(f"{stage}/pips_loss", loss_output.pips_loss, on_step=False, on_epoch=True, batch_size=bsz, rank_zero_only=True)#, sync_dist=True)
-
-        return loss_output.loss
+            self.log(f"{stage}/metric_loss", loss_output.metric_loss, on_step=False, on_epoch=True, batch_size=bsz,
+                     rank_zero_only=True)
 
     def _kld_weight(self) -> float:
         """Current β according to ramp-up schedule."""
@@ -138,14 +202,20 @@ class LitModel(pl.LightningModule):
         else:
             return self.loss_fn.metric_weight
 
-    def training_step(self, batch, batch_idx):
-        return self._step(batch, batch_idx, "train")
-
-    def validation_step(self, batch, batch_idx):
-        self._step(batch, batch_idx, "val")
+    # def training_step(self, batch, batch_idx):
+    #     return self._step(batch, batch_idx, "train")
+    #
+    # def validation_step(self, batch, batch_idx):
+    #     self._step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        opt_G = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        if self.loss_fn.use_gan:  # discriminator present?
+            opt_D = torch.optim.Adam(self.loss_fn.D.parameters(), lr=self.lr)
+        else:
+            opt_D = None
+        return [opt_G, opt_D]  # a list/tuple of TWO
+
 
     def train_dataloader(self):
         ds = self.data_cfg.create_dataset()

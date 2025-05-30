@@ -2,64 +2,48 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.losses.loss_configs import MetricLoss
+from src.losses.discriminators import PatchD3, MultiScaleD, StyleGAN2D
 from src.models.model_utils import ModelOutput
 # from taming.modules.losses.vqperceptual import LPIPS
 import lpips
 from torch.amp import autocast
 
+def calc_tv_loss(recon_x):
+    # vertical diffs: shape [B, C, H-1, W]
+    tv_v = torch.abs(recon_x[:, :, 1:, :] - recon_x[:, :, :-1, :])
+    # horizontal diffs: shape [B, C, H, W-1]
+    tv_h = torch.abs(recon_x[:, :, :, 1:] - recon_x[:, :, :, :-1])
+    # mean over channel & spatial dims → [B]
+    tv_loss = (
+            tv_v.mean(dim=[1, 2, 3]) +
+            tv_h.mean(dim=[1, 2, 3])
+    )
+    return tv_loss
 
-# Adapted from LDM codebase (their loss sans discriminator)
-def L1PIPS_module(self, x, recon_x) -> ModelOutput:
-    # --- reconstruction + perceptual ---
-    # pixel‐L1 per sample
-    rec_loss = torch.abs(x.contiguous() - recon_x.contiguous()).mean(dim=[1, 2, 3])
+def calc_pips_loss(self, x, recon_x) -> ModelOutput:
 
-    # perceptual
-    if self.pips_weight > 0:
-        if x.shape[1] == 1:
-            in3 = x.repeat(1, 3, 1, 1)
-            out3 = recon_x.repeat(1, 3, 1, 1)
-            with autocast("cuda"):
-                p_loss = self.perceptual_loss(in3, out3).view(rec_loss.shape[0])
-        else:
-            with autocast("cuda"):
-                p_loss = self.perceptual_loss(
-                    x.contiguous(), recon_x.contiguous()
-                ).view(rec_loss.shape[0])
+    if x.shape[1] == 1:
+        in3 = x.repeat(1, 3, 1, 1)
+        out3 = recon_x.repeat(1, 3, 1, 1)
+        with autocast("cuda"):
+            p_loss = self.perceptual_loss(in3, out3).view(x.shape[0])
     else:
-        p_loss = torch.zeros_like(rec_loss)
+        with autocast("cuda"):
+            p_loss = self.perceptual_loss(
+                x.contiguous(), recon_x.contiguous()
+            ).view(x.shape[0])
 
-    # total‑variation (TV) per sample
-    if self.tv_weight > 0:
-        # vertical diffs: shape [B, C, H-1, W]
-        tv_v = torch.abs(recon_x[:, :, 1:, :] - recon_x[:, :, :-1, :])
-        # horizontal diffs: shape [B, C, H, W-1]
-        tv_h = torch.abs(recon_x[:, :, :, 1:] - recon_x[:, :, :, :-1])
-        # mean over channel & spatial dims → [B]
-        tv_loss = (
-                tv_v.mean(dim=[1, 2, 3]) +
-                tv_h.mean(dim=[1, 2, 3])
-        )
-    else:
-        tv_loss = torch.zeros_like(rec_loss)
+    return p_loss.mean()
 
-    # combine them, normalizing so the scale stays comparable
-    total_weight = 1.0 + self.pips_weight + self.tv_weight
-    rec_loss = (
-                       rec_loss
-                       + self.pips_weight * p_loss
-                       + self.tv_weight * tv_loss
-               ) / total_weight
-
-    # now your usual NLL (or ELBO) step
-    nll_loss = rec_loss / torch.exp(self.recon_logvar) + self.recon_logvar
-    # nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
-
-    return ModelOutput(nll_loss=nll_loss, recon_loss=rec_loss, pips_loss=p_loss)
 
 
 def recon_module(self, x, recon_x):
-    if self.reconstruction_loss == "mse":
+    if self.reconstruction_loss == "L1":
+        recon_loss = torch.abs(
+            recon_x.reshape(x.shape[0], -1) - x.reshape(x.shape[0], -1),
+        ).mean(dim=-1)
+
+    elif self.reconstruction_loss == "mse":
         recon_loss = (
                 0.5
                 * F.mse_loss(
@@ -70,36 +54,37 @@ def recon_module(self, x, recon_x):
         )
 
     elif self.reconstruction_loss == "bce":
-
         recon_loss = F.binary_cross_entropy(
             recon_x.reshape(x.shape[0], -1),
             x.reshape(x.shape[0], -1),
             reduction="none",
         ).mean(dim=-1)
+    else:
+        raise NotImplementedError
         
     return recon_loss
 
-def process_recon_loss(self, x, recon_x):
-
-    if self.pips_flag:
-        PIPS_loss = L1PIPS_module(self, x, recon_x)
-        recon_loss = PIPS_loss.nll_loss
-        px_loss = PIPS_loss.recon_loss
-        p_loss = PIPS_loss.pips_loss
-    elif (not self.pips_flag) and (self.reconstruction_loss == "L1"):  # we can also do just the L1 loss
-        self.pips_weight = 0
-        PIPS_loss = L1PIPS_module(self, x, recon_x)
-        recon_loss = PIPS_loss.nll_loss
-        px_loss = PIPS_loss.recon_los
-        p_loss = PIPS_loss.p_loss
-    elif self.reconstruction_loss in ["mse", "bce"]:
-        recon_loss = recon_module(self, x, recon_x)
-        px_loss = recon_loss
-        p_loss = torch.tensor([0.0])
-    else:
-        raise NotImplementedError
-
-    return recon_loss, px_loss, p_loss
+# def process_recon_loss(self, x, recon_x):
+#
+#     if self.pips_flag:
+#         PIPS_loss = L1PIPS_module(self, x, recon_x)
+#         recon_loss = PIPS_loss.nll_loss
+#         px_loss = PIPS_loss.recon_loss
+#         p_loss = PIPS_loss.pips_loss
+#     elif (not self.pips_flag) and (self.reconstruction_loss == "L1"):  # we can also do just the L1 loss
+#         self.pips_weight = 0
+#         PIPS_loss = L1PIPS_module(self, x, recon_x)
+#         recon_loss = PIPS_loss.nll_loss
+#         px_loss = PIPS_loss.recon_los
+#         p_loss = PIPS_loss.p_loss
+#     elif self.reconstruction_loss in ["mse", "bce"]:
+#         recon_loss = recon_module(self, x, recon_x)
+#         px_loss = recon_loss
+#         p_loss = torch.tensor([0.0])
+#     else:
+#         raise NotImplementedError
+#
+#     return recon_loss, px_loss, p_loss
 
 class EVALPIPSLOSS(nn.Module):
     def __init__(self, cfg, force_gpu: bool = False):
@@ -148,6 +133,7 @@ class VAELossBasic(nn.Module):
 
         # self.kld_weight = cfg.kld_weight
         self.reconstruction_loss = cfg.reconstruction_loss
+
         # only applies if we're not doing PIPS
         self.pips_flag = cfg.pips_flag
         self.schedule_pips = cfg.schedule_pips
@@ -156,6 +142,12 @@ class VAELossBasic(nn.Module):
         self.pips_cfg = cfg.pips_cfg
         self.tv_weight = cfg.tv_weight
 
+        # GAN
+        self.use_gan = cfg.use_gan
+        self.gan_weight = cfg.gan_weight
+        self.gan_net = cfg.gan_net
+
+        # KLD
         self.schedule_kld = cfg.schedule_kld
         self.kld_weight = cfg.kld_weight
         self.kld_cfg = cfg.kld_cfg
@@ -170,32 +162,68 @@ class VAELossBasic(nn.Module):
         # this is your learnable recon‐variance term:
         self.register_buffer('recon_logvar', torch.tensor(recon_logvar_init)) # NOPE. nn.Parameter(torch.tensor(recon_logvar_init))
 
+        # --- set up GAN loss ----
+        if self.use_gan:
+            if cfg.gan_net == "patch":
+                self.D = PatchD3(cfg.input_dim[0])
+            elif cfg.gan_net == "ms_patch":
+                self.D = MultiScaleD(cfg.input_dim[0])
+            elif cfg.gan_net == "style2":
+                self.D = StyleGAN2D(cfg.input_dim[0]).to(cfg.device)
+            else:
+                raise ValueError("unknown gan_arch")
+
     def forward(self, model_input, model_output, batch_key="data"):
 
+        # get model outputs
         x = model_input[batch_key]
         recon_x = model_output.recon_x
         logvar = model_output.logvar
         mu = model_output.mu
 
-        # get recon loss
-        recon_loss, px_loss, p_loss = process_recon_loss(self, x, recon_x)
-
+        # Standard Gaussian regularization
         KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
 
-        if not self.pips_flag:
-            recon_scale_factor = (128 * 288)
-        else:
-            recon_scale_factor = (128 * 288) / 10 # accounts for fact that L1 loss ~10x size of L2
-        kld_scale_factor = 100 #/ mu.shape[1]
+        # get PIXEL recon loss
+        pixel_loss = recon_module(self, x, recon_x)
 
+        # get Perceptual loss
+        if self.pips_flag & self.pips_weight:
+            pips_loss = calc_pips_loss(self, x, recon_x)
+        else:
+            pips_loss = 0
+
+        # add adversarial loss
+        gan_loss = torch.zeros_like(pixel_loss)  # default zero
+        if self.use_gan:
+            pred_fake = self.D(recon_x)
+            if isinstance(pred_fake, (list, tuple)):  # multi-scale
+                gan_loss = sum([-p.mean() for p in pred_fake]) / len(pred_fake)
+            else:
+                gan_loss = -pred_fake.mean()
+
+        # TV loss
+        # tv_loss = 0
+        # if self.tv_weight > 0:
+        #     tv_loss = calc_tv_loss(recon_x)
+
+        # Upscale recon and KLD to standardized pixel/latent sizes
+        if self.reconstruction_loss != "L1":
+            pixel_scale_factor = (128 * 288) / 100 # factor of 100 comes from shuffling the KLD resizing factor
+        else:
+            pixel_scale_factor = (128 * 288) / 10 / 100# accounts for fact that L1 loss ~10x size of L2
+
+        kld_scale_factor = 1 #/ mu.shape[1]
         # calculate weighted loss components
-        recon_loss_w = recon_loss.mean(dim=0) * recon_scale_factor
-        kld_loss_w = self.kld_weight * KLD.mean(dim=0) * kld_scale_factor
+        pixel_loss_w = pixel_loss.mean(dim=0) * pixel_scale_factor
+        kld_loss_w = KLD.mean(dim=0) * kld_scale_factor
+
+        # combine
+        recon_loss = pixel_loss_w + self.kld_weight*kld_loss_w + self.pips_weight*pips_loss + self.gan_weight*gan_loss
 
         output = ModelOutput(
-            loss=(recon_loss_w + kld_loss_w) / (recon_scale_factor + kld_scale_factor),
-            recon_loss=recon_loss.mean(dim=0), pips_loss=p_loss.mean(dim=0), pixel_loss=px_loss.mean(dim=0),
-            KLD=KLD.mean(dim=0)
+            loss=recon_loss, recon_loss=recon_loss,
+            gan_loss=gan_loss, pips_loss=pips_loss, pixel_loss=pixel_loss_w, kld_loss=kld_loss_w
         )
 
         return output

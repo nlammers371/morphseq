@@ -15,7 +15,6 @@ def _abs_ancestor(path: str, levels: str) -> str:
 
 OmegaConf.register_new_resolver("ancestor", _abs_ancestor)
 
-
 @hydra.main(version_base="1.1",
             config_path="/home/nick/projects/morphseq/src/hydra_configs",
             config_name="base")
