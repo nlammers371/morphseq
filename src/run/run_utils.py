@@ -11,7 +11,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 import hydra
 from src.lightning.pl_wrappers import LitModel
 import pytorch_lightning as pl
-from src.lightning.callbacks import SaveRunMetadata
+from src.lightning.callbacks import SaveRunMetadata, EpochListCheckpoint
 import torch
 from hydra.core.hydra_config import HydraConfig
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -149,7 +149,7 @@ def train_vae(cfg):
         loss_fn=loss_fn,
         eval_gpu_flag=train_config.eval_gpu_flag,
         data_cfg=data_config,
-        lr=train_config.learning_rate,
+        train_cfg=train_config,
         batch_key="data",
     )
     # make output directory
@@ -183,10 +183,18 @@ def train_vae(cfg):
     checkpoint_cb = ModelCheckpoint(
         dirpath=ckpt_path,  # same top‑level folder as your logger
         filename="epoch{epoch:02d}",  # e.g. epoch=05.ckpt
-        save_top_k=-1,  # save all checkpoints, not just the best
-        every_n_epochs=model_config.trainconfig.save_every_n,
+        # save_top_k=-1,  # save all checkpoints, not just the best
+        # every_n_epochs=model_config.trainconfig.save_every_n,
         save_last=True,  # also keep 'last.ckpt'
     )
+
+    if hasattr(model_config.trainconfig, "save_epochs"):
+        spec_ckpt_cb = [EpochListCheckpoint(
+            epochs=model_config.trainconfig.save_epochs,
+            dirpath=os.path.join(ckpt_path, "special")
+        )]
+    else:
+        spec_ckpt_cb = []
 
     # device_kwargs = pick_devices(gpus)
     # if torch.cuda.is_available():
@@ -202,8 +210,9 @@ def train_vae(cfg):
     trainer = pl.Trainer(logger=[wandb_logger, tb_logger],
                          max_epochs=train_config.max_epochs,
                          precision=16,
-                         callbacks=[SaveRunMetadata(data_config), checkpoint_cb],
+                         callbacks=[SaveRunMetadata(data_config), checkpoint_cb] + spec_ckpt_cb,
                          accelerator="gpu",
+                         log_every_n_steps=10,
                          strategy=DDPStrategy(find_unused_parameters=True),
                          devices="auto",
                          )

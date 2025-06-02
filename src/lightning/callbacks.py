@@ -1,6 +1,8 @@
 import json, os, subprocess
 from pytorch_lightning import Callback
 import pickle
+from pathlib import Path
+
 
 class SaveRunMetadata(Callback):
     def __init__(self, data_cfg):
@@ -27,3 +29,17 @@ class SaveRunMetadata(Callback):
         #     self.metric_array = self.metric_array
 
         self._written = True
+
+class EpochListCheckpoint(Callback):
+    def __init__(self, epochs, dirpath="checkpoints"):
+        super().__init__()
+        self.epochs = set(int(e) for e in epochs)
+        self.dir = Path(dirpath)
+        self.dir.mkdir(exist_ok=True, parents=True)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        # +1 because current_epoch is 0-based
+        epoch = trainer.current_epoch + 1
+        if epoch in self.epochs:
+            ckpt_path = self.dir / f"epoch{epoch:04d}.ckpt"
+            trainer.save_checkpoint(ckpt_path)

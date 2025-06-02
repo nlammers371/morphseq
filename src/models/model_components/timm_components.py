@@ -87,8 +87,6 @@ class TimmEncoder(nn.Module):
             #     return mu, logvar, skips
             return ModelOutput(embedding=mu, log_covariance=logvar)
 
-
-
 # ---------- building blocks ----------
 class UpBlock(nn.Module):
     """Depth-wise conv → point-wise conv → BN → SiLU → pixel-shuffle ↑2."""

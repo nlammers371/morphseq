@@ -3,14 +3,15 @@ config_target: src.models.model_configs.VAEConfig
 ddconfig:
   name: "DeiT-Tiny" #"Efficient-B0-RA"
   input_dim: [1, 288, 128]
-  dec_use_local_attn: False
+  dec_use_local_attn: False # Currently a bug in this somewhere
   latent_dim: 100
-  n_conv_layers: 5
+#  n_conv_layers: 5
 
 lossconfig:
   kld_weight: 10.0
+
   pips_flag: True
-  pips_weight: 1.0
+  pips_weight: 1.0 #7.5
   pips_net: "vgg"
 
   use_gan: True
@@ -20,12 +21,13 @@ lossconfig:
 dataconfig:
   target: "BasicDataset"
   num_workers: 8
-  batch_size: 32
+  batch_size: 64
   wrap: True
   root: ${ancestor:${hydra:run.dir},2} #"/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/"
 
 trainconfig:
   benchmark: True
-  accumulate_grad_batches: 2
-  max_epochs: 5
+  accumulate_grad_batches: 1
+  max_epochs: 7
+  save_epochs: [3, 4]
   eval_gpu_flag: True

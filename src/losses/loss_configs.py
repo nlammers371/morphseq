@@ -13,44 +13,76 @@ class BasicLoss:
     target: Literal[
         "src.losses.loss_functions.VAELossBasic"
     ] = "src.losses.loss_functions.VAELossBasic"
+
+    max_epochs: int = 25 # this will be overwritten by whatever is passed to the trainconfig
+
+    # KLD
     kld_weight: float = 1.0
+    schedule_kld: bool = True
+    kld_warmup: int = 0
+
     # PIXEL
     reconstruction_loss: str = "L1"
+
     # PIPS
     pips_net: Literal["vgg", "alex", "squeeze"] = "vgg"
     pips_flag: bool = True
-    pips_weight: float = 0.1
-
+    pips_weight: float = 7.5
+    schedule_pips: bool = True
 
     # ADVERSARIAL
     use_gan: bool = False
     gan_weight: float = 1.0
     gan_net: Literal["ms_patch", "patch", "style2"] = "patch"
+    schedule_gan: bool = True
 
     # Extra PIPS to monitor recon quality
     use_pips_eval: bool = True
     eval_pips_net: Literal["vgg", "alex", "squeeze"] = "alex"
 
     # get scheduler info
-    schedule_pips: bool = True
-    pips_warmup: int = 30
-    pips_rampup: int = 20
-    schedule_kld: bool = True
-    kld_warmup: int = 10
-    kld_rampup: int = 20
+    ramp_scale: float = 5.0
+    hold_scale: float = 5.0
+    tv_weight: float = 0 #1e-5
 
+    @property
+    def train_scale(self) -> float:
+        return min([self.max_epochs / 25.0, 1.0])
 
+    @property
+    def kld_rampup(self) -> int:
+        return math.ceil(self.ramp_scale * self.train_scale)
 
-    tv_weight: float = 1e-5
+    @property
+    def pips_warmup(self) -> int:
+        return self.kld_rampup + self.kld_warmup + math.ceil(self.hold_scale * self.train_scale)
 
+    @property
+    def pips_rampup(self) -> int:
+        return math.ceil(self.ramp_scale * self.train_scale)
+
+    @property
+    def gan_warmup(self) -> int:
+        if self.pips_weight > 0:
+            return self.pips_rampup + self.pips_warmup + math.ceil(self.hold_scale * self.train_scale)
+        else:
+            return self.kld_rampup + self.kld_warmup + math.ceil(self.hold_scale * self.train_scale)
+
+    @property
+    def gan_rampup(self) -> int:
+        return math.ceil(self.ramp_scale * self.train_scale)
+
+    @property
+    def kld_cfg(self):
+        return dict(n_warmup=self.kld_warmup, n_rampup=self.kld_rampup, w_min=0, w_max=self.kld_weight)
 
     @property
     def pips_cfg(self):
         return dict(n_warmup=self.pips_warmup, n_rampup=self.pips_rampup, w_min=0, w_max=self.pips_weight)
 
     @property
-    def kld_cfg(self):
-        return dict(n_warmup=self.kld_warmup, n_rampup=self.kld_rampup, w_min=0, w_max=self.kld_weight)
+    def gan_cfg(self):
+        return dict(n_warmup=self.gan_warmup, n_rampup=self.gan_rampup, w_min=0, w_max=self.gan_weight)
 
     def create_module(self):
         # dynamically import the module & class

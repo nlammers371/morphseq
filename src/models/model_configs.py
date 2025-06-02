@@ -71,9 +71,10 @@ class VAEConfig:
 
         # 3) deep‐merge user values on top of base
         merged = deep_merge(base, user_model)
-
+        merged["lossconfig"]["max_epochs"] = merged["trainconfig"]["max_epochs"]
         # 4) re‐instantiate & validate in one shot
         inst = cls(**merged)
+        inst.lossconfig.max_epochs = inst.trainconfig.max_epochs
         inst.lossconfig.input_dim = inst.ddconfig.input_dim
 
         return inst
@@ -114,10 +115,9 @@ class morphVAEConfig:
         inst = cls(**merged)
 
         # 5) update loss with necessary config options
+        inst.lossconfig.max_epochs = inst.trainconfig.max_epochs
         inst.lossconfig.latent_dim = inst.ddconfig.latent_dim
         inst.lossconfig.input_dim = inst.ddconfig.input_dim
-        # inst.lossconfig.latent_dim_bio = inst.ddconfig.latent_dim_bio
-        # inst.lossconfig.latent_dim_nuisance = inst.ddconfig.latent_dim_nuisance
 
         # loss -> data
         inst.dataconfig.self_target_prob = inst.lossconfig.self_target_prob

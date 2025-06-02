@@ -146,6 +146,8 @@ class VAELossBasic(nn.Module):
         self.use_gan = cfg.use_gan
         self.gan_weight = cfg.gan_weight
         self.gan_net = cfg.gan_net
+        self.schedule_gan = cfg.schedule_gan
+        self.gan_cfg = cfg.gan_cfg
 
         # KLD
         self.schedule_kld = cfg.schedule_kld
@@ -188,14 +190,14 @@ class VAELossBasic(nn.Module):
         pixel_loss = recon_module(self, x, recon_x)
 
         # get Perceptual loss
-        if self.pips_flag & self.pips_weight:
+        if self.pips_flag & (self.pips_weight > 0):
             pips_loss = calc_pips_loss(self, x, recon_x)
         else:
             pips_loss = 0
 
         # add adversarial loss
-        gan_loss = torch.zeros_like(pixel_loss)  # default zero
-        if self.use_gan:
+        gan_loss = 0  # default zero
+        if self.use_gan and self.gan_weight > 0:
             pred_fake = self.D(recon_x)
             if isinstance(pred_fake, (list, tuple)):  # multi-scale
                 gan_loss = sum([-p.mean() for p in pred_fake]) / len(pred_fake)
