@@ -8,4 +8,4 @@ python -m src.run.training_cluster --multirun \
     model=vae_timm \
     model.ddconfig.name="Efficient-B0-RA","Efficient-B4","ConvNeXt-Tiny","Swin-Tiny","MaxViT-Tiny" \
     model.lossconfig.gan_net="style2" \
-    model.lossconfig.gan_weight=0.05, 0.25
+    model.lossconfig.gan_weight=0.05,0.25
