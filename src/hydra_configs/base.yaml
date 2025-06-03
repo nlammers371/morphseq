@@ -11,9 +11,8 @@ hydra:
     dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
     subdir: ${hydra.job.num}
 
-
 wandb:
-  project: mdl-proto
+  project: sweep01
   #entity: nlammers-trap-zf-ml
   # RUN NAMING & GROUPING
   run_name: ${hydra:job.name}_${now:%Y%m%d_%H%M%S}_${hydra:job.num}

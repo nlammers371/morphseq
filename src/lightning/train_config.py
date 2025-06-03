@@ -27,4 +27,4 @@ class LitTrainConfig:
 
     @property
     def lr_gan(self) -> float:
-        return self.lr_base
+        return self.lr_base / 2

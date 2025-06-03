@@ -4,6 +4,11 @@ from src.run.run_utils import train_vae, collect_results_recursive
 import torch
 import os
 from pathlib import Path
+import warnings
+
+# 1) Silence all FutureWarning / UserWarning from torchvision, lpips, torch, etc.
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 torch.set_float32_matmul_precision("medium")   # good default
 

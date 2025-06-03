@@ -263,7 +263,7 @@ class LitModel(pl.LightningModule):
         )
 
         if self.loss_fn.use_gan:  # discriminator present?
-            opt_D = torch.optim.Adam(self.loss_fn.D.parameters(), lr=self.train_cfg.lr_gan)
+            opt_D = torch.optim.Adam(self.loss_fn.D.parameters(), lr=self.train_cfg.lr_gan, betas=(0.5, 0.999))
         else:
             opt_D = None
         return [opt_G, opt_D]  # a list/tuple of TWO

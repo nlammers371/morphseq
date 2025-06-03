@@ -33,7 +33,7 @@ class BasicLoss:
     # ADVERSARIAL
     use_gan: bool = False
     gan_weight: float = 1.0
-    gan_net: Literal["ms_patch", "patch", "style2"] = "patch"
+    gan_net: Literal["patch", "ms_patch", "style2"] = "patch"
     schedule_gan: bool = True
 
     # Extra PIPS to monitor recon quality
@@ -47,30 +47,30 @@ class BasicLoss:
 
     @property
     def train_scale(self) -> float:
-        return min([self.max_epochs / 25.0, 1.0])
+        return min([self.max_epochs / 30.0, 1.0])
 
     @property
     def kld_rampup(self) -> int:
-        return math.ceil(self.ramp_scale * self.train_scale)
+        return math.floor(self.ramp_scale * self.train_scale)
 
     @property
     def pips_warmup(self) -> int:
-        return self.kld_rampup + self.kld_warmup + math.ceil(self.hold_scale * self.train_scale)
+        return self.kld_rampup + self.kld_warmup + math.floor(self.hold_scale * self.train_scale)
 
     @property
     def pips_rampup(self) -> int:
-        return math.ceil(self.ramp_scale * self.train_scale)
+        return math.floor(self.ramp_scale * self.train_scale)
 
     @property
     def gan_warmup(self) -> int:
         if self.pips_weight > 0:
-            return self.pips_rampup + self.pips_warmup + math.ceil(self.hold_scale * self.train_scale)
+            return self.pips_rampup + self.pips_warmup + math.floor(self.hold_scale * self.train_scale)
         else:
-            return self.kld_rampup + self.kld_warmup + math.ceil(self.hold_scale * self.train_scale)
+            return self.kld_rampup + self.kld_warmup + math.floor(self.hold_scale * self.train_scale)
 
     @property
     def gan_rampup(self) -> int:
-        return math.ceil(self.ramp_scale * self.train_scale)
+        return math.floor(self.ramp_scale * self.train_scale)
 
     @property
     def kld_cfg(self):

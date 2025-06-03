@@ -11,7 +11,7 @@ lossconfig:
   kld_weight: 1.0
 
   pips_flag: True
-  pips_weight: 7.5
+  pips_weight: 0.0 #7.5
   pips_net: "vgg"
 
   use_gan: True
@@ -28,6 +28,6 @@ dataconfig:
 trainconfig:
   benchmark: True
   accumulate_grad_batches: 1
-  max_epochs: 35
-  save_epochs: [9, 19, 29]
+  max_epochs: 25
+  save_epochs: [9, 19]
   eval_gpu_flag: True

@@ -171,7 +171,7 @@ class VAELossBasic(nn.Module):
             elif cfg.gan_net == "ms_patch":
                 self.D = MultiScaleD(cfg.input_dim[0])
             elif cfg.gan_net == "style2":
-                self.D = StyleGAN2D(cfg.input_dim[0]).to(cfg.device)
+                self.D = StyleGAN2D(cfg.input_dim[0])
             else:
                 raise ValueError("unknown gan_arch")
 
