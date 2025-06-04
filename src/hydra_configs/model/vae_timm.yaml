@@ -1,7 +1,7 @@
 config_target: src.models.model_configs.VAEConfig
 
 ddconfig:
-  name: "ViT-Large" #"Efficient-B0-RA"
+  name: "RegNet-Y" #"Efficient-B0-RA"
   input_dim: [1, 288, 128]
   dec_use_local_attn: False # Currently a bug in this somewhere
   latent_dim: 64
