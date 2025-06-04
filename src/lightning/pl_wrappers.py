@@ -139,8 +139,13 @@ class LitModel(pl.LightningModule):
             pred_real = self.loss_fn.D(x)
             pred_fake = self.loss_fn.D(x_hat)
 
-            loss_D = (F.relu(1 - pred_real).mean() +
-                      F.relu(1 + pred_fake).mean())
+            if self.loss_fn.gan_net in ["ms_patch", "patch4scale"]:
+                loss_D_list = [(F.relu(1 - pred_real[i]).mean() +
+                                F.relu(1 + pred_fake[i]).mean()) for i in range(len(pred_real))]
+                loss_D = torch.stack(loss_D_list).mean()
+            else:
+                loss_D = (F.relu(1 - pred_real).mean() +
+                          F.relu(1 + pred_fake).mean())
 
             self.log("train/loss_D", loss_D, prog_bar=True, on_step=True, on_epoch=self.log_epoch)
 
@@ -384,11 +389,11 @@ class LitAutoencoderKL(pl.LightningModule):
             list(self.model.decoder.parameters()) +
             list(self.model.quant_conv.parameters()) +
             list(self.model.post_quant_conv.parameters()),
-            lr=lr, betas=(0.5, 0.9)
+            lr=lr, betas=(0.5, 0.99)
         )
         opt_disc = torch.optim.Adam(
             self.loss_fn.discriminator.parameters(),
-            lr=lr, betas=(0.5, 0.9)
+            lr=lr, betas=(0.0, 0.9)
         )
         return [opt_ae, opt_disc], []
 

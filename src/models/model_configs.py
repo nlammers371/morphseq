@@ -21,7 +21,10 @@ ARCH_REGISTRY: dict[str, type] = {"convVAE": LegacyArchitecture,
                                     "MaxViT-Tiny": TimmArchitecture,
                                     "DeiT-Tiny": TimmArchitecture,  # alt
                                     "RegNet-Y": TimmArchitecture,
-                                    "ViT-Tiny": TimmArchitecture}
+                                    "ViT-Tiny": TimmArchitecture,
+                                    "Swin-Large": TimmArchitecture,
+                                    "MaxViT-Small": TimmArchitecture,
+                                    "Vit-Large": TimmArchitecture}
 
 
 def resolve_arch(dd: dict):

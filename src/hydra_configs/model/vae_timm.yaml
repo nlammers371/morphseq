@@ -16,7 +16,8 @@ lossconfig:
 
   use_gan: True
   gan_weight: 1.0
-  gan_net: "patch"
+  gan_net: "ms_patch"
+  schedule_gan: True
 
 dataconfig:
   target: "BasicDataset"

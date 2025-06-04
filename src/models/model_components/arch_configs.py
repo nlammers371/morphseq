@@ -26,13 +26,19 @@ timm_dict = {
     "MaxViT-Tiny": "maxvit_tiny_tf_512.in1k",
     "DeiT-Tiny": "deit_tiny_patch16_224",  # alt
     "RegNet-Y": "regnety_400mf",
-    "ViT-Tiny": "vit_tiny_patch16_224"}
+    "ViT-Tiny": "vit_tiny_patch16_224",
+    "Swin-Large": "swin_large_patch4_window7_224",
+    "MaxViT-Small": "maxvit_small_tf_224",
+    "Vit-Large": "vit_large_patch16_224.dinov2"}
+
 # alt
 @dataclass
 class TimmArchitecture:
 
     name: Literal["Efficient-B0-RA", "Efficient-B4", "ConvNeXt-Tiny",
-                  "Swin-Tiny", "MaxViT-Tiny", "DeiT-Tiny", "RegNet-Y", "ViT-Tiny"] = "Efficient-B0-RA"
+                  "Swin-Tiny", "MaxViT-Tiny", "DeiT-Tiny", "RegNet-Y",
+                  "ViT-Tiny", "Swin-Large", "MaxViT-Small", "ViT-Large"] = "Efficient-B0-RA"
+
     is_timm_arch: bool = True
     latent_dim: int = 64
     orth_flag: bool = False

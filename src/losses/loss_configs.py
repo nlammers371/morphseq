@@ -33,7 +33,7 @@ class BasicLoss:
     # ADVERSARIAL
     use_gan: bool = False
     gan_weight: float = 1.0
-    gan_net: Literal["patch", "ms_patch", "style2"] = "patch"
+    gan_net: Literal["patch", "ms_patch", "style2", "style2block", "resnet_sn", "patch4scale"] = "patch"
     schedule_gan: bool = True
 
     # Extra PIPS to monitor recon quality
