@@ -167,19 +167,19 @@ class VAELossBasic(nn.Module):
         # --- set up GAN loss ----
         if self.use_gan:
             if cfg.gan_net == "patch":
-                self.D = PatchD3(cfg.input_dim[0])
+                self.D = PatchD3(in_ch=cfg.input_dim[0])
             elif cfg.gan_net == "ms_patch":
-                self.D = MultiScaleD(cfg.input_dim[0])
+                self.D = MultiScaleD(in_ch=cfg.input_dim[0])
             elif cfg.gan_net == "style2": # keeping temporarilly
-                self.D = StyleGAN2DV0(in_ch=self.input_dim[0])
+                self.D = StyleGAN2DV0(in_ch=cfg.input_dim[0])
             elif cfg.gan_net == "style2_small":
-                self.D = StyleGAN2D(in_ch=self.input_dim[0], num_blocks=4)
+                self.D = StyleGAN2D(in_ch=cfg.input_dim[0], num_blocks=4)
             elif cfg.gan_net == "style2_big":
-                self.D = StyleGAN2D(in_ch=self.input_dim[0], num_blocks=8)
+                self.D = StyleGAN2D(in_ch=cfg.input_dim[0], num_blocks=8)
             elif cfg.gan_net == "resnet_sn":
-                self.D = ResNet50SN_D(in_ch=self.input_dim[0])
+                self.D = ResNet50SN_D(in_ch=cfg.input_dim[0])
             elif cfg.gan_net == "patch4scale":
-                self.D = FourScalePatchD(in_ch=self.input_dim[0])
+                self.D = FourScalePatchD(in_ch=cfg.input_dim[0])
             else:
                 raise ValueError("unknown gan_arch")
 
