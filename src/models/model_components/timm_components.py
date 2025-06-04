@@ -40,7 +40,6 @@ class TimmEncoder(nn.Module):
                 self.model_name,
                 pretrained=self.use_pretrained_weights,
                 in_chans=self.cfg.input_dim[0],
-                img_size=(self.cfg.input_dim[1], self.cfg.input_dim[2]),
                 features_only=True, out_indices=None   # we’ll choose later
             )
             self.embed_dim = self.backbone.feature_info.channels()[-1]
