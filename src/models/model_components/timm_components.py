@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Optional
 from src.models.model_utils import ModelOutput
-from src.models.model_components.timm_helpers import vit_resize
+from src.models.model_components.timm_helpers import vit_resize, swin_resize
 from src.models.model_components.arch_configs import TimmArchitecture
 
 PATCH_FAMILIES = ("vit", "deit", "mixer", "swin", "maxvit", "cait", "levit", "beit", "coat", "pools")  # edit as you add exotic tags
@@ -30,10 +30,13 @@ class TimmEncoder(nn.Module):
         # -------- 1) build backbone --------
         if self._is_patch_family():
             # ViT-style backbone (tokens out)
-            self.backbone = create_model(self.model_name, pretrained=self.use_pretrained_weights, in_chans=self.cfg.input_dim[0])
-            self.embed_dim = self.backbone.num_features  # e.g. 192 / 768
+            self.backbone = create_model(self.model_name, pretrained=self.use_pretrained_weights, in_chans=self.cfg.input_dim[0]) # e.g. 192 / 768
             if self.model_name[:3] == "vit":
                 self.backbone = vit_resize(self.backbone, (self.cfg.input_dim[1], self.cfg.input_dim[2]))
+            elif self.model_name[:4] == "swin":
+                self.backbone = swin_resize(self.backbone, (self.cfg.input_dim[1], self.cfg.input_dim[2]))
+
+            self.embed_dim = self.backbone.num_features
         else:
             # Conv / hierarchical backbone (maps out)
             self.backbone = create_model(
@@ -49,7 +52,7 @@ class TimmEncoder(nn.Module):
         self.log_var = nn.Linear(self.embed_dim, self.latent_dim)
 
         # Global pool layer only needed for feature-map families
-        if not self._is_patch_family():
+        if True: #not self._is_patch_family():
             self.pool = nn.AdaptiveAvgPool2d(1)
 
         # flag for whether to force into orthonormal basis
@@ -73,9 +76,13 @@ class TimmEncoder(nn.Module):
     # ---------------------------------------
     def forward(self, x):
         if self._is_patch_family():                         # ViT / DeiT
-            # ① forward to patch tokens
-            tokens = self.backbone.forward_features(x)      # [B,N,C]
-            cls_or_mean = tokens.mean(dim=1)                # mean-pool tokens
+            # forward to patch tokens
+            tokens = self.backbone.forward_features(x)
+            if self.model_name[:4] == "swin":
+                cls_or_mean = tokens.mean(dim=[1, 2])
+            else:
+                cls_or_mean = tokens.mean(dim=1)
+                # mean-pool tokens
             mu, logvar = self.embedding(cls_or_mean), self.log_var(cls_or_mean)
 
             return ModelOutput(embedding=mu, log_covariance=logvar)

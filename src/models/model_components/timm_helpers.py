@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+from timm.models.swin_transformer import SwinTransformer
 
 def vit_resize(model, new_hw):
     """
@@ -33,4 +34,18 @@ def vit_resize(model, new_hw):
     pos_tok = pos_tok.permute(0, 2, 3, 1).reshape(1, -1, pos_tok.shape[1])
     model.pos_embed = nn.Parameter(torch.cat([cls_tok, pos_tok], dim=1))
 
+    return model
+
+def swin_resize(model, new_hw):
+    H, W = new_hw
+    pe = model.patch_embed
+
+    # 1) update PatchEmbed meta
+    ph, pw = pe.patch_size                  # (4, 4)
+    pe.img_size   = (H, W)
+    pe.grid_size  = (H // ph, W // pw)      # (72, 32)
+    pe.num_patches = pe.grid_size[0] * pe.grid_size[1]
+
+    # 2) nothing else required – Swin uses *relative* position bias
+    #    which works for any grid ≥ original window size (7×7).
     return model

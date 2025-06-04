@@ -25,7 +25,7 @@ timm_dict = {
     "Swin-Tiny": "swin_tiny_patch4_window7_224.ms_in22k_ft_in1k",
     "MaxViT-Tiny": "maxvit_tiny_tf_512.in1k",
     "DeiT-Tiny": "deit_tiny_patch16_224.fb_in1k",  # alt
-    "RegNet-Y": "regnety_400mf",
+    "RegNet-Y": "regnety_064.pycls_in1k",
     "ViT-Tiny": "vit_tiny_patch16_224.augreg_in21k_ft_in1k",
     "Swin-Large": "swin_large_patch4_window7_224.ms_in22k_ft_in1k",
     "MaxViT-Small": "maxvit_small_tf_224.in1k",
