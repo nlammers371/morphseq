@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.losses.loss_configs import MetricLoss
-from src.losses.discriminators import PatchD3, MultiScaleD, StyleGAN2D, FourScalePatchD, ResNet50SN_D
+from src.losses.discriminators import PatchD3, MultiScaleD, StyleGAN2D, FourScalePatchD, ResNet50SN_D, StyleGAN2DV0
 from src.models.model_utils import ModelOutput
 # from taming.modules.losses.vqperceptual import LPIPS
 import lpips
@@ -170,6 +170,8 @@ class VAELossBasic(nn.Module):
                 self.D = PatchD3(cfg.input_dim[0])
             elif cfg.gan_net == "ms_patch":
                 self.D = MultiScaleD(cfg.input_dim[0])
+            elif cfg.gan_net == "style2": # keeping temporarilly
+                self.D = StyleGAN2DV0(in_ch=self.input_dim[0])
             elif cfg.gan_net == "style2_small":
                 self.D = StyleGAN2D(in_ch=self.input_dim[0], num_blocks=4)
             elif cfg.gan_net == "style2_big":
