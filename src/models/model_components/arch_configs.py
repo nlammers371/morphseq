@@ -21,14 +21,14 @@ class LegacyArchitecture:
 timm_dict = {
     "Efficient-B0-RA": "efficientnet_b0.ra_in1k",   # E-B0-RA
     "Efficient-B4": "efficientnet_b4",           # E-B4
-    "ConvNeXt-Tiny": "convnext_tiny_in22k_ft_in1k",
-    "Swin-Tiny": "swin_tiny_patch4_window7_224",
+    "ConvNeXt-Tiny": "convnext_tiny.fb_in1k",
+    "Swin-Tiny": "swin_tiny_patch4_window7_224.ms_in22k_ft_in1k",
     "MaxViT-Tiny": "maxvit_tiny_tf_512.in1k",
-    "DeiT-Tiny": "deit_tiny_patch16_224",  # alt
+    "DeiT-Tiny": "deit_tiny_patch16_224.fb_in1k",  # alt
     "RegNet-Y": "regnety_400mf",
-    "ViT-Tiny": "vit_tiny_patch16_224",
-    "Swin-Large": "swin_large_patch4_window7_224",
-    "MaxViT-Small": "maxvit_small_tf_224",
+    "ViT-Tiny": "vit_tiny_patch16_224.augreg_in21k_ft_in1k",
+    "Swin-Large": "swin_large_patch4_window7_224.ms_in22k_ft_in1k",
+    "MaxViT-Small": "maxvit_small_tf_224.in1k",
     "ViT-Large": "vit_large_patch14_dinov2.lvd142m"}
 
 # alt
