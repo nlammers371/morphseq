@@ -12,7 +12,7 @@ hydra:
     subdir: ${hydra.job.num}
 
 wandb:
-  project: sweep01-test
+  project: sweep01
   #entity: nlammers-trap-zf-ml
   # RUN NAMING & GROUPING
   run_name: ${hydra:job.name}_${now:%Y%m%d_%H%M%S}_${hydra:job.num}
