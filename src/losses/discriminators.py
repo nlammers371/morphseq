@@ -25,31 +25,31 @@ class MultiScaleD(nn.Module):
             x = self.down(x)
         return out            # list of logits
 
-# ---------- StyleGAN-2 Discriminator (minimal) ----------
-class StyleGAN2D(nn.Module):
-    def __init__(self, in_ch=3, channels=64, num_blocks=4):
-        super().__init__()
-        layers=[]
-        c=channels
-        for _ in range(num_blocks):
-            layers += [
-                nn.Conv2d(in_ch, c, 3, 1, 1), nn.LeakyReLU(.2, True),
-                nn.Conv2d(c, c, 3, 1, 1),     nn.LeakyReLU(.2, True),
-                nn.AvgPool2d(2)
-            ]
-            in_ch, c = c, min(c*2, 512)
-        layers += [nn.Conv2d(c, c, 3, 1, 1), nn.LeakyReLU(.2, True)]
-        self.features = nn.Sequential(*layers)
-        self.final = nn.Sequential(
-            nn.Conv2d(c+1, c, 3, 1, 1),  nn.LeakyReLU(.2, True),
-            nn.Conv2d(c, 1, 4)
-        )
-    def forward(self, x):
-        feat = self.features(x)
-        # minibatch-std-dev trick
-        std = feat.std(dim=0, keepdim=True).mean([1,2,3], keepdim=True)
-        feat = torch.cat([feat, std.expand_as(feat[:,:1])], 1)
-        return self.final(feat).view(-1)
+# # ---------- StyleGAN-2 Discriminator (minimal) ----------
+# class StyleGAN2D(nn.Module):
+#     def __init__(self, in_ch=3, channels=64, num_blocks=4):
+#         super().__init__()
+#         layers=[]
+#         c=channels
+#         for _ in range(num_blocks):
+#             layers += [
+#                 nn.Conv2d(in_ch, c, 3, 1, 1), nn.LeakyReLU(.2, True),
+#                 nn.Conv2d(c, c, 3, 1, 1),     nn.LeakyReLU(.2, True),
+#                 nn.AvgPool2d(2)
+#             ]
+#             in_ch, c = c, min(c*2, 512)
+#         layers += [nn.Conv2d(c, c, 3, 1, 1), nn.LeakyReLU(.2, True)]
+#         self.features = nn.Sequential(*layers)
+#         self.final = nn.Sequential(
+#             nn.Conv2d(c+1, c, 3, 1, 1),  nn.LeakyReLU(.2, True),
+#             nn.Conv2d(c, 1, 4)
+#         )
+#     def forward(self, x):
+#         feat = self.features(x)
+#         # minibatch-std-dev trick
+#         std = feat.std(dim=0, keepdim=True).mean([1,2,3], keepdim=True)
+#         feat = torch.cat([feat, std.expand_as(feat[:,:1])], 1)
+#         return self.final(feat).view(-1)
 
 
 
@@ -142,6 +142,8 @@ def make_layer(in_ch, out_ch, num_blocks, stride=1):
     for _ in range(1, num_blocks):
         layers.append(SNBasicBlock(out_ch, out_ch))
     return nn.Sequential(*layers)
+
+
 
 class ResNet50SN_D(nn.Module):
     def __init__(self, in_ch=3):
