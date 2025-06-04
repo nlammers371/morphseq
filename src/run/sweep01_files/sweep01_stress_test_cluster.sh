@@ -8,5 +8,7 @@ python -m src.run.training_cluster --multirun \
     model=vae_timm \
     model.ddconfig.name="MaxViT-Tiny" \
     model.lossconfig.gan_net="style2" \
-    model.lossconfig.gan_weight=1.0 \
-    model.trainconfig.max_epochs=7.0
+    model.lossconfig.pips_weight=1.0 \
+    model.lossconfig.schedule_pips=False \
+    model.lossconfig.schedule_gan=False \
+    model.trainconfig.max_epochs=2.0
