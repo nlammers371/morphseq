@@ -223,20 +223,20 @@ def train_vae(cfg):
     )
     dummy_input = torch.zeros((1, *model_config.ddconfig.input_dim))
 
-    torch.onnx.export(
-        model,  # underlying PyTorch model
-        dummy_input,  # representative input tensor
-        "model.onnx",  # output file
-        export_params=True,
-        opset_version=12,
-        input_names=["input"],
-        output_names=["output"],
-        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}}
-    )
+    # torch.onnx.export(
+    #     model,  # underlying PyTorch model
+    #     dummy_input,  # representative input tensor
+    #     "model.onnx",  # output file
+    #     export_params=True,
+    #     opset_version=12,
+    #     input_names=["input"],
+    #     output_names=["output"],
+    #     dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}}
+    # )
 
-    artifact = wandb.Artifact("model-architecture", type="model")
-    artifact.add_file("model.onnx")
-    wandb_logger.experiment.log_artifact(artifact)
+    # artifact = wandb.Artifact("model-architecture", type="model")
+    # artifact.add_file("model.onnx")
+    # wandb_logger.experiment.log_artifact(artifact)
 
     # run it!
     trainer.fit(lit)

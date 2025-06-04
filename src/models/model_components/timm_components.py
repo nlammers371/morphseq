@@ -6,15 +6,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Optional
 from src.models.model_utils import ModelOutput
+from src.models.model_components.timm_helpers import vit_resize
 from src.models.model_components.arch_configs import TimmArchitecture
 
-PATCH_FAMILIES = ("vit", "deit", "mixer", "swin_mlp")   # edit as you add exotic tags
+PATCH_FAMILIES = ("vit", "deit", "mixer", "swin", "maxvit", "cait", "levit", "beit", "coat", "pools")  # edit as you add exotic tags
 
 class TimmEncoder(nn.Module):
     """
     Generic encoder → (mu, logvar, optional skip list)
     Works with any timm backbone that either
-      (a) supports features_only=True  **or**
+      (a) supports features_only=True **or**
       (b) is a patch-token Vision Transformer.
     """
     def __init__(self, cfg: TimmArchitecture) -> None:
@@ -31,10 +32,15 @@ class TimmEncoder(nn.Module):
             # ViT-style backbone (tokens out)
             self.backbone = create_model(self.model_name, pretrained=self.use_pretrained_weights, in_chans=self.cfg.input_dim[0])
             self.embed_dim = self.backbone.num_features  # e.g. 192 / 768
+            if self.model_name[:3] == "vit":
+                self.backbone = vit_resize(self.backbone, (self.cfg.input_dim[1], self.cfg.input_dim[2]))
         else:
             # Conv / hierarchical backbone (maps out)
             self.backbone = create_model(
-                self.model_name, pretrained=self.use_pretrained_weights, in_chans=self.cfg.input_dim[0],
+                self.model_name,
+                pretrained=self.use_pretrained_weights,
+                in_chans=self.cfg.input_dim[0],
+                img_size=(self.cfg.input_dim[1], self.cfg.input_dim[2]),
                 features_only=True, out_indices=None   # we’ll choose later
             )
             self.embed_dim = self.backbone.feature_info.channels()[-1]
@@ -71,7 +77,7 @@ class TimmEncoder(nn.Module):
             # ① forward to patch tokens
             tokens = self.backbone.forward_features(x)      # [B,N,C]
             cls_or_mean = tokens.mean(dim=1)                # mean-pool tokens
-            mu, logvar = self.embedding(cls_or_mean), self.logvar(cls_or_mean)
+            mu, logvar = self.embedding(cls_or_mean), self.log_var(cls_or_mean)
 
             return ModelOutput(embedding=mu, log_covariance=logvar)
 

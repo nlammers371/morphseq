@@ -29,7 +29,7 @@ timm_dict = {
     "ViT-Tiny": "vit_tiny_patch16_224",
     "Swin-Large": "swin_large_patch4_window7_224",
     "MaxViT-Small": "maxvit_small_tf_224",
-    "Vit-Large": "vit_large_patch16_224.dinov2"}
+    "ViT-Large": "vit_large_patch14_dinov2.lvd142m"}
 
 # alt
 @dataclass

@@ -24,7 +24,7 @@ ARCH_REGISTRY: dict[str, type] = {"convVAE": LegacyArchitecture,
                                     "ViT-Tiny": TimmArchitecture,
                                     "Swin-Large": TimmArchitecture,
                                     "MaxViT-Small": TimmArchitecture,
-                                    "Vit-Large": TimmArchitecture}
+                                    "ViT-Large": TimmArchitecture}
 
 
 def resolve_arch(dd: dict):
@@ -35,7 +35,7 @@ def resolve_arch(dd: dict):
     if typ not in ARCH_REGISTRY:
         raise KeyError(f"Unknown arch name {typ!r}; must be one of {list(ARCH_REGISTRY)}")
     cls = ARCH_REGISTRY[typ]
-    kwargs = {k: v for k, v in dd.items() if k != "name"}
+    kwargs = {k: v for k, v in dd.items()}# if k != "name"}
     return cls(**kwargs)
 
 @dataclass
