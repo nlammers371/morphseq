@@ -287,6 +287,7 @@ class LitModel(pl.LightningModule):
             num_workers=self.data_cfg.num_workers,
             sampler=train_sampler,
             shuffle=False,
+            drop_last=True
         )
 
     def val_dataloader(self):
@@ -299,6 +300,7 @@ class LitModel(pl.LightningModule):
             num_workers=self.data_cfg.num_workers,
             sampler=eval_sampler,
             shuffle=False,
+            drop_last=True
         )
 
     # -------------------------------------------------------------------
