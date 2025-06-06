@@ -185,6 +185,7 @@ def train_vae(cfg):
         filename="epoch{epoch:02d}",  # e.g. epoch=05.ckpt
         # save_top_k=-1,  # save all checkpoints, not just the best
         # every_n_epochs=model_config.trainconfig.save_every_n,
+        save_weights_only=True,
         save_last=True,  # also keep 'last.ckpt'
     )
 
@@ -221,7 +222,7 @@ def train_vae(cfg):
     wandb_logger.experiment.watch(
         lit.model, log="all"
     )
-    dummy_input = torch.zeros((1, *model_config.ddconfig.input_dim))
+    # dummy_input = torch.zeros((1, *model_config.ddconfig.input_dim))
 
     # torch.onnx.export(
     #     model,  # underlying PyTorch model

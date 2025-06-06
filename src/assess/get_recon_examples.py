@@ -39,11 +39,15 @@ def recon_wrapper(hydra_run_path,
 
 
         # initialize
-        model, model_config = initialize_model_to_asses(config)
+        try:
+            model, model_config = initialize_model_to_asses(config)
+        except:
+            continue
         loss_fn = model_config.lossconfig.create_module()
         run_path = os.path.dirname(os.path.dirname(cfg))
         latest_ckpt = parse_hydra_paths(run_path=run_path)
-
+        if latest_ckpt is None:
+            continue
         # load train/test/eval indices
         split_path = os.path.join(run_path, "split_indices.pkl")
         with open(split_path, 'rb') as file:
@@ -115,8 +119,8 @@ def assess_image_reconstructions(
     preds = trainer.predict(lit_model, dataloaders=dataloader)
 
     # concat batch dictionaries
-    snip_ids = sum([list(p["snip_ids"]) for p in preds], [])
-    snip_ids = [os.path.basename(s).replace(".jpg", "") for s in snip_ids]
+    # snip_ids = sum([list(p["snip_ids"]) for p in preds], [])
+    # snip_ids = [os.path.basename(s).replace(".jpg", "") for s in snip_ids]
 
     # make im fig
     for p in preds:

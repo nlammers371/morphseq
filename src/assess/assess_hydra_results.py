@@ -124,9 +124,14 @@ def parse_hydra_paths(run_path, version=None, ckpt=None):
     ckpt_dir = os.path.join(run_path, "checkpoints", "")
     # find all .ckpt files
     if ckpt is None:
-        all_ckpts = glob(os.path.join(ckpt_dir, "*.ckpt"))
-        # pick the one with the latest modification time
-        latest_ckpt = max(all_ckpts, key=os.path.getmtime)
+        latest_ckpt = os.path.join(ckpt_dir, "last.ckpt")
+        if not os.path.isfile(latest_ckpt):
+            all_ckpts = glob(os.path.join(ckpt_dir, "*.ckpt"))
+            # pick the one with the latest modification time
+            if len(all_ckpts) > 0:
+                latest_ckpt = max(all_ckpts, key=os.path.getmtime)
+            else:
+                latest_ckpt = None
     else:
         latest_ckpt = ckpt_dir + ckpt + ".ckpt"
 
