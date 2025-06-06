@@ -49,6 +49,7 @@ class LitModel(pl.LightningModule):
         self.eval_gpu_flag = eval_gpu_flag
         self.loss_fn = loss_fn
         self.data_cfg = data_cfg
+        self.current_mode = None
 
         self.train_cfg = train_cfg
         self.batch_key = batch_key

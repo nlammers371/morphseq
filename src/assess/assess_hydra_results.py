@@ -114,14 +114,14 @@ def get_hydra_runs(hydra_run_path, run_type):
 
 def parse_hydra_paths(run_path, version=None, ckpt=None):
 
-    if version is None:  # find most recent version
-        all_versions = glob(os.path.join(run_path, "*"))
-        all_versions = sorted([v for v in all_versions if os.path.isdir(v)])
-        model_dir = all_versions[-1]
-    else:
-        model_dir = os.path.join(run_path, version, "")
+    # if version is None:  # find most recent version
+    #     all_versions = glob(os.path.join(run_path, "*"))
+    #     all_versions = sorted([v for v in all_versions if os.path.isdir(v)])
+    #     model_dir = all_versions[-1]
+    # else:
+    #     model_dir = os.path.join(run_path, version, "")
     # get checkpoint
-    ckpt_dir = os.path.join(model_dir, "checkpoints", "")
+    ckpt_dir = os.path.join(run_path, "checkpoints", "")
     # find all .ckpt files
     if ckpt is None:
         all_ckpts = glob(os.path.join(ckpt_dir, "*.ckpt"))
@@ -130,7 +130,7 @@ def parse_hydra_paths(run_path, version=None, ckpt=None):
     else:
         latest_ckpt = ckpt_dir + ckpt + ".ckpt"
 
-    return model_dir, latest_ckpt
+    return latest_ckpt
 
 
 def assess_image_reconstructions(
@@ -334,15 +334,13 @@ def process_run(run_dir: Path) -> None:
 
 
 
-def assess_hydra_results(data_root,
-                         run_name,
+def assess_hydra_results(hydra_run_path,
                          run_type,
-                           n_image_figures=50,
-                           overwrite_flag=False,
-                           skip_figures_flag=False,
-                           batch_size=16):
+                         n_image_figures=50,
+                         overwrite_flag=False,
+                         skip_figures_flag=False,
+                         batch_size=16):
 
-    hydra_run_path = os.path.join(data_root, "hydra_outputs", run_name)
     hyper_df, cfg_path_list = get_hydra_runs(hydra_run_path, run_type)
 
     hyper_df.to_csv(os.path.join(hydra_run_path, "hyperparam_df.csv"), index=False)

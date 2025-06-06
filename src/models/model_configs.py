@@ -61,7 +61,7 @@ class VAEConfig:
         # 1) pull in the raw user dict (OmegaConf or plain dict)
         user_model = cfg.pop("model", {})
         if isinstance(user_model, DictConfig):
-            user_model = OmegaConf.to_container(user_model, resolve=True)
+            user_model = OmegaConf.to_container(user_model, resolve=False)
         user_model = prune_empty(user_model)
 
         # 2) instantiate ddconfig first
