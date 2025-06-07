@@ -160,4 +160,5 @@ class WindowAttention(nn.Module):
 
         x = self.proj(x)
         x = self.proj_drop(x)
+
         return x
