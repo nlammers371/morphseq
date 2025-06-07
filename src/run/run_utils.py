@@ -210,7 +210,7 @@ def train_vae(cfg):
     # 3) train with Lightning
     trainer = pl.Trainer(logger=[wandb_logger, tb_logger],
                          max_epochs=train_config.max_epochs,
-                         precision=16,
+                         precision='16-mixed', detect_anomaly=True,
                          callbacks=[SaveRunMetadata(data_config), checkpoint_cb] + spec_ckpt_cb,
                          accelerator="gpu",
                          log_every_n_steps=10,
@@ -219,9 +219,9 @@ def train_vae(cfg):
                          )
 
     # wandb_run = trainer.logger.experiment
-    wandb_logger.experiment.watch(
-        lit.model, log="all"
-    )
+    # wandb_logger.experiment.watch(
+    #     lit.model, log="all"
+    # )
     # dummy_input = torch.zeros((1, *model_config.ddconfig.input_dim))
 
     # torch.onnx.export(

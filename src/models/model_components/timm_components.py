@@ -138,6 +138,7 @@ class UniDecLite(nn.Module):
         self.use_pretrained_weights = cfg.use_pretrained_weights
         self.latent_dim = cfg.latent_dim
         self.use_local_attn = cfg.dec_use_local_attn
+
         # fc reshape from latent z
         self.fc = nn.Linear(self.latent_dim, self.enc_ch_last * self.lat_h * self.lat_w)
 
@@ -160,7 +161,7 @@ class UniDecLite(nn.Module):
         if self.use_local_attn:
             from src.models.model_components.window_attention import WindowAttention
             self.local_attn = WindowAttention(
-                dim=256, window_size=(7, 7), num_heads=4, qkv_bias=True)
+                dim=256, window_size=(4, 4), num_heads=4, qkv_bias=True)
             self.norm = nn.LayerNorm(256)
         else:
             self.local_attn = None
@@ -187,11 +188,28 @@ class UniDecLite(nn.Module):
 
             # optional local attention after UpBlock4 (idx 1) for GAN sharpness
             if self.local_attn and i == 1:
-                B, C, H, W = x.shape
-                x_flat = x.flatten(2).transpose(1, 2)          # B, HW, C
-                x_norm = self.norm(x_flat)
-                x_attn = self.local_attn(x_norm) + x_flat
-                x = x_attn.transpose(1, 2).view(B, C, H, W)
+                B, C, H, W = x.shape  # here H = W = 16
+                win = self.local_attn.window_size[0]  # must divide both H and W
+
+                # ---------- partition ----------
+                n_wh, n_ww = H // win, W // win  # 2 × 2 windows
+                x_ = (x.view(B, C, n_wh, win, n_ww, win)  # B,C,2,8,2,8
+                      .permute(0, 2, 4, 3, 5, 1)  # B,2,2,8,8,C
+                      .reshape(B * n_wh * n_ww, win * win, C))  # (B*4 , 64 , C)
+
+                # ---------- attention ----------
+                x_ = self.norm(x_)  # LN on each window
+                x_ = self.local_attn(x_) + x_  # (B*4 , 64 , C)
+
+                # ---------- un-partition ----------
+                x = (x_.reshape(B, n_wh, n_ww, win, win, C)
+                      .permute(0, 5, 1, 3, 2, 4)  # B,C,2,8,2,8
+                      .reshape(B, C, H, W))
+                # B, C, H, W = x.shape
+                # x_flat = x.flatten(2).transpose(1, 2)          # B, HW, C
+                # x_norm = self.norm(x_flat)
+                # x_attn = self.local_attn(x_norm) + x_flat
+                # x = x_attn.transpose(1, 2).view(B, C, H, W)
 
         recon = torch.sigmoid(self.to_img(x))
         return ModelOutput(reconstruction=recon)

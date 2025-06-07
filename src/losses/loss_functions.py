@@ -175,7 +175,7 @@ class VAELossBasic(nn.Module):
             elif cfg.gan_net == "style2_small":
                 self.D = StyleGAN2D(in_ch=cfg.input_dim[0], num_blocks=4)
             elif cfg.gan_net == "style2_big":
-                self.D = StyleGAN2D(in_ch=cfg.input_dim[0], num_blocks=8)
+                self.D = StyleGAN2D(in_ch=cfg.input_dim[0], num_blocks=7)
             elif cfg.gan_net == "resnet_sn":
                 self.D = ResNet50SN_D(in_ch=cfg.input_dim[0])
             elif cfg.gan_net == "patch4scale":
