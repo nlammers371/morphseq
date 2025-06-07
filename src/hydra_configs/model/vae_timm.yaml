@@ -29,6 +29,6 @@ dataconfig:
 trainconfig:
   benchmark: True
   accumulate_grad_batches: 1
-  max_epochs: 40
+  max_epochs: 50
   save_epochs: [9, 19, 29]
   eval_gpu_flag: True
