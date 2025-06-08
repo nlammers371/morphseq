@@ -5,6 +5,7 @@ import torch
 import os
 from pathlib import Path
 import warnings
+import wandb
 
 # 1) Silence all FutureWarning / UserWarning from torchvision, lpips, torch, etc.
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -30,6 +31,7 @@ def main(cfg: DictConfig):
     train_vae(cfg_dict)
     results_dir = os.path.join(cfg.model.dataconfig.root, "training_outputs", "")
     collect_results_recursive(results_dir=results_dir)
+
 
 if __name__ == "__main__":
     main()

@@ -210,7 +210,7 @@ def train_vae(cfg):
     # 3) train with Lightning
     trainer = pl.Trainer(logger=[wandb_logger, tb_logger],
                          max_epochs=train_config.max_epochs,
-                         precision='16-mixed', detect_anomaly=True,
+                         precision=16,
                          callbacks=[SaveRunMetadata(data_config), checkpoint_cb] + spec_ckpt_cb,
                          accelerator="gpu",
                          log_every_n_steps=10,
@@ -237,13 +237,15 @@ def train_vae(cfg):
 
     # artifact = wandb.Artifact("model-architecture", type="model")
     # artifact.add_file("model.onnx")
-    # wandb_logger.experiment.log_artifact(artifact)
-
+    # wandb_logger.experiment.log_artifact(artifact
     # run it!
-    trainer.fit(lit)
-
-    # tell logger to close
-    wandb_logger.experiment.finish()
+    try:
+        trainer.fit(lit)
+        # tell logger to close
+        wandb_logger.experiment.finish()
+    except:
+        wandb.finish()
+        print("Erorr encountered during training. Skipping.")
 
     return {}
 
@@ -351,6 +353,7 @@ def initialize_model(config):
 #     # data_config = model_config.dataconfig
 #     # # get train/test/eval indices
 #     # data_config.make_metadata()
+#
 #
 #     # initialize model
 #     model = build_from_config(model_config)

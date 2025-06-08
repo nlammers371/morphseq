@@ -187,7 +187,7 @@ class UniDecLite(nn.Module):
             #     x = torch.cat([x, self.skip_weight * skip], dim=1)
 
             # optional local attention after UpBlock4 (idx 1) for GAN sharpness
-            if self.local_attn and i == 1:
+            if self.use_local_attn and i == 1:
                 B, C, H, W = x.shape  # here H = W = 16
                 win = self.local_attn.window_size[0]  # must divide both H and W
 

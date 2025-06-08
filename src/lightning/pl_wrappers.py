@@ -396,7 +396,7 @@ class LitAutoencoderKL(pl.LightningModule):
         )
         opt_disc = torch.optim.Adam(
             self.loss_fn.discriminator.parameters(),
-            lr=lr, betas=(0.0, 0.9)
+            lr=lr, betas=(0.5, 0.9)
         )
         return [opt_ae, opt_disc], []
 
