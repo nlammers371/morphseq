@@ -93,7 +93,7 @@ def recon_wrapper(hydra_run_path,
         pips_wt = model_config.lossconfig.pips_weight
         gan_wt = model_config.lossconfig.gan_weight
 
-        out_name = f"{mdl_name}_p{int(10*pips_wt)}_g{int(10*gan_wt)}_{folder_name}"
+        out_name = f"{mdl_name}_p{int(10*pips_wt)}_g{int(np.ceil(100*gan_wt))}_GAN{model_config.lossconfig.gan_net}_{folder_name}"
         mdl_folder = os.path.join(out_path, out_name)
         os.makedirs(mdl_folder, exist_ok=True)
         # look at image reconstructions
