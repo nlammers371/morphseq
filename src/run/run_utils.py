@@ -239,13 +239,13 @@ def train_vae(cfg):
     # artifact.add_file("model.onnx")
     # wandb_logger.experiment.log_artifact(artifact
     # run it!
-    try:
-        trainer.fit(lit)
-        # tell logger to close
-        wandb_logger.experiment.finish()
-    except:
-        wandb.finish()
-        print("Erorr encountered during training. Skipping.")
+    # try:
+    trainer.fit(lit)
+    # tell logger to close
+    wandb_logger.experiment.finish()
+    # except:
+    #     wandb.finish()
+    #     print("Erorr encountered during training. Skipping.")
 
     return {}
 

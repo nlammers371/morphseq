@@ -38,7 +38,7 @@ class VAE(nn.Module):
 
         """
         encoder_output = self.encoder(x)
-        mu, logvar = encoder_output.embedding, encoder_output.log_covariance
+        mu, logvar = encoder_output.embedding, encoder_output.log_covariance.clamp(min=-10.0, max=5.0)
         z = self.reparametrize(mu, logvar)
         recon_x = self.decoder(z)["reconstruction"]
 

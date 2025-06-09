@@ -27,10 +27,13 @@ OmegaConf.register_new_resolver("ancestor", _abs_ancestor)
 
 def main(cfg: DictConfig):
     # immediately turn it into a plain dict:
+    # try:
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     train_vae(cfg_dict)
     results_dir = os.path.join(cfg.model.dataconfig.root, "training_outputs", "")
     collect_results_recursive(results_dir=results_dir)
+    # except:
+    #     wandb.finish()
 
 
 if __name__ == "__main__":
