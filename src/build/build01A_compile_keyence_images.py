@@ -353,12 +353,12 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
                 meta_frames.append(temp_df)
         else:
             metadata_df_temp = process_map(partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, 
-                                                                        ff_dir=ff_dir, overwrite_flag=overwrite), 
+                                                                        ff_dir=ff_dir, overwrite=overwrite), 
                                         range(len(well_list)), max_workers=n_workers)
             meta_frames += metadata_df_temp
             
-        # process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False)
-        # meta_frames = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
+        # process_well(w, well_list, cytometer_flag, ff_dir, overwrite=False)
+        # meta_frames = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite), rP=0.5)
         # if len(meta_frames) > 0:
         #     meta_frames = pd.concat(meta_frames)
         #     first_time = np.min(meta_frames['Time (s)'].copy())
@@ -383,7 +383,7 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
     print('Done.')
 
 
-def stitch_ff_from_keyence(data_root, n_workers=4, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None, orientation_list=None):
+def stitch_ff_from_keyence(data_root, n_workers=4, overwrite=False, n_stitch_samples=15, dir_list=None, write_dir=None, orientation_list=None):
     
     par_flag = n_workers > 1
 
@@ -420,7 +420,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, overwrite_flag=False, n_stitc
 
         # ----- build (or reuse) master params once -------------------------------
         prior_file = ff_tile_root / "master_params.json"
-        if overwrite_flag or not prior_file.exists():
+        if overwrite or not prior_file.exists():
             sample_dirs = np.random.choice(ff_folders,
                                         min(n_stitch_samples, len(ff_folders)),
                                         replace=False)
@@ -431,22 +431,22 @@ def stitch_ff_from_keyence(data_root, n_workers=4, overwrite_flag=False, n_stitc
         # Call parallel function to stitch images
         if not par_flag:
             for f in tqdm(range(len(ff_folders))):
-                stitch_experiment(f, ff_folders, str(ff_tile_root), str(stitch_root), overwrite_flag, size_factor, orientation=orientation)
+                stitch_experiment(f, ff_folders, str(ff_tile_root), str(stitch_root), overwrite, size_factor, orientation=orientation)
 
         else:
             process_map(partial(stitch_experiment, ff_folder_list=ff_folders, ff_tile_dir=str(ff_tile_root), 
-                                stitch_ff_dir=str(stitch_root), overwrite_flag=overwrite_flag, size_factor=size_factor, orientation=orientation),
+                                stitch_ff_dir=str(stitch_root), overwrite=overwrite, size_factor=size_factor, orientation=orientation),
                                         range(len(ff_folders)), max_workers=n_workers, chunksize=1)
 
 
 
 if __name__ == "__main__":
 
-    overwrite_flag = True
+    overwrite = True
 
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     dir_list = ["20230525", "20231207"]
     # build FF images
-    build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
+    build_ff_from_keyence(data_root, overwrite=overwrite, dir_list=dir_list)
     # stitch FF images
-    stitch_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
+    stitch_ff_from_keyence(data_root, overwrite=overwrite, dir_list=dir_list)
