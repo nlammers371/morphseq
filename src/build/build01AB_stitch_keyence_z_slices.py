@@ -17,9 +17,11 @@ import skimage.io as io
 import pandas as pd
 from stitch2d.tile import Tile
 
+from src.build.keyence_export_utils import trim_to_shape
 
 
-def trim_image(im, out_shape):
+
+def trim_to_shape(im, out_shape):
     im_shape = im.shape
     im_diffs = im_shape - out_shape
     if np.any(np.abs(im_diffs) > 0):
@@ -178,7 +180,7 @@ def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir,
 
                 if orientation == "horizontal":
                     z_arr = z_arr.T
-                z_out = trim_image(z_arr.astype(out_dtype), out_shape)
+                z_out = trim_to_shape(z_arr.astype(out_dtype), out_shape)
                 z_slice_array[z, :, :] = z_out
 
             # save 
