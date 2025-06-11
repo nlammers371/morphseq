@@ -2,12 +2,13 @@
 import os
 import numpy as np
 # from PIL import Image
-import skimage.io as io
+import skimage.io as skio
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from src.functions.utilities import path_leaf
-
+from typing import List, Tuple, Union, Optional
 import glob2 as glob
+import logging
 import cv2
 from stitch2d import StructuredMosaic
 import json
@@ -18,6 +19,13 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, Union
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S"
+)
+log = logging.getLogger(__name__)
 
 def scrape_keyence_metadata(path: Union[str, Path]) -> Dict[str, Any]:
     """
@@ -340,16 +348,16 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
         # process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False)
         # metadata_df_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
         if len(metadata_df_list) > 0:
-            metadata_df = pd.concat(metadata_df_list)
-            first_time = np.min(metadata_df['Time (s)'].copy())
-            metadata_df['Time Rel (s)'] = metadata_df['Time (s)'] - first_time
+            meta_frames = pd.concat(metadata_df_list)
+            first_time = np.min(meta_frames['Time (s)'].copy())
+            meta_frames['Time Rel (s)'] = meta_frames['Time (s)'] - first_time
         else:
-            metadata_df = []
+            meta_frames = []
 
         # # load previous metadata
         # metadata_path = os.path.join(data_root, 'metadata', "built_metadata_files", sub_name + '_metadata.csv')
 
-        if metadata_df:
+        if meta_frames:
             df = pd.concat(meta_frames)
             df["Time Rel (s)"] = df["Time (s)"] - df["Time (s)"].min()
             df.to_csv(META / f"{acq.name}_metadata.csv", index=False)
