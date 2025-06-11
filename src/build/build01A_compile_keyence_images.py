@@ -6,9 +6,7 @@ import skimage.io as io
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from src.functions.utilities import path_leaf
-# from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
-# from tqdm import tqdm
-# from PIL import Image
+
 import glob2 as glob
 import cv2
 from stitch2d import StructuredMosaic
@@ -17,396 +15,325 @@ from tqdm import tqdm
 # import pickle
 # from parfor import pmap
 import pandas as pd
+import xml.etree.ElementTree as ET
+from typing import Dict, Any, Union
+from pathlib import Path
+
+def scrape_keyence_metadata(path: Union[str, Path]) -> Dict[str, Any]:
+    """
+    Parse the <Data> … </Data> chunk inside a Keyence .tif and
+    return the exact same keys your downstream code expects.
+    """
+    path = Path(path)
+
+    # read only until </Data> tag – avoids loading the full image bytes twice
+    with path.open("rb") as fh:
+        chunk = fh.read().split(b"</Data>", 1)[0] + b"</Data>"
+
+    root = ET.fromstring(chunk.decode(errors="ignore"))
+
+    def text(tag: str) -> str:
+        node = root.find(f".//{tag}")
+        return node.text if node is not None else ""
+
+    # original column names preserved ↓
+    sec = int(text("ShootingDateTime")) / 1e7           # 100 ns → s
+    width_px  = int(text("Width"))
+    height_px = int(text("Height"))
+    width_um  = int(text("Width_um"))  / 1000
+    height_um = int(text("Height_um")) / 1000
+
+    return {
+        "Time (s)"   : sec,
+        "Objective"  : text("LensName"),
+        "Channel"    : text("Observation_Type"),
+        "Width (px)" : width_px,
+        "Height (px)": height_px,
+        "Width (um)" : width_um,
+        "Height (um)": height_um,
+    }
+
+# def findnth(haystack, needle, n):
+#     parts = haystack.split(needle, n+1)
+#     if len(parts)<=n+1:
+#         return -1
+#     return len(haystack)-len(parts[-1])-len(needle)
+
+# --- misc image helpers -----------------------------------------------------
+def trim_to_shape(img: np.ndarray, target: tuple[int, int]) -> np.ndarray:
+    """
+    Center-crop or zero-pad `img` to `target` (Y, X) shape.
+    Returns a **new** array with the original dtype.
+    """
+    tY, tX = target
+    iY, iX = img.shape[:2]
+
+    # pad if needed
+    pad_y = max(0, tY - iY)
+    pad_x = max(0, tX - iX)
+    if pad_y or pad_x:
+        img = np.pad(img,
+                     ((pad_y // 2, pad_y - pad_y // 2),
+                      (pad_x // 2, pad_x - pad_x // 2)),
+                     mode="constant")
+
+    # crop if needed
+    start_y = (img.shape[0] - tY) // 2
+    start_x = (img.shape[1] - tX) // 2
+    return img[start_y:start_y + tY, start_x:start_x + tX]
 
 
-def scrape_keyence_metadata(im_path):
+def focus_stack_maxlap(stack: np.ndarray,
+                       lap_ksize: int = 3,
+                       gauss_ksize: int = 3) -> np.ndarray:
+    """
+    Fast Laplacian-max focus stack.
 
-    with open(im_path, 'rb') as a:
-        fulldata = a.read()
-    metadata = fulldata.partition(b'<Data>')[2].partition(b'</Data>')[0].decode()
+    Parameters
+    ----------
+    stack : (Z, Y, X) uint8/uint16 array of slices
+    lap_ksize, gauss_ksize : odd ints, kernel sizes for Laplacian & blur
+    """
+    if stack.ndim != 3:
+        raise ValueError("stack must be Z×Y×X")
 
-    meta_dict = dict({})
-    keyword_list = ['ShootingDateTime', 'LensName', 'Observation Type', 'Width', 'Height', 'Width', 'Height']
-    outname_list = ['Time (s)', 'Objective', 'Channel', 'Width (px)', 'Height (px)', 'Width (um)', 'Height (um)']
-
-    for k in range(len(keyword_list)):
-        param_string = keyword_list[k]
-        name = outname_list[k]
-
-        if (param_string == 'Width') or (param_string == 'Height'):
-            if 'um' in name:
-                ind1 = findnth(metadata, param_string + ' Type', 2)
-                ind2 = findnth(metadata, '/' + param_string, 2)
-            else:
-                ind1 = findnth(metadata, param_string + ' Type', 1)
-                ind2 = findnth(metadata, '/' + param_string, 1)
-        else:
-            ind1 = metadata.find(param_string)
-            ind2 = metadata.find('/' + param_string)
-        long_string = metadata[ind1:ind2]
-        subind1 = long_string.find(">")
-        subind2 = long_string.find("<")
-        param_val = long_string[subind1+1:subind2]
-
-        sysind = long_string.find("System.")
-        dtype = long_string[sysind+7:subind1-1]
-        if 'Int' in dtype:
-            param_val = int(param_val)
-
-        if param_string == "ShootingDateTime":
-            param_val = param_val / 10 / 1000 / 1000  # convert to seconds (native unit is 100 nanoseconds)
-        elif "um" in name:
-            param_val = param_val / 1000
-
-        # add to dict
-        meta_dict[name] = param_val
-
-    return meta_dict
-
-
-def findnth(haystack, needle, n):
-    parts = haystack.split(needle, n+1)
-    if len(parts)<=n+1:
-        return -1
-    return len(haystack)-len(parts[-1])-len(needle)
-
-def trim_image(im, out_shape):
-    im_shape = im.shape
-    im_diffs = im_shape - out_shape
-
-    pad_width = -im_diffs
-    pad_width[np.where(pad_width < 0)] = 0
-    im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype('uint8')
-
-    im_diffs[np.where(im_diffs < 0)] = 0
-    sv = np.floor(im_diffs / 2).astype(int)
-    if np.all(sv>0):
-        im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
-    elif sv[0]==0:
-        im_out = im_out[:, sv[1]:-(im_diffs[1] - sv[1])]
-    elif sv[1]==0:
-        im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
-
-    return im_out
-
-def doLap(image, lap_size=7, blur_size=7):
-
-    # YOU SHOULD TUNE THESE VALUES TO SUIT YOUR NEEDS
-#     kernel_size = 5  # Size of the laplacian window
-#     blur_size = 5  # How big of a kernal to use for the gaussian blur
-    # Generally, keeping these two values the same or very close works well
-    # Also, odd numbers, please...
-
-    blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
-    return cv2.Laplacian(blurred, cv2.CV_64F, ksize=lap_size)
-
-def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
-
-    well_dir = well_list[w]
-    # extract basic well info
-    well_name = well_dir[-4:]
-    well_df = pd.DataFrame([], columns=['well', 'time_int', 'time_string', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Channel', 'Objective', 'Time (s)'])
-    master_iter_i = 0
-
-    # get conventional well name
-    well_name_conv = sorted(glob.glob(os.path.join(well_dir, "_*")))
-    well_name_conv = well_name_conv[0][-3:]
-
-    # if multiple positions were taken per well, then there will be a layer of position folders
-    position_dir_list = sorted(glob.glob(well_dir + "/P*"))
-    if len(position_dir_list) == 0:
-        position_dir_list = [well_dir]
-
-    for p, pos_dir in enumerate(position_dir_list):
-
-        # each pos dir contains one or more time points
-        time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
-        no_timelapse_flag = len(time_dir_list) == 0
-
-        if no_timelapse_flag:
-            time_dir_list = [well_dir]
-
-        for t, time_dir in enumerate(time_dir_list):
-
-            # each time directoy contains a list of Z slices for each channel
-            ch_string = "CH" #+ str(ch_to_use)
-            im_list = sorted(glob.glob(time_dir + "/*" + ch_string + "*"))
-
-            # it is possible that multiple positionas are present within the same time folder
-            if not cytometer_flag:
-                sub_pos_list = []
-                for i, im in enumerate(im_list):
-                    im_name = im.replace(time_dir, "")
-                    well_ind = im_name.find(well_name)
-                    pos_id = int(im_name[well_ind + 5:well_ind + 10])
-                    sub_pos_list.append(pos_id)
-            else:
-                sub_pos_list = np.ones((len(im_list),))
-
-            sub_pos_index = np.unique(sub_pos_list).astype(int)
-
-            # check to see if images have already been generated
-            do_flags = [1] * len(sub_pos_index)
-            # print(sub_pos_index)
-            for sp, pi in enumerate(sub_pos_index):
-                if not no_timelapse_flag:
-                    tt = int(time_dir[-4:])
-                else:
-                    tt = 0
-                if cytometer_flag:
-                    # pos_id_list.append(p)
-                    pos_string = f'p{p:04}'
-                else:
-                    # pos_id_list.append(pi)
-                    pos_string = f'p{sp:04}'
-
-                ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}/' #+ f'ch{ch_to_use:02}/'
-                if os.path.isfile(
-                        os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.jpg')) and not overwrite_flag:
-                    do_flags[sp] = 0
-                    if t == 0 and p == 0 and w == 0:
-                        print("Skipping pre-existing files. Set 'overwrite_flag=True' to overwrite existing images")
-
-            for sp, pi in enumerate(sub_pos_index):
-                pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
-                # load
-                images = []
-                for iter_i, i in enumerate(pos_indices):
-                    if do_flags[sp]:
-                        im = io.imread(im_list[i])
-                        if im is not None:
-                            images.append(im)
-
-                    # scrape metadata from first image
-                    if (iter_i == 0) and (p == 0):
-                        temp_dict = scrape_keyence_metadata(im_list[i])
-                        k_list = list(temp_dict.keys())
-                        temp_df = pd.DataFrame(np.empty((1, len(k_list))), columns=k_list)
-                        for k in k_list:
-                            temp_df[k] = temp_dict[k]
-
-                        # add to main dictionary
-                        if no_timelapse_flag:
-                            tstring = 'T0'
-                            temp_df["time_string"] = tstring
-                            temp_df["time_int"] = 0
-                        else:
-                            tstring = 'T' + time_dir[-4:]
-                            temp_df["time_string"] = tstring
-                            temp_df["time_int"] = int(time_dir[-4:])
-
-                        temp_df["well"] = well_name_conv
-                        temp_df = temp_df[temp_df.columns[::-1]]
-                        # add to main dataframe
-                        well_df.loc[master_iter_i] = temp_df.loc[0]
-                        master_iter_i += 1
-
-
-                if do_flags[sp]:
-                    laps = []
-                    well_res = (well_df["Width (um)"]/ well_df["Width (px)"]).to_numpy()[0]
-                    filter_rad = 3 # int(np.floor(26/well_res/2)*2)+1
-                    # laps_d = []
-                    for i in range(len(images)):
-                        # print
-                        # "Lap {}".format(i)
-                        laps.append(doLap(images[i], lap_size=filter_rad, blur_size=filter_rad))
-                        # laps_d.append(doLap(images[i], lap_size=7, blur_size=7))  # I've found that depth stacking works better with larger filters
-
-                    laps = np.asarray(laps)
-                    abs_laps = np.absolute(laps)
-
-                    # laps_d = np.asarray(laps_d)
-                    # abs_laps_d = np.absolute(laps_d)
-
-                    # calculate full-focus and depth images
-                    ff_image = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
-                    # depth_image = np.argmax(abs_laps_d, axis=0)
-                    maxima = abs_laps.max(axis=0)
-                    bool_mask = abs_laps == maxima
-                    mask = bool_mask.astype(np.uint8)
-                    for i in range(len(images)):
-                        ff_image[np.where(mask[i] == 1)] = images[i][np.where(mask[i] == 1)]
-
-                    # ff_image = 255 - ff_image  # take the negative
-
-                    if not no_timelapse_flag:
-                        tt = int(time_dir[-4:])
-                    else:
-                        tt = 0
-                    if cytometer_flag:
-                        # pos_id_list.append(p)
-                        pos_string = f'p{p:04}'
-                    else:
-                        # pos_id_list.append(pi)
-                        pos_string = f'p{pi:04}'
-
-                    # save images
-                    ff_out_name = 'ff_' + well_name_conv + f'_t{tt:04}/' #+ f'ch{ch_to_use:02}/'
-                    # depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
-                    op_ff = os.path.join(ff_dir, ff_out_name)
-                    # op_depth = os.path.join(depth_dir, depth_out_name)
-
-                    if not os.path.isdir(op_ff):
-                        os.makedirs(op_ff)
-                    # if not os.path.isdir(op_depth):
-                    #     os.makedirs(op_depth)
-
-                    # convet depth image to 8 bit
-                    # max_z = abs_laps.shape[0]
-                    # depth_image_int8 = np.round(depth_image / max_z * 255).astype('uint8')
-                    io.imsave(os.path.join(ff_dir, ff_out_name, 'im_' + pos_string + '.jpg'), ff_image, check_constrast=False)
-
-                    # cv2.imwrite(os.path.join(depth_dir, depth_out_name, 'im_' + pos_string + '.tif'), depth_image_int8)
-
-    # well_dict_out = dict({well_name_conv: well_dict})
-
-    return well_df
-
-
-def stitch_experiment(t, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor, orientation):
-
-    # time_indices = np.where(np.asarray(time_id_list) == tt)[0]
-    ff_path = os.path.join(ff_folder_list[t], '')
-    ff_name = path_leaf(ff_path)
-    n_images = len(glob.glob(ff_path + '*.jpg'))
-
-    # set target stitched image size
-    if n_images == 2:
-        out_shape = np.asarray([800, 630]) * size_factor
-    elif n_images == 3:
-        if orientation == "vertical":
-            out_shape = np.asarray([1140, 630]) * size_factor
-        else: 
-            out_shape = np.asarray([1140, 480]) * size_factor
-    else:
-        raise Exception("Unrecognized number of images to stitch")
-
-    out_shape = out_shape.astype(int)
-
-    ff_out_name = ff_name[3:] + '_stitch.png'
-
-    if not os.path.isfile(os.path.join(stitch_ff_dir, ff_out_name)) or overwrite_flag:
-
-        # perform stitching
-        ff_mosaic = StructuredMosaic(
-            ff_path,
-            dim=n_images,  # number of tiles in primary axis
-            origin="upper left",  # position of first tile
-            direction=orientation,
-            pattern="raster"
+    # gaussian blur (vectorised)
+    blur = np.stack(
+        [cv2.GaussianBlur(z, (gauss_ksize, gauss_ksize), 0) for z in stack],
+        axis=0
+    )
+    lap = np.abs(
+        np.stack(
+            [cv2.Laplacian(z, cv2.CV_32F, ksize=lap_ksize) for z in blur],
+            axis=0
         )
+    )
 
+    best   = lap.argmax(axis=0)                             # (Y, X) ints
+    z_idx, y_idx = np.indices(best.shape)
+    return stack[best, y_idx, z_idx]      
+
+### Helper functions
+def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
+    return [skio.imread(file_list[i]) for i in indices]
+
+def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
+    out_dir.mkdir(parents=True, exist_ok=True)
+    skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
+
+
+def process_well(
+    w: int,
+    well_list: list[str],
+    cytometer_flag: bool,
+    ff_root: str | Path,
+    overwrite: bool = False,
+) -> pd.DataFrame:
+    """
+    Drop-in replacement: returns the same metadata DF,
+    writes full-focus JPGs to `ff_root`.
+    """
+    well_dir  = Path(well_list[w])
+    well_name = well_dir.name[-4:]                # e.g. 'A01a'
+    well_conv = sorted(well_dir.glob("_*"))[0].name[-3:]
+
+    # handle optional 'P*' and 'T*' layers
+    pos_dirs  = sorted(well_dir.glob("P*")) or [well_dir]
+    meta_rows = []
+
+    for p, pos_dir in enumerate(pos_dirs):
+        time_dirs = sorted(pos_dir.glob("T*")) or [pos_dir]
+
+        for time_dir in time_dirs:
+            t_idx = int(time_dir.name[1:]) if time_dir.stem.startswith("T") else 0
+            im_files = sorted(time_dir.glob("*CH*"))
+
+            # deduce sub-positions inside one folder
+            sub_pos = (
+                np.ones(len(im_files)) if cytometer_flag
+                else [int(f.name.split(well_name)[1][:5]) for f in im_files]
+            )
+            for pi in np.unique(sub_pos).astype(int):
+                pos_idx   = np.where(sub_pos == pi)[0]
+                pos_str   = f"p{(p if cytometer_flag else pi):04}"
+                out_dir   = Path(ff_root) / f"ff_{well_conv}_t{t_idx:04}"
+                out_file  = out_dir / f"im_{pos_str}.jpg"
+
+                if out_file.exists() and not overwrite:
+                    if p == t_idx == w == 0:
+                        print("Skipping existing JPGs (set overwrite=True to rebuild).")
+                    continue
+
+                stack = np.stack(_load_images(pos_idx, im_files), axis=0)
+                well_res = float(scrape_keyence_metadata(im_files[0])["Width (um)"]) / \
+                           scrape_keyence_metadata(im_files[0])["Width (px)"]
+                ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
+                ff_img = focus_stack_maxlap(stack, lap_ksize=ksize, gauss_ksize=ksize)
+
+                _write_ff(ff_img, out_dir, pos_str)
+
+                # metadata only once per (well, time point)
+                meta = scrape_keyence_metadata(im_files[0])
+                meta.update({"well": well_conv,
+                             "time_string": f"T{t_idx:04}",
+                             "time_int": t_idx})
+                meta_rows.append(meta)
+
+    return pd.DataFrame(meta_rows)
+
+
+def _valid_acq_dirs(root: Path, dir_list: list[str] | None) -> list[Path]:
+    if dir_list is not None:
+        dirs = [root / d for d in dir_list]
+    else:
+        dirs = [p for p in root.iterdir() if p.is_dir()]
+    return [d for d in dirs if "ignore" not in d.name]
+
+#############################################################################
+#  A.  MASTER-PARAM SAMPLER
+#############################################################################
+def _coords_to_array(coords: dict[int, List[float]], n_tiles: int) -> np.ndarray:
+    arr = np.full((n_tiles, 2), np.nan)
+    for k, v in coords.items():
+        arr[k, :] = v
+    return arr
+
+def build_master_params(
+    sample_dirs : List[Path],
+    *,
+    orientation : str,
+    n_tiles     : int,
+    outfile     : Path,
+) -> None:
+    """
+    Randomly samples folders, runs stitch2d alignment, and stores the
+    *median* tile coordinates as a JSON prior.  Called ONCE per acquisition.
+    """
+    all_coords = []
+    for fld in sample_dirs:
         try:
-            # mosaic.downsample(0.6)
-            ff_mosaic.align()
-        except:
-            pass
+            m = StructuredMosaic(str(fld), dim=n_tiles,
+                                 origin="upper left", direction=orientation,
+                                 pattern="raster")
+            m.align()
+            if len(m.params["coords"]) == n_tiles:          # good alignment
+                all_coords.append(_coords_to_array(m.params["coords"], n_tiles))
+        except Exception:
+            log.debug("Sampling failed in %s", fld)
 
-        try:  # NL: skipping one problematic well for now
-            default_flag = False
-            if len(ff_mosaic.params["coords"]) != n_images:
-                default_flag = True
-            else:
-                c_params = ff_mosaic.params["coords"]
-                if orientation == "vertical":
-                    if n_images == 3:
-                        lr_shifts = np.asarray([c_params[0][1], c_params[1][1], c_params[2][1]])
-                        default_flag = np.max(lr_shifts) > 2
+    if not all_coords:
+        log.warning("No good samples – master params not written")
+        return
 
-                    elif n_images == 2:
-                        lr_shifts = np.asarray([c_params[0][1], c_params[1][1]])
-                        # ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
-                        default_flag = np.max(lr_shifts) > 1
-                else:
-                    if n_images == 3:
-                        ud_shifts = np.asarray([c_params[0][0], c_params[1][0], c_params[2][0]])
-                        default_flag = np.max(ud_shifts) > 2
+    med = np.nanmedian(np.stack(all_coords), axis=0)        # (n_tiles, 2)
+    prior = {"coords": {i: med[i].tolist() for i in range(n_tiles)}}
 
-                    elif n_images == 2:
-                        ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
-                        # ud_shifts = np.asarray([c_params[0][0], c_params[1][0]])
-                        default_flag = np.max(ud_shifts) > 1
+    outfile.parent.mkdir(parents=True, exist_ok=True)
+    outfile.write_text(json.dumps(prior))
+    log.info("Wrote master params to %s", outfile)
 
-            if default_flag:
-                ff_mosaic.load_params(ff_tile_dir + "/master_params.json")
 
-            ff_mosaic.reset_tiles()
-            ff_mosaic.save_params(ff_path + 'params.json')
-            ff_mosaic.smooth_seams()
+#############################################################################
+#  B.  ONE-FOLDER STITCHER
+#############################################################################
+_SHIFT_TOL = 2.0  # px tolerance per axis for “good” translation
 
-            # trim to standardize the size
-            ff_arr = ff_mosaic.stitch()
-            if orientation == "horizontal":
-                ff_arr = ff_arr.T
-            ff_out = trim_image(ff_arr, out_shape)
+def _coords_good(coords: dict[int, List[float]],
+                 n_tiles: int,
+                 orientation: str) -> bool:
+    if len(coords) != n_tiles:
+        return False
+    arr = _coords_to_array(coords, n_tiles)     # (n,2)
 
-            # invert
-            if ff_out.dtype == np.uint16:
-                ff_out = 65535 - ff_out
-            elif ff_out.dtype == np.uint8: 
-                ff_out = 255 - ff_out
-            else:
-                raise Exception("Image data type not recognized")
+    axis = 1 if orientation == "vertical" else 0
+    # ensure successive tiles don’t jump more than +-2 px laterally
+    return np.nanmax(np.abs(np.diff(arr[:, axis]))) <= _SHIFT_TOL
 
-            io.imsave(os.path.join(stitch_ff_dir, ff_out_name), ff_out, check_contrast=False)
 
-        except:
-            pass
+def stitch_experiment(
+    idx            : int,
+    ff_folders     : List[str],
+    ff_tile_dir    : str,
+    out_dir        : str,
+    overwrite      : bool,
+    size_factor    : float,
+    orientation    : str = "vertical",
+) -> dict:
+    """
+    Replaces your old function 1-for-1.
+    • Still uses StructuredMosaic.
+    • Will *only* fall back to master_params.json when alignment is missing
+      or clearly exceeds the tolerance.
+    """
+    ff_path  = Path(ff_folders[idx])
+    out_png  = Path(out_dir) / (ff_path.name[3:] + "_stitch.png")
+    if out_png.exists() and not overwrite:
+        return {}
 
-    return{}
+    n_tiles = len(list(ff_path.glob("*.jpg")))
+    target  = {2: np.array([800,  630]),
+               3: np.array([1140, 630]) if orientation == "vertical"
+                  else np.array([1140, 480])}[n_tiles] * size_factor
+    target  = tuple(target.astype(int))
 
-def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag=False, dir_list=None, write_dir=None,):
+    mosaic = StructuredMosaic(str(ff_path), dim=n_tiles,
+                              origin="upper left", direction=orientation,
+                              pattern="raster")
+    try:
+        mosaic.align()
+    except Exception:
+        log.debug("Primary alignment failed in %s", ff_path)
 
-    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '') 
-    if write_dir is None:
-        write_dir = os.path.join(data_root, 'built_image_data', 'keyence', '')
-        
-    # handle paths
-    if dir_list == None:
-        # Get a list of directories
-        dir_list_raw = sorted(glob.glob(read_dir + "*"))
-        dir_list = []
-        for dd in dir_list_raw:
-            if os.path.isdir(dd):
-                dir_list.append(dd)
+    if not _coords_good(mosaic.params["coords"], n_tiles, orientation):
+        prior_file = Path(ff_tile_dir) / "master_params.json"
+        if prior_file.exists():
+            mosaic.load_params(str(prior_file))
+            mosaic.reset_tiles()
+            log.info("Fallback to master params for %s", ff_path)
+        else:
+            raise RuntimeError(f"No valid alignment and no prior for {ff_path}")
 
-    # filter for desired directories
-    dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
+    mosaic.smooth_seams()
+    stitched = mosaic.stitch()
+    if orientation == "horizontal":
+        stitched = stitched.T
 
-    for d in dir_indices:
-        # initialize dictionary to metadata
-        # metadata_dict = dict({})
-        sub_name = path_leaf(dir_list[d])
-        dir_path = os.path.join(read_dir, sub_name, '')
+    # trim & invert
+    stitched = trim_to_shape(stitched, target)
+    maxv = np.iinfo(stitched.dtype).max
+    stitched = maxv - stitched
 
-        # depth_dir = os.path.join(write_dir, "D_images", sub_name)
-        ff_dir = os.path.join(write_dir, "FF_images",  sub_name)
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    skio.imsave(out_png, stitched, check_contrast=False)
+    return {}
 
-        # if not os.path.isdir(depth_dir):
-        #     os.makedirs(depth_dir)
-        if not os.path.isdir(ff_dir):
-            os.makedirs(ff_dir)
+def build_ff_from_keyence(data_root, *, n_workers=4,
+                          overwrite=False, dir_list=None, write_dir=None):
+    
+    par_flag = n_workers > 1
 
-        # Each folder at this level pertains to a single well
-        well_list = sorted(glob.glob(dir_path + "XY*"))
-        cytometer_flag = False
-        if len(well_list) == 0:
-            cytometer_flag = True
-            well_list = sorted(glob.glob(dir_path + "/W0*"))
+    RAW   = Path(data_root) / "raw_image_data" / "keyence"
+    BUILT = Path(write_dir or data_root) / "built_image_data" / "keyence"
+    META  = Path(data_root) / "metadata" / "built_metadata_files"
+    acq_dirs = _valid_acq_dirs(RAW, dir_list)
 
-        print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        # for w in tqdm(range(len(well_list))):
-        # (w, well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use=1)
-        # metadata_dict_list = []
+    for acq in tqdm(acq_dirs, desc="Building FF"):
+
+        ff_dir = BUILT / "FF_images" / acq.name
+        ff_dir.mkdir(parents=True, exist_ok=True)
+
+        well_list = sorted((acq.glob("XY*") or acq.glob("W0*")))
+        cytometer_flag = not any(acq.glob("XY*"))
+
+        # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         metadata_df_list = []
         if not par_flag:
             for w in tqdm(range(len(well_list))):
-                temp_df = process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag)
+                temp_df = process_well(w, well_list, cytometer_flag, ff_dir, overwrite)
                 metadata_df_list.append(temp_df)
         else:
             metadata_df_temp = process_map(partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, 
-                                                                        ff_dir=ff_dir, overwrite_flag=overwrite_flag), 
+                                                                        ff_dir=ff_dir, overwrite_flag=overwrite), 
                                         range(len(well_list)), max_workers=n_workers)
             metadata_df_list += metadata_df_temp
             
@@ -419,147 +346,71 @@ def build_ff_from_keyence(data_root, par_flag=False, n_workers=4, overwrite_flag
         else:
             metadata_df = []
 
-        # load previous metadata
-        metadata_path = os.path.join(data_root, 'metadata', "built_metadata_files", sub_name + '_metadata.csv')
+        # # load previous metadata
+        # metadata_path = os.path.join(data_root, 'metadata', "built_metadata_files", sub_name + '_metadata.csv')
 
-
-        if len(metadata_df) > 0:
-            metadata_df.reset_index()
-            metadata_df.to_csv(metadata_path, index=False)
-        # with open(os.path.join(ff_dir, 'metadata.pickle'), 'wb') as handle:
-        #     pickle.dump(metadata_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        if metadata_df:
+            df = pd.concat(meta_frames)
+            df["Time Rel (s)"] = df["Time (s)"] - df["Time (s)"].min()
+            df.to_csv(META / f"{acq.name}_metadata.csv", index=False)
 
     print('Done.')
 
 
-def stitch_ff_from_keyence(data_root, n_workers=4, par_flag=False, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None, orientation_list=None):
+def stitch_ff_from_keyence(data_root, n_workers=4, overwrite_flag=False, n_stitch_samples=15, dir_list=None, write_dir=None, orientation_list=None):
     
-    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '')
-    if write_dir is None:
-        write_dir = data_root
+    par_flag = n_workers > 1
 
-    metadata_root = os.path.join(data_root, "metadata", "built_metadata_files", "")
-    # handle paths
-    if dir_list == None:
-        # Get a list of directories
-        dir_list_raw = sorted(glob.glob(read_dir + "*"))
-        dir_list = []
-        for dd in dir_list_raw:
-            if os.path.isdir(dd):
-                dir_list.append(dd)
+    RAW_ROOT   = Path(data_root) / "raw_image_data" / "keyence"
+    WRITE_ROOT = Path(write_dir or data_root)
+    META_ROOT  = Path(data_root) / "metadata" / "built_metadata_files"
 
-    # print('Estimating stitching prior...')
-    dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
+    # --- discover acquisition folders --------------------------------------
+    acq_dirs = (
+        [RAW_ROOT / d for d in dir_list]
+        if dir_list
+        else [p for p in RAW_ROOT.iterdir() if p.is_dir() and "ignore" not in p.name]
+    )
+    acq_dirs = sorted(acq_dirs)
+
     if orientation_list is None:
-        orientation_list = ["vertical"] * len(dir_list)
+        orientation_list = ["vertical"] * len(acq_dirs)
+    if len(orientation_list) != len(acq_dirs):
+        raise ValueError("orientation_list length must match dir_list length")
 
-    for d in dir_indices:
-        sub_name = path_leaf(dir_list[d])
-        orientation = orientation_list[d]
-        # directories containing image tiles
-        # depth_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "D_images", sub_name, '')
-        ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
+    # -----------------------------------------------------------------------
+    for acq, orientation in zip(acq_dirs, orientation_list):
+        # inside stitch_ff_from_keyence() – one acquisition folder “acq”
+        ff_tile_root = WRITE_ROOT / "built_image_data" / "keyence" / "FF_images" / acq.name
+        stitch_root  = WRITE_ROOT / "built_image_data" / "stitched_FF_images" / acq.name
+        stitch_root.mkdir(parents=True, exist_ok=True)
 
-        metadata_path = os.path.join(metadata_root, sub_name + '_metadata.csv')
-        metadata_df = pd.read_csv(metadata_path, index_col=0)
+        metadata_path = os.path.join(META_ROOT, acq.name + '_metadata.csv')
+        metadata_df = pd.read_csv(metadata_path,)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
-        time_ind_index = np.unique(metadata_df["time_int"])
-        # no_timelapse_flag = len(time_ind_index) == 0
 
-        # get list of subfolders
-        ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
+        ff_folders = sorted(ff_tile_root.glob("ff_*"))
+        n_tiles    = len(list(ff_folders[0].glob("*.jpg")))  # assume constant
 
-        # # if not no_timelapse_flag:
-        if not os.path.isfile(ff_tile_dir + "/master_params.json") or overwrite_flag:
+        # ----- build (or reuse) master params once -------------------------------
+        prior_file = ff_tile_root / "master_params.json"
+        if overwrite_flag or not prior_file.exists():
+            sample_dirs = np.random.choice(ff_folders,
+                                        min(n_stitch_samples, len(ff_folders)),
+                                        replace=False)
+            build_master_params(list(sample_dirs), orientation=orientation,
+                                n_tiles=n_tiles, outfile=prior_file)
 
-            # select a random set of directories to iterate through to estimate stitching prior
-            folder_options = range(len(ff_folder_list))
-            stitch_samples = np.random.choice(folder_options, np.min([n_stitch_samples, len(folder_options)]), replace=False)
-
-
-            print(f'Estimating stitch priors for images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-            n_images_exp = None
-            for n in tqdm(range(len(stitch_samples))):
-                im_ind = stitch_samples[n]
-                ff_path = ff_folder_list[im_ind]
-                n_images = len(glob.glob(ff_path + '/*.jpg'))
-                if n == 0:
-                    align_array = np.empty((n_stitch_samples, 2, n_images))
-                    align_array[:] = np.nan
-                    n_images_exp = n_images
-
-                n_pass = 0
-                # perform stitching
-                ff_mosaic = StructuredMosaic(
-                    ff_path,
-                    dim=n_images,  # number of tiles in primary axis
-                    origin="upper left",  # position of first tile
-                    direction=orientation,
-                    pattern="raster"
-                )
-                try:
-                    ff_mosaic.align()
-                    n_pass += 1
-                    # ff_mosaic.reset_tiles()
-                except:
-                    pass
-
-                if (len(ff_mosaic.params["coords"]) == n_images) and n_images > 1:       # NL: need to make this more general eventually
-                    c_params = ff_mosaic.params["coords"]
-                    for c in range(len(c_params)):
-                        align_array[n, :, c] = c_params[c]
-
-            # now make a master mosaic to use when alignment fails
-            master_mosaic = ff_mosaic.copy()
-            master_params = master_mosaic.params
-            # calculate median parameters for each tile
-            med_coords = np.nanmedian(align_array, axis=0)
-            c_dict = dict({})
-            for c in range(align_array.shape[2]):
-                c_dict[c] =  med_coords[:, c].tolist()
-            master_params["coords"] = c_dict
-
-            # save params for subsequent use
-            jason_params = json.dumps(master_params)
-            # Writing to json
-            with open(ff_tile_dir + "/master_params.json", "w") as outfile:
-                outfile.write(jason_params)
-
-        # directories to write stitched files to
-        stitch_ff_dir = os.path.join(write_dir, "built_image_data", "stitched_FF_images", sub_name)
-
-        # if not os.path.isdir(stitch_depth_dir):
-        #     os.makedirs(stitch_depth_dir)
-        if not os.path.isdir(stitch_ff_dir):
-            os.makedirs(stitch_ff_dir)
-
-        # get list of subfolders
-        # depth_folder_list = sorted(glob.glob(depth_tile_dir + "depth*"))
-        ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
-
-        print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+        # print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         # Call parallel function to stitch images
         if not par_flag:
-            for f in tqdm(range(len(ff_folder_list))):
-                stitch_experiment(f, ff_folder_list, ff_tile_dir, stitch_ff_dir, overwrite_flag, size_factor, orientation=orientation)
+            for f in tqdm(range(len(ff_folders))):
+                stitch_experiment(f, ff_folders, str(ff_tile_root), str(stitch_root), overwrite_flag, size_factor, orientation=orientation)
 
         else:
-            process_map(partial(stitch_experiment, ff_folder_list=ff_folder_list, ff_tile_dir=ff_tile_dir, 
-                                stitch_ff_dir=stitch_ff_dir, overwrite_flag=overwrite_flag, size_factor=size_factor, orientation=orientation),
-                                        range(len(ff_folder_list)), max_workers=n_workers, chunksize=1)
-
-        # else:
-        #     raise Warning("Some compute environments may not be compatible with parfor pmap function")
-        #     pmap(stitch_experiment, range(len(ff_folder_list)), (ff_folder_list, ff_tile_dir, depth_folder_list,
-        #                       depth_tile_dir, stitch_ff_dir,
-        #                       stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
-            
-            # pmap(stitch_experiment, range(len(ff_folder_list)),
-            #                             (ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
-            #                              stitch_depth_dir, overwrite_flag, out_shape), rP=0.5)
-
-        # stitch_experiment(1, ff_folder_list, ff_tile_dir, depth_folder_list, depth_tile_dir, stitch_ff_dir,
-        #  stitch_depth_dir, overwrite_flag, out_shape)
+            process_map(partial(stitch_experiment, ff_folder_list=ff_folders, ff_tile_dir=str(ff_tile_root), 
+                                stitch_ff_dir=str(stitch_root), overwrite_flag=overwrite_flag, size_factor=size_factor, orientation=orientation),
+                                        range(len(ff_folders)), max_workers=n_workers, chunksize=1)
 
 
 

@@ -1,3 +1,12 @@
+import sys
+from pathlib import Path
+
+# Path to the project *root* (the directory that contains the `src/` folder)
+REPO_ROOT = Path(__file__).resolve().parents[2]   # adjust “2” if levels differ
+
+# Put that directory at the *front* of sys.path so Python looks there first
+sys.path.insert(0, str(REPO_ROOT))
+
 from omegaconf import OmegaConf, DictConfig
 import hydra
 from src.run.run_utils import train_vae, collect_results_recursive
