@@ -1,11 +1,9 @@
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
-# from PIL import Image
 import skimage.io as skio
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
-from src.functions.utilities import path_leaf
 from typing import List, Tuple, Union, Optional
 import glob2 as glob
 import logging
@@ -13,8 +11,6 @@ import cv2
 from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
-# import pickle
-# from parfor import pmap
 import pandas as pd
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, Union
@@ -27,41 +23,57 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-def scrape_keyence_metadata(path: Union[str, Path]) -> Dict[str, Any]:
-    """
-    Parse the <Data> … </Data> chunk inside a Keyence .tif and
-    return the exact same keys your downstream code expects.
-    """
-    path = Path(path)
+def _findnth(haystack, needle, n):
+    parts = haystack.split(needle, n+1)
+    if len(parts)<=n+1:
+        return -1
+    return len(haystack)-len(parts[-1])-len(needle)
 
-    # read only until </Data> tag – avoids loading the full image bytes twice
-    with path.open("rb") as fh:
-        chunk = fh.read().split(b"</Data>", 1)[0] + b"</Data>"
+def scrape_keyence_metadata(im_path):
 
-    root = ET.fromstring(chunk.decode(errors="ignore"))
+    with open(im_path, 'rb') as a:
+        fulldata = a.read()
+    metadata = fulldata.partition(b'<Data>')[2].partition(b'</Data>')[0].decode()
 
-    def text(tag: str) -> str:
-        node = root.find(f".//{tag}")
-        return node.text if node is not None else ""
+    meta_dict = dict({})
+    keyword_list = ['ShootingDateTime', 'LensName', 'Observation Type', 'Width', 'Height', 'Width', 'Height']
+    outname_list = ['Time (s)', 'Objective', 'Channel', 'Width (px)', 'Height (px)', 'Width (um)', 'Height (um)']
 
-    # original column names preserved ↓
-    sec = int(text("ShootingDateTime")) / 1e7           # 100 ns → s
-    width_px  = int(text("Width"))
-    height_px = int(text("Height"))
-    width_um  = int(text("Width_um"))  / 1000
-    height_um = int(text("Height_um")) / 1000
+    for k in range(len(keyword_list)):
+        param_string = keyword_list[k]
+        name = outname_list[k]
 
-    return {
-        "Time (s)"   : sec,
-        "Objective"  : text("LensName"),
-        "Channel"    : text("Observation_Type"),
-        "Width (px)" : width_px,
-        "Height (px)": height_px,
-        "Width (um)" : width_um,
-        "Height (um)": height_um,
-    }
+        if (param_string == 'Width') or (param_string == 'Height'):
+            if 'um' in name:
+                ind1 = _findnth(metadata, param_string + ' Type', 2)
+                ind2 = _findnth(metadata, '/' + param_string, 2)
+            else:
+                ind1 = _findnth(metadata, param_string + ' Type', 1)
+                ind2 = _findnth(metadata, '/' + param_string, 1)
+        else:
+            ind1 = metadata.find(param_string)
+            ind2 = metadata.find('/' + param_string)
+        long_string = metadata[ind1:ind2]
+        subind1 = long_string.find(">")
+        subind2 = long_string.find("<")
+        param_val = long_string[subind1+1:subind2]
 
-# def findnth(haystack, needle, n):
+        sysind = long_string.find("System.")
+        dtype = long_string[sysind+7:subind1-1]
+        if 'Int' in dtype:
+            param_val = int(param_val)
+
+        if param_string == "ShootingDateTime":
+            param_val = param_val / 10 / 1000 / 1000  # convert to seconds (native unit is 100 nanoseconds)
+        elif "um" in name:
+            param_val = param_val / 1000
+
+        # add to dict
+        meta_dict[name] = param_val
+
+    return meta_dict
+
+# def _findnth(haystack, needle, n):
 #     parts = haystack.split(needle, n+1)
 #     if len(parts)<=n+1:
 #         return -1
@@ -118,8 +130,8 @@ def focus_stack_maxlap(stack: np.ndarray,
     )
 
     best   = lap.argmax(axis=0)                             # (Y, X) ints
-    z_idx, y_idx = np.indices(best.shape)
-    return stack[best, y_idx, z_idx]      
+    y_idx, x_idx = np.indices(best.shape)
+    return stack[best, y_idx, x_idx]      
 
 ### Helper functions
 def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
@@ -127,7 +139,7 @@ def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
 
 def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
     out_dir.mkdir(parents=True, exist_ok=True)
-    skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
+    skio.imsave(out_dir / f"im_{pos_string}.png", ff, check_contrast=False)
 
 
 def process_well(
@@ -159,17 +171,17 @@ def process_well(
             # deduce sub-positions inside one folder
             sub_pos = (
                 np.ones(len(im_files)) if cytometer_flag
-                else [int(f.name.split(well_name)[1][:5]) for f in im_files]
+                else [int(f.name.split(well_name)[1][1:6]) for f in im_files]
             )
             for pi in np.unique(sub_pos).astype(int):
                 pos_idx   = np.where(sub_pos == pi)[0]
                 pos_str   = f"p{(p if cytometer_flag else pi):04}"
                 out_dir   = Path(ff_root) / f"ff_{well_conv}_t{t_idx:04}"
-                out_file  = out_dir / f"im_{pos_str}.jpg"
+                out_file  = out_dir / f"im_{pos_str}.png"
 
                 if out_file.exists() and not overwrite:
                     if p == t_idx == w == 0:
-                        print("Skipping existing JPGs (set overwrite=True to rebuild).")
+                        print("Skipping existing PNGs (set overwrite=True to rebuild).")
                     continue
 
                 stack = np.stack(_load_images(pos_idx, im_files), axis=0)
@@ -278,7 +290,7 @@ def stitch_experiment(
     if out_png.exists() and not overwrite:
         return {}
 
-    n_tiles = len(list(ff_path.glob("*.jpg")))
+    n_tiles = len(list(ff_path.glob("*.png")))
     target  = {2: np.array([800,  630]),
                3: np.array([1140, 630]) if orientation == "vertical"
                   else np.array([1140, 480])}[n_tiles] * size_factor
@@ -334,31 +346,37 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
         cytometer_flag = not any(acq.glob("XY*"))
 
         # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        metadata_df_list = []
+        meta_frames = []
         if not par_flag:
             for w in tqdm(range(len(well_list))):
                 temp_df = process_well(w, well_list, cytometer_flag, ff_dir, overwrite)
-                metadata_df_list.append(temp_df)
+                meta_frames.append(temp_df)
         else:
             metadata_df_temp = process_map(partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, 
                                                                         ff_dir=ff_dir, overwrite_flag=overwrite), 
                                         range(len(well_list)), max_workers=n_workers)
-            metadata_df_list += metadata_df_temp
+            meta_frames += metadata_df_temp
             
         # process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False)
-        # metadata_df_list = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
-        if len(metadata_df_list) > 0:
-            meta_frames = pd.concat(metadata_df_list)
-            first_time = np.min(meta_frames['Time (s)'].copy())
-            meta_frames['Time Rel (s)'] = meta_frames['Time (s)'] - first_time
-        else:
-            meta_frames = []
+        # meta_frames = pmap(process_well, range(len(well_list)), (well_list, cytometer_flag, ff_dir, depth_dir, ch_to_use, overwrite_flag), rP=0.5)
+        # if len(meta_frames) > 0:
+        #     meta_frames = pd.concat(meta_frames)
+        #     first_time = np.min(meta_frames['Time (s)'].copy())
+        #     meta_frames['Time Rel (s)'] = meta_frames['Time (s)'] - first_time
+        # else:
+        #     meta_frames = []
 
-        # # load previous metadata
-        # metadata_path = os.path.join(data_root, 'metadata', "built_metadata_files", sub_name + '_metadata.csv')
+        # load previous metadata
+        df_path = META / f"{acq.name}_metadata.csv"
+        if not overwrite and os.path.isfile(df_path):
+            df_prev = pd.read_csv(df_path)
+            df_prev = [df_prev]
+        else:
+            df_prev = []
 
         if meta_frames:
-            df = pd.concat(meta_frames)
+            df = pd.concat(meta_frames + df_prev)
+            df.drop_duplicates(subset=["well", "time_string"])
             df["Time Rel (s)"] = df["Time (s)"] - df["Time (s)"].min()
             df.to_csv(META / f"{acq.name}_metadata.csv", index=False)
 
@@ -398,7 +416,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, overwrite_flag=False, n_stitc
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
 
         ff_folders = sorted(ff_tile_root.glob("ff_*"))
-        n_tiles    = len(list(ff_folders[0].glob("*.jpg")))  # assume constant
+        n_tiles    = len(list(ff_folders[0].glob("*.png")))  # assume constant
 
         # ----- build (or reuse) master params once -------------------------------
         prior_file = ff_tile_root / "master_params.json"
