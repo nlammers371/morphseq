@@ -9,5 +9,5 @@ python -m src.run.training_cluster --multirun \
     model.ddconfig.name="Swin-Tiny" \
     model.ddconfig.dec_use_local_attn=False \
     model.ddconfig.latent_dim=64,128 \
-    model.lossconfig.gan_net="style2_small" \
+    model.lossconfig.gan_net="style2" \
     model.lossconfig.gan_weight=0.05,0.1

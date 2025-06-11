@@ -13,6 +13,8 @@ class LitTrainConfig:
     eval_gpu_flag: bool=True
     save_epochs: list[int] = field(default_factory=list)
 
+    gan_net: str="patch" # this will be overwritten by whatever is passed to lossconfig
+
     @property
     def lr_encoder(self) -> float:
         return self.lr_base / 10
@@ -27,4 +29,7 @@ class LitTrainConfig:
 
     @property
     def lr_gan(self) -> float:
-        return self.lr_base / 2
+        if "style" in self.gan_net:
+            return self.lr_base / 4
+        else:
+            return self.lr_base / 2

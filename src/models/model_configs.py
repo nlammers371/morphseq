@@ -78,6 +78,7 @@ class VAEConfig:
         # 4) re‐instantiate & validate in one shot
         inst = cls(**merged)
         inst.lossconfig.max_epochs = inst.trainconfig.max_epochs
+        inst.trainconfig.gan_net = inst.lossconfig.gan_net
         inst.lossconfig.input_dim = inst.ddconfig.input_dim
 
         return inst
