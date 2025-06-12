@@ -1,21 +1,30 @@
+from pathlib import Path
+import sys
+
+# Path to the project *root* (the directory that contains the `src/` folder)
+REPO_ROOT = Path(__file__).resolve().parents[3]   # adjust “2” if levels differ
+
+# Put that directory at the *front* of sys.path so Python looks there first
+sys.path.insert(0, str(REPO_ROOT))
+
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
 import skimage.io as skio
+import json
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
-from typing import List, Tuple, Union, Optional
-import glob2 as glob
+from typing import List
 import logging
 from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
 import pandas as pd
-import xml.etree.ElementTree as ET
 from typing import Dict, Any, Union
 from pathlib import Path
+from glob2 import glob
 
-from src.build.keyence_export_utils import _coords_to_array, focus_stack_maxlap, scrape_keyence_metadata, trim_to_shape
+from src.build.keyence_export_utils import _coords_to_array, _coords_good, focus_stack_maxlap, scrape_keyence_metadata, trim_to_shape, to_u8_adaptive
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +40,10 @@ def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
 
 def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
     out_dir.mkdir(parents=True, exist_ok=True)
-    skio.imsave(out_dir / f"im_{pos_string}.png", ff, check_contrast=False)
+    if ff.dtype == np.uint16:
+        ff = to_u8_adaptive(ff)
+
+    skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
 
 
 def _valid_acq_dirs(root: Path, dir_list: list[str] | None) -> list[Path]:
@@ -76,7 +88,7 @@ def process_well(
                 pos_idx   = np.where(sub_pos == pi)[0]
                 pos_str   = f"p{(p if cytometer_flag else pi):04}"
                 out_dir   = Path(ff_root) / f"ff_{well_conv}_t{t_idx:04}"
-                out_file  = out_dir / f"im_{pos_str}.png"
+                out_file  = out_dir / f"im_{pos_str}.jpg"
 
                 if out_file.exists() and not overwrite:
                     if p == t_idx == w == 0:
@@ -117,10 +129,10 @@ def build_master_params(
     """
     all_coords = []
     for fld in sample_dirs:
-        try:
+        try: 
             m = StructuredMosaic(str(fld), dim=n_tiles,
-                                 origin="upper left", direction=orientation,
-                                 pattern="raster")
+                                    origin="upper left", direction=orientation,
+                                    pattern="raster")
             m.align()
             if len(m.params["coords"]) == n_tiles:          # good alignment
                 all_coords.append(_coords_to_array(m.params["coords"], n_tiles))
@@ -159,11 +171,11 @@ def stitch_experiment(
       or clearly exceeds the tolerance.
     """
     ff_path  = Path(ff_folders[idx])
-    out_png  = Path(out_dir) / (ff_path.name[3:] + "_stitch.png")
+    out_png  = Path(out_dir) / (ff_path.name[3:] + "_stitch.jpg")
     if out_png.exists() and not overwrite:
         return {}
 
-    n_tiles = len(list(ff_path.glob("*.png")))
+    n_tiles = len(list(ff_path.glob("*.jpg")))
     target  = {2: np.array([800,  630]),
                3: np.array([1140, 630]) if orientation == "vertical"
                   else np.array([1140, 480])}[n_tiles] * size_factor
@@ -180,7 +192,11 @@ def stitch_experiment(
     if not _coords_good(mosaic.params["coords"], n_tiles, orientation):
         prior_file = Path(ff_tile_dir) / "master_params.json"
         if prior_file.exists():
-            mosaic.load_params(str(prior_file))
+            # mosaic.load_params(str(prior_file))
+            with open(prior_file) as fh:
+                prior = json.load(fh)
+            
+            mosaic.params["coords"] = prior["coords"]
             mosaic.reset_tiles()
             log.info("Fallback to master params for %s", ff_path)
         else:
@@ -193,12 +209,13 @@ def stitch_experiment(
 
     # trim & invert
     stitched = trim_to_shape(stitched, target)
-    maxv = np.iinfo(stitched.dtype).max
-    stitched = maxv - stitched
+    # maxv = np.iinfo(stitched.dtype).max
+    # stitched = maxv - stitched
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     skio.imsave(out_png, stitched, check_contrast=False)
     return {}
+
 
 def build_ff_from_keyence(data_root, *, n_workers=4,
                           overwrite=False, dir_list=None, write_dir=None):
@@ -226,7 +243,7 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
                 meta_frames.append(temp_df)
         else:
             metadata_df_temp = process_map(partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, 
-                                                                        ff_dir=ff_dir, overwrite=overwrite), 
+                                                                        ff_root=ff_dir, overwrite=overwrite), 
                                         range(len(well_list)), max_workers=n_workers)
             meta_frames += metadata_df_temp
             
@@ -280,7 +297,7 @@ def stitch_ff_from_keyence(data_root, n_workers=4, overwrite=False, n_stitch_sam
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
 
         ff_folders = sorted(ff_tile_root.glob("ff_*"))
-        n_tiles    = len(list(ff_folders[0].glob("*.png")))  # assume constant
+        n_tiles    = len(list(ff_folders[0].glob("*.jpg")))  # assume constant
 
         # ----- build (or reuse) master params once -------------------------------
         prior_file = ff_tile_root / "master_params.json"

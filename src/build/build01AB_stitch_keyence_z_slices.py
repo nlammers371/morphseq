@@ -5,13 +5,9 @@ from PIL import Image
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from src.functions.utilities import path_leaf
-from src.functions.image_utils import gaussian_focus_stacker, LoG_focus_stacker
 from tqdm import tqdm
-from PIL import Image
 import glob2 as glob
-import cv2
 from stitch2d import StructuredMosaic
-import json
 from tqdm import tqdm
 import skimage.io as io
 import pandas as pd
@@ -19,28 +15,6 @@ from stitch2d.tile import Tile
 
 from src.build.keyence_export_utils import trim_to_shape
 
-
-
-def trim_to_shape(im, out_shape):
-    im_shape = im.shape
-    im_diffs = im_shape - out_shape
-    if np.any(np.abs(im_diffs) > 0):
-        pad_width = -im_diffs
-        pad_width[np.where(pad_width < 0)] = 0
-        im_out = np.pad(im.copy(), ((0, pad_width[0]), (0, pad_width[1])), mode='constant').astype(im.dtype)
-
-        im_diffs[np.where(im_diffs < 0)] = 0
-        sv = np.floor(im_diffs / 2).astype(int)
-        if np.all(sv>0):
-            im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), sv[1]:-(im_diffs[1] - sv[1])]
-        elif sv[0]==0:
-            im_out = im_out[:, sv[1]:-(im_diffs[1] - sv[1])]
-        elif sv[1]==0:
-            im_out = im_out[sv[0]:-(im_diffs[0] - sv[0]), :]
-    else:
-        im_out = im
-        
-    return im_out[:out_shape[0], :out_shape[1]]
 
 def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir, orientation, overwrite_flag=False):
 

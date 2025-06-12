@@ -1,8 +1,18 @@
 import numpy as np
 import cv2
 from typing import List
+from stitch2d.tile import OpenCVTile
+from skimage import feature, color
+from skimage import exposure, util
 
 _SHIFT_TOL = 2.0  # px tolerance per axis for “good” translation
+
+
+def to_u8_adaptive(img16, low=.1, high=99.9):
+    # percentile stretch → uint8
+    lo, hi = np.percentile(img16, (low, high))
+    img_rescaled = exposure.rescale_intensity(img16, in_range=(lo, hi))
+    return util.img_as_ubyte(img_rescaled) 
 
 def _coords_to_array(coords: dict[int, List[float]], n_tiles: int) -> np.ndarray:
     arr = np.full((n_tiles, 2), np.nan)
