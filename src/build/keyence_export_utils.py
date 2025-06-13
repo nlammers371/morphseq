@@ -4,9 +4,16 @@ from typing import List
 from stitch2d.tile import OpenCVTile
 from skimage import feature, color
 from skimage import exposure, util
+from pathlib import Path 
 
 _SHIFT_TOL = 2.0  # px tolerance per axis for “good” translation
 
+def valid_acq_dirs(root: Path, dir_list: list[str] | None) -> list[Path]:
+    if dir_list is not None:
+        dirs = [root / d for d in dir_list]
+    else:
+        dirs = [p for p in root.iterdir() if p.is_dir()]
+    return [d for d in dirs if "ignore" not in d.name]
 
 def to_u8_adaptive(img16, low=.1, high=99.9):
     # percentile stretch → uint8

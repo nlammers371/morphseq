@@ -23,8 +23,8 @@ import pandas as pd
 from typing import Dict, Any, Union
 from pathlib import Path
 from glob2 import glob
-
-from src.build.keyence_export_utils import _coords_to_array, _coords_good, focus_stack_maxlap, scrape_keyence_metadata, trim_to_shape, to_u8_adaptive
+import skimage
+from src.build.keyence_export_utils import _coords_to_array, _coords_good, focus_stack_maxlap, scrape_keyence_metadata, trim_to_shape, to_u8_adaptive, valid_acq_dirs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +32,59 @@ logging.basicConfig(
     datefmt="%H:%M:%S"
 )
 log = logging.getLogger(__name__)
+logging.getLogger("stitch2d").setLevel(logging.ERROR) 
+
+SHIFT_TOL = {               # px tolerances before we fall back
+    2: {"vertical": 1, "horizontal": 1},
+    3: {"vertical": 2, "horizontal": 2},
+}
+
+
+
+
+def align_with_qc(mosaic, n_tiles, orientation):
+    """
+    • try mosaic.align(); ignore exceptions
+    • test #coords and intra-tile shift against thresholds
+    • load master params if any test fails
+    """
+
+    fallback_flag = False
+    try:
+        mosaic.align()
+    except Exception as e:
+        log.debug("align() raised %s – will fall back", e)
+        fallback_flag = True
+        return fallback_flag
+
+    coords = mosaic.params.get("coords", {})
+    if len(coords) != n_tiles:           # lost a tile
+        log.debug("Only %d/%d tiles aligned – falling back", len(coords), n_tiles)
+        fallback_flag = True
+        return fallback_flag
+
+    # shift QC: Δx for vertical stacks, Δy for horizontal
+    arr = np.array([coords[i] for i in range(n_tiles)])
+    axis = 1 if orientation == "vertical" else 0
+    if np.abs(arr[:, axis]).max() > SHIFT_TOL[n_tiles][orientation]:
+        log.debug("Shifts exceed tolerance – falling back")
+        fallback_flag = True
+        return fallback_flag
+
+
+def flatten_master_params(master_json):
+    with open(master_json) as fh:
+        d = json.load(fh)
+    # Move 'shape' to the root if nested under 'metadata'
+    if "metadata" in d and "shape" in d["metadata"]:
+        d["shape"] = d["metadata"]["shape"]
+    if "coords" in d and isinstance(next(iter(d["coords"])), str):
+        # Convert keys to int if needed
+        d["coords"] = {int(k): v for k, v in d["coords"].items()}
+    # Save to a temp file or overwrite
+    with open(master_json, "w") as fh:
+        json.dump(d, fh)
+    return master_json
 
 
 ### Helper functions
@@ -41,17 +94,10 @@ def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
 def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
     out_dir.mkdir(parents=True, exist_ok=True)
     if ff.dtype == np.uint16:
-        ff = to_u8_adaptive(ff)
-
+        ff = skimage.util.img_as_ubyte(ff)
+    # skio.use_plugin("imageio")
     skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
 
-
-def _valid_acq_dirs(root: Path, dir_list: list[str] | None) -> list[Path]:
-    if dir_list is not None:
-        dirs = [root / d for d in dir_list]
-    else:
-        dirs = [p for p in root.iterdir() if p.is_dir()]
-    return [d for d in dirs if "ignore" not in d.name]
 
 def process_well(
     w: int,
@@ -92,7 +138,7 @@ def process_well(
 
                 if out_file.exists() and not overwrite:
                     if p == t_idx == w == 0:
-                        print("Skipping existing PNGs (set overwrite=True to rebuild).")
+                        print("Skipping existing JPGs (set overwrite=True to rebuild).")
                     continue
 
                 stack = np.stack(_load_images(pos_idx, im_files), axis=0)
@@ -117,38 +163,50 @@ def process_well(
 #############################################################################
 
 def build_master_params(
-    sample_dirs : List[Path],
-    *,
-    orientation : str,
-    n_tiles     : int,
-    outfile     : Path,
-) -> None:
-    """
-    Randomly samples folders, runs stitch2d alignment, and stores the
-    *median* tile coordinates as a JSON prior.  Called ONCE per acquisition.
-    """
-    all_coords = []
+    sample_dirs,           # list of Path or str: folders to sample
+    orientation,           # str: "vertical" or "horizontal"
+    n_tiles,               # int: how many tiles
+    outfile,               # Path: destination for master_params.json
+):
+    align_array = []
+    last_good_mosaic = None
+
     for fld in sample_dirs:
         try: 
-            m = StructuredMosaic(str(fld), dim=n_tiles,
-                                    origin="upper left", direction=orientation,
-                                    pattern="raster")
-            m.align()
-            if len(m.params["coords"]) == n_tiles:          # good alignment
-                all_coords.append(_coords_to_array(m.params["coords"], n_tiles))
-        except Exception:
-            log.debug("Sampling failed in %s", fld)
+            mosaic = StructuredMosaic(
+                str(fld), dim=n_tiles,
+                origin="upper left", direction=orientation,
+                pattern="raster"
+            )
+            mosaic.align()
+            if len(mosaic.params["coords"]) == n_tiles:
+                coords = mosaic.params["coords"]
+                arr = np.array([coords[i] for i in range(n_tiles)])
+                align_array.append(arr)
+                last_good_mosaic = mosaic
+        except Exception as e:
+            print(f"Stitch2d alignment failed for {fld}: {e}")
 
-    if not all_coords:
-        log.warning("No good samples – master params not written")
+    if not align_array or last_good_mosaic is None:
+        print("No good samples – master params not written")
         return
 
-    med = np.nanmedian(np.stack(all_coords), axis=0)        # (n_tiles, 2)
-    prior = {"coords": {i: med[i].tolist() for i in range(n_tiles)}}
+    # median across all sampled alignments
+    med_coords = np.nanmedian(np.stack(align_array), axis=0)
+    coords_dict = {i: med_coords[i].tolist() for i in range(n_tiles)}
 
+    # Use a real, full params dict as template
+    master_params = last_good_mosaic.params.copy()
+    master_params["coords"] = coords_dict
+
+    # (optional) If you want to remove volatile keys, do it here:
+    # for key in ["filenames", ...]: master_params.pop(key, None)
+
+    # Write valid JSON for stitch2d
+    outfile = Path(outfile)
     outfile.parent.mkdir(parents=True, exist_ok=True)
-    outfile.write_text(json.dumps(prior))
-    log.info("Wrote master params to %s", outfile)
+    outfile.write_text(json.dumps(master_params))
+    print(f"Wrote master params to {outfile}")
 
 
 #############################################################################
@@ -172,10 +230,11 @@ def stitch_experiment(
     """
     ff_path  = Path(ff_folders[idx])
     out_png  = Path(out_dir) / (ff_path.name[3:] + "_stitch.jpg")
+    out_params  = Path(ff_path) / "params.json"
     if out_png.exists() and not overwrite:
         return {}
 
-    n_tiles = len(list(ff_path.glob("*.jpg")))
+    n_tiles = len(list(glob(str(ff_path) + "/*.jpg")))
     target  = {2: np.array([800,  630]),
                3: np.array([1140, 630]) if orientation == "vertical"
                   else np.array([1140, 480])}[n_tiles] * size_factor
@@ -184,25 +243,23 @@ def stitch_experiment(
     mosaic = StructuredMosaic(str(ff_path), dim=n_tiles,
                               origin="upper left", direction=orientation,
                               pattern="raster")
-    try:
-        mosaic.align()
-    except Exception:
-        log.debug("Primary alignment failed in %s", ff_path)
+    
+    fallback_flag = align_with_qc(mosaic,
+              n_tiles=n_tiles,
+              orientation=orientation)
+    
+    if fallback_flag:
+        master_json=str(Path(ff_tile_dir) / "master_params.json")
+        # flatten_master_params(master_json)
+        # Now:
+        mosaic.load_params(master_json)
 
-    if not _coords_good(mosaic.params["coords"], n_tiles, orientation):
-        prior_file = Path(ff_tile_dir) / "master_params.json"
-        if prior_file.exists():
-            # mosaic.load_params(str(prior_file))
-            with open(prior_file) as fh:
-                prior = json.load(fh)
-            
-            mosaic.params["coords"] = prior["coords"]
-            mosaic.reset_tiles()
-            log.info("Fallback to master params for %s", ff_path)
-        else:
-            raise RuntimeError(f"No valid alignment and no prior for {ff_path}")
+    mosaic.reset_tiles()
+
+   
 
     mosaic.smooth_seams()
+    mosaic.save_params(out_params)
     stitched = mosaic.stitch()
     if orientation == "horizontal":
         stitched = stitched.T
@@ -225,7 +282,7 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
     RAW   = Path(data_root) / "raw_image_data" / "keyence"
     BUILT = Path(write_dir or data_root) / "built_image_data" / "keyence"
     META  = Path(data_root) / "metadata" / "built_metadata_files"
-    acq_dirs = _valid_acq_dirs(RAW, dir_list)
+    acq_dirs = valid_acq_dirs(RAW, dir_list)
 
     for acq in tqdm(acq_dirs, desc="Building FF"):
 
