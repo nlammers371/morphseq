@@ -246,7 +246,6 @@ def process_well(w, well_list, cytometer_flag, ff_dir, overwrite_flag=False):
                     # depth_out_name = 'depth_' + well_name_conv + f'_t{tt:04}_' + f'ch{ch_to_use:02}/'
                     op_ff = os.path.join(ff_dir, ff_out_name)
                     # op_depth = os.path.join(depth_dir, depth_out_name)
-
                     if not os.path.isdir(op_ff):
                         os.makedirs(op_ff)
                     # if not os.path.isdir(op_depth):

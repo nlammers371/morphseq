@@ -11,218 +11,220 @@ from stitch2d import StructuredMosaic
 from tqdm import tqdm
 import skimage.io as io
 import pandas as pd
-from stitch2d.tile import Tile # OpenCVTile as
-from pathlib import Path
-import logging 
-import skimage
-from src.build.keyence_export_utils import trim_to_shape, to_u8_adaptive, valid_acq_dirs
+from stitch2d.tile import Tile
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S"
-)
-log = logging.getLogger(__name__)
-logging.getLogger("stitch2d").setLevel(logging.ERROR) 
-#####################
-# Helpers
+from src.build.keyence_export_utils import trim_to_shape
 
-# -------------------------------------------------------------
-def list_time_dirs(pos_dir: Path) -> list[Path]:
-    """Return [T0001/, T0002/, …] or [pos_dir] if no sub-folders."""
-    t_dirs = sorted(p for p in pos_dir.glob("T*") if p.is_dir())
-    return t_dirs or [pos_dir]
 
-def list_z_images(time_dir: Path, ch_tag="CH") -> list[Path]:
-    """All Z-slice images for a given time directory."""
-    return sorted(time_dir.glob(f"*{ch_tag}*"))
+def stitch_well(w, well_list, cytometer_flag, out_dir, size_factor, ff_tile_dir, orientation, overwrite_flag=False):
 
-def split_subpos(im_list: list[Path], well_tag: str, cytometer=False) -> dict[int, list[Path]]:
-    """
-    Group filenames by sub-position id.
-    Returns {pos_id: [img0, img1, …]}.
-    """
-    if cytometer:
-        return {0: im_list}
+    well_dir = well_list[w]
+    # extract basic well info
+    well_name = well_dir[-4:]
 
-    by_pos = {}
-    for p in im_list:
-        stem = p.name
-        pos_id = int(stem[stem.find(well_tag) + 5 : stem.find(well_tag) + 10])
-        by_pos.setdefault(pos_id, []).append(p)
-    return by_pos
-
-def build_well_path_table(position_dirs, well_tag, cytometer) -> list[list[list[Path]]]:
-    """
-    3-D ragged list: [time][pos][z] == Path
-    """
-    table = []
-    for pos_dir in position_dirs:
-        for t, time_dir in enumerate(list_time_dirs(pos_dir)):
-            im_list = list_z_images(time_dir)
-            subpos_dict = split_subpos(im_list, well_tag, cytometer)
-            # ensure inner dims are aligned
-            if len(table) <= t:
-                table.append([])
-            table[t].extend(subpos_dict[k] for k in sorted(subpos_dict))
-    return table  # shape: T × P × Z
-
-# -------------------------------------------------------------
-def choose_canvas(n_tiles, orientation, size_factor) -> tuple[int,int]:
-    lookup = {
-        1: np.array([480, 640]),
-        2: np.array([800, 630]),
-        3: np.array([1140, 630]) if orientation=="vertical" else np.array([1140, 480]),
-    }
-    if n_tiles not in lookup:
-        raise ValueError("unexpected #tiles")
-    return tuple((lookup[n_tiles] * size_factor).astype(int))
-
-def get_alignment_coords(n_pos_tiles, orientation, ff_tile_dir):
-
-    folder_name = os.path.basename(ff_tile_dir)
-    
-    prior_path = Path(ff_tile_dir) / "params.json"
-    if prior_path.exists():  
-        template = StructuredMosaic(
-            os.path.dirname(str(prior_path)),
-            dim=n_pos_tiles,
-            origin="upper left",
-            direction=orientation,        # "vertical" or "horizontal"
-            pattern="raster",
-            )
-                          # (a) load existing params
-        template.load_params(str(prior_path))
-    else:                                      # (b) compute once on first slice
-        # -- load slice z=0 just for alignment --
-        raise Exception(f"No alignment info found for {folder_name}")
-
-    coords_prior = template.params["coords"] 
-
-    return coords_prior
-
-def stitch_well(
-    w: int,
-    well_list: list[Path],
-    orientation: str,
-    cytometer: bool,
-    ff_tile_dir: Path,
-    size_factor: float,
-    out_dir: Path,
-    overwrite=False,
-):
-    well_dir = Path(well_list[w])
-    well_tag = well_dir.name[-4:]
-
+    # get conventional well name
     well_name_conv = sorted(glob.glob(os.path.join(well_dir, "_*")))
     well_name_conv = well_name_conv[0][-3:]
 
-    position_dirs = sorted(glob.glob(str(well_dir) + "/P*"))
-    if len(position_dirs) == 0:
-        position_dirs = [well_dir]
+    # if multiple positions were taken per well, then there will be a layer of position folders
+    position_dir_list = sorted(glob.glob(well_dir + "/P*"))
+    if len(position_dir_list) == 0:
+        position_dir_list = [well_dir]
 
-    table = build_well_path_table(position_dirs, well_tag, cytometer)  # T×P×Z
-    _, n_pos, n_z = len(table), len(table[0]), len(table[0][0])
-    canvas_shape = choose_canvas(n_pos, orientation, size_factor)
+    #####
+    # load all paths into a parsable list object
+    first_flag = True
 
-    # build placeholder Tile list once
-    tiles = [Tile(np.zeros((1,1), np.uint8)) for _ in range(n_pos)]
+    for p, pos_dir in enumerate(position_dir_list):
+        # each pos dir contains one or more time points
+        time_dir_list = sorted(glob.glob(pos_dir + "/T*"))
+        time_dir_list = [t for t in time_dir_list if os.path.isdir(t)]
+        no_timelapse_flag = len(time_dir_list) == 0
+
+        if no_timelapse_flag:
+            time_dir_list = [well_dir]
+
+        for t, time_dir in enumerate(time_dir_list):
+
+            # each time directoy contains a list of Z slices for each channel
+            ch_string = "CH" #+ str(ch_to_use)
+            im_list = sorted(glob.glob(time_dir + "/*" + ch_string + "*"))
+
+            # it is possible that multiple positionas are present within the same time folder
+            if not cytometer_flag:
+                sub_pos_list = []
+                for i, im in enumerate(im_list):
+                    im_name = im.replace(time_dir, "")
+                    well_ind = im_name.find(well_name)
+                    pos_id = int(im_name[well_ind + 5:well_ind + 10])
+                    sub_pos_list.append(pos_id)
+            else:
+                sub_pos_list = np.ones((len(im_list),))
+
+            sub_pos_index = np.unique(sub_pos_list).astype(int)
+
+            if first_flag:
+                if cytometer_flag:
+                    n_pos = len(position_dir_list)
+                else:
+                    n_pos = len(sub_pos_index)
+                well_path_list =  [[ [""] for i in range(n_pos) ] for i in range(len(time_dir_list)) ] #[[""]*n_pos]*len(time_dir_list)
+                first_flag = False
+
+            for sp, pi in enumerate(sub_pos_index):
+                pos_indices = np.where(np.asarray(sub_pos_list) == pi)[0]
+                # save paths
+                image_paths = [im_list[pos_i] for pos_i in pos_indices]
+
+                if cytometer_flag:
+                    well_path_list[t][p] = image_paths
+                else:
+                    well_path_list[t][sp] = image_paths
+
+    # get dim stats
+    n_time_points = len(well_path_list)
+    n_pos_tiles = len(well_path_list[0])
+    n_z_slices = len(well_path_list[0][0])
+
+    # set target stitched image size
+    if n_pos_tiles == 1:
+        out_shape = np.asarray([480, 640]) * size_factor
+    elif n_pos_tiles == 2:
+        out_shape = np.asarray([800, 630]) * size_factor
+    elif n_pos_tiles == 3:
+        if orientation == "vertical":
+            out_shape = np.asarray([1140, 630]) * size_factor
+        else: 
+            out_shape = np.asarray([1140, 480]) * size_factor
+    else:
+        raise Exception("Unrecognized number of images to stitch")
+    out_shape = out_shape.astype(int)
     
-    # for t in range(n_time):
-    #     if n_time > 1:
-    #         ff_out_name = 'ff_' + well_tag + f'_t{t+1:04}'
-    #     else:
-    #         ff_out_name = 'ff_' + well_tag + f'_t{t:04}'
-    for t_idx, stack in enumerate(table):                         # loop time
-        out_png = out_dir / f"{well_name_conv}_t{t_idx:04}_stack.tif"
-        if out_png.exists() and not overwrite:
-            continue
-        z_cube = np.empty((n_z, *canvas_shape), dtype=np.uint8)
-        # ff_tile_path = os.path.join(ff_tile_dir, ff_out_name, "")
+    for t in range(n_time_points):
+        if n_time_points > 1:
+            ff_out_name = 'ff_' + well_name_conv + f'_t{t+1:04}'
+        else:
+            ff_out_name = 'ff_' + well_name_conv + f'_t{t:04}'
+        ff_tile_path = os.path.join(ff_tile_dir, ff_out_name, "")
 
-        ff_out_name = 'ff_' + well_name_conv + f'_t{t_idx:04}'
-        # initialize tiles object
-        # tiles = [Tile(np.zeros((1, 1), dtype=np.uint8)) for _ in range(n_pos)]
-        coords_prior = get_alignment_coords(n_pos, orientation, os.path.join(ff_tile_dir, ff_out_name, ""))
+        out_name = ff_out_name
+        out_name = out_name.replace("ff_", "")
+        out_name = out_name +  "_stack.tif"
 
-        for z in range(n_z): 
-            tiles = []                                     # loop z
-            for p in range(n_pos):
-                img = io.imread(stack[p][z])
-                if img.dtype == np.uint16:
-                    img = skimage.util.img_as_ubyte(img)          # or adaptive
-                tiles.append(Tile(img))
+        save_path = os.path.join(out_dir, out_name)
 
-            n_images = len(tiles)
+        if (not os.path.isfile(save_path)) or overwrite_flag: 
+            z_slice_array = np.zeros((n_z_slices, out_shape[0], out_shape[1]))
+            for z in range(n_z_slices):
+                im_z_list = []
+                for p in range(n_pos_tiles):
+                    load_string = well_path_list[t][p][z]
+                    if load_string == '/net/trapnell/vol1/home/nlammers/projects/data/morphseq/raw_image_data/keyence/20230608/W045/P00003/T0040/wt_11ss_W045_P00003_T0040_Z001_CH1.tif':
+                        im = np.zeros(out_shape, dtype=np.uint8) # handle a one-time issue with a corrupt tile
+                    else:
+                        im = io.imread(load_string)
+                        out_dtype = im.dtype
+                    im_z_list.append(Tile(im))
 
-            z_mosaic = StructuredMosaic(
-                    tiles,
-                    dim=n_images,  # number of tiles in primary axis
-                    origin="upper left",  # position of first tile
-                    direction=orientation,
-                    pattern="raster"
-                )
+                n_images = len(im_z_list)
 
-            z_mosaic.params["coords"] = coords_prior   # 1. inject pre-computed shifts
-            z_mosaic.reset_tiles()                     # 2. tell stitch2d to trust them
-            z_mosaic.smooth_seams()                    # 3. OPTIONAL but recommended
-            stitched = z_mosaic.stitch() 
-            if orientation == "horizontal":
-                stitched = stitched.T
-            z_cube[z] = trim_to_shape(stitched, canvas_shape)
+                z_mosaic = StructuredMosaic(
+                        im_z_list,
+                        dim=n_images,  # number of tiles in primary axis
+                        origin="upper left",  # position of first tile
+                        direction=orientation,
+                        pattern="raster"
+                    )
 
-        # save 
-        io.imsave(out_png, z_cube,  check_contrast=False)
+                if n_images > 1:
+
+                    # load saved parameters
+                    if os.path.isfile(os.path.join(ff_tile_path, "params.json")):
+                        z_mosaic.load_params(os.path.join(ff_tile_path, "params.json"))
+                    else:
+                        z_mosaic.load_params(os.path.join(ff_tile_dir, "master_params.json"))
+                    z_mosaic.smooth_seams()
+                    
+                    z_arr = z_mosaic.stitch()
+
+                else:
+                    z_arr = z_mosaic.stitch()
+
+                if orientation == "horizontal":
+                    z_arr = z_arr.T
+                z_out = trim_to_shape(z_arr.astype(out_dtype), out_shape)
+                z_slice_array[z, :, :] = z_out
+
+            # save 
+            io.imsave(save_path, z_slice_array, check_contrast=False)
         
                 
-    # well_dict_out = dict({well_tag: well_dict})
+    # well_dict_out = dict({well_name_conv: well_dict})
 
     return {}
 
 
-def stitch_z_from_keyence(data_root, orientation_list, n_workers=4, overwrite=False, dir_list=None, write_dir=None):
+def stitch_z_from_keyence(data_root, orientation_list, par_flag=False, n_workers=4, overwrite_flag=False, dir_list=None, write_dir=None):
 
-    par_flag = n_workers > 1
-
-    RAW = Path(data_root) / "raw_image_data" / "keyence"
-    META  = Path(data_root) / "metadata" / "built_metadata_files"
-    BUILT = Path(data_root) / "built_image_data" / "keyence"
-    BUILTZ = Path(data_root) / "built_image_data" / "keyence_stitched_z"
+    read_dir = os.path.join(data_root, 'raw_image_data', 'keyence', '') 
+    # built_dir = os.path.join(data_root, 'built_image_data', 'keyence', '') 
+    write_dir = data_root #os.path.join(data_root, 'built_image_data', 'keyence_stitched_z', '')
     
     # handle paths
-    acq_dirs = valid_acq_dirs(RAW, dir_list)
+    if dir_list == None:
+        # Get a list of directories
+        dir_list_raw = sorted(glob.glob(read_dir + "*"))
+        dir_list = []
+        for dd in dir_list_raw:
+            if os.path.isdir(dd):
+                dir_list.append(dd)
 
-    for d, acq in enumerate(tqdm(acq_dirs, "Stitching z stacks...")):
-        # initialize dictionary to metadata)
-        dir_path = str(acq) #os.path.join(read_dir, sub_name, '')
+    # filter for desired directories
+    dir_indices = [d for d in range(len(dir_list)) if "ignore" not in dir_list[d]]
+
+    for d in dir_indices:
+        # initialize dictionary to metadata
+        sub_name = path_leaf(dir_list[d])
+        dir_path = os.path.join(read_dir, sub_name, '')
 
         orientation = orientation_list[d]
 
         # depth_dir = os.path.join(write_dir, "D_images", sub_name)
-        out_dir = BUILTZ /  acq.name
-        os.makedirs(out_dir, exist_ok=True)
+        out_dir = os.path.join(write_dir, 'built_image_data', 'keyence_stitched_z', sub_name)
+        if not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
 
         # Each folder at this level pertains to a single well
-        well_list = sorted(glob.glob(os.path.join(dir_path, "XY*")))
+        well_list = sorted(glob.glob(dir_path + "XY*"))
         cytometer_flag = False
         if len(well_list) == 0:
             cytometer_flag = True
             well_list = sorted(glob.glob(dir_path + "/W0*"))
 
         # get list of FF tile folders
-        ff_tile_dir = BUILT /  "FF_images" / acq.name
-        metadata_path = META / f"{acq.name}_metadata.csv"
+        ff_tile_dir = os.path.join(write_dir, "built_image_data", "keyence", "FF_images", sub_name, '')
+        metadata_path = os.path.join(data_root, 'metadata', 'built_metadata_files', sub_name + '_metadata.csv')
         metadata_df = pd.read_csv(metadata_path)
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
+        time_ind_index = np.unique(metadata_df["time_int"])
+        # no_timelapse_flag = len(time_ind_index) == 1
+        # if no_timelapse_flag:
+        #     out_shape = np.asarray([800, 630])*size_factor
+        # else:
+        #     out_shape = np.asarray([1140, 630])*size_factor
+        # out_shape = out_shape.astype(int)
 
-        # print(f'Stitching z slices in directory {d+1:01} of ' + f'{len(dir_indices)}')
+        # get list of subfolders
+        # ff_folder_list = sorted(glob.glob(ff_tile_dir + "ff*"))
+
+        print(f'Stitching z slices in directory {d+1:01} of ' + f'{len(dir_indices)}')
         if not par_flag:
             for w in tqdm(range(len(well_list))):
-                stitch_well(w, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
+                stitch_well(w, well_list=well_list, orientation=orientation, cytometer_flag=cytometer_flag, out_dir=out_dir, overwrite_flag=overwrite_flag, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
                 
         else:
-            process_map(partial(stitch_well, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, 
-                                                                        out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir), 
+            process_map(partial(stitch_well, well_list=well_list, orientation=orientation, cytometer_flag=cytometer_flag, 
+                                                                        out_dir=out_dir, overwrite_flag=overwrite_flag, size_factor=size_factor, ff_tile_dir=ff_tile_dir), 
                                         range(len(well_list)), chunksize=1)
 
     print('Done.')
@@ -230,11 +232,11 @@ def stitch_z_from_keyence(data_root, orientation_list, n_workers=4, overwrite=Fa
 
 if __name__ == "__main__":
 
-    overwrite = True
+    overwrite_flag = True
 
     # data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     # dir_list = ["20230525", "20231207"]
     # # build FF images
-    # build_ff_from_keyence(data_root, overwrite=overwrite, dir_list=dir_list)
+    # build_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
     # # stitch FF images
-    # stitch_ff_from_keyence(data_root, overwrite=overwrite, dir_list=dir_list)
+    # stitch_ff_from_keyence(data_root, overwrite_flag=overwrite_flag, dir_list=dir_list)
