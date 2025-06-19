@@ -27,11 +27,11 @@ def main():
     orientation_list = ["horizontal"]*len(dir_list)
 
     # build FF images
-    # build_ff_from_keyence(data_root, n_workers=8, overwrite=overwrite, dir_list=dir_list)
+    build_ff_from_keyence(data_root, n_workers=1, overwrite=overwrite, dir_list=dir_list)
     # build_ff_from_keyence(data_root, n_workers=8, par_flag=False, overwrite_flag=overwrite, dir_list=dir_list)
 
     # stitch FF images
-    stitch_ff_from_keyence(data_root, n_workers=n_workers, overwrite=overwrite, orientation_list=orientation_list, dir_list=dir_list)
+    # stitch_ff_from_keyence(data_root, n_workers=n_workers, overwrite=overwrite, orientation_list=orientation_list, dir_list=dir_list)
 
     # stitch_z_from_keyence(data_root, dir_list=dir_list, orientation_list=orientation_list, n_workers=n_workers, overwrite=True)
 

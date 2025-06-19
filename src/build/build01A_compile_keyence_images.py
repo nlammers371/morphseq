@@ -10,7 +10,6 @@ sys.path.insert(0, str(REPO_ROOT))
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
-import skimage.io as skio
 import json
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
@@ -24,7 +23,10 @@ from typing import Dict, Any, Union
 from pathlib import Path
 from glob2 import glob
 import skimage
-from src.build.export_utils import scrape_keyence_metadata, trim_to_shape, to_u8_adaptive, valid_acq_dirs
+import skimage.io as skio
+from skimage import exposure
+from src.build.export_utils import scrape_keyence_metadata, trim_to_shape, to_u8_adaptive, valid_acq_dirs, im_rescale, LoG_focus_stacker
+import torch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -101,9 +103,10 @@ def process_well(
     w: int,
     well_list: list[str],
     cytometer_flag: bool,
+    device: str,
     ff_root: str | Path,
-    overwrite: bool = False,
-) -> pd.DataFrame:
+    ff_filter_size: int=3,
+    overwrite: bool = False) -> pd.DataFrame:
     """
     Drop-in replacement: returns the same metadata DF,
     writes full-focus JPGs to `ff_root`.
@@ -128,6 +131,21 @@ def process_well(
                 np.ones(len(im_files)) if cytometer_flag
                 else [int(f.name.split(well_name)[1][1:6]) for f in im_files]
             )
+            # First loop: load all positions into z-stacks
+            stack_list = []
+            for pi in np.unique(sub_pos).astype(int):
+                pos_idx   = np.where(sub_pos == pi)[0]
+                pos_str   = f"p{(p if cytometer_flag else pi):04}"
+
+                stack = np.stack(_load_images(pos_idx, im_files), axis=0)
+
+                stack_list.append(stack)
+
+            # Normalize intensity consistently across stack
+            im_cb = np.stack(stack_list)
+            _, lo, hi = im_rescale(im_cb)
+
+            # Second loop: FF-project and save
             for pi in np.unique(sub_pos).astype(int):
                 pos_idx   = np.where(sub_pos == pi)[0]
                 pos_str   = f"p{(p if cytometer_flag else pi):04}"
@@ -138,14 +156,24 @@ def process_well(
                     if p == t_idx == w == 0:
                         print("Skipping existing JPGs (set overwrite=True to rebuild).")
                     continue
-
+                
+                # normalize
                 stack = np.stack(_load_images(pos_idx, im_files), axis=0)
-                well_res = float(scrape_keyence_metadata(im_files[0])["Width (um)"]) / \
-                           scrape_keyence_metadata(im_files[0])["Width (px)"]
-                # ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
-                ff_img = focus_stack_maxlap(stack, lap_ksize=ksize, gauss_ksize=ksize)
+                norm = exposure.rescale_intensity(stack, in_range=(lo, hi))
+                norm = norm.astype(np.float32)
+                tensor = torch.from_numpy(norm).to(device)          
 
-                _write_ff(ff_img, out_dir, pos_str)
+                # ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
+                ff_t, _ = LoG_focus_stacker(tensor, filter_size=ff_filter_size, device=device)
+                arr = ff_t.numpy()
+                if stack.dtype == np.uint16:
+                    arr_clipped = np.clip(arr, 0, 65535)
+                    ff_i = arr_clipped.astype(np.uint16)
+                elif stack.dtype == np.uint8:
+                    arr_clipped = np.clip(arr, 0, 255)
+                    ff_i = arr_clipped.astype(np.uint8)
+
+                _write_ff(ff_i, out_dir, pos_str)
 
                 # metadata only once per (well, time point)
                 meta = scrape_keyence_metadata(im_files[0])
@@ -277,6 +305,17 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
     META  = Path(data_root) / "metadata" / "built_metadata_files"
     acq_dirs = valid_acq_dirs(RAW, dir_list)
 
+    # get compute device to use
+    device = (
+                "cuda"
+                if torch.cuda.is_available() #and (not par_flag)
+                else "cpu"
+            )
+
+    if device == "cpu":
+        print("Warning: using CPU. This may be quite slow. GPU recommended.")
+
+    # iterate through directories
     for acq in tqdm(acq_dirs, desc="Building FF"):
 
         ff_dir = BUILT / "FF_images" / acq.name
@@ -287,14 +326,15 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
 
         # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
         meta_frames = []
+        run_process_well = partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, device=device,
+                                                                        ff_root=ff_dir, overwrite=overwrite)
+
         if not par_flag:
             for w in tqdm(range(len(well_list))):
-                temp_df = process_well(w, well_list, cytometer_flag, ff_dir, overwrite)
+                temp_df = run_process_well(w)
                 meta_frames.append(temp_df)
         else:
-            metadata_df_temp = process_map(partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, 
-                                                                        ff_root=ff_dir, overwrite=overwrite), 
-                                        range(len(well_list)), max_workers=n_workers)
+            metadata_df_temp = process_map(run_process_well, range(len(well_list)), max_workers=n_workers)
             meta_frames += metadata_df_temp
             
         # load previous metadata
