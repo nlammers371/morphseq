@@ -22,7 +22,7 @@ import nd2
 import skimage.io as skio
 import skimage
 from stitch2d import StructuredMosaic      
-from src.build.yx1_export_utils import LoG_focus_stacker
+from src.build.export_utils import LoG_focus_stacker, im_rescale
 
 log = logging.getLogger(__name__)
 logging.basicConfig(format="%(levelname)s | %(message)s", level=logging.INFO)
@@ -104,20 +104,12 @@ def _focus_stack(
     filter_size: int
 ) -> np.ndarray:
     
-    """Return 16-bit full-focus image (negative)."""
     # instead of torch.quantile, use numpy
-    flat = stack_zyx.ravel()
-    if flat.size > 2_000_000:
-        flat = flat[:: flat.size // 2_000_000]
-    px99 = np.percentile(flat, 99.9)
+    norm = im_rescale(stack_zyx)
+    norm = norm.astype(np.float32)
+    tensor = torch.from_numpy(norm).to(device)
 
-    arr = stack_zyx.astype(np.float32)         # Z × Y × X in host RAM
-    # px99 = np.percentile(arr, 99.9)            # very fast C routine
-
-    # normalize in PyTorch (or NumPy — either is fine)
-    tensor = torch.from_numpy(arr).to(device)
-    norm   = torch.clamp(tensor / px99, 0, 1) * 65535
-    ff_t, _ = LoG_focus_stacker(norm, filter_size, device)
+    ff_t, _ = LoG_focus_stacker(tensor, filter_size, device)
     arr = ff_t.numpy()
     arr_clipped = np.clip(arr, 0, 65535)
     ff_i = arr_clipped.astype(np.uint16)
