@@ -40,8 +40,6 @@ SHIFT_TOL = {               # px tolerances before we fall back
 }
 
 
-
-
 def align_with_qc(mosaic, n_tiles, orientation):
     """
     • try mosaic.align(); ignore exceptions
@@ -222,12 +220,7 @@ def stitch_experiment(
     size_factor    : float,
     orientation    : str = "vertical",
 ) -> dict:
-    """
-    Replaces your old function 1-for-1.
-    • Still uses StructuredMosaic.
-    • Will *only* fall back to master_params.json when alignment is missing
-      or clearly exceeds the tolerance.
-    """
+
     ff_path  = Path(ff_folders[idx])
     out_png  = Path(out_dir) / (ff_path.name[3:] + "_stitch.jpg")
     out_params  = Path(ff_path) / "params.json"
@@ -321,24 +314,19 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
     print('Done.')
 
 
-def stitch_ff_from_keyence(data_root, n_workers=4, overwrite=False, n_stitch_samples=15, dir_list=None, write_dir=None, orientation_list=None):
+def stitch_ff_from_keyence(data_root, n_workers=4, overwrite=False, n_stitch_samples=50, dir_list=None, write_dir=None, orientation_list=None):
     
     par_flag = n_workers > 1
 
-    RAW_ROOT   = Path(data_root) / "raw_image_data" / "keyence"
+    RAW   = Path(data_root) / "raw_image_data" / "keyence"
     WRITE_ROOT = Path(write_dir or data_root)
     META_ROOT  = Path(data_root) / "metadata" / "built_metadata_files"
 
     # --- discover acquisition folders --------------------------------------
-    acq_dirs = (
-        [RAW_ROOT / d for d in dir_list]
-        if dir_list
-        else [p for p in RAW_ROOT.iterdir() if p.is_dir() and "ignore" not in p.name]
-    )
-    acq_dirs = sorted(acq_dirs)
+    acq_dirs = valid_acq_dirs(RAW, dir_list)
 
     if orientation_list is None:
-        orientation_list = ["vertical"] * len(acq_dirs)
+        orientation_list = ["horizontal"] * len(acq_dirs)
     if len(orientation_list) != len(acq_dirs):
         raise ValueError("orientation_list length must match dir_list length")
 

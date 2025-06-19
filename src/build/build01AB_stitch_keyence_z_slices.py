@@ -128,11 +128,8 @@ def stitch_well(
     # build placeholder Tile list once
     tiles = [Tile(np.zeros((1,1), np.uint8)) for _ in range(n_pos)]
     
-    # for t in range(n_time):
-    #     if n_time > 1:
-    #         ff_out_name = 'ff_' + well_tag + f'_t{t+1:04}'
-    #     else:
-    #         ff_out_name = 'ff_' + well_tag + f'_t{t:04}'
+    master_json=str(Path(ff_tile_dir) / "master_params.json")
+
     for t_idx, stack in enumerate(table):                         # loop time
         out_png = out_dir / f"{well_name_conv}_t{t_idx:04}_stack.tif"
         if out_png.exists() and not overwrite:
@@ -140,11 +137,16 @@ def stitch_well(
         z_cube = np.empty((n_z, *canvas_shape), dtype=np.uint8)
         # ff_tile_path = os.path.join(ff_tile_dir, ff_out_name, "")
 
-        ff_out_name = 'ff_' + well_name_conv + f'_t{t_idx:04}'
+        # ff_out_name = 'ff_' + well_name_conv + f'_t{t_idx:04}'
         # initialize tiles object
         # tiles = [Tile(np.zeros((1, 1), dtype=np.uint8)) for _ in range(n_pos)]
-        coords_prior = get_alignment_coords(n_pos, orientation, os.path.join(ff_tile_dir, ff_out_name, ""))
-
+        # coords_prior = get_alignment_coords(n_pos, orientation, os.path.join(ff_tile_dir, ff_out_name, ""))
+        
+        # consitency check
+        # if len(coords_prior) != n_pos:
+        #     raise Exception(f"Mismatched numbers of stitch coords and tiles in {well_name_conv}")
+        
+        # iterate through Z
         for z in range(n_z): 
             tiles = []                                     # loop z
             for p in range(n_pos):
@@ -153,17 +155,20 @@ def stitch_well(
                     img = skimage.util.img_as_ubyte(img)          # or adaptive
                 tiles.append(Tile(img))
 
-            n_images = len(tiles)
-
+            if len(tiles) != n_pos:
+                raise Exception(f"Mismatched numbers of stitch coords and tiles in {well_name_conv}")
+            
             z_mosaic = StructuredMosaic(
                     tiles,
-                    dim=n_images,  # number of tiles in primary axis
+                    dim=n_pos,  # number of tiles in primary axis
                     origin="upper left",  # position of first tile
                     direction=orientation,
                     pattern="raster"
                 )
 
-            z_mosaic.params["coords"] = coords_prior   # 1. inject pre-computed shifts
+            # z_mosaic.params["coords"] = coords_prior   # 1. inject pre-computed shifts
+            z_mosaic.load_params(master_json)
+
             z_mosaic.reset_tiles()                     # 2. tell stitch2d to trust them
             z_mosaic.smooth_seams()                    # 3. OPTIONAL but recommended
             stitched = z_mosaic.stitch() 
