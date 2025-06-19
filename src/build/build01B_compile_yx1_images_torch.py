@@ -101,11 +101,11 @@ def _get_stack(
 def _focus_stack(
     stack_zyx: np.ndarray,
     device: str,
-    filter_size: int
+    filter_size: int = 3
 ) -> np.ndarray:
-    
+
     # instead of torch.quantile, use numpy
-    norm = im_rescale(stack_zyx)
+    norm, _, _ = im_rescale(stack_zyx)
     norm = norm.astype(np.float32)
     tensor = torch.from_numpy(norm).to(device)
 
