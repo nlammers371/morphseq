@@ -24,7 +24,7 @@ from typing import Dict, Any, Union
 from pathlib import Path
 from glob2 import glob
 import skimage
-from src.build.keyence_export_utils import _coords_to_array, _coords_good, focus_stack_maxlap, scrape_keyence_metadata, trim_to_shape, to_u8_adaptive, valid_acq_dirs
+from src.build.export_utils import scrape_keyence_metadata, trim_to_shape, to_u8_adaptive, valid_acq_dirs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -142,7 +142,7 @@ def process_well(
                 stack = np.stack(_load_images(pos_idx, im_files), axis=0)
                 well_res = float(scrape_keyence_metadata(im_files[0])["Width (um)"]) / \
                            scrape_keyence_metadata(im_files[0])["Width (px)"]
-                ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
+                # ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
                 ff_img = focus_stack_maxlap(stack, lap_ksize=ksize, gauss_ksize=ksize)
 
                 _write_ff(ff_img, out_dir, pos_str)
