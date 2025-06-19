@@ -91,7 +91,7 @@ def im_rescale(im, low=0, high=99.9, n_samp=2000000):
     # arr = im.astype(np.float32)  # Z × Y × X in host RAM
     norm = exposure.rescale_intensity(im, in_range=(lo, hi))
     # px99 = np.percentile(arr, 99.9)            # very fast C routine
-    return norm
+    return norm, lo, hi
     # normalize in PyTorch (or NumPy — either is fine)
     #
     # norm = torch.clamp(tensor / px99, 0, 1) * 65535
