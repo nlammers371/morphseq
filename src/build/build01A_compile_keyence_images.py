@@ -19,7 +19,7 @@ from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
 import pandas as pd
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Literal
 from pathlib import Path
 from glob2 import glob
 import skimage
@@ -295,15 +295,17 @@ def stitch_experiment(
     return {}
 
 
-def build_ff_from_keyence(data_root, *, n_workers=4,
-                          overwrite=False, dir_list=None, write_dir=None):
+def build_ff_from_keyence(data_root: Path | str, 
+                          exp_name: str,
+                          n_workers: int=4,
+                          overwrite: bool=False):
     
     par_flag = n_workers > 1
 
     RAW   = Path(data_root) / "raw_image_data" / "keyence"
-    BUILT = Path(write_dir or data_root) / "built_image_data" / "keyence"
+    BUILT = Path(data_root) / "built_image_data" / "keyence"
     META  = Path(data_root) / "metadata" / "built_metadata_files"
-    acq_dirs = valid_acq_dirs(RAW, dir_list)
+    # acq_dirs = valid_acq_dirs(RAW, dir_list)
 
     # get compute device to use
     device = (
@@ -316,93 +318,98 @@ def build_ff_from_keyence(data_root, *, n_workers=4,
         print("Warning: using CPU. This may be quite slow. GPU recommended.")
 
     # iterate through directories
-    for acq in tqdm(acq_dirs, desc="Building FF"):
+    # for acq in tqdm(acq_dirs, desc="Building FF"):
+    ff_dir = BUILT / "FF_images" / exp_name
+    raw_dir = RAW / exp_name 
+    ff_dir.mkdir(parents=True, exist_ok=True)
 
-        ff_dir = BUILT / "FF_images" / acq.name
-        ff_dir.mkdir(parents=True, exist_ok=True)
+    well_list = sorted((raw_dir.glob("XY*") or raw_dir.glob("W0*")))
+    cytometer_flag = not any(raw_dir.glob("XY*"))
 
-        well_list = sorted((acq.glob("XY*") or acq.glob("W0*")))
-        cytometer_flag = not any(acq.glob("XY*"))
+    # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+    meta_frames = []
+    run_process_well = partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, device=device,
+                                                                    ff_root=ff_dir, overwrite=overwrite)
 
-        # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        meta_frames = []
-        run_process_well = partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, device=device,
-                                                                        ff_root=ff_dir, overwrite=overwrite)
+    if not par_flag:
+        for w in tqdm(range(len(well_list))):
+            temp_df = run_process_well(w)
+            meta_frames.append(temp_df)
+    else:
+        metadata_df_temp = process_map(run_process_well, range(len(well_list)), max_workers=n_workers)
+        meta_frames += metadata_df_temp
+        
+    # load previous metadata
+    df_path = META / f"{exp_name}_metadata.csv"
+    if not overwrite and os.path.isfile(df_path):
+        df_prev = pd.read_csv(df_path)
+        df_prev = [df_prev]
+    else:
+        df_prev = []
 
-        if not par_flag:
-            for w in tqdm(range(len(well_list))):
-                temp_df = run_process_well(w)
-                meta_frames.append(temp_df)
-        else:
-            metadata_df_temp = process_map(run_process_well, range(len(well_list)), max_workers=n_workers)
-            meta_frames += metadata_df_temp
-            
-        # load previous metadata
-        df_path = META / f"{acq.name}_metadata.csv"
-        if not overwrite and os.path.isfile(df_path):
-            df_prev = pd.read_csv(df_path)
-            df_prev = [df_prev]
-        else:
-            df_prev = []
-
-        if meta_frames:
-            df = pd.concat(meta_frames + df_prev)
-            df.drop_duplicates(subset=["well", "time_string"])
-            df["Time Rel (s)"] = df["Time (s)"] - df["Time (s)"].min()
-            df.to_csv(META / f"{acq.name}_metadata.csv", index=False)
+    if meta_frames:
+        df = pd.concat(meta_frames + df_prev)
+        df.drop_duplicates(subset=["well", "time_string"])
+        df["Time Rel (s)"] = df["Time (s)"] - df["Time (s)"].min()
+        df.to_csv(META / f"{exp_name}_metadata.csv", index=False)
 
     print('Done.')
 
 
-def stitch_ff_from_keyence(data_root, n_workers=4, overwrite=False, n_stitch_samples=50, dir_list=None, write_dir=None, orientation_list=None):
+def stitch_ff_from_keyence(data_root: str | Path, 
+                           exp_name: str, 
+                           orientation: Literal["horizontal", "vertical"], 
+                           n_workers: int=4, 
+                           overwrite: bool=False, 
+                           n_stitch_samples: int=50):
     
     par_flag = n_workers > 1
 
-    RAW   = Path(data_root) / "raw_image_data" / "keyence"
-    WRITE_ROOT = Path(write_dir or data_root)
+    # RAW   = Path(data_root) / "raw_image_data" / "keyence"
+    WRITE_ROOT = Path(data_root)
     META_ROOT  = Path(data_root) / "metadata" / "built_metadata_files"
 
-    # --- discover acquisition folders --------------------------------------
-    acq_dirs = valid_acq_dirs(RAW, dir_list)
+    # # --- discover acquisition folders --------------------------------------
+    # acq_dirs = valid_acq_dirs(RAW, dir_list)
 
-    if orientation_list is None:
-        orientation_list = ["horizontal"] * len(acq_dirs)
-    if len(orientation_list) != len(acq_dirs):
-        raise ValueError("orientation_list length must match dir_list length")
+    # if orientation_list is None:
+    #     orientation_list = ["horizontal"] * len(acq_dirs)
+    # if len(orientation_list) != len(acq_dirs):
+    #     raise ValueError("orientation_list length must match dir_list length")
 
     # -----------------------------------------------------------------------
-    for acq, orientation in zip(acq_dirs, orientation_list):
+    # for acq, orientation in zip(acq_dirs, orientation_list):
         # inside stitch_ff_from_keyence() – one acquisition folder “acq”
-        ff_tile_root = WRITE_ROOT / "built_image_data" / "keyence" / "FF_images" / acq.name
-        stitch_root  = WRITE_ROOT / "built_image_data" / "stitched_FF_images" / acq.name
-        stitch_root.mkdir(parents=True, exist_ok=True)
+    ff_tile_root = WRITE_ROOT / "built_image_data" / "keyence" / "FF_images" / exp_name
+    stitch_root  = WRITE_ROOT / "built_image_data" / "stitched_FF_images" / exp_name
+    stitch_root.mkdir(parents=True, exist_ok=True)
 
-        metadata_path = os.path.join(META_ROOT, acq.name + '_metadata.csv')
-        metadata_df = pd.read_csv(metadata_path,)
-        size_factor = metadata_df["Width (px)"].iloc[0] / 640
+    metadata_path = os.path.join(META_ROOT, exp_name + '_metadata.csv')
+    metadata_df = pd.read_csv(metadata_path,)
+    size_factor = metadata_df["Width (px)"].iloc[0] / 640
 
-        ff_folders = sorted(ff_tile_root.glob("ff_*"))
-        n_tiles    = len(list(ff_folders[0].glob("*.jpg")))  # assume constant
+    ff_folders = sorted(ff_tile_root.glob("ff_*"))
+    n_tiles    = len(list(ff_folders[0].glob("*.jpg")))  # assume constant
 
-        # ----- build (or reuse) master params once -------------------------------
-        prior_file = ff_tile_root / "master_params.json"
-        if overwrite or not prior_file.exists():
-            sample_dirs = np.random.choice(ff_folders,
-                                        min(n_stitch_samples, len(ff_folders)),
-                                        replace=False)
-            build_master_params(list(sample_dirs), orientation=orientation,
-                                n_tiles=n_tiles, outfile=prior_file)
+    # ----- build (or reuse) master params once -------------------------------
+    prior_file = ff_tile_root / "master_params.json"
+    if overwrite or not prior_file.exists():
+        sample_dirs = np.random.choice(ff_folders,
+                                    min(n_stitch_samples, len(ff_folders)),
+                                    replace=False)
+        build_master_params(list(sample_dirs), orientation=orientation,
+                            n_tiles=n_tiles, outfile=prior_file)
 
-        # print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        # Call parallel function to stitch images
-        if not par_flag:
-            for f in tqdm(range(len(ff_folders))):
-                stitch_experiment(f, ff_folders, str(ff_tile_root), str(stitch_root), overwrite, size_factor, orientation=orientation)
+    # print(f'Stitching images in directory {d+1:01} of ' + f'{len(dir_indices)}')
+    # Call parallel function to stitch images
+    if not par_flag:
+        for f in tqdm(range(len(ff_folders))):
+            stitch_experiment(f, ff_folders, str(ff_tile_root), str(stitch_root), overwrite, size_factor, orientation=orientation)
 
-        else:
-            process_map(partial(stitch_experiment, ff_folder_list=ff_folders, ff_tile_dir=str(ff_tile_root), 
-                                stitch_ff_dir=str(stitch_root), overwrite=overwrite, size_factor=size_factor, orientation=orientation),
-                                        range(len(ff_folders)), max_workers=n_workers, chunksize=1)
+    else:
+        process_map(partial(stitch_experiment, ff_folder_list=ff_folders, ff_tile_dir=str(ff_tile_root), 
+                            stitch_ff_dir=str(stitch_root), overwrite=overwrite, size_factor=size_factor, orientation=orientation),
+                                    range(len(ff_folders)), max_workers=n_workers, chunksize=1)
 
 
 

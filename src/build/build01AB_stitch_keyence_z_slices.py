@@ -15,7 +15,7 @@ from stitch2d.tile import Tile # OpenCVTile as
 from pathlib import Path
 import logging 
 import skimage
-from src.build.keyence_export_utils import trim_to_shape, to_u8_adaptive, valid_acq_dirs
+from src.build.export_utils import trim_to_shape, to_u8_adaptive, valid_acq_dirs
 
 logging.basicConfig(
     level=logging.INFO,
