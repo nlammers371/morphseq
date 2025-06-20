@@ -11,6 +11,16 @@ import torch.nn.functional as F
 
 _KERNELS = {}  # {(fs, device) : (gf_tensor, log_tensor)}
 
+# hacky solution for keyence images
+def _get_keyence_tile_orientation(experiment_date):
+    year_int = int(experiment_date[:4])
+    if year_int < 2024:
+        orientation = "vertical"
+    else:
+        orentation = "horizontal"
+
+    return orientation
+
 def _get_kernels(filter_size: int, device: torch.device):
     """Return (gaussian, laplacian-of-gaussian) kernels on the requested device."""
     key = (filter_size, device)

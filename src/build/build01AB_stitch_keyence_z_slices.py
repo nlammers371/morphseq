@@ -101,7 +101,7 @@ def get_alignment_coords(n_pos_tiles, orientation, ff_tile_dir):
 
     return coords_prior
 
-def stitch_well(
+def stitch_well_z(
     w: int,
     well_list: list[Path],
     orientation: str,
@@ -126,25 +126,15 @@ def stitch_well(
     canvas_shape = choose_canvas(n_pos, orientation, size_factor)
 
     # build placeholder Tile list once
-    tiles = [Tile(np.zeros((1,1), np.uint8)) for _ in range(n_pos)]
+    # tiles = [Tile(np.zeros((1,1), np.uint8)) for _ in range(n_pos)]
     
-    master_json=str(Path(ff_tile_dir) / "master_params.json")
+    master_json = str(Path(ff_tile_dir) / "master_params.json")
 
     for t_idx, stack in enumerate(table):                         # loop time
         out_png = out_dir / f"{well_name_conv}_t{t_idx:04}_stack.tif"
         if out_png.exists() and not overwrite:
             continue
         z_cube = np.empty((n_z, *canvas_shape), dtype=np.uint8)
-        # ff_tile_path = os.path.join(ff_tile_dir, ff_out_name, "")
-
-        # ff_out_name = 'ff_' + well_name_conv + f'_t{t_idx:04}'
-        # initialize tiles object
-        # tiles = [Tile(np.zeros((1, 1), dtype=np.uint8)) for _ in range(n_pos)]
-        # coords_prior = get_alignment_coords(n_pos, orientation, os.path.join(ff_tile_dir, ff_out_name, ""))
-        
-        # consitency check
-        # if len(coords_prior) != n_pos:
-        #     raise Exception(f"Mismatched numbers of stitch coords and tiles in {well_name_conv}")
         
         # iterate through Z
         for z in range(n_z): 
@@ -221,14 +211,13 @@ def stitch_z_from_keyence(data_root, orientation_list, n_workers=4, overwrite=Fa
         size_factor = metadata_df["Width (px)"].iloc[0] / 640
 
         # print(f'Stitching z slices in directory {d+1:01} of ' + f'{len(dir_indices)}')
+        run_stitch_well_z = partial(stitch_well_z, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, 
+                                  out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
         if not par_flag:
             for w in tqdm(range(len(well_list))):
-                stitch_well(w, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
-                
+                run_stitch_well_z(w)  
         else:
-            process_map(partial(stitch_well, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, 
-                                                                        out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir), 
-                                        range(len(well_list)), chunksize=1)
+            process_map(run_stitch_well_z, range(len(well_list)), chunksize=1)
 
     print('Done.')
 
