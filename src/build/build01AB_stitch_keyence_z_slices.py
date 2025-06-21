@@ -15,7 +15,7 @@ from stitch2d.tile import Tile # OpenCVTile as
 from pathlib import Path
 import logging 
 import skimage
-from src.build.export_utils import trim_to_shape, to_u8_adaptive, valid_acq_dirs
+from src.build.export_utils import trim_to_shape, to_u8_adaptive, valid_acq_dirs, _get_keyence_tile_orientation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,13 +104,14 @@ def get_alignment_coords(n_pos_tiles, orientation, ff_tile_dir):
 def stitch_well_z(
     w: int,
     well_list: list[Path],
-    orientation: str,
     cytometer: bool,
     ff_tile_dir: Path,
     size_factor: float,
+    orientation: str,
     out_dir: Path,
     overwrite=False,
 ):
+    
     well_dir = Path(well_list[w])
     well_tag = well_dir.name[-4:]
 
@@ -175,9 +176,13 @@ def stitch_well_z(
     return {}
 
 
-def stitch_z_from_keyence(data_root, orientation_list, n_workers=4, overwrite=False, dir_list=None, write_dir=None):
+def stitch_z_from_keyence(data_root: Path | str, 
+                          exp_name: str,
+                          n_workers:int=4, 
+                          overwrite: bool=False):
 
     par_flag = n_workers > 1
+    orientation = _get_keyence_tile_orientation(exp_name)
 
     RAW = Path(data_root) / "raw_image_data" / "keyence"
     META  = Path(data_root) / "metadata" / "built_metadata_files"
@@ -185,39 +190,38 @@ def stitch_z_from_keyence(data_root, orientation_list, n_workers=4, overwrite=Fa
     BUILTZ = Path(data_root) / "built_image_data" / "keyence_stitched_z"
     
     # handle paths
-    acq_dirs = valid_acq_dirs(RAW, dir_list)
+    # acq_dirs = valid_acq_dirs(RAW, dir_list)
 
-    for d, acq in enumerate(tqdm(acq_dirs, "Stitching z stacks...")):
-        # initialize dictionary to metadata)
-        dir_path = str(acq) #os.path.join(read_dir, sub_name, '')
+    # for d, acq in enumerate(tqdm(acq_dirs, "Stitching z stacks...")):
+    # initialize dictionary to metadata)
+    acq = Path(RAW / exp_name)
+    dir_path = str(acq) #os.path.join(read_dir, sub_name, '')
 
-        orientation = orientation_list[d]
+    # depth_dir = os.path.join(write_dir, "D_images", sub_name)
+    out_dir = BUILTZ /  acq.name
+    os.makedirs(out_dir, exist_ok=True)
 
-        # depth_dir = os.path.join(write_dir, "D_images", sub_name)
-        out_dir = BUILTZ /  acq.name
-        os.makedirs(out_dir, exist_ok=True)
+    # Each folder at this level pertains to a single well
+    well_list = sorted(glob.glob(os.path.join(dir_path, "XY*")))
+    cytometer_flag = False
+    if len(well_list) == 0:
+        cytometer_flag = True
+        well_list = sorted(glob.glob(dir_path + "/W0*"))
 
-        # Each folder at this level pertains to a single well
-        well_list = sorted(glob.glob(os.path.join(dir_path, "XY*")))
-        cytometer_flag = False
-        if len(well_list) == 0:
-            cytometer_flag = True
-            well_list = sorted(glob.glob(dir_path + "/W0*"))
+    # get list of FF tile folders
+    ff_tile_dir = BUILT /  "FF_images" / acq.name
+    metadata_path = META / f"{acq.name}_metadata.csv"
+    metadata_df = pd.read_csv(metadata_path)
+    size_factor = metadata_df["Width (px)"].iloc[0] / 640
 
-        # get list of FF tile folders
-        ff_tile_dir = BUILT /  "FF_images" / acq.name
-        metadata_path = META / f"{acq.name}_metadata.csv"
-        metadata_df = pd.read_csv(metadata_path)
-        size_factor = metadata_df["Width (px)"].iloc[0] / 640
-
-        # print(f'Stitching z slices in directory {d+1:01} of ' + f'{len(dir_indices)}')
-        run_stitch_well_z = partial(stitch_well_z, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, 
-                                  out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
-        if not par_flag:
-            for w in tqdm(range(len(well_list))):
-                run_stitch_well_z(w)  
-        else:
-            process_map(run_stitch_well_z, range(len(well_list)), chunksize=1)
+    # print(f'Stitching z slices in directory {d+1:01} of ' + f'{len(dir_indices)}')
+    run_stitch_well_z = partial(stitch_well_z, well_list=well_list, orientation=orientation, cytometer=cytometer_flag, 
+                                out_dir=out_dir, overwrite=overwrite, size_factor=size_factor, ff_tile_dir=ff_tile_dir)
+    if not par_flag:
+        for w in tqdm(range(len(well_list))):
+            run_stitch_well_z(w)  
+    else:
+        process_map(run_stitch_well_z, range(len(well_list)), chunksize=1)
 
     print('Done.')
 

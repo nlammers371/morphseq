@@ -25,7 +25,7 @@ from glob2 import glob
 import skimage
 import skimage.io as skio
 from skimage import exposure
-from src.build.export_utils import scrape_keyence_metadata, trim_to_shape, to_u8_adaptive, valid_acq_dirs, im_rescale, LoG_focus_stacker
+from src.build.export_utils import scrape_keyence_metadata, trim_to_shape, _get_keyence_tile_orientation, to_u8_adaptive, valid_acq_dirs, im_rescale, LoG_focus_stacker
 import torch
 
 logging.basicConfig(
@@ -246,7 +246,7 @@ def stitch_experiment(
     out_dir        : str,
     overwrite      : bool,
     size_factor    : float,
-    orientation    : str = "vertical",
+    orientation    : str,
 ) -> dict:
 
     ff_path  = Path(ff_folders[idx])
@@ -298,7 +298,8 @@ def stitch_experiment(
 def build_ff_from_keyence(data_root: Path | str, 
                           exp_name: str,
                           n_workers: int=4,
-                          overwrite: bool=False):
+                          overwrite: bool=False, 
+                          device: str="cpu"):
     
     par_flag = n_workers > 1
 
@@ -308,12 +309,11 @@ def build_ff_from_keyence(data_root: Path | str,
     # acq_dirs = valid_acq_dirs(RAW, dir_list)
 
     # get compute device to use
-    device = (
-                "cuda"
-                if torch.cuda.is_available() #and (not par_flag)
-                else "cpu"
-            )
-
+    # device = (
+    #             "cuda"
+    #             if torch.cuda.is_available() #and (not par_flag)
+    #             else "cpu"
+    #         )
     if device == "cpu":
         print("Warning: using CPU. This may be quite slow. GPU recommended.")
 
@@ -358,13 +358,12 @@ def build_ff_from_keyence(data_root: Path | str,
 
 def stitch_ff_from_keyence(data_root: str | Path, 
                            exp_name: str, 
-                           orientation: Literal["horizontal", "vertical"], 
                            n_workers: int=4, 
                            overwrite: bool=False, 
                            n_stitch_samples: int=50):
     
     par_flag = n_workers > 1
-
+    orientation = _get_keyence_tile_orientation(exp_name)
     # RAW   = Path(data_root) / "raw_image_data" / "keyence"
     WRITE_ROOT = Path(data_root)
     META_ROOT  = Path(data_root) / "metadata" / "built_metadata_files"

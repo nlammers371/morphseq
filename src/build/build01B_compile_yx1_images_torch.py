@@ -12,7 +12,8 @@ sys.path.insert(0, str(REPO_ROOT))
 import os, json, time, logging
 from pathlib import Path
 from typing import List, Sequence, Tuple
-
+from functools import partial
+from tqdm.contrib.concurrent import process_map
 import numpy as np
 import pandas as pd
 import torch
@@ -23,13 +24,26 @@ import skimage.io as skio
 import skimage
 from stitch2d import StructuredMosaic      
 from src.build.export_utils import LoG_focus_stacker, im_rescale
-
+# 
 log = logging.getLogger(__name__)
-logging.basicConfig(format="%(levelname)s | %(message)s", level=logging.INFO)
+logging.basicConfig(format="%(level_name)s | %(message)s", level=logging.INFO)
 
 
 ##########
 # Helper functions
+def _FF_wrapper(w, dask_arr, well_id_array, time_id_array, device, filter_size, bf_idx, 
+                out_ff, well_name_list_long, overwrite):
+    
+    # get indices
+    t_idx = time_id_array[w]
+    w_idx = well_id_array[w]
+    well_name = well_name_list_long[w]
+
+    stack = _get_stack(dask_arr, t_idx, w_idx)
+    ff = _focus_stack(stack, device, filter_size)
+
+    _write_ff(out_ff, well_name, t_idx, bf_idx, ff, overwrite)
+
 
 def _qc_well_assignments(stage_xyz_array, well_name_list_long):
      # use clustering to double check well assignments
@@ -110,7 +124,7 @@ def _focus_stack(
     tensor = torch.from_numpy(norm).to(device)
 
     ff_t, _ = LoG_focus_stacker(tensor, filter_size, device)
-    arr = ff_t.numpy()
+    arr = ff_t.cpu().numpy()
     arr_clipped = np.clip(arr, 0, 65535)
     ff_i = arr_clipped.astype(np.uint16)
     # convert to 8 bit 
@@ -136,155 +150,161 @@ def _write_ff(
 
 def build_ff_from_yx1(
     data_root: str | Path,
-    *,
+    exp_name: str,
     overwrite: bool = False,
-    dir_list: Sequence[str] | None = None,
-    write_dir: str | Path | None = None,
+    # dir_list: Sequence[str] | None = None,
+    # write_dir: str | Path | None = None,
+    device: str="cpu",
+    n_workers: int=1,
     metadata_only: bool = False,
-    n_z_keep: Sequence[int | None] | None = None,
+    # n_z_keep: Sequence[int | None] | None = None,
 ):
+
+    par_flag = n_workers > 1
 
     data_root = Path(data_root)
     read_root = data_root / "raw_image_data" / "YX1"
-    write_root = Path(write_dir) if write_dir else data_root / "built_image_data"
+    write_root = data_root / "built_image_data"
     meta_root = data_root / "metadata"
 
-    exp_dirs = (
-        [read_root / d for d in dir_list] if dir_list else _find_dirs(read_root)
-    )
-    if n_z_keep is None:
-        n_z_keep = [None] * len(exp_dirs)
+    # exp_dirs = (
+    #     [read_root / d for d in dir_list] if dir_list else _find_dirs(read_root)
+    # )
+    # if n_z_keep is None:
+    #     n_z_keep = [None] * len(exp_dirs)
 
 
-    for exp_path, z_keep in zip(exp_dirs, n_z_keep):
-        name = exp_path.name
-        log.info("⏳  %s", name)
+    # for exp_path, z_keep in zip(exp_dirs, n_z_keep):
+    exp_path = read_root / exp_name
+    # exp_name = exp_path.exp_name
+    log.info("⏳  %s", exp_name)
 
-        nd = _read_nd2(exp_path)
-        shape_twzcxy = nd.shape  # T,W,Z,C,Y,X
-        n_t, n_w, n_z = shape_twzcxy[:3]
+    nd = _read_nd2(exp_path)
+    shape_twzcxy = nd.shape  # T,W,Z,C,Y,X
+    n_t, n_w, n_z = shape_twzcxy[:3]
 
-        dask_arr = nd.to_dask()  # (T,W,Z,C,Y,X)
-        channel_names = [c.channel.name for c in nd.frame_metadata(0).channels]
-        bf_idx = channel_names.index("BF")
+    dask_arr = nd.to_dask()  # (T,W,Z,C,Y,X)
+    channel_names = [c.channel.name for c in nd.frame_metadata(0).channels]
+    bf_idx = channel_names.index("BF")
 
-        # non_bf_indices = [i for i in range(len(channel_names)) if channel_names[i] != "BF"]
+    # non_bf_indices = [i for i in range(len(channel_names)) if channel_names[i] != "BF"]
 
-        # if n_channels > 1:
-        #     fluo_dir = os.path.join(write_dir, "stitched_fluo_images", sub_name)
-        #     if not os.path.isdir(fluo_dir):
-        #         os.makedirs(fluo_dir)
+    # if n_channels > 1:
+    #     fluo_dir = os.path.join(write_dir, "stitched_fluo_images", sub_name)
+    #     if not os.path.isdir(fluo_dir):
+    #         os.makedirs(fluo_dir)
 
 
-        # get image resolution
-        voxel_size = nd.voxel_size()
+    # get image resolution
+    voxel_size = nd.voxel_size()
 
-        # n_channels = len(nd.frame_metadata(0).channels)
+    # n_channels = len(nd.frame_metadata(0).channels)
 
-        # read in plate map
-        plate_map_xl = pd.ExcelFile(meta_root / "well_metadata" / f"{name}_well_metadata.xlsx")
+    # read in plate map
+    plate_map_xl = pd.ExcelFile(meta_root / "well_metadata" / f"{exp_name}_well_metadata.xlsx")
 
-        # if n_channels > 1:
-        #     channel_map = plate_map_xl.parse("channels")
+    # if n_channels > 1:
+    #     channel_map = plate_map_xl.parse("channels")
 
-        # fix jumps in nd2 time stamp
-        frame_time_vec = _fix_nd2_timestamp(nd, n_z)
+    # fix jumps in nd2 time stamp
+    frame_time_vec = _fix_nd2_timestamp(nd, n_z)
 
-        # get series numbers
-        series_map = plate_map_xl.parse("series_number_map").iloc[:8, 1:13]
+    # get series numbers
+    series_map = plate_map_xl.parse("series_number_map").iloc[:8, 1:13]
 
-        well_name_list = []
-        well_ind_list = []
-        col_id_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-        row_letter_list = ["A", "B", "C", "D", "E", "F", "G", "H"]
-        for c in range(len(col_id_list)):
-            for r in range(len(row_letter_list)):
-                ind_float = series_map.iloc[r, c]
-                if ~np.isnan(ind_float):
-                    well_name = row_letter_list[r] + f"{col_id_list[c]:02}"
-                    well_name_list.append(well_name)
-                    well_ind_list.append(int(ind_float))
+    well_name_list = []
+    well_ind_list = []
+    col_id_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    row_letter_list = ["A", "B", "C", "D", "E", "F", "G", "H"]
+    for c in range(len(col_id_list)):
+        for r in range(len(row_letter_list)):
+            ind_float = series_map.iloc[r, c]
+            if ~np.isnan(ind_float):
+                well_name = row_letter_list[r] + f"{col_id_list[c]:02}"
+                well_name_list.append(well_name)
+                well_ind_list.append(int(ind_float))
 
-        si = np.argsort(well_ind_list)
-        well_name_list_sorted = np.asarray(well_name_list)[si].tolist()
-        well_ind_list_sorted = np.asarray(well_ind_list)[si].tolist()
+    si = np.argsort(well_ind_list)
+    well_name_list_sorted = np.asarray(well_name_list)[si].tolist()
+    well_ind_list_sorted = np.asarray(well_ind_list)[si].tolist()
 
-        # generate longform vectors
-        well_name_list_long = np.repeat(well_name_list_sorted, n_t)
-        well_ind_list_long = np.repeat(np.asarray(well_ind_list)[si], n_t)
+    # generate longform vectors
+    well_name_list_long = np.repeat(well_name_list_sorted, n_t)
+    well_ind_list_long = np.repeat(np.asarray(well_ind_list)[si], n_t)
 
-        # check that assigned well IDs match recorded stage positions
-        stage_xyz_array = np.empty((n_w*n_t, 3))
-        well_id_array = np.empty((n_w*n_t,))
-        time_id_array = np.empty((n_w*n_t,))
-        iter_i = 0
-        for w in range(n_w):
-            for t in range(n_t):
-                base_ind = t*n_w + w
-                slice_ind = base_ind*n_z
+    # check that assigned well IDs match recorded stage positions
+    stage_xyz_array = np.empty((n_w*n_t, 3))
+    well_id_array = np.empty((n_w*n_t,))
+    time_id_array = np.empty((n_w*n_t,))
+    iter_i = 0
+    for w in range(n_w):
+        for t in range(n_t):
+            base_ind = t*n_w + w
+            slice_ind = base_ind*n_z
+            
+            stage_xyz_array[iter_i, :] = np.asarray(nd.frame_metadata(slice_ind).channels[0].position.stagePositionUm)
+            well_id_array[iter_i] = w
+            time_id_array[iter_i] = t
+            iter_i += 1
+
+
+    # chec that recorded well positions are consistent with actual image positions on the plate
+    _qc_well_assignments(stage_xyz_array, well_name_list_long)
+
+    # generate metadata dataframe
+    well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
+    well_df["nd2_series_num"] = well_ind_list_long
+    well_df["microscope"] = "YX1"
+    time_int_list = np.tile(np.arange(0, n_t), n_w)
+    well_df["time_int"] = time_int_list
+    well_df["Height (um)"] = shape_twzcxy [3]*voxel_size[1]
+    well_df["Width (um)"] = shape_twzcxy [4]*voxel_size[0]
+    well_df["Height (px)"] = shape_twzcxy [3]
+    well_df["Width (px)"] = shape_twzcxy [4]
+    well_df["BF Channel"] = bf_idx
+    well_df["Objective"] = nd.frame_metadata(0).channels[0].microscope.objectiveName
+    time_ind_vec = []
+    for n in range(n_w):
+        time_ind_vec += np.arange(n, n_w*n_t, n_w).tolist()
+    well_df["Time (s)"] = frame_time_vec[time_ind_vec]
+
+    # get device
+    # device = (
+    #         "cuda"
+    #         if torch.cuda.is_available() #and (not par_flag)
+    #         else "cpu"
+    #     )
+
+    if device == "cpu":
+        print("Warning: using CPU. This may be quite slow. GPU recommended.")
+
+    # call FF function
+    if not metadata_only:
+
+        out_ff = write_root / "stitched_FF_images" / exp_name
+
+        call_ff = partial(_FF_wrapper, dask_arr=dask_arr, well_id_array=well_id_array, 
+                          time_id_array=time_id_array, device=device, filter_size=3, 
+                          bf_idx=bf_idx, out_ff=out_ff, well_name_list_long=well_ind_list_long, overwrite=overwrite)
+    
+        if not par_flag:
+            for w in tqdm(range(len(well_id_array))):
+                call_ff(w)
+        else:
+            process_map(call_ff, range(len(well_id_array)), max_workers=n_workers, chunksize=1)
+
                 
-                stage_xyz_array[iter_i, :] = np.asarray(nd.frame_metadata(slice_ind).channels[0].position.stagePositionUm)
-                well_id_array[iter_i] = w
-                time_id_array[iter_i] = t
-                iter_i += 1
 
 
-        # chec that recorded well positions are consistent with actual image positions on the plate
-        _qc_well_assignments(stage_xyz_array, well_name_list_long)
+    first_time = np.min(well_df['Time (s)'].copy())
+    well_df['Time Rel (s)'] = well_df['Time (s)'] - first_time
+    
+    # load previous metadata
+    out_meta = meta_root / "built_metadata_files"
+    out_meta.mkdir(parents=True, exist_ok=True)
+    well_df.to_csv(out_meta / f"{exp_name}_metadata.csv", index=False)
 
-        # generate metadata dataframe
-        well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
-        well_df["nd2_series_num"] = well_ind_list_long
-        well_df["microscope"] = "YX1"
-        time_int_list = np.tile(np.arange(0, n_t), n_w)
-        well_df["time_int"] = time_int_list
-        well_df["Height (um)"] = shape_twzcxy [3]*voxel_size[1]
-        well_df["Width (um)"] = shape_twzcxy [4]*voxel_size[0]
-        well_df["Height (px)"] = shape_twzcxy [3]
-        well_df["Width (px)"] = shape_twzcxy [4]
-        well_df["BF Channel"] = bf_idx
-        well_df["Objective"] = nd.frame_metadata(0).channels[0].microscope.objectiveName
-        time_ind_vec = []
-        for n in range(n_w):
-            time_ind_vec += np.arange(n, n_w*n_t, n_w).tolist()
-        well_df["Time (s)"] = frame_time_vec[time_ind_vec]
-
-        # get device
-        device = (
-                "cuda"
-                if torch.cuda.is_available() #and (not par_flag)
-                else "cpu"
-            )
-
-        if device == "cpu":
-            print("Warning: using CPU. This may be quite slow. GPU recommended.")
-
-        # call FF function
-        if not metadata_only:
-
-            out_ff = write_root / "stitched_FF_images" / name
-            filter_size = 3
-
-            for w_idx, _ in enumerate(well_ind_list_sorted):
-                for t_idx in range(n_t):
-                    # stack = _get_stack(
-                    #     dask_arr[..., bf_idx, :, :], t_idx, w_idx, z_keep
-                    # )
-                    stack = _get_stack(dask_arr, t_idx, w_idx, z_keep)
-
-                    ff = _focus_stack(stack, device, filter_size)
-                    _write_ff(out_ff, well_name_list_sorted[w_idx], t_idx, bf_idx, ff, overwrite)
-
-
-        first_time = np.min(well_df['Time (s)'].copy())
-        well_df['Time Rel (s)'] = well_df['Time (s)'] - first_time
-        
-        # load previous metadata
-        out_meta = meta_root / "built_metadata_files"
-        out_meta.mkdir(parents=True, exist_ok=True)
-        well_df.to_csv(out_meta / f"{name}_metadata.csv", index=False)
-
-        nd.close()
+    nd.close()
 
 
     print('Done.')
