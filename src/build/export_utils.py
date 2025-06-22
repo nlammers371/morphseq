@@ -9,8 +9,6 @@ import torch
 import torch.nn.functional as F
 
 
-_KERNELS = {}  # {(fs, device) : (gf_tensor, log_tensor)}
-
 # hacky solution for keyence images
 def _get_keyence_tile_orientation(experiment_date):
     year_int = int(experiment_date[:4])
@@ -21,35 +19,96 @@ def _get_keyence_tile_orientation(experiment_date):
 
     return orientation
 
+_KERNELS: dict[tuple[int, torch.device], tuple[torch.Tensor, torch.Tensor]] = {}
+
 def _get_kernels(filter_size: int, device: torch.device):
-    """Return (gaussian, laplacian-of-gaussian) kernels on the requested device."""
+    """Return cached (gaussian, laplacian) kernels for the given filter_size & device."""
     key = (filter_size, device)
     if key in _KERNELS:
         return _KERNELS[key]
 
-    k = filter_size                      # alias for brevity
-    ind = k // 2 + 1                     # strip border after filtering
+    k   = filter_size
+    ind = k // 2 + 1  # for the cropping step
 
-    # --- gaussian --------------------------------------------------------
-    gf = np.zeros((2 * k + 1, 2 * k + 1), np.float32)
+    # --- Gaussian filter kernel ---
+    gf = np.zeros((2*k+1, 2*k+1), np.float32)
     gf[k, k] = 1.0
     gf = cv2.GaussianBlur(gf, (k, k), 0)[ind:-ind, ind:-ind]
     gf = torch.from_numpy(gf).unsqueeze(0).unsqueeze(0).to(device)
 
-    # --- laplacian -------------------------------------------------------
-    lpf = np.zeros_like(gf[0, 0].cpu().numpy())
-    pad = (k - lpf.shape[0] // 2)        # difference after cropping
-    full = np.pad(lpf, pad, mode="constant")
-    full[k, k] = 1
-    lpf = cv2.Laplacian(full, cv2.CV_32F, ksize=k)[ind:-ind, ind:-ind]
-    lpf = torch.from_numpy(lpf).unsqueeze(0).unsqueeze(0).to(device)
+    # --- Laplacian filter kernel ---
+    # build a “full” delta at center then crop to the same shape as gf
+    full = np.zeros((2*k+1, 2*k+1), np.float32)
+    full[k, k] = 1.0
+    lpf  = cv2.Laplacian(full, cv2.CV_32F, ksize=k)[ind:-ind, ind:-ind]
+    lpf  = torch.from_numpy(lpf).unsqueeze(0).unsqueeze(0).to(device)
 
     _KERNELS[key] = (gf, lpf)
-    return _KERNELS[key]
+    return gf, lpf
 
-# ---------- main function ----------
+
 def LoG_focus_stacker(
-    data_zyx: torch.Tensor | np.ndarray,   # Z × Y × X dtype float / uint16
+    data_zyx: torch.Tensor | np.ndarray,   # either Z×Y×X or N×Z×Y×X
+    filter_size: int,
+    device: str | torch.device = "cpu",
+):
+    """
+    Returns (ff, abs_log), where:
+      - ff is the full-focus image (float32 on `device`)
+      - abs_log is the absolute LoG response.
+
+    Accepts inputs of shape:
+      • (Z, Y, X)   → returns ff of shape (Y, X) and abs_log (Z, Y, X)
+      • (N, Z, Y, X) → returns ff of shape (N, Y, X) and abs_log (N, Z, Y, X)
+    """
+    device = torch.device(device)
+    gf, logf = _get_kernels(filter_size, device)
+
+    # 1) normalize input to a 4-D tensor of shape (N, Z, Y, X)
+    if not torch.is_tensor(data_zyx):
+        data = torch.from_numpy(np.asarray(data_zyx))
+    else:
+        data = data_zyx
+
+    if data.ndim == 3:
+        data = data.unsqueeze(0)        # now (1, Z, Y, X)
+        squeeze_first = True
+    elif data.ndim == 4:
+        squeeze_first = False
+    else:
+        raise ValueError(f"Expected 3D or 4D input, got {data.ndim}D")
+
+    data = data.to(device, dtype=torch.float32, non_blocking=True)
+
+    # 2) flatten N×Z into a single batch dimension so we can conv2d all planes at once
+    N, Z, Y, X = data.shape
+    flat = data.reshape(N * Z, Y, X).unsqueeze(1)   # (N*Z, 1, Y, X)
+
+    # 3) apply Gaussian then Laplacian
+    gb     = F.conv2d(flat, gf, padding="same")
+    log_rsp = F.conv2d(gb, logf, padding="same").squeeze(1)  # (N*Z, Y, X)
+    abs_flat = log_rsp.abs()
+
+    # 4) un-flatten to (N, Z, Y, X)
+    abs_log = abs_flat.reshape(N, Z, Y, X)
+
+    # 5) pick the best focus plane per stack
+    #    max over the Z-axis (dimension 1)
+    best, idx = abs_log.max(dim=1)       # both are shape (N, Y, X)
+
+    # 6) gather the corresponding pixel from the original data
+    #    first reshape data back to (N, Z, Y, X)
+    #    then pick along dim=1 using idx
+    ff = data.gather(1, idx.unsqueeze(1)).squeeze(1)  # (N, Y, X)
+
+    if squeeze_first:
+        ff      = ff[0]      # -> (Y, X)
+        abs_log = abs_log[0] # -> (Z, Y, X)
+
+    return ff, abs_log
+
+def LoG_focus_stacker_batch(
+    data_zyx: torch.Tensor | np.ndarray,   # B*T x Z × Y × X dtype float / uint16
     filter_size: int,
     device: str | torch.device = "cpu",
 ):
@@ -92,7 +151,7 @@ def to_u8_adaptive(img16, low=.1, high=99.9):
     img_rescaled = exposure.rescale_intensity(img16, in_range=(lo, hi))
     return util.img_as_ubyte(img_rescaled)
 
-def im_rescale(im, low=0, high=99.9, n_samp=2000000):
+def im_rescale(im, low=0.1, high=99.9, n_samp=2000000):
     flat = im.ravel()
     if flat.size > 2_000_000:
         flat = flat[:: flat.size // 2_000_000]
