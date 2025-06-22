@@ -21,7 +21,7 @@ import multiprocessing
 from functools import partial
 from tqdm.contrib.concurrent import process_map 
 from skimage.transform import rescale, resize
-from src.build.build01A_compile_keyence_images import trim_image
+from src.build.build01A_compile_keyence_torch import trim_image
 from pathlib import Path
 from sklearn.decomposition import PCA
 import warnings 

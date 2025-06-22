@@ -7,8 +7,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]   # adjust “2” if levels dif
 # Put that directory at the *front* of sys.path so Python looks there first
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.build.build01A_compile_keyence_images import stitch_ff_from_keyence # build_ff_from_keyence
-from src.build.build01A_compile_keyence_images import build_ff_from_keyence
+from src.build.build01A_compile_keyence_torch import stitch_ff_from_keyence # build_ff_from_keyence
+from src.build.build01A_compile_keyence_torch import build_ff_from_keyence
 from src.build.build01AB_stitch_keyence_z_slices import stitch_z_from_keyence
 import multiprocessing
 

@@ -111,6 +111,7 @@ def process_well(
     Drop-in replacement: returns the same metadata DF,
     writes full-focus JPGs to `ff_root`.
     """
+    
     well_dir  = Path(well_list[w])
     well_name = well_dir.name[-4:]                # e.g. 'A01a'
     well_conv = sorted(well_dir.glob("_*"))[0].name[-3:]
@@ -165,7 +166,7 @@ def process_well(
 
                 # ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
                 ff_t, _ = LoG_focus_stacker(tensor, filter_size=ff_filter_size, device=device)
-                arr = ff_t.numpy()
+                arr = ff_t.cpu().numpy()
                 if stack.dtype == np.uint16:
                     arr_clipped = np.clip(arr, 0, 65535)
                     ff_i = arr_clipped.astype(np.uint16)
@@ -303,17 +304,13 @@ def build_ff_from_keyence(data_root: Path | str,
     
     par_flag = n_workers > 1
 
-    RAW   = Path(data_root) / "raw_image_data" / "keyence"
-    BUILT = Path(data_root) / "built_image_data" / "keyence"
+    RAW   = Path(data_root) / "raw_image_data" / "Keyence"
+    BUILT = Path(data_root) / "built_image_data" / "Keyence"
     META  = Path(data_root) / "metadata" / "built_metadata_files"
+    os.makedirs(BUILT, exist_ok=True)
+    os.makedirs(META, exist_ok=True)
     # acq_dirs = valid_acq_dirs(RAW, dir_list)
 
-    # get compute device to use
-    # device = (
-    #             "cuda"
-    #             if torch.cuda.is_available() #and (not par_flag)
-    #             else "cpu"
-    #         )
     if device == "cpu":
         print("Warning: using CPU. This may be quite slow. GPU recommended.")
 
@@ -325,7 +322,10 @@ def build_ff_from_keyence(data_root: Path | str,
 
     well_list = sorted((raw_dir.glob("XY*") or raw_dir.glob("W0*")))
     cytometer_flag = not any(raw_dir.glob("XY*"))
-
+    if cytometer_flag:
+        well_list = sorted(raw_dir.glob("W0*"))
+    else:
+        well_list = sorted(raw_dir.glob("XY*"))
     # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
     meta_frames = []
     run_process_well = partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, device=device,
