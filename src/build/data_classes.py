@@ -3,7 +3,35 @@ import skimage.io as skio
 from skimage import exposure
 import torch
 from torch.utils.data import Dataset
+from typing import Tuple, Any
 from src.build.export_utils import im_rescale
+from collections import OrderedDict
+
+class DatasetOutput(OrderedDict):
+    """Base ModelOutput class fixing the output type from the models. This class is inspired from
+    the ``ModelOutput`` class from hugginface transformers library"""
+
+    def __getitem__(self, k):
+        if isinstance(k, str):
+            self_dict = {k: v for (k, v) in self.items()}
+            return self_dict[k]
+        else:
+            return self.to_tuple()[k]
+
+    def __setattr__(self, name, value):
+        super().__setitem__(name, value)
+        super().__setattr__(name, value)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        super().__setattr__(key, value)
+
+    def to_tuple(self) -> Tuple[Any]:
+        """
+        Convert self to a tuple containing all the attributes/keys that are not ``None``.
+        """
+        return tuple(self[k] for k in self.keys())
+    
 
 class MultiTileZStackDataset(Dataset):
     def __init__(self, samples, ff_dtype=np.float32):
@@ -37,4 +65,4 @@ class MultiTileZStackDataset(Dataset):
         arr = np.stack(stretched, axis=0)
         # shape == (n_tiles, Z, H, W)
 
-        return torch.from_numpy(arr)
+        return DatasetOutput(data=torch.from_numpy(arr), path=entry)

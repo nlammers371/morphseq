@@ -25,7 +25,8 @@ from glob2 import glob
 import skimage
 import skimage.io as skio
 from skimage import exposure
-from src.build.export_utils import scrape_keyence_metadata, trim_to_shape, _get_keyence_tile_orientation, to_u8_adaptive, valid_acq_dirs, im_rescale, LoG_focus_stacker
+from src.build.export_utils import (trim_to_shape, _get_keyence_tile_orientation, save_images_parallel, LoG_focus_stacker, 
+                                    get_n_cpu_workers, get_n_workers_for_pipeline, estimate_batch_sizes, scrape_keyence_metadata)
 import torch
 from src.build.data_classes import MultiTileZStackDataset
 from torch.utils.data import DataLoader
@@ -108,7 +109,9 @@ def get_image_paths(
     sample_dict = {}
     exp_name = os.path.basename(os.path.dirname(well_list[0]))
 
-    for w, well_dir in enumerate(tqdm(well_list, "Compiling list of images to export...")):
+    meta_rows = []
+
+    for w, well_dir in enumerate(tqdm(well_list, "Building metadata...")):
 
         well_name = Path(well_dir).name[-4:]                # e.g. 'A01a'
         well_conv = sorted(well_dir.glob("_*"))[0].name[-3:]
@@ -136,107 +139,30 @@ def get_image_paths(
 
                     if key in sample_dict:
                         tile_zpaths = sample_dict[key]["tile_zpaths"]
-                        tile_zpaths.append([im_files[idx] for idx in pos_idx])
+                        tile_zpaths.append([str(im_files[idx]) for idx in pos_idx])
                         sample_dict[key]["tile_zpaths"] = tile_zpaths
                     else:
                         sample_dict[key] = {
                                             "date": exp_name,
                                             "well": well_conv,
-                                            "tile_zpaths": [[im_files[idx] for idx in pos_idx]]
+                                            "time_id": t_idx,
+                                            "tile_zpaths": [[str(im_files[idx]) for idx in pos_idx]]
                                         }
+                        
+                    p_iter = p if cytometer_flag else pi
+
+                    # update metadata once per well-timepoint
+                    if p_iter == 1:
+                        meta = scrape_keyence_metadata(im_files[0])
+                        meta.update({"well": well_conv,
+                                    "time_string": f"T{t_idx:04}",
+                                    "time_int": t_idx})
+                        meta_rows.append(meta)
+                
 
     # convert dict to a list                
-    return list(sample_dict.values())
+    return list(sample_dict.values()), pd.DataFrame(meta_rows)
     
-
-
-
-
-def process_well(
-    w: int,
-    well_list: list[str],
-    cytometer_flag: bool,
-    device: str,
-    ff_root: str | Path,
-    ff_filter_size: int=3,
-    overwrite: bool = False) -> pd.DataFrame:
-    """
-    Drop-in replacement: returns the same metadata DF,
-    writes full-focus JPGs to `ff_root`.
-    """
-    
-    well_dir  = Path(well_list[w])
-    well_name = well_dir.name[-4:]                # e.g. 'A01a'
-    well_conv = sorted(well_dir.glob("_*"))[0].name[-3:]
-
-    # handle optional 'P*' and 'T*' layers
-    pos_dirs  = sorted(well_dir.glob("P*")) or [well_dir]
-    meta_rows = []
-
-    for p, pos_dir in enumerate(pos_dirs):
-        time_dirs = sorted(pos_dir.glob("T*")) or [pos_dir]
-
-        for time_dir in time_dirs:
-            t_idx = int(time_dir.name[1:]) if time_dir.stem.startswith("T") else 0
-            im_files = sorted(time_dir.glob("*CH*"))
-
-            # deduce sub-positions inside one folder
-            sub_pos = (
-                np.ones(len(im_files)) if cytometer_flag
-                else [int(f.name.split(well_name)[1][1:6]) for f in im_files]
-            )
-            # First loop: load all positions into z-stacks
-            stack_list = []
-            for pi in np.unique(sub_pos).astype(int):
-                pos_idx   = np.where(sub_pos == pi)[0]
-                pos_str   = f"p{(p if cytometer_flag else pi):04}"
-
-                stack = np.stack(_load_images(pos_idx, im_files), axis=0)
-
-                stack_list.append(stack)
-
-            # Normalize intensity consistently across stack
-            im_cb = np.stack(stack_list)
-            _, lo, hi = im_rescale(im_cb)
-
-            # Second loop: FF-project and save
-            for pi in np.unique(sub_pos).astype(int):
-                pos_idx   = np.where(sub_pos == pi)[0]
-                pos_str   = f"p{(p if cytometer_flag else pi):04}"
-                out_dir   = Path(ff_root) / f"ff_{well_conv}_t{t_idx:04}"
-                out_file  = out_dir / f"im_{pos_str}.jpg"
-
-                if out_file.exists() and not overwrite:
-                    if p == t_idx == w == 0:
-                        print("Skipping existing JPGs (set overwrite=True to rebuild).")
-                    continue
-                
-                # normalize
-                stack = np.stack(_load_images(pos_idx, im_files), axis=0)
-                norm = exposure.rescale_intensity(stack, in_range=(lo, hi))
-                norm = norm.astype(np.float32)
-                tensor = torch.from_numpy(norm).to(device)          
-
-                # ksize = int(np.floor(26 / well_res / 2) * 2 + 1)
-                ff_t, _ = LoG_focus_stacker(tensor, filter_size=ff_filter_size, device=device)
-                arr = ff_t.cpu().numpy()
-                if stack.dtype == np.uint16:
-                    arr_clipped = np.clip(arr, 0, 65535)
-                    ff_i = arr_clipped.astype(np.uint16)
-                elif stack.dtype == np.uint8:
-                    arr_clipped = np.clip(arr, 0, 255)
-                    ff_i = arr_clipped.astype(np.uint8)
-
-                _write_ff(ff_i, out_dir, pos_str)
-
-                # metadata only once per (well, time point)
-                meta = scrape_keyence_metadata(im_files[0])
-                meta.update({"well": well_conv,
-                             "time_string": f"T{t_idx:04}",
-                             "time_int": t_idx})
-                meta_rows.append(meta)
-
-    return pd.DataFrame(meta_rows)
 
 #############################################################################
 #  A.  MASTER-PARAM SAMPLER
@@ -353,11 +279,17 @@ def build_ff_from_keyence(data_root: Path | str,
                           exp_name: str,
                           n_workers: int=4,
                           overwrite: bool=False, 
-                          device: str="cpu",
-                          batch_size=8):
+                          device: str="cpu"):
     
-    par_flag = n_workers > 1
+    # figure out how to utilize compute resources
+    # 1) decide how many threads to write images
+    n_write_threads = get_n_cpu_workers(frac=0.5)
 
+    # 2) decide how many workers to load/process stacks in parallel
+    n_load_workers  = get_n_workers_for_pipeline()
+
+
+    # get path info
     RAW   = Path(data_root) / "raw_image_data" / "Keyence"
     BUILT = Path(data_root) / "built_image_data" / "Keyence"
     META  = Path(data_root) / "metadata" / "built_metadata_files"
@@ -382,34 +314,55 @@ def build_ff_from_keyence(data_root: Path | str,
         well_list = sorted(raw_dir.glob("XY*"))
     
     # call function to walk through directories and compile list of image paths
-    sample_list = get_image_paths(well_list=well_list, cytometer_flag=cytometer_flag)
-    ds = MultiTileZStackDataset(sample_list)
-    loader = DataLoader(ds,
-                    batch_size=batch_size,       # two experiments per batch
-                    num_workers=n_workers,      # parallel I/O
-                    pin_memory=True)
-    
-    for batch in loader:
-        # batch.shape == (batch_size, n_tiles, Z, H, W)
-        batch = batch.to(device, non_blocking=True)
-        # now you can FF-project each tile—for instance by reshaping:
-        b, t, z, h, w = batch.shape
-        flat = batch.view(b*t, z, h, w)            # treat each tile as its own volume
-        ff   = my_FF_projector(flat)               # returns shape (b*t, H, W)
-        ff   = ff.view(b, t, h, w) 
-        
-    # print(f'Building full-focus images in directory {d+1:01} of ' + f'{len(dir_indices)}')
-    meta_frames = []
-    run_process_well = partial(process_well, well_list=well_list, cytometer_flag=cytometer_flag, device=device,
-                                                                    ff_root=ff_dir, overwrite=overwrite)
+    sample_list, meta_df = get_image_paths(well_list=well_list, cytometer_flag=cytometer_flag)
 
-    if not par_flag:
-        for w in tqdm(range(len(well_list))):
-            temp_df = run_process_well(w)
-            meta_frames.append(temp_df)
-    else:
-        metadata_df_temp = process_map(run_process_well, range(len(well_list)), max_workers=n_workers)
-        meta_frames += metadata_df_temp
+
+    ds = MultiTileZStackDataset(sample_list)
+    # check image size to gauge memory footprint
+    arr = ds[0]["data"]
+    sample_bytes = int(arr.nbytes)
+    gpu_bs, cpu_bs = estimate_batch_sizes(sample_bytes)
+    batch_size = gpu_bs if gpu_bs > 0 else cpu_bs
+
+
+    loader = DataLoader(ds,
+                        batch_size=batch_size,       # two experiments per batch
+                        num_workers=n_load_workers,      # parallel I/O
+                        pin_memory=True)
+    
+    
+    for batch in tqdm(loader, "Doing FF projections..."):
+        # batch.shape == (batch_size, n_tiles, Z, H, W)
+       
+        # now you can FF-project each tile—for instance by reshaping:
+        data = batch["data"]
+        data = data.to(device, non_blocking=True)
+        b, t, z, h, w = data.shape
+        flat = data.view(b*t, z, h, w)            # treat each tile as its own volume
+        ff, _   = LoG_focus_stacker(flat, filter_size=3) 
+        
+        # prepare to save              # returns shape (b*t, H, W)
+        ff   = ff.view(b, t, h, w).cpu().numpy()
+        ff_list = [ff[i] for i in range(ff.shape[0])]
+
+        # build lists file and folder names
+        meta_dict = batch["path"]
+        n_tiles = len(meta_dict["tile_zpaths"])
+        well_names = meta_dict["well"]
+        time_indices = meta_dict["time_id"]
+        all_paths = [
+            Path(ff_dir) / f"ff_{w}_t{t:04}" / f"im_p{p:04}.jpg"
+            for w, t in zip(well_names, time_indices)
+            for p in range(n_tiles)
+        ]
+        
+        # us parallel processing to save images
+        save_images_parallel(images=ff_list,
+                             paths=all_paths,
+                             n_workers=n_write_threads)
+
+
+        print("Check")
         
     # load previous metadata
     df_path = META / f"{exp_name}_metadata.csv"
@@ -419,11 +372,10 @@ def build_ff_from_keyence(data_root: Path | str,
     else:
         df_prev = []
 
-    if meta_frames:
-        df = pd.concat(meta_frames + df_prev)
-        df.drop_duplicates(subset=["well", "time_string"])
-        df["Time Rel (s)"] = df["Time (s)"] - df["Time (s)"].min()
-        df.to_csv(META / f"{exp_name}_metadata.csv", index=False)
+    if meta_df.shape[0] > 0:
+        meta_df.drop_duplicates(subset=["well", "time_string"])
+        meta_df["Time Rel (s)"] = meta_df["Time (s)"] - meta_df["Time (s)"].min()
+        meta_df.to_csv(META / f"{exp_name}_metadata.csv", index=False)
 
     print('Done.')
 

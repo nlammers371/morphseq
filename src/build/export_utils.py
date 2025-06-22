@@ -1,13 +1,92 @@
 import numpy as np
 import cv2
-from typing import List
+from typing import List, Sequence
 from stitch2d.tile import OpenCVTile
 from skimage import feature, color
 from skimage import exposure, util
 from pathlib import Path
 import torch
 import torch.nn.functional as F
+from concurrent.futures import ThreadPoolExecutor
+import skimage.io as skio
+import os, psutil, torch
 
+
+def get_n_cpu_workers(frac: float = 0.5, max_workers: int = 24) -> int:
+    """
+    Use a fraction of your logical cores for I/O / CPU-bound tasks.
+    """
+    total = os.cpu_count() or 1
+    return min(max(1, int(total * frac)), max_workers)
+
+
+def estimate_batch_sizes(
+    sample_bytes: int,
+    gpu_fraction: float = 0.8,
+    cpu_fraction: float = 0.8,
+    cuda_device: int = 0,
+    max_ram_cpu: int = 1e9 * 32
+) -> tuple[int, int]:
+    """
+    Estimate how many images of the same shape you can fit in memory:
+      → gpu_bs: for CUDA tensors (or None if no GPU)
+      → cpu_bs: for CPU‐side batching/loading
+
+    `sample_image_path` should point to any one representative file.
+    """
+    
+
+    # 2) GPU estimate
+    if torch.cuda.is_available():
+        dev = torch.device(f"cuda:{cuda_device}")
+        props    = torch.cuda.get_device_properties(dev)
+        reserved = torch.cuda.memory_reserved(dev)
+        allocated= torch.cuda.memory_allocated(dev)
+        free_gpu = props.total_memory - reserved - allocated
+        gpu_bs_raw = int(np.floor(free_gpu * gpu_fraction / 4) * 4)
+        gpu_bs   = max(int(gpu_bs_raw // sample_bytes), 1)
+    else:
+        gpu_bs = 0  # or None, to signal “no GPU”
+
+    # 3) CPU estimate
+    vm = psutil.virtual_memory()
+    free_cpu = min(vm.free, max_ram_cpu)
+    cpu_bs_raw = int(np.floor(free_cpu * cpu_fraction / 4) * 4)
+    cpu_bs   = max(cpu_bs_raw // sample_bytes, 1)
+
+    return gpu_bs, cpu_bs
+
+
+def get_n_workers_for_pipeline(max_workers: int=8):
+    """
+    How many parallel subprocesses (e.g. for loading) should we spawn?
+    If you have a GPU, you might want fewer workers to reduce
+    overall memory pressure.
+    """
+    if torch.cuda.is_available():
+        return min(get_n_cpu_workers(frac=0.25), max_workers)
+    else:
+        return min(get_n_cpu_workers(frac=0.75), max_workers)
+    
+
+def _save_one_image(args):
+    img, path = args
+    skio.imsave(path, img, check_contrast=False)
+
+
+def save_images_parallel(images: Sequence[np.ndarray],
+                         paths:  Sequence[Path],
+                         n_workers: int | None = None):
+    """
+    images: list of 2D arrays (e.g. your ff tiles)
+    paths:  list of same length, where to write each array
+    n_workers: threads to use (defaults to cpu_count()-1)
+    """
+    if n_workers is None:
+        import os
+        n_workers = max(1, os.cpu_count() - 1)
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        pool.map(_save_one_image, zip(images, paths))
 
 # hacky solution for keyence images
 def _get_keyence_tile_orientation(experiment_date):

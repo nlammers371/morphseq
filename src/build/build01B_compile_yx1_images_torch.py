@@ -23,7 +23,7 @@ import nd2
 import skimage.io as skio
 import skimage
 from stitch2d import StructuredMosaic      
-from src.build.export_utils import LoG_focus_stacker, im_rescale
+from src.build.export_utils import (LoG_focus_stacker, im_rescale, get_n_cpu_workers, get_n_workers_for_pipeline, estimate_batch_sizes)
 # 
 log = logging.getLogger(__name__)
 logging.basicConfig(format="%(level_name)s | %(message)s", level=logging.INFO)
@@ -132,20 +132,7 @@ def _focus_stack(
 
     return ff_8 #(65535 - ff.cpu().numpy()).astype(np.uint16)
 
-def _write_ff(
-    out_root: Path,
-    well: str,
-    t_idx: int,
-    ch_idx: int,
-    ff: np.ndarray,
-    overwrite: bool = False,
-):
-    name = f"{well}_t{t_idx:04}_ch{ch_idx:02}_stitch.jpg"
-    out_root.mkdir(parents=True, exist_ok=True)
-    f = out_root / name
-    if f.exists() and not overwrite:
-        return
-    skio.imsave(f, ff, check_contrast=False)
+
 
 
 def build_ff_from_yx1(
@@ -159,6 +146,12 @@ def build_ff_from_yx1(
     metadata_only: bool = False,
     # n_z_keep: Sequence[int | None] | None = None,
 ):
+    
+    # figure out what we have to work with
+    n_write_threads = get_n_cpu_workers(frac=0.5)
+
+    # 2) decide how many workers to load/process stacks in parallel
+    n_load_workers  = get_n_workers_for_pipeline()
 
     par_flag = n_workers > 1
 
@@ -166,13 +159,6 @@ def build_ff_from_yx1(
     read_root = data_root / "raw_image_data" / "YX1"
     write_root = data_root / "built_image_data"
     meta_root = data_root / "metadata"
-
-    # exp_dirs = (
-    #     [read_root / d for d in dir_list] if dir_list else _find_dirs(read_root)
-    # )
-    # if n_z_keep is None:
-    #     n_z_keep = [None] * len(exp_dirs)
-
 
     # for exp_path, z_keep in zip(exp_dirs, n_z_keep):
     exp_path = read_root / exp_name
@@ -183,16 +169,13 @@ def build_ff_from_yx1(
     shape_twzcxy = nd.shape  # T,W,Z,C,Y,X
     n_t, n_w, n_z = shape_twzcxy[:3]
 
+    # calculate batch size
+    sample_bytes = np.product(shape_twzcxy[2:]) * 4 # factor of 4 for 16 but
+    batch_size = estimate_batch_sizes(sample_bytes)
+
     dask_arr = nd.to_dask()  # (T,W,Z,C,Y,X)
     channel_names = [c.channel.name for c in nd.frame_metadata(0).channels]
     bf_idx = channel_names.index("BF")
-
-    # non_bf_indices = [i for i in range(len(channel_names)) if channel_names[i] != "BF"]
-
-    # if n_channels > 1:
-    #     fluo_dir = os.path.join(write_dir, "stitched_fluo_images", sub_name)
-    #     if not os.path.isdir(fluo_dir):
-    #         os.makedirs(fluo_dir)
 
 
     # get image resolution
@@ -268,12 +251,6 @@ def build_ff_from_yx1(
         time_ind_vec += np.arange(n, n_w*n_t, n_w).tolist()
     well_df["Time (s)"] = frame_time_vec[time_ind_vec]
 
-    # get device
-    # device = (
-    #         "cuda"
-    #         if torch.cuda.is_available() #and (not par_flag)
-    #         else "cpu"
-    #     )
 
     if device == "cpu":
         print("Warning: using CPU. This may be quite slow. GPU recommended.")
