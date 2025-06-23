@@ -71,7 +71,71 @@ ccs_mseq = new_cell_count_set(cds_mseq,
 
 # colData(ccs_mseq)$dist_from_spline
 
-median_ctrlinj_dist <- median(colData(ccs_mseq)$dist_from_spline[colData(ccs_mseq)$perturbation == "ctrl-inj"], na.rm = TRUE)
+# for each timepoint in timepoint column and for each unique val in $perturbation get assign it as severe if it is above that subsets median thhreshold 
+
+
+library(dplyr)
+
+# Convert colData to a dataframe for easier manipulation
+coldata_df <- as.data.frame(colData(ccs_mseq))
+
+# Group by timepoint and perturbation, compute the median, and assign severity
+coldata_df <- coldata_df %>%
+  group_by(timepoint, perturbation) %>%
+  mutate(
+    group_median = median(dist_from_spline, na.rm = TRUE),
+    m_severity = ifelse(dist_from_spline > group_median, "severe", "not_severe")
+  ) %>%
+  ungroup()
+
+# Assign the new m_severity column back to colData
+colData(ccs_mseq)$m_severity <- coldata_df$m_severity
+
+
+
+
+# First, compute the per-group median:
+group_thresholds <- coldata_df %>%
+  group_by(timepoint, perturbation) %>%
+  summarize(m_severe_threshold = median(dist_from_spline, na.rm = TRUE), .groups = "drop")
+
+library(ggplot2)
+
+# Plot the violins with dashed black lines at each median threshold, localized to each violin
+p <- ggplot(coldata_df, aes(x = factor(timepoint), y = dist_from_spline, fill = perturbation)) +
+  geom_violin(position = position_dodge(width = 0.7)) +
+  geom_segment(
+    data = group_thresholds,
+    aes(
+      x = as.numeric(factor(timepoint)) - 0.25, 
+      xend = as.numeric(factor(timepoint)) + 0.25,
+      y = m_severe_threshold, 
+      yend = m_severe_threshold,
+      group = perturbation
+    ),
+    color = "black",
+    linetype = "dashed",  # Changed from "solid" to "dashed"
+    size = 0.8,
+    position = position_dodge(width = 0.7)
+  ) +
+  guides(
+    fill = guide_legend(title = "Perturbation")
+  ) +
+  theme_classic() +
+  labs(
+    x = "Timepoint",
+    y = "Distance from spline"
+  )
+
+# Save the plot
+ggsave(
+  filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/dist_from_spline_by_timepoint_perturbation_msevere.pdf",
+  plot = p,
+  width = 6,
+  height = 4
+)
+
+# median_ctrlinj_dist <- median(colData(ccs_mseq)$dist_from_spline[colData(ccs_mseq)$perturbation == "ctrl-inj"], na.rm = TRUE)
 
 
 # # Create the plot
@@ -81,7 +145,7 @@ median_ctrlinj_dist <- median(colData(ccs_mseq)$dist_from_spline[colData(ccs_mse
 
 # # Save the plot to a Pdf
 # ggsave(
-#   filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/dist_from_spline_by_timepoint_perturbation_noline.pdf",
+#   filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250326/dist_from_spline_by_timepoint_perturbation_noline.pdf",
 #   plot = p,
 #   width = 6,
 #   height = 4
@@ -98,7 +162,7 @@ median_ctrlinj_dist <- median(colData(ccs_mseq)$dist_from_spline[colData(ccs_mse
 
 # # Save the plot to a Pdf
 # ggsave(
-#   filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/dist_from_spline_by_timepoint_perturbation_ctrlline.pdf",
+#   filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250326/dist_from_spline_by_timepoint_perturbation_ctrlline.pdf",
 #   plot = p,
 #   width = 6,
 #   height = 4
@@ -106,20 +170,12 @@ median_ctrlinj_dist <- median(colData(ccs_mseq)$dist_from_spline[colData(ccs_mse
 
 
 
-colData(ccs_mseq)$m_severity <- ifelse(
-  colData(ccs_mseq)$dist_from_spline < median_ctrlinj_dist,
-  "not_severe",
-  "severe")
-
 
 
 reg_formula_1= "~ ns( timepoint , knots= c(48) ) + ns( timepoint , knots= c(48) ):perturbation + m_severity:perturbation + offset(log(Offset))"
 
 
 ccm_mseq  = new_cell_count_model(ccs_mseq, main_model_formula_str =reg_formula_1, num_threads = 6)
-
-
-# The two levels for perturbation
 
 # The two levels for perturbation
 perturbations <- c("ctrl-inj", "lmx1ba;lmx1bb")
@@ -205,14 +261,14 @@ all_comparisons <- dplyr::bind_rows(comparison_list)
 # Write out the original cond_estimates
 write.csv(
   cond_estimates,
-  "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/cond_estimates.csv",
+  "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/data/cond_estimates.csv",
   row.names = FALSE
 )
 
 # Write out our new comparison table
 write.csv(
   all_comparisons,
-  "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/cond_comparisons.csv",
+  "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/data/cond_comparisons.csv",
   row.names = FALSE
 )
 
@@ -226,7 +282,7 @@ write.csv(
 
 
 # Create a single PDF file to contain all plots
-pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/lmx1b_all_timepoint_severe_vs_not.pdf", width = 8, height = 6)
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/lmx1b_all_timepoint_severe_vs_not.pdf", width = 8, height = 6)
 # Get unique timepoints
 unique_timepoints <- unique(cond_estimates$timepoint)[0]
 for(tp in unique_timepoints) {
@@ -273,7 +329,7 @@ library(ggrepel)  # For text labels that don't overlap
 unique_timepoints <- unique(cond_estimates$timepoint)
 
 # Create a single PDF file to contain all scatter plots
-pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/lmx1b_abundance_scatter_plots.pdf", 
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/lmx1b_abundance_scatter_plots.pdf", 
     width = 8, height = 7)
 
 for(tp in unique_timepoints) {
@@ -360,7 +416,7 @@ cat("All lmx1b abundance scatter plots saved to a single PDF file\n")
 
 
 
-pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/ctrl_inj_abundance_scatter_plots.pdf", 
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/ctrl_inj_abundance_scatter_plots.pdf", 
     width = 8, height = 7)
 
 for(tp in unique_timepoints) {
@@ -441,247 +497,7 @@ for(tp in unique_timepoints) {
 # Close the PDF device
 dev.off()
 
-cat("All ctrl-inj abundance scatter plots saved to a single PDF file\n")
-
-
-
-library(dplyr)
-library(ggplot2)
-library(VennDiagram)
-library(grid)
-
-# Get unique timepoints
-unique_timepoints <- unique(cond_estimates$timepoint)
-
-# Create a PDF for the Venn diagrams
-pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/affected_populations_venn.pdf", 
-    width = 8, height = 7)
-
-# To store results for CSV export
-all_results <- list()
-
-
-# Store all affected cell populations across timepoints
-all_lmx1b_affected <- c()
-all_ctrlinj_affected <- c()
-
-# For each timepoint, create a Venn diagram
-for(tp in unique_timepoints) {
-  # Get cell types affected in lmx1b
-  cond_not_lmx1b <- cond_estimates %>%
-    filter(timepoint == tp, m_severity == "not_severe", perturbation == "lmx1ba;lmx1bb")
-  cond_sev_lmx1b <- cond_estimates %>%
-    filter(timepoint == tp, m_severity == "severe", perturbation == "lmx1ba;lmx1bb")
-  
-  # Skip if data is missing
-  if(nrow(cond_not_lmx1b) == 0 || nrow(cond_sev_lmx1b) == 0) {next}
-  
-  # Compare abundances for lmx1b
-  cmp_lmx1b <- compare_abundances(ccm_mseq, cond_not_lmx1b, cond_sev_lmx1b)
-  
-  # Get affected cell types in lmx1b (|delta_log_abund| > 1)
-  lmx1b_affected <- cmp_lmx1b %>%
-    filter(abs(delta_log_abund) > 1) %>%
-    pull(cell_group)
-  
-  # Get cell types affected in ctrl-inj
-  cond_not_ctrl <- cond_estimates %>%
-    filter(timepoint == tp, m_severity == "not_severe", perturbation == "ctrl-inj")
-  cond_sev_ctrl <- cond_estimates %>%
-    filter(timepoint == tp, m_severity == "severe", perturbation == "ctrl-inj")
-  
-  # Skip if data is missing
-  if(nrow(cond_not_ctrl) == 0 || nrow(cond_sev_ctrl) == 0) {
-    next
-  }
-  
-  # Compare abundances for ctrl-inj
-  cmp_ctrl <- compare_abundances(ccm_mseq, cond_not_ctrl, cond_sev_ctrl)
-  
-  # Get affected cell types in ctrl-inj (|delta_log_abund| > 1)
-  ctrl_affected <- cmp_ctrl %>%
-    filter(abs(delta_log_abund) > 1) %>%
-    pull(cell_group)
-  
-  # Add to the all timepoints lists
-  all_lmx1b_affected <- c(all_lmx1b_affected, lmx1b_affected)
-  all_ctrlinj_affected <- c(all_ctrlinj_affected, ctrl_affected)
-  
-  # Create Venn diagram for this timepoint
-  venn_list <- list(
-    "lmx1ba;lmx1bb" = lmx1b_affected,
-    "ctrl-inj" = ctrl_affected
-  )
-  
-  # Calculate numbers for the Venn diagram
-  n_lmx1b <- length(lmx1b_affected)
-  n_ctrl <- length(ctrl_affected)
-  n_both <- length(intersect(lmx1b_affected, ctrl_affected))
-  
-  # Create the Venn diagram
-  venn <- venn.diagram(
-    x = venn_list,
-    filename = NULL,
-    category.names = c("lmx1ba;lmx1bb", "ctrl-inj"),
-    main = paste("Affected Cell Types at", tp, "hpf"),
-    sub = paste("Cell types with |log fold change| > 1"),
-    main.cex = 1.2,
-    sub.cex = 0.8,
-    fill = c("#B19CD9", "#93C6E7"),  # Soft purple and soft blue
-    alpha = 0.5,
-    cex = 1,
-    cat.cex = 0.8,
-    cat.pos = c(0, 0),
-    cat.dist = c(0.05, 0.05)
-  )
-  
-  # Print the Venn diagram to the PDF
-  grid.newpage()
-  grid.draw(venn)
-  
-  # Print the cell types in each section
-  grid.newpage()
-  
-  # Create a text representation of the Venn results
-  lmx1b_only <- setdiff(lmx1b_affected, ctrl_affected)
-  ctrl_only <- setdiff(ctrl_affected, lmx1b_affected)
-  both <- intersect(lmx1b_affected, ctrl_affected)
-  
-  # Add to results list for CSV export
-  all_results[[paste0("timepoint_", tp)]] <- list(
-    timepoint = tp,
-    lmx1b_only = lmx1b_only,
-    ctrl_only = ctrl_only,
-    both = both
-  )
-  
-  text_content <- paste0(
-    "Timepoint: ", tp, " hpf\n\n",
-    "lmx1ba;lmx1bb only (", length(lmx1b_only), " cell types):\n",
-    paste(lmx1b_only, collapse = ", "), "\n\n",
-    "ctrl-inj only (", length(ctrl_only), " cell types):\n",
-    paste(ctrl_only, collapse = ", "), "\n\n",
-    "Both (", length(both), " cell types):\n",
-    paste(both, collapse = ", ")
-  )
-  
-  grid.text(text_content, x = 0.5, y = 0.5, just = "center", gp = gpar(fontsize = 10))
-}
-
-# Create a Venn diagram for all timepoints
-# Remove duplicates
-all_lmx1b_affected <- unique(all_lmx1b_affected)
-all_ctrlinj_affected <- unique(all_ctrlinj_affected)
-
-# Create Venn diagram for all timepoints
-venn_list_all <- list(
-  "lmx1ba;lmx1bb" = all_lmx1b_affected,
-  "ctrl-inj" = all_ctrlinj_affected
-)
-
-# Calculate numbers for the Venn diagram
-n_lmx1b_all <- length(all_lmx1b_affected)
-n_ctrl_all <- length(all_ctrlinj_affected)
-n_both_all <- length(intersect(all_lmx1b_affected, all_ctrlinj_affected))
-
-# Create the Venn diagram
-venn_all <- venn.diagram(
-  x = venn_list_all,
-  filename = NULL,
-  category.names = c("lmx1ba;lmx1bb", "ctrl-inj"),
-  main = "Affected Cell Types Across All Timepoints",
-  sub = "Cell types with |log fold change| > 1",
-  main.cex = 1.2,
-  sub.cex = 0.8,
-  fill = c("#B19CD9", "#93C6E7"),  # Soft purple and soft blue
-  alpha = 0.5,
-  cex = 1,
-  cat.cex = 0.8,
-  cat.pos = c(0, 0),
-  cat.dist = c(0.05, 0.05)
-)
-
-# Print the Venn diagram to the PDF
-grid.newpage()
-grid.draw(venn_all)
-
-# Print the cell types in each section
-grid.newpage()
-
-# Create a text representation of the Venn results
-lmx1b_only_all <- setdiff(all_lmx1b_affected, all_ctrlinj_affected)
-ctrl_only_all <- setdiff(all_ctrlinj_affected, all_lmx1b_affected)
-both_all <- intersect(all_lmx1b_affected, all_ctrlinj_affected)
-
-# Add to results list for CSV export
-all_results[["all_timepoints"]] <- list(
-  timepoint = "all",
-  lmx1b_only = lmx1b_only_all,
-  ctrl_only = ctrl_only_all,
-  both = both_all
-)
-
-text_content_all <- paste0(
-  "All Timepoints Combined\n\n",
-  "lmx1ba;lmx1bb only (", length(lmx1b_only_all), " cell types):\n",
-  paste(lmx1b_only_all, collapse = ", "), "\n\n",
-  "ctrl-inj only (", length(ctrl_only_all), " cell types):\n",
-  paste(ctrl_only_all, collapse = ", "), "\n\n",
-  "Both (", length(both_all), " cell types):\n",
-  paste(both_all, collapse = ", ")
-)
-
-grid.text(text_content_all, x = 0.5, y = 0.5, just = "center", gp = gpar(fontsize = 10))
-
-# Close the PDF
-dev.off()
-
-# Create the directory if it doesn't exist
-dir.create("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/", 
-           showWarnings = FALSE, recursive = TRUE)
-
-# Export results to CSV files
-for (tp_name in names(all_results)) {
-  result <- all_results[[tp_name]]
-  
-  # Create data frames for each category
-  lmx1b_only_df <- data.frame(
-    timepoint = result$timepoint,
-    cell_group = result$lmx1b_only,
-    category = "lmx1b_only"
-  )
-  
-  ctrl_only_df <- data.frame(
-    timepoint = result$timepoint,
-    cell_group = result$ctrl_only,
-    category = "ctrl_only"
-  )
-  
-  both_df <- data.frame(
-    timepoint = result$timepoint,
-    cell_group = result$both,
-    category = "both"
-  )
-  
-  # Combine into one data frame
-  combined_df <- rbind(lmx1b_only_df, ctrl_only_df, both_df)
-  
-  # Create filename
-  if (tp_name == "all_timepoints") {
-    filename <- "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_all_timepoints.csv"
-  } else {
-    filename <- paste0("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_", result$timepoint, ".csv")
-  }
-  
-  # Write to CSV
-  write.csv(combined_df, filename, row.names = FALSE)
-}
-
-cat("Venn diagrams saved to affected_populations_venn.pdf\n")
-cat("CSV files with affected populations saved to the data/lmx1b_vs_ctrlinj_timepoints/ directory\n")
-
-#####
-
+source("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/venn_diagram_script.r")
 
 # Subset the data into three lists by category
 lmx1b_only_list <- combined_df[combined_df$category == "lmx1b_only", ]$cell_group
@@ -722,7 +538,7 @@ p <- plot_cell_type_perturb_kinetics(perturb_ccm_lmx1b,
 
 
 # Define the filename and save the plot as a PDF
-ggsave(filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/plots/cell_type_perturb_kinetics.pdf", 
+ggsave(filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/plots/cell_type_severe_lmx1bvs_ctrl_perturb_kinetics.pdf", 
        plot = p, 
        device = "pdf", 
        width = 20, 
@@ -730,6 +546,75 @@ ggsave(filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/
 
 # Print confirmation message
 message("Plot saved as cell_type_perturb_kinetics.pdf")
+
+# 1) Identify the embryo_IDs for lmx1b
+
+colData(ccs_mseq[ colData(ccs_mseq)$perturbation == "lmx1ba;lmx1bb",])$perturbation
+
+lmx1b_embryo_ID <- colData(ccs_mseq[ ,colData(ccs_mseq)$perturbation == "lmx1ba;lmx1bb"])$sample
+
+colData(cds_mseq)$m_severity <-
+  colData(ccs_mseq)$m_severity[
+    match(colData(cds_mseq)$embryo_ID, colData(ccs_mseq)$sample)
+  ]
+
+
+# 2) Subset the CDS object to include only those embryo_IDs
+cds_mseq_lmx1b <- cds_mseq[,colData(cds_mseq)$embryo_ID %in% lmx1b_embryo_ID]
+cds_mseq_lmx1b <- cds_mseq_lmx1b[, colData(cds_mseq_lmx1b)$cell_type %in% combined_df$cell_group]
+
+# 3) Create a new column by concatenating 'perturbation' and 'm_severity'
+colData(cds_mseq_lmx1b)$perturbation_severity <-
+  paste(colData(cds_mseq_lmx1b)$perturbation,
+        colData(cds_mseq_lmx1b)$m_severity,
+        sep = "_")
+
+# 4) Get the unique values of the new column
+unique_vals <- unique(colData(cds_mseq_lmx1b)$perturbation_severity)
+unique_vals
+ccm_mseq_lmx1b = fit_mt_models(cds_mseq_lmx1b, 
+                             sample_group = "embryo_ID", 
+                             cell_group = "cell_type", 
+                             perturbation_col = "perturbation_severity", 
+                             ctrl_ids = c("lmx1ba;lmx1bb_not_severe"),
+                             mt_ids = c("lmx1ba;lmx1bb_severe"),
+                             num_threads=6)
+
+perturb_ccm_lmx1b_only <- ccm_mseq_lmx1b$perturb_ccm[[1]]
+
+library(purrr)
+
+# Load necessary library
+library(ggplot2)
+
+p <- plot_cell_type_perturb_kinetics(perturb_ccm_lmx1b_only, 
+                                newdata = tibble("expt"= c("LMX1B") ), 
+                                raw_counts = F, 
+                                nrow = 5) + 
+                                xlab("time")
+
+
+# Define the filename and save the plot as a PDF
+ggsave(filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/plots/cell_type_severe_lmx1bvs_nonseverelmx1b_perturb_kinetics_exptLMX1B.pdf", 
+       plot = p, 
+       device = "pdf", 
+       width = 20, 
+       height = 12)
+
+p <- plot_cell_type_perturb_kinetics(perturb_ccm_lmx1b_only, 
+                                newdata = tibble("expt"= c("LMX1Bearly") ), 
+                                raw_counts = F, 
+                                nrow = 5) + 
+                                xlab("time")
+
+
+# Define the filename and save the plot as a PDF
+ggsave(filename = "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/plots/cell_type_severe_lmx1bvs_nonseverelmx1b_perturb_kinetics_exptLMX1Bearly.pdf", 
+       plot = p, 
+       device = "pdf", 
+       width = 20, 
+       height = 12)
+
 
 
 

@@ -1,4 +1,3 @@
-
 library(dplyr)
 library(ggplot2)
 library(VennDiagram)
@@ -8,7 +7,7 @@ library(grid)
 unique_timepoints <- unique(cond_estimates$timepoint)
 
 # Create a PDF for the Venn diagrams
-pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/affected_populations_venn.pdf", 
+pdf("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/affected_populations_venn.pdf", 
     width = 8, height = 7)
 
 # To store results for CSV export
@@ -99,6 +98,11 @@ for(tp in unique_timepoints) {
   grid.newpage()
   grid.draw(venn)
   
+  # Create a text representation of the Venn results
+  lmx1b_only <- setdiff(lmx1b_affected, ctrl_affected)
+  ctrl_only <- setdiff(ctrl_affected, lmx1b_affected)
+  both <- intersect(lmx1b_affected, ctrl_affected)
+  
   # Add cell type names directly to the diagram
   grid.newpage()
   
@@ -143,11 +147,6 @@ for(tp in unique_timepoints) {
   # Print the cell types in each section
   grid.newpage()
   
-  # Create a text representation of the Venn results
-  lmx1b_only <- setdiff(lmx1b_affected, ctrl_affected)
-  ctrl_only <- setdiff(ctrl_affected, lmx1b_affected)
-  both <- intersect(lmx1b_affected, ctrl_affected)
-  
   # Add to results list for CSV export
   all_results[[paste0("timepoint_", tp)]] <- list(
     timepoint = tp,
@@ -173,6 +172,11 @@ for(tp in unique_timepoints) {
 # Remove duplicates
 all_lmx1b_affected <- unique(all_lmx1b_affected)
 all_ctrlinj_affected <- unique(all_ctrlinj_affected)
+
+# Create text representation for all timepoints BEFORE creating the diagram
+lmx1b_only_all <- setdiff(all_lmx1b_affected, all_ctrlinj_affected)
+ctrl_only_all <- setdiff(all_ctrlinj_affected, all_lmx1b_affected)
+both_all <- intersect(all_lmx1b_affected, all_ctrlinj_affected)
 
 # Create Venn diagram for all timepoints
 venn_list_all <- list(
@@ -258,11 +262,6 @@ popViewport()
 # Print the cell types in each section
 grid.newpage()
 
-# Create a text representation of the Venn results
-lmx1b_only_all <- setdiff(all_lmx1b_affected, all_ctrlinj_affected)
-ctrl_only_all <- setdiff(all_ctrlinj_affected, all_lmx1b_affected)
-both_all <- intersect(all_lmx1b_affected, all_ctrlinj_affected)
-
 # Add to results list for CSV export
 all_results[["all_timepoints"]] <- list(
   timepoint = "all",
@@ -287,7 +286,7 @@ grid.text(text_content_all, x = 0.5, y = 0.5, just = "center", gp = gpar(fontsiz
 dev.off()
 
 # Create the directory if it doesn't exist
-dir.create("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/", 
+dir.create("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/data/lmx1b_vs_ctrlinj_timepoints/", 
            showWarnings = FALSE, recursive = TRUE)
 
 # Export results to CSV files
@@ -318,9 +317,9 @@ for (tp_name in names(all_results)) {
   
   # Create filename
   if (tp_name == "all_timepoints") {
-    filename <- "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_all_timepoints.csv"
+    filename <- "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_all_timepoints.csv"
   } else {
-    filename <- paste0("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250310/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_", result$timepoint, ".csv")
+    filename <- paste0("/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20250325/data/lmx1b_vs_ctrlinj_timepoints/affected_populations_", result$timepoint, ".csv")
   }
   
   # Write to CSV
@@ -329,30 +328,3 @@ for (tp_name in names(all_results)) {
 
 cat("Venn diagrams saved to affected_populations_venn.pdf\n")
 cat("CSV files with affected populations saved to the data/lmx1b_vs_ctrlinj_timepoints/ directory\n")
-
-
-
-
-
-
-wt_expt_ccm = new_cell_count_model(wt_ccs, 
-                                   main_model_formula_str = "ns(timepoint, df=3)", 
-                                   nuisance_model_formula_str = "~ expt")
-
-batches = data.frame(batch = unique(colData(wt_ccs)$expt))                                   
-batches = batches %>% mutate(tp_preds = purrr::map(.f = function(batch) {
- estimate_abundances_over_interval(wt_expt_ccm,
-                                            start_time,
-                                            stop_time,
-                                            knockout=FALSE,
-                                            interval_col="timepoint",
-                                            interval_step=2,
-                                            expt = batch)
-}, .x=batch))
-
-wt_timepoint_pred_df = batches %>% select(tp_preds) %>% tidyr::unnest(tp_preds)
-
-ggplot(wt_timepoint_pred_df, aes(x = timepoint)) +
-  geom_line(aes(y = exp(log_abund) + exp(log_abund_detection_thresh), color=expt)) +
-  facet_wrap(~cell_group, scales="free_y", nrow = 2) + monocle3:::monocle_theme_opts() + 
-  ggtitle("wild-type kinetics by expt")

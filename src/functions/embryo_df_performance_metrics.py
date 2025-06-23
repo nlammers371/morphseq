@@ -2720,3 +2720,354 @@ def combine_results_dict(results_dict):
 # This will produce a DataFrame with each row corresponding to a (model_index, Perturbation) pair,
 # and columns from across_seg_df, within_seg_measures, and dispersion_metrics.
 
+
+
+
+def plot_avg_predictions_multiclass(
+    test_df, 
+    y_pred_proba, 
+    pert_comparisons, 
+    pert_plotting=None, 
+    window_size=3, 
+    max_hpf=40,
+    plot=True,
+    save_dir=None,
+    filename=None,
+    highlight_embryos=None
+):
+    """
+    Visualizes average model predictions over time for each embryo in a multiclass scenario using Plotly.
+    
+    Parameters:
+    - test_df (pd.DataFrame): Contains 'embryo_id', 'snip_id', 'class_num', and 'predicted_stage_hpf'.
+    - y_pred_proba (np.ndarray): Predicted probabilities from the model.
+    - pert_comparisons (list): All perturbations/classes used in the model.
+    - pert_plotting (list, optional): Subset of perturbations to plot. Defaults to all.
+    - window_size (int): Sliding window size for averaging. Defaults to 3.
+    - max_hpf (int): Maximum hours post-fertilization (hpf) to display. Defaults to 40.
+    - plot (bool): Whether to display the plot interactively. Defaults to True.
+    - save_dir (str, optional): Directory to save the plot to. If provided, the plot will be saved.
+    - filename (str, optional): Filename to save the plot as. Defaults to "average_model_predictions_multiclass.html".
+    - highlight_embryos (list of [str, str] or [str], optional): List of embryo IDs with optional colors. Defaults to None.
+    
+    Returns:
+    - str or None: Path to the saved file if save_dir is provided, otherwise None
+    """
+    def generate_pastel_colors(n):
+        """Generates n unique pastel colors."""
+        cmap = plt.cm.gist_rainbow
+        return [mcolors.rgb2hex(cmap(i / n)) for i in range(n)]
+
+    def rgba_to_rgba_str(rgba_tuple):
+        r, g, b, a = rgba_tuple
+        return f'rgba({int(r*255)}, {int(g*255)}, {int(b*255)}, {a})'
+
+    # Ensure 'snip_id' is present in test_df for hover information
+    if 'snip_id' not in test_df.columns:
+        if 'embryo_id' in test_df.columns:
+            test_df['snip_id'] = test_df['embryo_id']
+        else:
+            raise ValueError("DataFrame must contain 'snip_id' or 'embryo_id' columns for hover information.")
+    
+    # Use pert_comparisons as provided without reordering
+    pert_comparisons = list(pert_comparisons)
+    
+    # Set perturbations to plot (also without reordering)
+    if pert_plotting is None:
+        pert_plotting = pert_comparisons
+    else:
+        pert_plotting = list(pert_plotting)
+    
+    # Map perturbations to labels and vice versa
+    perturbation_to_label = {pert: idx for idx, pert in enumerate(pert_comparisons)}
+    label_to_perturbation = {idx: pert for idx, pert in enumerate(pert_comparisons)}
+    
+    # Assign colors using tab10 colormap
+    cmap = plt.get_cmap('tab10')
+    colors = [rgba_to_rgba_str(cmap(i % 10)) for i in range(len(pert_plotting))]
+    perturbation_to_color = {pert: colors[i] for i, pert in enumerate(pert_plotting)}
+    
+    # Add predicted probabilities to test_df
+    proba_columns = [f'proba_{i}' for i in range(y_pred_proba.shape[1])]
+    proba_df = pd.DataFrame(y_pred_proba, columns=proba_columns).reset_index(drop=True)
+    test_df = test_df.reset_index(drop=True)
+    test_df = pd.concat([test_df, proba_df], axis=1)
+    
+    # Filter test_df based on pert_plotting and max_hpf
+    class_nums_to_plot = [perturbation_to_label[pert] for pert in pert_plotting]
+    test_df_filtered = test_df[
+        (test_df['class_num'].isin(class_nums_to_plot)) & 
+        (test_df['predicted_stage_hpf'] <= max_hpf)
+    ]
+    
+    # Process highlighted embryos
+    highlight_dict = {}
+    pastel_colors = generate_pastel_colors(20)  # Generate 20 unique pastel colors
+    
+    if highlight_embryos:
+        for i, entry in enumerate(highlight_embryos):
+            # Process each highlight entry
+            if isinstance(entry, list):
+                if len(entry) == 1:  # Only embryo_id provided
+                    embryo_id, color = entry[0], pastel_colors[i % len(pastel_colors)]
+                elif len(entry) == 2:  # Both embryo_id and color provided
+                    embryo_id, color = entry
+                else:
+                    print(f"Invalid highlight entry: {entry}. Skipping.")
+                    continue
+            else:  # Single string entry
+                embryo_id, color = entry, pastel_colors[i % len(pastel_colors)]
+                
+            # Add to highlight_dict if embryo exists in the filtered data
+            if embryo_id in test_df_filtered['embryo_id'].values:
+                highlight_dict[embryo_id] = color
+            else:
+                print(f"Embryo ID '{embryo_id}' not found in the filtered DataFrame. Skipping.")
+    
+    # Separate regular and highlighted embryos
+    highlighted_ids = set(highlight_dict.keys())
+    regular_embryo_ids = [eid for eid in test_df_filtered['embryo_id'].unique() if eid not in highlighted_ids]
+    
+    # Initialize Plotly figure
+    fig = go.Figure()
+    
+    # Function to plot embryos (regular or highlighted)
+    def plot_embryos(embryo_ids, color_mapping, is_highlight=False):
+        for embryo_id in embryo_ids:
+            embryo_data = test_df_filtered[test_df_filtered['embryo_id'] == embryo_id].copy()
+            
+            # Get the embryo's perturbation label
+            embryo_class_num = int(embryo_data['class_num'].iloc[0])
+            embryo_perturbation = label_to_perturbation.get(embryo_class_num, None)
+            
+            if embryo_perturbation not in pert_plotting:
+                continue
+            
+            # Sort by 'predicted_stage_hpf'
+            embryo_data.sort_values('predicted_stage_hpf', inplace=True)
+            
+            # Get prediction probabilities based on classification type
+            proba_col = f'proba_{embryo_class_num}'
+            
+            if proba_col not in embryo_data.columns:
+                print(f"Warning: {proba_col} not found. Skipping embryo_id {embryo_id}.")
+                continue
+                
+            # Use direct probabilities (simplified)
+            prediction = embryo_data[proba_col]
+            
+            # Apply sliding window average
+            embryo_data['avg_prediction'] = prediction.rolling(
+                window=window_size, min_periods=1
+            ).mean()
+            embryo_data['avg_time'] = embryo_data['predicted_stage_hpf'].rolling(
+                window=window_size, min_periods=1
+            ).mean()
+            
+            # Determine styling based on highlight status
+            if is_highlight:
+                color = color_mapping.get(embryo_id, perturbation_to_color[embryo_perturbation])
+                marker_size = 10
+                line_width = 5
+            else:
+                color = perturbation_to_color[embryo_perturbation]
+                marker_size = 4
+                line_width = 2
+            
+            # Add line trace
+            fig.add_trace(
+                go.Scatter(
+                    x=embryo_data['avg_time'],
+                    y=embryo_data['avg_prediction'],
+                    mode='lines',
+                    line=dict(color=color, width=line_width),
+                    opacity=0.3,
+                    showlegend=False,
+                    hoverinfo='skip'
+                )
+            )
+            
+            # Add scatter trace with hover info
+            fig.add_trace(
+                go.Scatter(
+                    x=embryo_data['avg_time'],
+                    y=embryo_data['avg_prediction'],
+                    mode='markers',
+                    marker=dict(color=color, size=marker_size),
+                    showlegend=False,
+                    hovertemplate=(
+                        'Snip ID: %{customdata}<br>'
+                        'Mean Predicted Stage (hpf): %{x:.2f}<br>'
+                        'Avg Prediction Probability: %{y:.2f}<extra></extra>'
+                    ),
+                    customdata=embryo_data['snip_id']
+                )
+            )
+    
+    # Plot regular embryos first
+    plot_embryos(regular_embryo_ids, perturbation_to_color, is_highlight=False)
+    
+    # Plot highlighted embryos last with specified colors
+    if highlighted_ids:
+        plot_embryos(list(highlighted_ids), highlight_dict, is_highlight=True)
+    
+    # Add legend entries for perturbations
+    for pert in pert_plotting:
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode='markers',
+                marker=dict(color=perturbation_to_color[pert], size=10),
+                legendgroup=pert,
+                showlegend=True,
+                name=pert
+            )
+        )
+    
+    # Add legend entries for highlighted embryos
+    for embryo_id, color in highlight_dict.items():
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode='markers',
+                marker=dict(color=color, size=10),
+                legendgroup=f'Highlight: {embryo_id}',
+                showlegend=True,
+                name=f'Highlight: {embryo_id}',
+            )
+        )
+    
+    # Update layout
+    fig.update_layout(
+        title='Average Model Predictions Over Time per Embryo',
+        xaxis_title='Mean Predicted Stage (hpf)',
+        yaxis_title='Avg Prediction Probability',
+        legend_title='Embryo Type',
+        font=dict(size=14),
+        title_font_size=18,
+        legend=dict(
+            itemsizing='constant',
+            font=dict(size=12)
+        ),
+        template='plotly_white',
+        hovermode='closest',
+        width=1000,
+        height=700
+    )
+    
+    # Update axes
+    fig.update_xaxes(
+        showgrid=True, gridwidth=1, gridcolor='LightGray',
+        tickfont=dict(size=12)
+    )
+    fig.update_yaxes(
+        showgrid=True, gridwidth=1, gridcolor='LightGray',
+        tickfont=dict(size=12)
+    )
+    
+    # Save the plot if save_dir is provided
+    saved_path = None
+    if save_dir:
+        # Create directory if it doesn't exist
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Use provided filename or default
+        plot_filename = filename or "average_model_predictions_multiclass.html"
+        
+        # Create full path
+        plot_path = os.path.join(save_dir, plot_filename)
+        
+        # Save the plot
+        fig.write_html(plot_path)
+        print(f"Average Model Predictions plot saved to: {plot_path}")
+        saved_path = plot_path
+    
+    # Display the plot if plot=True
+    if plot:
+        fig.show()
+        
+    return saved_path
+def split_train_test_stratified(df, pert_pair, pert_column='phenotype', embryo_id_column='embryo_id', test_size=0.2, random_state=42):
+    """
+    Splits a dataframe into training and test sets based on unique 'embryo_id',
+    ensuring each perturbation in the pair has a proper train/test split.
+
+    Parameters:
+    df (pd.DataFrame): The dataframe containing the embryo data
+    pert_pair (list): List of two perturbations to compare
+    pert_column (str): Column name for perturbation/phenotype
+    embryo_id_column (str): Column name for embryo ID
+    test_size (float): The proportion of the dataset to include in the test split
+    random_state (int): The random seed for reproducibility
+
+    Returns:
+    train_df (pd.DataFrame): The training dataframe containing only the filtered perturbations
+    test_df (pd.DataFrame): The test dataframe containing only the filtered perturbations
+    """
+    # Filter dataframe to only include the perturbations in the pair
+    filtered_df = df[df[pert_column].isin(pert_pair)].copy()
+    
+    if filtered_df.empty:
+        raise ValueError(f"No data found for perturbations: {pert_pair}")
+    
+    # Get unique embryo IDs for each perturbation
+    train_ids = []
+    test_ids = []
+    
+    for pert in pert_pair:
+        pert_df = filtered_df[filtered_df[pert_column] == pert]
+        
+        if pert_df.empty:
+            print(f"Warning: No data found for perturbation '{pert}'")
+            continue
+            
+        pert_embryo_ids = pert_df[embryo_id_column].unique()
+        
+        if len(pert_embryo_ids) == 0:
+            print(f"Warning: No embryo IDs found for perturbation '{pert}'")
+            continue
+            
+        # Split embryo IDs for this perturbation
+        pert_train_ids, pert_test_ids = train_test_split(
+            pert_embryo_ids, 
+            test_size=test_size,
+            random_state=random_state
+        )
+        
+        train_ids.extend(pert_train_ids)
+        test_ids.extend(pert_test_ids)
+    
+    # Create train and test dataframes
+    train_df = filtered_df[filtered_df[embryo_id_column].isin(train_ids)].reset_index(drop=True)
+    test_df = filtered_df[filtered_df[embryo_id_column].isin(test_ids)].reset_index(drop=True)
+    
+    # Check if we have both perturbations in train and test
+    train_perts = train_df[pert_column].unique()
+    test_perts = test_df[pert_column].unique()
+    
+    if len(train_perts) < len(pert_pair) or len(test_perts) < len(pert_pair):
+        missing_in_train = set(pert_pair) - set(train_perts)
+        missing_in_test = set(pert_pair) - set(test_perts)
+        
+        print(f"Warning: Not all perturbations present in both splits:")
+        if missing_in_train:
+            print(f"  Missing in train: {missing_in_train}")
+        if missing_in_test:
+            print(f"  Missing in test: {missing_in_test}")
+    
+    # Print statistics about the split
+    print(f"Split statistics for {pert_pair}:")
+    for pert in pert_pair:
+        n_train = sum(train_df[pert_column] == pert)
+        n_test = sum(test_df[pert_column] == pert)
+        total = n_train + n_test
+        if total > 0:
+            train_pct = n_train / total * 100
+            test_pct = n_test / total * 100
+            print(f"  {pert}: {n_train} train ({train_pct:.1f}%), {n_test} test ({test_pct:.1f}%)")
+        else:
+            print(f"  {pert}: No data found")
+    
+    return train_df, test_df

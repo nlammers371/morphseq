@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.decomposition import PCA
 import seaborn as sns
+import matplotlib.colors as mcolors
 
 def apply_pca_on_pert_comparisons(
     df, 
@@ -291,9 +292,9 @@ def create_spline_segments_for_df(df, pert_splines, k=50):
 # ============================
 def build_splines_and_segments(
     df,
-    save_dir,
     model_index,
     LocalPrincipalCurveClass,
+    save_dir = None,
     comparisons=None,
     bandwidth=0.5,
     max_iter=250,
@@ -444,9 +445,10 @@ def build_splines_and_segments(
         pert_splines = pd.DataFrame(columns=["PCA_1", "PCA_2", "PCA_3", "phenotype"])
 
     # Optionally, save the spline data
-    spline_csv_path = os.path.join(save_dir, f"pert_splines_{model_index}_unique.csv")
-    pert_splines.to_csv(spline_csv_path, index=False)
-    print(f"Spline DataFrame 'pert_splines' saved to: {spline_csv_path}")
+    if save_dir:
+        spline_csv_path = os.path.join(save_dir, f"pert_splines_{model_index}_unique.csv")
+        pert_splines.to_csv(spline_csv_path, index=False)
+        print(f"Spline DataFrame 'pert_splines' saved to: {spline_csv_path}")
 
     # ----------------------------
     # 3. Create segments for each phenotype using the function above
