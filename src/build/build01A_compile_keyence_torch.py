@@ -24,10 +24,9 @@ from pathlib import Path
 from glob2 import glob
 import skimage
 import skimage.io as skio
-from skimage import exposure
+from skimage import exposure, util
 from src.build.export_utils import (trim_to_shape, _get_keyence_tile_orientation, save_images_parallel, LoG_focus_stacker, 
                                     get_n_cpu_workers, get_n_workers_for_pipeline, estimate_batch_sizes, scrape_keyence_metadata)
-import torch
 from src.build.data_classes import MultiTileZStackDataset
 from torch.utils.data import DataLoader
 
@@ -91,15 +90,15 @@ def flatten_master_params(master_json):
 
 
 ### Helper functions
-def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
-    return [skio.imread(file_list[i]) for i in indices]
+# def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
+#     return [skio.imread(file_list[i]) for i in indices]
 
-def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    if ff.dtype == np.uint16:
-        ff = skimage.util.img_as_ubyte(ff)
-    # skio.use_plugin("imageio")
-    skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
+# def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
+#     out_dir.mkdir(parents=True, exist_ok=True)
+#     if ff.dtype == np.uint16:
+#         ff = skimage.util.img_as_ubyte(ff)
+#     # skio.use_plugin("imageio")
+#     skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
 
 # build path dictionary
 def get_image_paths(
@@ -110,7 +109,7 @@ def get_image_paths(
     exp_name = os.path.basename(os.path.dirname(well_list[0]))
 
     meta_rows = []
-
+    pixel_size_um = None
     for w, well_dir in enumerate(tqdm(well_list, "Building metadata...")):
 
         well_name = Path(well_dir).name[-4:]                # e.g. 'A01a'
@@ -133,8 +132,18 @@ def get_image_paths(
                 )
                 # First loop: load all positions into z-stacks
                 for pi in np.unique(sub_pos).astype(int):
-                    pos_idx   = np.where(sub_pos == pi)[0]
+                    # update metadata once per well-timepoint
+                    p_iter = p if cytometer_flag else pi-1
+                    if p_iter == 0:
+                        meta = scrape_keyence_metadata(im_files[0])
+                        meta.update({"well": well_conv,
+                                    "time_string": f"T{t_idx:04}",
+                                    "time_int": t_idx})
+                        meta_rows.append(meta)
 
+                        pixel_size_um = meta['Width (um)'] / meta['Width (px)']
+
+                    pos_idx   = np.where(sub_pos == pi)[0]
                     key = f"{well_conv}_t{t_idx:04}"
 
                     if key in sample_dict:
@@ -146,18 +155,12 @@ def get_image_paths(
                                             "date": exp_name,
                                             "well": well_conv,
                                             "time_id": t_idx,
-                                            "tile_zpaths": [[str(im_files[idx]) for idx in pos_idx]]
+                                            "tile_zpaths": [[str(im_files[idx]) for idx in pos_idx]],
+                                            "pixel_size_um": pixel_size_um
                                         }
                         
-                    p_iter = p if cytometer_flag else pi
+                    
 
-                    # update metadata once per well-timepoint
-                    if p_iter == 1:
-                        meta = scrape_keyence_metadata(im_files[0])
-                        meta.update({"well": well_conv,
-                                    "time_string": f"T{t_idx:04}",
-                                    "time_int": t_idx})
-                        meta_rows.append(meta)
                 
 
     # convert dict to a list                
@@ -277,9 +280,8 @@ def stitch_experiment(
 
 def build_ff_from_keyence(data_root: Path | str, 
                           exp_name: str,
-                          n_workers: int=4,
-                          overwrite: bool=False, 
-                          device: str="cpu"):
+                          ff_filter_res_um: float=3.0,
+                          overwrite: bool=False):
     
     # figure out how to utilize compute resources
     # 1) decide how many threads to write images
@@ -295,10 +297,6 @@ def build_ff_from_keyence(data_root: Path | str,
     META  = Path(data_root) / "metadata" / "built_metadata_files"
     os.makedirs(BUILT, exist_ok=True)
     os.makedirs(META, exist_ok=True)
-    # acq_dirs = valid_acq_dirs(RAW, dir_list)
-
-    if device == "cpu":
-        print("Warning: using CPU. This may be quite slow. GPU recommended.")
 
     # iterate through directories
     # for acq in tqdm(acq_dirs, desc="Building FF"):
@@ -318,17 +316,24 @@ def build_ff_from_keyence(data_root: Path | str,
 
 
     ds = MultiTileZStackDataset(sample_list)
+
     # check image size to gauge memory footprint
-    arr = ds[0]["data"]
-    sample_bytes = int(arr.nbytes)
+    im0 = ds[0]["data"]
+    sample_bytes = int(im0.nbytes)
     gpu_bs, cpu_bs = estimate_batch_sizes(sample_bytes)
-    batch_size = gpu_bs if gpu_bs > 0 else cpu_bs
+    # batch_size = gpu_bs if gpu_bs > 0 else cpu_bs
+    if gpu_bs > 0:
+        device = "cuda"
+    else:
+        device = "cpu"
 
 
     loader = DataLoader(ds,
-                        batch_size=batch_size,       # two experiments per batch
-                        num_workers=n_load_workers,      # parallel I/O
-                        pin_memory=True)
+                        batch_size=4,            # only ever load 1 sample at a time
+                        num_workers=2,           # only one worker process
+                        pin_memory=True,
+                        prefetch_factor=1,       # only prefetch 1 batch
+                        persistent_workers=False)
     
     
     for batch in tqdm(loader, "Doing FF projections..."):
@@ -336,17 +341,23 @@ def build_ff_from_keyence(data_root: Path | str,
        
         # now you can FF-project each tile—for instance by reshaping:
         data = batch["data"]
+        meta_dict = batch["path"]
         data = data.to(device, non_blocking=True)
         b, t, z, h, w = data.shape
-        flat = data.view(b*t, z, h, w)            # treat each tile as its own volume
-        ff, _   = LoG_focus_stacker(flat, filter_size=3) 
+        flat = data.view(b*t, z, h, w) # treat each tile as its own volume
+
+        # calculate size of filter to use
+        pixel_size_um = meta_dict["pixel_size_um"][0].numpy()
+        filter_rad = max(1, int(round(ff_filter_res_um/ pixel_size_um)))
+        filter_size = 2 * filter_rad + 1
+        ff, _   = LoG_focus_stacker(flat, filter_size=filter_size) 
         
         # prepare to save              # returns shape (b*t, H, W)
         ff   = ff.view(b, t, h, w).cpu().numpy()
-        ff_list = [ff[i] for i in range(ff.shape[0])]
+        ff_list = [util.img_as_ubyte(ff[b][p]) for b in range(ff.shape[0]) for p in range(ff.shape[1])]
 
         # build lists file and folder names
-        meta_dict = batch["path"]
+        
         n_tiles = len(meta_dict["tile_zpaths"])
         well_names = meta_dict["well"]
         time_indices = meta_dict["time_id"]
@@ -354,15 +365,14 @@ def build_ff_from_keyence(data_root: Path | str,
             Path(ff_dir) / f"ff_{w}_t{t:04}" / f"im_p{p:04}.jpg"
             for w, t in zip(well_names, time_indices)
             for p in range(n_tiles)
-        ]
+            ]
+        
         
         # us parallel processing to save images
         save_images_parallel(images=ff_list,
                              paths=all_paths,
                              n_workers=n_write_threads)
 
-
-        print("Check")
         
     # load previous metadata
     df_path = META / f"{exp_name}_metadata.csv"
@@ -442,4 +452,4 @@ if __name__ == "__main__":
 
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     
-    build_ff_from_keyence(data_root=data_root, exp_name="20230525")
+    build_ff_from_keyence(data_root=data_root, exp_name="20250529_36hpf_ctrl_atf6")

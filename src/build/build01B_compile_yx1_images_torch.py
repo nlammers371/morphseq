@@ -3,11 +3,10 @@ import sys
 from pathlib import Path
 
 # Path to the project *root* (the directory that contains the `src/` folder)
-REPO_ROOT = Path(__file__).resolve().parents[3]   # adjust “2” if levels differ
+REPO_ROOT = Path(__file__).resolve().parents[2]   # adjust “2” if levels differ
 
 # Put that directory at the *front* of sys.path so Python looks there first
 sys.path.insert(0, str(REPO_ROOT))
-
 
 import os, json, time, logging
 from pathlib import Path
@@ -21,28 +20,62 @@ from tqdm import tqdm
 from sklearn.cluster import KMeans
 import nd2
 import skimage.io as skio
+from skimage import util
 import skimage
 from stitch2d import StructuredMosaic      
-from src.build.export_utils import (LoG_focus_stacker, im_rescale, get_n_cpu_workers, get_n_workers_for_pipeline, estimate_batch_sizes)
-# 
+from src.build.export_utils import (LoG_focus_stacker, im_rescale, get_n_cpu_workers, get_n_workers_for_pipeline, 
+                                    estimate_batch_sizes, save_images_parallel)
+from typing import Any
+from skimage.measure import block_reduce
+
+# pick a name for your logger (usually __name__)
 log = logging.getLogger(__name__)
-logging.basicConfig(format="%(level_name)s | %(message)s", level=logging.INFO)
+log.setLevel(logging.INFO)            # or DEBUG, WARNING, etc.
 
+# create a console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
 
-##########
-# Helper functions
-def _FF_wrapper(w, dask_arr, well_id_array, time_id_array, device, filter_size, bf_idx, 
-                out_ff, well_name_list_long, overwrite):
-    
-    # get indices
-    t_idx = time_id_array[w]
-    w_idx = well_id_array[w]
-    well_name = well_name_list_long[w]
+# note: use %(levelname)s, not %(level_name)s
+fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+datefmt = "%Y-%m-%d %H:%M:%S"
+formatter = logging.Formatter(fmt, datefmt=datefmt)
 
-    stack = _get_stack(dask_arr, t_idx, w_idx)
-    ff = _focus_stack(stack, device, filter_size)
+ch.setFormatter(formatter)
+log.addHandler(ch)
 
-    _write_ff(out_ff, well_name, t_idx, bf_idx, ff, overwrite)
+def batch_blocks(dask_arr, batch_size, dtype, rs_flag, z_pad_flag=False):
+    """
+    Yield batches of (B, Z, Y, X) numpy arrays
+    along with their (t,w) coordinates.
+    """
+    T, W = dask_arr.shape[:2]
+    coords = [(t, w) for t in range(T) for w in range(W)]
+
+    for i in range(0, len(coords), batch_size):
+        batch_coords = coords[i : i + batch_size]
+        blocks: list[torch.Tensor] = []
+        
+        for t, w in batch_coords:
+            # pull Z×Y×X numpy array into memory
+            if not z_pad_flag:
+                arr = dask_arr[t, w, :, :, :].compute()  
+            else:
+                arr = dask_arr[t, w, 5:-5, :, :].compute()  
+            
+            if rs_flag:
+                # downsample Y & X by factor 2 using local mean
+                # block_size = (1, 2, 2) keeps Z intact
+                arr = block_reduce(arr, block_size=(1, 2, 2), func=np.mean)
+            
+            # convert to desired dtype and torch tensor
+            tarr = torch.from_numpy(arr).type(dtype)
+            blocks.append(tarr)
+        
+        # stack into (B, Z, Y, X)
+        batch_tensor = torch.stack(blocks, dim=0)
+        yield batch_coords, batch_tensor
+
 
 
 def _qc_well_assignments(stage_xyz_array, well_name_list_long):
@@ -88,9 +121,34 @@ def _fix_nd2_timestamp(nd, n_z):
 
     return frame_time_vec
 
+def estimate_max_blocks(Z: int, Y: int, X: int,
+                        dtype: torch.dtype = torch.float16,
+                        safety: float = 0.8,
+                        device: str = "cuda",
+                        rs_thresh: int=2048,
+                        batch_max: int = 32) -> int:
+    """
+    Roughly how many Z×Y×X blocks of type `dtype` you can fit on GPU,
+    reserving `safety` fraction of free memory for overhead.
+    """
+    torch.cuda.empty_cache()
+    if device == "cuda":
+        # query free GPU memory (in bytes)
+        free, _ = torch.cuda.mem_get_info()  
+    else:
+        free = 2_000_000_000
 
-def _find_dirs(root: Path) -> List[Path]:
-    return sorted([d for d in root.iterdir() if d.is_dir() and "ignore" not in d.name])
+    # bytes per element
+    elem_size = torch.zeros((), dtype=dtype).element_size()
+    rs_flag = Y > rs_thresh
+    if rs_flag:
+        block_bytes = Z * Y * X * elem_size // 4
+
+    # allow only `safety` fraction of free memory
+    max_blocks = int((free * safety) // (block_bytes * 16) / 2) * 2 # added fudge factor to account for impact of convolutions etc
+
+    return min(batch_max, max(1, max_blocks)), rs_flag
+
 
 def _read_nd2(path: Path) -> nd2.ND2File:
     nd2_files = list(path.glob("*.nd2"))
@@ -112,52 +170,28 @@ def _get_stack(
         else dask_arr[t, w, :, :, :].compute()
     )
 
-def _focus_stack(
-    stack_zyx: np.ndarray,
-    device: str,
-    filter_size: int = 3
-) -> np.ndarray:
-
-    # instead of torch.quantile, use numpy
-    norm, _, _ = im_rescale(stack_zyx)
-    norm = norm.astype(np.float32)
-    tensor = torch.from_numpy(norm).to(device)
-
-    ff_t, _ = LoG_focus_stacker(tensor, filter_size, device)
-    arr = ff_t.cpu().numpy()
-    arr_clipped = np.clip(arr, 0, 65535)
-    ff_i = arr_clipped.astype(np.uint16)
-    # convert to 8 bit 
-    ff_8 = skimage.util.img_as_ubyte(ff_i)
-
-    return ff_8 #(65535 - ff.cpu().numpy()).astype(np.uint16)
-
-
 
 
 def build_ff_from_yx1(
     data_root: str | Path,
     exp_name: str,
     overwrite: bool = False,
-    # dir_list: Sequence[str] | None = None,
-    # write_dir: str | Path | None = None,
-    device: str="cpu",
-    n_workers: int=1,
     metadata_only: bool = False,
-    # n_z_keep: Sequence[int | None] | None = None,
+    ff_proc_dtype: torch.dtype = torch.float16,
+    ff_filter_res_um: float=3.0
 ):
     
-    # figure out what we have to work with
-    n_write_threads = get_n_cpu_workers(frac=0.5)
+    # set directories
+    BUILT = Path(data_root) / "built_image_data" / "Keyence"
+    ff_dir = BUILT / "stitched_FF_images" / exp_name
 
-    # 2) decide how many workers to load/process stacks in parallel
-    n_load_workers  = get_n_workers_for_pipeline()
+    # get device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    par_flag = n_workers > 1
+    # par_flag = n_workers > 1
 
     data_root = Path(data_root)
     read_root = data_root / "raw_image_data" / "YX1"
-    write_root = data_root / "built_image_data"
     meta_root = data_root / "metadata"
 
     # for exp_path, z_keep in zip(exp_dirs, n_z_keep):
@@ -169,25 +203,19 @@ def build_ff_from_yx1(
     shape_twzcxy = nd.shape  # T,W,Z,C,Y,X
     n_t, n_w, n_z = shape_twzcxy[:3]
 
-    # calculate batch size
-    sample_bytes = np.product(shape_twzcxy[2:]) * 4 # factor of 4 for 16 but
-    batch_size = estimate_batch_sizes(sample_bytes)
-
     dask_arr = nd.to_dask()  # (T,W,Z,C,Y,X)
     channel_names = [c.channel.name for c in nd.frame_metadata(0).channels]
     bf_idx = channel_names.index("BF")
-
+    if len(shape_twzcxy) == 6: # force to be BF only
+        print("Detected multiple channles. Keeping only BF.")
+        dask_arr = dask_arr[:, :, :, bf_idx, :, :]
 
     # get image resolution
     voxel_size = nd.voxel_size()
 
-    # n_channels = len(nd.frame_metadata(0).channels)
-
     # read in plate map
     plate_map_xl = pd.ExcelFile(meta_root / "well_metadata" / f"{exp_name}_well_metadata.xlsx")
 
-    # if n_channels > 1:
-    #     channel_map = plate_map_xl.parse("channels")
 
     # fix jumps in nd2 time stamp
     frame_time_vec = _fix_nd2_timestamp(nd, n_z)
@@ -230,9 +258,21 @@ def build_ff_from_yx1(
             time_id_array[iter_i] = t
             iter_i += 1
 
-
     # chec that recorded well positions are consistent with actual image positions on the plate
     _qc_well_assignments(stage_xyz_array, well_name_list_long)
+
+    # suppose you already have dask_arr = nd.to_dask()[..., bf_idx, ...] with shape (T,W,Z,Y,X)
+    Z, Y, X = dask_arr.shape[2:]
+    bs, rs_flag = estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
+    print(f"Batch size: {bs}")
+    if rs_flag:
+        shape_twzcxy = list(shape_twzcxy)
+        shape_twzcxy[-1] = shape_twzcxy[-1] // 2
+        shape_twzcxy[-2] = shape_twzcxy[-2] // 2
+        shape_twzcxy = tuple(shape_twzcxy)
+    
+        # voxel_size[0] = voxel_size[0] * 2
+        # voxel_size[1] = voxel_size[1] * 2
 
     # generate metadata dataframe
     well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
@@ -240,8 +280,12 @@ def build_ff_from_yx1(
     well_df["microscope"] = "YX1"
     time_int_list = np.tile(np.arange(0, n_t), n_w)
     well_df["time_int"] = time_int_list
-    well_df["Height (um)"] = shape_twzcxy [3]*voxel_size[1]
-    well_df["Width (um)"] = shape_twzcxy [4]*voxel_size[0]
+    if not rs_flag:
+        well_df["Height (um)"] = shape_twzcxy [3]*voxel_size[1]
+        well_df["Width (um)"] = shape_twzcxy [4]*voxel_size[0]
+    else:
+        well_df["Height (um)"] = shape_twzcxy [3]*voxel_size[1] * 2
+        well_df["Width (um)"] = shape_twzcxy [4]*voxel_size[0] * 2
     well_df["Height (px)"] = shape_twzcxy [3]
     well_df["Width (px)"] = shape_twzcxy [4]
     well_df["BF Channel"] = bf_idx
@@ -251,27 +295,53 @@ def build_ff_from_yx1(
         time_ind_vec += np.arange(n, n_w*n_t, n_w).tolist()
     well_df["Time (s)"] = frame_time_vec[time_ind_vec]
 
+    
 
-    if device == "cpu":
-        print("Warning: using CPU. This may be quite slow. GPU recommended.")
+    n_coords  = dask_arr.shape[0] * dask_arr.shape[1]
+    n_batches = (n_coords + bs - 1) // bs 
+    z_pad_flag = exp_name == "20231206"
 
-    # call FF function
     if not metadata_only:
 
-        out_ff = write_root / "stitched_FF_images" / exp_name
+        for coords, batch_t in  tqdm(
+                                    batch_blocks(dask_arr, bs, dtype=ff_proc_dtype, rs_flag=rs_flag, z_pad_flag=z_pad_flag),
+                                    desc="Generating FF projections…",
+                                    total=n_batches,
+                                    unit="batch"
+                                ):
+            
+            # Pull batch np_batch.shape == (B, Z, Y, X)
+            batch_t = batch_t.to(device)
 
-        call_ff = partial(_FF_wrapper, dask_arr=dask_arr, well_id_array=well_id_array, 
-                          time_id_array=time_id_array, device=device, filter_size=3, 
-                          bf_idx=bf_idx, out_ff=out_ff, well_name_list_long=well_ind_list_long, overwrite=overwrite)
-    
-        if not par_flag:
-            for w in tqdm(range(len(well_id_array))):
-                call_ff(w)
-        else:
-            process_map(call_ff, range(len(well_id_array)), max_workers=n_workers, chunksize=1)
+            # instead of torch.quantile, use numpy
+            if rs_flag:
+                pixel_size_um = voxel_size[0] * 2
+            else:
+                pixel_size_um = voxel_size[0]
+            filter_rad = max(1, int(round(ff_filter_res_um/ pixel_size_um)))
+            filter_size = 2 * filter_rad + 1
 
-                
+            with torch.no_grad():
+                ff_t, _ = LoG_focus_stacker(batch_t, filter_size, device)
 
+            arr = ff_t.cpu().numpy()
+            arr_clipped = np.clip(arr, 0, 65535)
+            ff = arr_clipped.astype(np.uint16)
+            # prepare to save              # returns shape (b*t, H, W)
+            
+            ff_list = [util.img_as_ubyte(ff[b]) for b in range(ff.shape[0])]
+            
+            time_indices = [coord[0] for coord in coords]
+            well_names = [well_name_list_sorted[coords[b][1]] for b in range(bs)]
+            ff_paths = [
+                Path(ff_dir) / f"{w}_t{t:04}_stitch.jpg"
+                for w, t in zip(well_names, time_indices)]
+
+            # save
+            # us parallel processing to save images
+            save_images_parallel(images=ff_list,
+                                paths=ff_paths,
+                                n_workers=min(bs, 2))
 
     first_time = np.min(well_df['Time (s)'].copy())
     well_df['Time Rel (s)'] = well_df['Time (s)'] - first_time
@@ -292,8 +362,10 @@ if __name__ == "__main__":
 
     overwrite_flag = False
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    dir_list = ["2020306"]
+    # dir_list = ["2020306"]
     # build FF images
     # build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list, ch_to_use=4)
     # stitch FF images
-    build_ff_from_yx1(data_root=data_root, dir_list=dir_list, overwrite_flag=overwrite_flag, n_z_keep_in=8)
+    build_ff_from_yx1(data_root = data_root,
+                      exp_name = "20231206" #"20240314" 
+                     )

@@ -12,28 +12,19 @@ import skimage.io as skio
 import os, psutil, torch
 
 
-def get_n_cpu_workers(frac: float = 0.5, max_workers: int = 24) -> int:
+def get_n_cpu_workers(frac: float = 0.5, max_workers: int = 12) -> int:
     """
     Use a fraction of your logical cores for I/O / CPU-bound tasks.
     """
-    total = os.cpu_count() or 1
-    return min(max(1, int(total * frac)), max_workers)
+    if os.cpu_count() > 1:
+        total = 8
+    else: 1
+
+    return total
 
 
-def estimate_batch_sizes(
-    sample_bytes: int,
-    gpu_fraction: float = 0.8,
-    cpu_fraction: float = 0.8,
-    cuda_device: int = 0,
-    max_ram_cpu: int = 1e9 * 32
-) -> tuple[int, int]:
-    """
-    Estimate how many images of the same shape you can fit in memory:
-      → gpu_bs: for CUDA tensors (or None if no GPU)
-      → cpu_bs: for CPU‐side batching/loading
+def estimate_batch_sizes(sample_bytes, gpu_fraction=0.75) -> tuple[int, int]:
 
-    `sample_image_path` should point to any one representative file.
-    """
     
 
     # 2) GPU estimate
@@ -49,28 +40,26 @@ def estimate_batch_sizes(
         gpu_bs = 0  # or None, to signal “no GPU”
 
     # 3) CPU estimate
-    vm = psutil.virtual_memory()
-    free_cpu = min(vm.free, max_ram_cpu)
-    cpu_bs_raw = int(np.floor(free_cpu * cpu_fraction / 4) * 4)
-    cpu_bs   = max(cpu_bs_raw // sample_bytes, 1)
+    cpu_bs   = 1
 
     return gpu_bs, cpu_bs
 
 
-def get_n_workers_for_pipeline(max_workers: int=8):
+def get_n_workers_for_pipeline(max_workers: int=4):
     """
     How many parallel subprocesses (e.g. for loading) should we spawn?
     If you have a GPU, you might want fewer workers to reduce
     overall memory pressure.
     """
     if torch.cuda.is_available():
-        return min(get_n_cpu_workers(frac=0.25), max_workers)
+        return 1
     else:
-        return min(get_n_cpu_workers(frac=0.75), max_workers)
+        return 1
     
 
 def _save_one_image(args):
     img, path = args
+    path.parent.mkdir(parents=True, exist_ok=True)
     skio.imsave(path, img, check_contrast=False)
 
 
@@ -99,6 +88,7 @@ def _get_keyence_tile_orientation(experiment_date):
     return orientation
 
 _KERNELS: dict[tuple[int, torch.device], tuple[torch.Tensor, torch.Tensor]] = {}
+
 
 def _get_kernels(filter_size: int, device: torch.device):
     """Return cached (gaussian, laplacian) kernels for the given filter_size & device."""
@@ -230,16 +220,18 @@ def to_u8_adaptive(img16, low=.1, high=99.9):
     img_rescaled = exposure.rescale_intensity(img16, in_range=(lo, hi))
     return util.img_as_ubyte(img_rescaled)
 
-def im_rescale(im, low=0.1, high=99.9, n_samp=2000000):
+def im_rescale(im, low=0.1, high=99.9):
     flat = im.ravel()
-    if flat.size > 2_000_000:
-        flat = flat[:: flat.size // 2_000_000]
+    if flat.size > 1_000_000:
+        flat = flat[:: flat.size // 1_000_000]
     lo, hi = np.percentile(flat, (low, high))
 
     # arr = im.astype(np.float32)  # Z × Y × X in host RAM
     norm = exposure.rescale_intensity(im, in_range=(lo, hi))
     # px99 = np.percentile(arr, 99.9)            # very fast C routine
-    return norm, lo, hi
+    return norm
+
+
     # normalize in PyTorch (or NumPy — either is fine)
     #
     # norm = torch.clamp(tensor / px99, 0, 1) * 65535
