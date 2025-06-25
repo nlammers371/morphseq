@@ -10,7 +10,6 @@ sys.path.insert(0, str(REPO_ROOT))
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
-import json
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
 from typing import List
@@ -19,10 +18,8 @@ from stitch2d import StructuredMosaic
 import json
 from tqdm import tqdm
 import pandas as pd
-from typing import Dict, Any, Union, Literal
 from pathlib import Path
 from glob2 import glob
-import skimage
 import skimage.io as skio
 from skimage import exposure, util
 from src.build.export_utils import (trim_to_shape, _get_keyence_tile_orientation, save_images_parallel, LoG_focus_stacker, 
@@ -102,8 +99,8 @@ def flatten_master_params(master_json):
 
 # build path dictionary
 def get_image_paths(
-    well_list: list[str],
-    cytometer_flag: bool):
+                well_list: List[str] | List[Path],
+                cytometer_flag: bool):
 
     sample_dict = {}
     exp_name = os.path.basename(os.path.dirname(well_list[0]))
@@ -158,10 +155,6 @@ def get_image_paths(
                                             "tile_zpaths": [[str(im_files[idx]) for idx in pos_idx]],
                                             "pixel_size_um": pixel_size_um
                                         }
-                        
-                    
-
-                
 
     # convert dict to a list                
     return list(sample_dict.values()), pd.DataFrame(meta_rows)
@@ -224,7 +217,7 @@ def build_master_params(
 
 def stitch_experiment(
     idx            : int,
-    ff_folders     : List[str],
+    ff_folders     : List[str] | List[Path],
     ff_tile_dir    : str,
     out_dir        : str,
     overwrite      : bool,
@@ -401,14 +394,6 @@ def stitch_ff_from_keyence(data_root: str | Path,
     # RAW   = Path(data_root) / "raw_image_data" / "keyence"
     WRITE_ROOT = Path(data_root)
     META_ROOT  = Path(data_root) / "metadata" / "built_metadata_files"
-
-    # # --- discover acquisition folders --------------------------------------
-    # acq_dirs = valid_acq_dirs(RAW, dir_list)
-
-    # if orientation_list is None:
-    #     orientation_list = ["horizontal"] * len(acq_dirs)
-    # if len(orientation_list) != len(acq_dirs):
-    #     raise ValueError("orientation_list length must match dir_list length")
 
     # -----------------------------------------------------------------------
     # for acq, orientation in zip(acq_dirs, orientation_list):
