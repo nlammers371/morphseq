@@ -8,24 +8,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]   # adjust “2” if levels dif
 # Put that directory at the *front* of sys.path so Python looks there first
 sys.path.insert(0, str(REPO_ROOT))
 
-import os, json, time, logging
+import logging
 from pathlib import Path
-from typing import List, Sequence, Tuple
-from functools import partial
-from tqdm.contrib.concurrent import process_map
 import numpy as np
 import pandas as pd
 import torch
 from tqdm import tqdm
 from sklearn.cluster import KMeans
 import nd2
-import skimage.io as skio
 from skimage import util
-import skimage
-from stitch2d import StructuredMosaic      
-from src.build.export_utils import (LoG_focus_stacker, im_rescale, get_n_cpu_workers, get_n_workers_for_pipeline, 
-                                    estimate_batch_sizes, save_images_parallel)
-from typing import Any
+from src.build.export_utils import (LoG_focus_stacker, im_rescale, save_images_parallel)
 from skimage.measure import block_reduce
 
 # pick a name for your logger (usually __name__)
@@ -243,7 +235,6 @@ def build_ff_from_yx1(
 
     si = np.argsort(well_ind_list)
     well_name_list_sorted = np.asarray(well_name_list)[si].tolist()
-    well_ind_list_sorted = np.asarray(well_ind_list)[si].tolist()
 
     # generate longform vectors
     well_name_list_long = np.repeat(well_name_list_sorted, n_t)
@@ -278,9 +269,6 @@ def build_ff_from_yx1(
         shape_twzcxy[-1] = shape_twzcxy[-1] // 2
         shape_twzcxy[-2] = shape_twzcxy[-2] // 2
         shape_twzcxy = tuple(shape_twzcxy)
-    
-        # voxel_size[0] = voxel_size[0] * 2
-        # voxel_size[1] = voxel_size[1] * 2
 
     # generate metadata dataframe
     well_df = pd.DataFrame(well_name_list_long[:, np.newaxis], columns=["well"])
