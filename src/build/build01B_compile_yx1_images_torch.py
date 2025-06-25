@@ -270,7 +270,6 @@ def build_ff_from_yx1(
     # suppose you already have dask_arr = nd.to_dask()[..., bf_idx, ...] with shape (T,W,Z,Y,X)
     Z, Y, X = dask_arr.shape[2:]
     bs, rs_flag = estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
-    bs = 1
     print(f"Batch size: {bs}")
 
 

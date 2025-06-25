@@ -204,20 +204,12 @@ class Experiment:
 
     # ——— call pipeline functions —————————————————————————————————————————————
     @record("ff")
-    def export_images(self, n_workers=None):
-        if n_workers is not None:
-            device = "cpu"
-        elif self.has_gpu:
-            device = "cuda"
-            n_workers = 1
-        else:
-            device = "cpu"
-            n_workers = self.num_cpu_workers
+    def export_images(self):
 
         if self.microscope == "Keyence":
-            build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=n_workers, device=device)
+            build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True)
         else:
-            build_ff_from_yx1(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=n_workers, device=device)
+            build_ff_from_yx1(data_root=self.data_root, exp_name=self.date, overwrite=True)
 
     @record("stitch")
     def stitch_images(self):
@@ -284,9 +276,9 @@ if __name__ == '__main__':
 
     # load master experiment log
     manager = ExperimentManager(root=root)
-    exp = manager.experiments["20230525"]
-    exp.export_images()
-    # manager.export_all()   
+    # exp = manager.experiments["20230525"]
+    # exp.export_images()
+    manager.export_all()   
 
     print("check")
     # first, assess status of each experiment within the pipeline
