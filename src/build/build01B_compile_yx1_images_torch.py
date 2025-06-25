@@ -63,13 +63,19 @@ def batch_blocks(dask_arr, batch_size, dtype, rs_flag, z_pad_flag=False):
             else:
                 arr = dask_arr[t, w, 5:-5, :, :].compute()  
             
+            _, lo, hi = im_rescale(arr)
             if rs_flag:
                 # downsample Y & X by factor 2 using local mean
                 # block_size = (1, 2, 2) keeps Z intact
+                _, lo, hi = im_rescale(arr)
+
                 arr = block_reduce(arr, block_size=(1, 2, 2), func=np.mean)
             
+                norm, _, _ = im_rescale(arr, lo=lo, hi=hi)
+            else:
+                norm, _, _ = im_rescale(arr)
             # convert to desired dtype and torch tensor
-            tarr = torch.from_numpy(arr).type(dtype)
+            tarr = torch.from_numpy(norm).type(dtype)
             blocks.append(tarr)
         
         # stack into (B, Z, Y, X)
@@ -264,7 +270,10 @@ def build_ff_from_yx1(
     # suppose you already have dask_arr = nd.to_dask()[..., bf_idx, ...] with shape (T,W,Z,Y,X)
     Z, Y, X = dask_arr.shape[2:]
     bs, rs_flag = estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
+    bs = 1
     print(f"Batch size: {bs}")
+
+
     if rs_flag:
         shape_twzcxy = list(shape_twzcxy)
         shape_twzcxy[-1] = shape_twzcxy[-1] // 2
@@ -294,8 +303,6 @@ def build_ff_from_yx1(
     for n in range(n_w):
         time_ind_vec += np.arange(n, n_w*n_t, n_w).tolist()
     well_df["Time (s)"] = frame_time_vec[time_ind_vec]
-
-    
 
     n_coords  = dask_arr.shape[0] * dask_arr.shape[1]
     n_batches = (n_coords + bs - 1) // bs 

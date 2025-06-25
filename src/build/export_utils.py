@@ -220,16 +220,20 @@ def to_u8_adaptive(img16, low=.1, high=99.9):
     img_rescaled = exposure.rescale_intensity(img16, in_range=(lo, hi))
     return util.img_as_ubyte(img_rescaled)
 
-def im_rescale(im, low=0.1, high=99.9):
-    flat = im.ravel()
-    if flat.size > 1_000_000:
-        flat = flat[:: flat.size // 1_000_000]
-    lo, hi = np.percentile(flat, (low, high))
+def im_rescale(im, low=0.1, high=99.9, lo=None, hi=None):
+    if (lo is None) | (hi is None):
+        flat = im.ravel()
+        if flat.size > 1_000_000:
+            flat = flat[:: flat.size // 1_000_000]
+        lo, hi = np.percentile(flat, (low, high))
 
-    # arr = im.astype(np.float32)  # Z × Y × X in host RAM
-    norm = exposure.rescale_intensity(im, in_range=(lo, hi))
+    # arr = im.astype(np.float32)  # Z × Y × X in host RAM\
+    if np.max(im) > 255:
+        norm = exposure.rescale_intensity(im, in_range=(lo, hi)) * (2**16-1)
+    else:
+        norm = exposure.rescale_intensity(im, in_range=(lo, hi)) * (2**8-1)
     # px99 = np.percentile(arr, 99.9)            # very fast C routine
-    return norm
+    return norm, lo, hi
 
 
     # normalize in PyTorch (or NumPy — either is fine)
