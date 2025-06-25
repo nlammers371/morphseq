@@ -22,14 +22,42 @@ def get_n_cpu_workers(frac: float = 0.5, max_workers: int = 12) -> int:
 
     return total
 
+def estimate_max_blocks(Z: int, Y: int, X: int,
+                        dtype: torch.dtype = torch.float16,
+                        safety: float = 0.8,
+                        device: str = "cuda",
+                        rs_thresh: int=2048,
+                        batch_max: int = 32) -> int:
+    """
+    Roughly how many Z×Y×X blocks of type `dtype` you can fit on GPU,
+    reserving `safety` fraction of free memory for overhead.
+    """
+    torch.cuda.empty_cache()
+    if device == "cuda":
+        # query free GPU memory (in bytes)
+        free, _ = torch.cuda.mem_get_info()  
+    else:
+        free = 2_000_000_000
+
+    # bytes per element
+    elem_size = torch.zeros((), dtype=dtype).element_size()
+    rs_flag = Y > rs_thresh
+    if rs_flag:
+        block_bytes = Z * Y * X * elem_size // 4
+    else:
+        block_bytes = Z * Y * X * elem_size
+
+    # allow only `safety` fraction of free memory
+    max_blocks = int((free * safety) // (block_bytes * 16) / 2) * 2 # added fudge factor to account for impact of convolutions etc
+
+    return min(batch_max, max(1, max_blocks)), rs_flag
 
 def estimate_batch_sizes(sample_bytes, gpu_fraction=0.75) -> tuple[int, int]:
 
-    
-
     # 2) GPU estimate
     if torch.cuda.is_available():
-        dev = torch.device(f"cuda:{cuda_device}")
+        dev_idx = torch.cuda.current_device()
+        dev     = torch.device(f"cuda:{dev_idx}")
         props    = torch.cuda.get_device_properties(dev)
         reserved = torch.cuda.memory_reserved(dev)
         allocated= torch.cuda.memory_allocated(dev)
@@ -220,7 +248,8 @@ def to_u8_adaptive(img16, low=.1, high=99.9):
     img_rescaled = exposure.rescale_intensity(img16, in_range=(lo, hi))
     return util.img_as_ubyte(img_rescaled)
 
-def im_rescale(im, low=0.1, high=99.9, lo=None, hi=None):
+
+def im_rescale(im, low=0.01, high=99.99, lo=None, hi=None):
     if (lo is None) | (hi is None):
         flat = im.ravel()
         if flat.size > 1_000_000:

@@ -17,8 +17,9 @@ from tqdm import tqdm
 from sklearn.cluster import KMeans
 import nd2
 from skimage import util
-from src.build.export_utils import (LoG_focus_stacker, im_rescale, save_images_parallel)
+from src.build.export_utils import (LoG_focus_stacker, im_rescale, save_images_parallel, estimate_max_blocks)
 from skimage.measure import block_reduce
+import dask.array as da
 
 # pick a name for your logger (usually __name__)
 log = logging.getLogger(__name__)
@@ -36,44 +37,42 @@ formatter = logging.Formatter(fmt, datefmt=datefmt)
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
-def batch_blocks(dask_arr, batch_size, dtype, rs_flag, z_pad_flag=False):
-    """
-    Yield batches of (B, Z, Y, X) numpy arrays
-    along with their (t,w) coordinates.
-    """
-    T, W = dask_arr.shape[:2]
-    coords = [(t, w) for t in range(T) for w in range(W)]
 
-    for i in range(0, len(coords), batch_size):
-        batch_coords = coords[i : i + batch_size]
-        blocks: list[torch.Tensor] = []
-        
-        for t, w in batch_coords:
-            # pull Z×Y×X numpy array into memory
-            if not z_pad_flag:
-                arr = dask_arr[t, w, :, :, :].compute()  
-            else:
-                arr = dask_arr[t, w, 5:-5, :, :].compute()  
-            
-            _, lo, hi = im_rescale(arr)
-            if rs_flag:
-                # downsample Y & X by factor 2 using local mean
-                # block_size = (1, 2, 2) keeps Z intact
-                _, lo, hi = im_rescale(arr)
 
-                arr = block_reduce(arr, block_size=(1, 2, 2), func=np.mean)
-            
-                norm, _, _ = im_rescale(arr, lo=lo, hi=hi)
-            else:
-                norm, _, _ = im_rescale(arr)
-            # convert to desired dtype and torch tensor
-            tarr = torch.from_numpy(norm).type(dtype)
-            blocks.append(tarr)
-        
-        # stack into (B, Z, Y, X)
-        batch_tensor = torch.stack(blocks, dim=0)
-        yield batch_coords, batch_tensor
+# def batch_blocks_fast(dask_arr, batch_size, dtype,
+#                       z_pad=False, downsample=False):
+#     """
+#     Iterate through (t,w) in row-major order; build batches lazily.
 
+#     Returns  (coords, tensor)  where
+#        coords : list[tuple[int,int]]  – (t,w) for each item in batch
+#        tensor : torch.Tensor (B, Z, Y, X) on *CPU*
+#     """
+#     T, W, Z, Y, X = dask_arr.shape
+#     buf = 5 if z_pad else 0
+#     ds  = 2 if downsample else 1
+#     # new_Y, new_X = Y//ds, X//ds            # integer division is safe here
+
+#     coords, blocks = [], []
+#     for t in range(T):
+#         for w in range(W):
+#             # --- 1. pull one stack (identical to your old code) ----------
+#             stk = dask_arr[t, w, buf:Z-buf].compute()       # → (Z, Y, X)
+#             # if downsample:
+#             #     stk = block_reduce(stk, block_size=(1, ds, ds), func=np.mean)
+
+#             norm, _, _ = im_rescale(stk)      # your existing rescale
+#             blocks.append( torch.from_numpy(norm).type(dtype) )
+#             coords.append((t, w))
+
+#             # --- 2. yield when batch is full ----------------------------
+#             if len(blocks) == batch_size:
+#                 yield coords, torch.stack(blocks, 0)
+#                 coords, blocks = [], []
+
+#     # tail
+#     if blocks:
+#         yield coords, torch.stack(blocks, 0)
 
 
 def _qc_well_assignments(stage_xyz_array, well_name_list_long):
@@ -118,34 +117,6 @@ def _fix_nd2_timestamp(nd, n_z):
     frame_time_vec = np.asarray(frame_time_vec)
 
     return frame_time_vec
-
-def estimate_max_blocks(Z: int, Y: int, X: int,
-                        dtype: torch.dtype = torch.float16,
-                        safety: float = 0.8,
-                        device: str = "cuda",
-                        rs_thresh: int=2048,
-                        batch_max: int = 32) -> int:
-    """
-    Roughly how many Z×Y×X blocks of type `dtype` you can fit on GPU,
-    reserving `safety` fraction of free memory for overhead.
-    """
-    torch.cuda.empty_cache()
-    if device == "cuda":
-        # query free GPU memory (in bytes)
-        free, _ = torch.cuda.mem_get_info()  
-    else:
-        free = 2_000_000_000
-
-    # bytes per element
-    elem_size = torch.zeros((), dtype=dtype).element_size()
-    rs_flag = Y > rs_thresh
-    if rs_flag:
-        block_bytes = Z * Y * X * elem_size // 4
-
-    # allow only `safety` fraction of free memory
-    max_blocks = int((free * safety) // (block_bytes * 16) / 2) * 2 # added fudge factor to account for impact of convolutions etc
-
-    return min(batch_max, max(1, max_blocks)), rs_flag
 
 
 def _read_nd2(path: Path) -> nd2.ND2File:
@@ -195,7 +166,7 @@ def build_ff_from_yx1(
     # for exp_path, z_keep in zip(exp_dirs, n_z_keep):
     exp_path = read_root / exp_name
     # exp_name = exp_path.exp_name
-    log.info("⏳  %s", exp_name)
+    log.info("Calculating FF for %s", exp_name)
 
     nd = _read_nd2(exp_path)
     shape_twzcxy = nd.shape  # T,W,Z,C,Y,X
@@ -261,6 +232,9 @@ def build_ff_from_yx1(
     # suppose you already have dask_arr = nd.to_dask()[..., bf_idx, ...] with shape (T,W,Z,Y,X)
     Z, Y, X = dask_arr.shape[2:]
     bs, rs_flag = estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
+    mb = 3
+    if bs > mb:
+        bs = mb
     print(f"Batch size: {bs}")
 
 
@@ -298,14 +272,14 @@ def build_ff_from_yx1(
     if not metadata_only:
 
         for coords, batch_t in  tqdm(
-                                    batch_blocks(dask_arr, bs, dtype=ff_proc_dtype, rs_flag=rs_flag, z_pad_flag=z_pad_flag),
+                                    batch_blocks_fast(dask_arr, bs, dtype=ff_proc_dtype, downsample=rs_flag, z_pad=z_pad_flag),
                                     desc="Generating FF projections…",
                                     total=n_batches,
                                     unit="batch"
                                 ):
             
             # Pull batch np_batch.shape == (B, Z, Y, X)
-            batch_t = batch_t.to(device)
+            batch_t = batch_t.to(device, non_blocking=True)
 
             # instead of torch.quantile, use numpy
             if rs_flag:
@@ -315,27 +289,35 @@ def build_ff_from_yx1(
             filter_rad = max(1, int(round(ff_filter_res_um/ pixel_size_um)))
             filter_size = 2 * filter_rad + 1
 
-            with torch.no_grad():
-                ff_t, _ = LoG_focus_stacker(batch_t, filter_size, device)
+            # pass to batcher
+            # if device == "cuda":
+            #     ff_t = batched_focus(batch_t, filter_size, device)
+            # else:
+            # ff_t, _ = LoG_focus_stacker(batch_t, filter_size, device)
 
-            arr = ff_t.cpu().numpy()
-            arr_clipped = np.clip(arr, 0, 65535)
-            ff = arr_clipped.astype(np.uint16)
-            # prepare to save              # returns shape (b*t, H, W)
+            # arr = ff_t.cpu().numpy()
+            # arr_clipped = np.clip(arr, 0, 65535)
+            # ff = arr_clipped.astype(np.uint16)
+            # # prepare to save              # returns shape (b*t, H, W)
             
-            ff_list = [util.img_as_ubyte(ff[b]) for b in range(ff.shape[0])]
+            # ff_list = [util.img_as_ubyte(ff[b]) for b in range(ff.shape[0])]
             
-            time_indices = [coord[0] for coord in coords]
-            well_names = [well_name_list_sorted[coords[b][1]] for b in range(bs)]
-            ff_paths = [
-                Path(ff_dir) / f"{w}_t{t:04}_stitch.jpg"
-                for w, t in zip(well_names, time_indices)]
+            # time_indices = [coord[0] for coord in coords]
+            # well_names = [well_name_list_sorted[coords[b][1]] for b in range(bs)]
+            # ff_paths = [
+            #     Path(ff_dir) / f"{w}_t{t:04}_stitch.jpg"
+            #     for w, t in zip(well_names, time_indices)]
 
-            # save
-            # us parallel processing to save images
-            save_images_parallel(images=ff_list,
-                                paths=ff_paths,
-                                n_workers=min(bs, 2))
+            # # save
+            # # us parallel processing to save images
+            # save_images_parallel(images=ff_list,
+            #                     paths=ff_paths,
+            #                     n_workers=min(bs, 2))
+            
+            # cleanup
+            del batch_t#, ff_t, arr, ff, ff_list
+            torch.cuda.empty_cache()       # clears un-referenced CUDA buffers
+            # import gc; gc.collect() 
 
     first_time = np.min(well_df['Time (s)'].copy())
     well_df['Time Rel (s)'] = well_df['Time (s)'] - first_time
@@ -361,5 +343,5 @@ if __name__ == "__main__":
     # build_ff_from_keyence(data_root, write_dir=write_dir, overwrite_flag=True, dir_list=dir_list, ch_to_use=4)
     # stitch FF images
     build_ff_from_yx1(data_root = data_root,
-                      exp_name = "20231206" #"20240314" 
+                      exp_name = "20231110" #"20240314" 
                      )

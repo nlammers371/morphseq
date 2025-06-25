@@ -9,6 +9,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 # script to define functions_folder for loading and standardizing fish movies
 import os
+import torch
 import numpy as np
 from tqdm.contrib.concurrent import process_map 
 from functools import partial
@@ -22,8 +23,7 @@ from pathlib import Path
 from glob2 import glob
 import skimage.io as skio
 from skimage import exposure, util
-from src.build.export_utils import (trim_to_shape, _get_keyence_tile_orientation, save_images_parallel, LoG_focus_stacker, 
-                                    get_n_cpu_workers, get_n_workers_for_pipeline, estimate_batch_sizes, scrape_keyence_metadata)
+from src.build.export_utils import (trim_to_shape, estimate_max_blocks, save_images_parallel, LoG_focus_stacker, scrape_keyence_metadata)
 from src.build.data_classes import MultiTileZStackDataset
 from torch.utils.data import DataLoader
 
@@ -274,14 +274,12 @@ def stitch_experiment(
 def build_ff_from_keyence(data_root: Path | str, 
                           exp_name: str,
                           ff_filter_res_um: float=3.0,
-                          overwrite: bool=False):
+                          overwrite: bool=False,
+                          ff_proc_dtype: torch.dtype=torch.float16):
     
     # figure out how to utilize compute resources
     # 1) decide how many threads to write images
-    n_write_threads = get_n_cpu_workers(frac=0.5)
-
-    # 2) decide how many workers to load/process stacks in parallel
-    n_load_workers  = get_n_workers_for_pipeline()
+    # n_write_threads = get_n_cpu_workers(frac=0.5)
 
 
     # get path info
@@ -312,17 +310,19 @@ def build_ff_from_keyence(data_root: Path | str,
 
     # check image size to gauge memory footprint
     im0 = ds[0]["data"]
-    sample_bytes = int(im0.nbytes)
-    gpu_bs, cpu_bs = estimate_batch_sizes(sample_bytes)
-    # batch_size = gpu_bs if gpu_bs > 0 else cpu_bs
-    if gpu_bs > 0:
-        device = "cuda"
-    else:
-        device = "cpu"
+    # sample_bytes = int(im0.nbytes)
+    # gpu_bs, _ = estimate_batch_sizes(sample_bytes)
 
+    # get device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    Z, Y, X = im0[0].shape
+    X = X * len(im0)
+    bs, _= estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
+    print(f"Batch size: {bs}")
+    log.info("Calculating FF for %s", exp_name)
 
     loader = DataLoader(ds,
-                        batch_size=4,            # only ever load 1 sample at a time
+                        batch_size=bs,            # only ever load 1 sample at a time
                         num_workers=2,           # only one worker process
                         pin_memory=True,
                         prefetch_factor=1,       # only prefetch 1 batch
@@ -364,7 +364,7 @@ def build_ff_from_keyence(data_root: Path | str,
         # us parallel processing to save images
         save_images_parallel(images=ff_list,
                              paths=all_paths,
-                             n_workers=n_write_threads)
+                             n_workers=min(2, bs))
 
         
     # load previous metadata
@@ -382,6 +382,9 @@ def build_ff_from_keyence(data_root: Path | str,
 
     print('Done.')
 
+
+######
+# STITCHING WRAPPER
 
 def stitch_ff_from_keyence(data_root: str | Path, 
                            exp_name: str, 

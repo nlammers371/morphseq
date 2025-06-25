@@ -245,17 +245,65 @@ class ExperimentManager:
     def discover_experiments(self):
         # scan "raw_image_data" subfolders for dates
         raw = self.root / "raw_image_data"
+        # collect all the dates first
+        dates = []
         for mic in raw.iterdir():
-            if mic.is_dir():
-                for d in (mic).iterdir():
-                    date = d.name
-                    if date not in self.experiments:
-                        self.experiments[date] = Experiment(date, self.root)
+            if not mic.is_dir(): 
+                continue
+            for d in mic.iterdir():
+                if d.is_dir():
+                    dates.append(d.name)
+                    
+        # dedupe & sort
+        for date in sorted(set(dates)):
+            self.experiments[date] = Experiment(date, self.root)
 
     def export_all(self):
         for exp in self.experiments.values():
             if exp.needs_export:
                 exp.export_images()
+
+    def export_experiments(self,
+                            experiments: list[str] | None = None,
+                            later_than: int | None = None,
+                            earlier_than: int | None = 99999999, 
+                            force_update: bool = False
+                          ):
+        
+        # ensure exactly one selector is provided
+        if (experiments is None) == (later_than is None):
+            raise ValueError("Must specify exactly one of `experiments` or `later_than`")
+
+        to_export: list[Experiment] = []
+        dates: list[str] = []
+
+        if experiments is not None:
+            # explicit list
+            for exp in self.experiments.values():
+                if exp.date in experiments and (exp.needs_export or force_update):
+                    to_export.append(exp)
+                    dates.append(exp.date)
+        else:
+            # all experiments after a cutoff date
+            for exp in self.experiments.values():
+                try:
+                    date_int = int(exp.date[:8])
+                    if (date_int >= later_than) and (date_int < earlier_than) and (exp.needs_export or force_update):
+                        to_export.append(exp)
+                        dates.append(exp.date)
+                except:
+                    pass
+
+        if not to_export:
+            print("No experiments to export.")
+            return
+
+        # report what’s going to run
+        print("Exporting:", ", ".join(dates))
+
+        for exp in to_export:
+            exp.export_images()
+
 
     def build_metadata_all(self):
         for exp in self.experiments.values():
