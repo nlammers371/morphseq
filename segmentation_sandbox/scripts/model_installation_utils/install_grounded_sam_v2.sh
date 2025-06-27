@@ -23,6 +23,11 @@
 # 2. conda create -n segmentation_grounded_sam python=3.10 -y
 # 3. conda activate segmentation_grounded_sam
 # 4. bash install_grounded_sam.sh
+#
+# IMPORTANT: Install with CUDA environment
+# If you plan to use CUDA/GPU acceleration later (even if you want to run on CPU sometimes),
+# Even with CUDA installed, you can still run models on CPU by specifying device='cpu'
+# in your Python code. Building with CUDA gives you maximum flexibility.
 # =================================================================
 
 set -e  # Exit on any error
@@ -47,6 +52,8 @@ fi
 echo "=== Step 3: Install Core Python Packages ==="
 conda install pytorch torchvision torchaudio -c pytorch -y
 pip install matplotlib jupyterlab
+# Install core dependencies with specific versions to avoid conflicts
+pip install supervision==0.25.0 opencv-python numpy scipy pillow pandas scikit-image tqdm pyyaml pycocotools addict timm transformers safetensors
 
 echo "=== Step 4: Create models directory ==="
 mkdir -p "$MORPHSEQ_HOME/segmentation_sandbox/models"
@@ -58,19 +65,19 @@ echo "✓ Working in: $(pwd)"
 # Step 5: Install SAM2
 # ----------------------------------------------------------------------------
 echo "=== Step 5: Install SAM2 ==="
-if [ ! -d "sam2" ]; then
-  git clone https://github.com/facebookresearch/sam2.git
-fi
-cd sam2
+# Remove and recreate the directory to ensure it's clean
+rm -rf "$MORPHSEQ_HOME/segmentation_sandbox/models/sam2"
+mkdir -p "$MORPHSEQ_HOME/segmentation_sandbox/models/sam2"
+cd "$MORPHSEQ_HOME/segmentation_sandbox/models/sam2"
+git clone https://github.com/facebookresearch/sam2.git .
 pip install -e .
 pip install jupyter matplotlib
 # Download checkpoints
+mkdir -p checkpoints
 cd checkpoints
-if [ ! -f sam2.1_hiera_large.pt ]; then
-  wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
-  wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_base_plus.pt
-  wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt
-fi
+wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
+wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_base_plus.pt
+wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt
 cd ../..
 
 echo "✓ SAM2 installed"
@@ -80,17 +87,12 @@ echo "✓ SAM2 installed"
 # Step 6: Install Official GroundingDINO (IDEA-Research)
 # ----------------------------------------------------------------------------
 echo "=== Step 6: Install Official GroundingDINO ==="
-# Clone or update the repository
-if [ ! -d "GroundingDINO" ]; then
-  git clone https://github.com/IDEA-Research/GroundingDINO.git GroundingDINO
-  echo "✓ Cloned Official GroundingDINO repository"
-else
-  echo "Official GroundingDINO directory exists, pulling latest changes"
-  cd GroundingDINO
-  git pull --ff-only || echo "⚠ Could not pull latest changes"
-  cd ..
-fi
-cd GroundingDINO
+# Remove and recreate the directory to ensure it's clean
+rm -rf "$MORPHSEQ_HOME/segmentation_sandbox/models/GroundingDINO"
+mkdir -p "$MORPHSEQ_HOME/segmentation_sandbox/models/GroundingDINO"
+cd "$MORPHSEQ_HOME/segmentation_sandbox/models/GroundingDINO"
+git clone https://github.com/IDEA-Research/GroundingDINO.git .
+git pull --ff-only || echo "⚠ Could not pull latest changes"
 pip install -r requirements.txt
 # If setup.py exists, install in editable mode
 if [ -f setup.py ]; then
@@ -107,27 +109,41 @@ echo "✓ Official GroundingDINO installed"
 # Step 7: Install Open-GroundingDino
 # ----------------------------------------------------------------------------
 echo "=== Step 7: Install Open-GroundingDino ==="
-if [ ! -d "Open-GroundingDino" ]; then
-  git clone https://github.com/longzw1997/Open-GroundingDino.git
+# Remove and recreate the directory to ensure it's clean
+rm -rf "$MORPHSEQ_HOME/segmentation_sandbox/models/Open-GroundingDino"
+mkdir -p "$MORPHSEQ_HOME/segmentation_sandbox/models/Open-GroundingDino"
+cd "$MORPHSEQ_HOME/segmentation_sandbox/models/Open-GroundingDino"
+git clone https://github.com/longzw1997/Open-GroundingDino.git .
+# Fix supervision version conflict in requirements.txt
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    sed -i '' 's/supervision==0.6.0/supervision==0.25.0/' requirements.txt
+else
+    # Linux
+    sed -i 's/supervision==0.6.0/supervision==0.25.0/' requirements.txt
 fi
-cd Open-GroundingDino
 pip install -r requirements.txt
-# macOS CUDA fix
+# CUDA fix - detect OS and use appropriate sed syntax
 cd models/GroundingDINO/ops
 [ ! -f setup.py.backup ] && cp setup.py setup.py.backup
-sed -i '' "s/raise NotImplementedError('Cuda is not availabel')/print('Compiling without CUDA - CPU only mode'); return []/" setup.py
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    sed -i '' "s/raise NotImplementedError('Cuda is not availabel')/print('Compiling without CUDA - CPU only mode'); return []/" setup.py
+else
+    # Linux
+    sed -i "s/raise NotImplementedError('Cuda is not availabel')/print('Compiling without CUDA - CPU only mode'); return []/" setup.py
+fi
 cd ../..
 python setup.py build install || echo "⚠ ops build failed, proceeding"
 cd ..
 echo "✓ Open-GroundingDino installed"
 
 # ----------------------------------------------------------------------------
-# Step 8: Install other image/data packages
+# Step 8: Verify Package Installation
 # ----------------------------------------------------------------------------
-echo "=== Step 8: Install other image/data packages ==="
-pip install opencv-python numpy scipy pillow pandas scikit-image tqdm pyyaml supervision pycocotools addict timm transformers safetensors
-
-echo "✓ All packages installed"
+echo "=== Step 8: Verify Package Installation ==="
+pip list | grep -E "supervision|groundingdino|torch|opencv|numpy"
+echo "✓ Package verification complete"
 
 # ----------------------------------------------------------------------------
 # Step 9: Smoke Tests
