@@ -56,6 +56,10 @@ import json
 from datetime import datetime
 from typing import Union, Tuple, List, Optional, Dict
 
+# global checkpoint variables
+videos_written = 0
+METADATA_PATH = None
+
 # --- Configuration for Image and Video Processing ---
 MAX_DIMENSION = 512  # Max width or height for both JPEGs and video
 JPEG_QUALITY = 90
@@ -65,9 +69,9 @@ VIDEO_CODEC = 'mp4v' # More compatible than H264, use 'avc1' for H264
 # Frame overlay settings
 ADD_FRAME_NUMBERS = True
 FONT = cv2.FONT_HERSHEY_SIMPLEX
-FONT_SCALE = 0.7
+FONT_SCALE = 1.0  # Increased for readability
 FONT_COLOR = (255, 255, 255)  # White text
-FONT_THICKNESS = 2
+FONT_THICKNESS = 3  # Increased thickness for visibility
 
 def parse_filename(filename: str) -> Tuple[Union[str, None], Union[str, None]]:
     """
@@ -156,14 +160,17 @@ def create_video_from_jpegs(
         if frame is None:
             continue
 
-        # Extract time from the unique image ID (e.g., "20240411_A01_0000" -> "0000")
-        time_str = jpeg_path.stem.split('_')[-1]
-        frame_text = f"t={time_str}"
-        
+        # Overlay full image ID for each frame
+        image_id = jpeg_path.stem
+        frame_text = image_id
+
         (text_width, text_height), _ = cv2.getTextSize(frame_text, FONT, FONT_SCALE, FONT_THICKNESS)
-        text_x = frame.shape[1] - text_width - 10
-        text_y = text_height + 10
-        
+        # Position text at top right, 10% down from the top
+        height, width = frame.shape[:2]
+        margin_px = 10
+        text_x = width - text_width - margin_px
+        text_y = int(0.1 * height)
+
         # Add a dark, semi-transparent background for the text
         overlay = frame.copy()
         cv2.rectangle(overlay, (text_x - 5, text_y - text_height - 5), (text_x + text_width + 5, text_y + 5), (0, 0, 0), -1)
@@ -386,6 +393,15 @@ def process_experiment(
         if video_id not in metadata['video_ids']:
             metadata['video_ids'].append(video_id)
 
+        # --- checkpoint logic ---
+        global videos_written, METADATA_PATH
+        videos_written += 1
+        if videos_written % 100 == 0:
+            with open(METADATA_PATH, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            if verbose:
+                print(f"[checkpoint] Saved metadata after {videos_written} videos")
+
         metadata['experiments'][experiment_id]['videos'][video_id] = {
             "video_id": video_id,
             "well_id": well_id,
@@ -474,6 +490,9 @@ def main():
     # Load existing metadata or create a new one
     metadata_path = output_dir / "experiment_metadata.json"
     metadata = load_or_initialize_metadata(metadata_path)
+    # set global path for checkpoints
+    global METADATA_PATH
+    METADATA_PATH = metadata_path
 
     # First, generate a list of all available experiment directories
     all_available_experiments = sorted([d for d in experiments_dir.iterdir() if d.is_dir()])
