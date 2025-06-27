@@ -81,3 +81,6 @@ src/build/__pychache__/
 
 # Ignore __pycache__ directories (recursively)
 **/__pycache__/
+
+segmentation_sandbox/models/*
+!segmentation_sandbox/models/.gitkeep
