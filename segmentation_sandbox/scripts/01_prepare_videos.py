@@ -48,6 +48,7 @@ import os
 import argparse
 import cv2
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 from tqdm import tqdm
 from collections import defaultdict
@@ -55,6 +56,14 @@ import shutil
 import json
 from datetime import datetime
 from typing import Union, Tuple, List, Optional, Dict
+
+# Try to import pyvips for faster image I/O
+try:
+    import pyvips
+    PYVIPS_AVAILABLE = True
+except ImportError:
+    PYVIPS_AVAILABLE = False
+    print("Warning: pyvips not available, falling back to OpenCV (slower). Install with: pip install pyvips")
 
 # global checkpoint variables
 videos_written = 0
@@ -103,14 +112,48 @@ def process_and_save_jpeg(
     Reads an image and saves it as a clean JPEG without overlays.
     Only resizes if target_size is provided and different from current size.
     Returns the dimensions of the saved JPEG.
+    Uses pyvips when available for faster I/O, falls back to OpenCV.
     """
     if output_path.exists() and not overwrite:
-        # To get dimensions, we have to read the existing image
+        # Get dimensions from existing file
+        if PYVIPS_AVAILABLE:
+            try:
+                img = pyvips.Image.new_from_file(str(output_path), access='sequential')
+                return img.width, img.height
+            except Exception:
+                pass
+        # Fallback to OpenCV
         existing_image = cv2.imread(str(output_path))
         if existing_image is not None:
             return existing_image.shape[1], existing_image.shape[0]
-        # If we can't read it, we'll just overwrite it
     
+    # Use pyvips for faster processing when available
+    if PYVIPS_AVAILABLE:
+        try:
+            # Load image with pyvips
+            img = pyvips.Image.new_from_file(str(image_path), access='sequential')
+            
+            # Convert to RGB if needed (pyvips handles this automatically)
+            if img.bands == 4:  # RGBA
+                img = img[:3]  # Take only RGB channels
+            
+            # Resize if needed
+            if target_size and (img.width, img.height) != target_size:
+                target_width, target_height = target_size
+                # Ensure dimensions are even for video codec compatibility
+                target_width = target_width - (target_width % 2)
+                target_height = target_height - (target_height % 2)
+                img = img.resize(target_width / img.width, vscale=target_height / img.height)
+            
+            # Save as JPEG with specified quality
+            img.write_to_file(str(output_path), Q=JPEG_QUALITY)
+            return img.width, img.height
+            
+        except Exception as e:
+            if show_warnings:
+                print(f"Warning: pyvips failed for {image_path}, falling back to OpenCV: {e}")
+    
+    # Fallback to OpenCV (original implementation)
     image = cv2.imread(str(image_path))
     if image is None:
         if show_warnings:
@@ -191,7 +234,8 @@ def process_experiment(
     output_dir: Path,
     metadata: Dict,
     overwrite: bool = False,
-    verbose: bool = True
+    verbose: bool = True,
+    workers: int = 4
 ) -> bool:
     """
     Processes a single experiment directory, updating the metadata object.
@@ -294,41 +338,67 @@ def process_experiment(
         image_ids = metadata['experiments'][experiment_id].get('videos', {}).get(video_id, {}).get('image_ids', [])
 
         if verbose:
-            print(f"  Converting {len(image_paths)} images to JPEG (skipping existing)...")
+            print(f"  Converting {len(image_paths)} images to JPEG using {workers} workers...")
         
-        new_images_processed = 0
+        # Prepare tasks for parallel conversion
+        tasks = []
         for image_path in sorted(image_paths):
             _, time_str = parse_filename(image_path.name)
             if not time_str:
                 continue
-            
             image_id = f"{video_id}_{time_str}"
             jpeg_path = video_frame_dir / f"{image_id}.jpg"
-
-            # --- Incremental Processing Check ---
-            if image_id in metadata['image_ids'] and not overwrite:
-                # If we are not overwriting, we still need the path and dimensions
-                if jpeg_path.exists():
-                    processed_jpeg_paths.append(jpeg_path)
-                    # This is slow, but necessary if we need to check for resizes
-                    img = cv2.imread(str(jpeg_path))
-                    if img is not None:
-                        image_dimensions.append((img.shape[1], img.shape[0]))
-                continue
-
-            show_warnings = warning_count < max_warnings
-            dims = process_and_save_jpeg(image_path, jpeg_path, None, overwrite, show_warnings)
             
-            if dims is None and warning_count < max_warnings:
-                warning_count += 1
-            elif dims:
-                new_images_processed += 1
-                processed_jpeg_paths.append(jpeg_path)
-                image_dimensions.append(dims)
-                if image_id not in metadata['image_ids']:
-                    metadata['image_ids'].append(image_id)
-                if image_id not in image_ids:
-                    image_ids.append(image_id)
+            # Skip if already processed and not overwriting
+            if image_id in metadata['image_ids'] and not overwrite and jpeg_path.exists():
+                # Still need to collect existing paths and dimensions
+                if PYVIPS_AVAILABLE:
+                    try:
+                        img = pyvips.Image.new_from_file(str(jpeg_path), access='sequential')
+                        processed_jpeg_paths.append(jpeg_path)
+                        image_dimensions.append((img.width, img.height))
+                        continue
+                    except Exception:
+                        pass
+                # Fallback to OpenCV for existing files
+                img = cv2.imread(str(jpeg_path))
+                if img is not None:
+                    processed_jpeg_paths.append(jpeg_path)
+                    image_dimensions.append((img.shape[1], img.shape[0]))
+                    continue
+            
+            tasks.append((image_path, jpeg_path, image_id))
+        
+        # Execute conversions in parallel using ThreadPoolExecutor
+        new_images_processed = 0
+        if tasks:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                future_to_info = {
+                    executor.submit(process_and_save_jpeg, img_path, jpeg_path, None, overwrite, warning_count < max_warnings): 
+                    (jpeg_path, image_id)
+                    for img_path, jpeg_path, image_id in tasks
+                }
+                
+                for future in tqdm(as_completed(future_to_info), total=len(future_to_info), 
+                                 desc="Converting images", disable=not verbose, leave=False):
+                    jpeg_path, image_id = future_to_info[future]
+                    try:
+                        dims = future.result()
+                        if dims is None:
+                            if warning_count < max_warnings:
+                                warning_count += 1
+                        else:
+                            new_images_processed += 1
+                            processed_jpeg_paths.append(jpeg_path)
+                            image_dimensions.append(dims)
+                            if image_id not in metadata['image_ids']:
+                                metadata['image_ids'].append(image_id)
+                            if image_id not in image_ids:
+                                image_ids.append(image_id)
+                    except Exception as e:
+                        if warning_count < max_warnings:
+                            print(f"Error processing {jpeg_path}: {e}")
+                            warning_count += 1
 
         if verbose and not overwrite:
             print(f"  Skipped {len(image_paths) - new_images_processed} existing images. Processed {new_images_processed} new images.")
@@ -472,8 +542,8 @@ def main():
         help="Enable detailed print statements (default: on)."
     )
     parser.add_argument(
-        '--no-verbose', dest='verbose', action='store_false',
-        help="Disable detailed print statements."
+        '--workers', type=int, default=4,
+        help="Number of parallel workers for image conversion."
     )
     parser.set_defaults(verbose=True)
     args = parser.parse_args()
@@ -548,7 +618,10 @@ def main():
     
     successful_count = 0
     for exp_dir in experiments_to_process:
-        success = process_experiment(exp_dir, output_dir, metadata, args.overwrite, args.verbose)
+        success = process_experiment(
+            exp_dir, output_dir, metadata,
+            args.overwrite, args.verbose, args.workers
+        )
         if success:
             successful_count += 1
 

@@ -52,8 +52,10 @@ fi
 echo "=== Step 3: Install Core Python Packages ==="
 conda install pytorch torchvision torchaudio -c pytorch -y
 pip install matplotlib jupyterlab
+# Install libvips system dependency and pyvips for faster image I/O
+conda install -c conda-forge libvips -y
 # Install core dependencies with specific versions to avoid conflicts
-pip install supervision==0.25.0 opencv-python numpy scipy pillow pandas scikit-image tqdm pyyaml pycocotools addict timm transformers safetensors
+pip install supervision==0.25.0 opencv-python numpy scipy pillow pandas pyvips scikit-image tqdm pyyaml pycocotools addict timm transformers safetensors
 
 echo "=== Step 4: Create models directory ==="
 mkdir -p "$MORPHSEQ_HOME/segmentation_sandbox/models"

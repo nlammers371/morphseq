@@ -14,6 +14,11 @@ paths:
   
   # Source data directories (relative to morphseq_data_dir)
   stitched_images_dir: "built_image_data/stitched_FF_images"
+    
+  # Mask directories (relative to morphseq_data_dir)
+  embryo_mask_root: "mask_data/embryo_mask_data"
+  yolk_mask_root: "mask_data/yolk_mask_data"
+  via_mask_root: "mask_data/via_annotation_data"
   
   # Generated video directory (will be created by pipeline, relative to sandbox)
   morphseq_well_videos: "data/intermediate/morphseq_well_videos"
@@ -22,16 +27,15 @@ paths:
   models_dir: "models"
   groundingdino_path: "models/GroundingDINO"
   sam2_path: "models/sam2/sam2"
-  
-  # Mask directories (relative to morphseq_data_dir)
-  embryo_mask_root: "mask_data/embryo_mask_data"
-  yolk_mask_root: "mask_data/yolk_mask_data"
-  via_mask_root: "mask_data/via_annotation_data"
-  
+
   # Output directories (relative to sandbox)
   intermediate_dir: "data/intermediate"
   final_dir: "data/final"
   logs_dir: "logs"
+  
+  # Intermediate processing directories (relative to sandbox)
+  intermediate:
+    jpeg_frames: "data/intermediate/jpeg_frames"
 
 # Model configuration
 models:
