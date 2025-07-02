@@ -6,7 +6,7 @@ Performs automated image quality assessment following the proper MorphSeq QC wor
 
 WORKFLOW: Initialize → Manual → Automatic → Done
 
-1. INITIALIZE: Adds all images from metadata to QC CSV (this script does this first)
+1. INITIALIZE: Adds all images from metadata to QC JSON (this script does this first)
 2. MANUAL: Human experts can manually review and flag images (external process)  
 3. AUTOMATIC: This script performs algorithmic QC on remaining unflagged images
 4. DONE: Complete QC dataset ready for pipeline
@@ -17,42 +17,83 @@ Usage:
         --experiments_to_process 20240411,20240412
 
 QC Philosophy:
-    - Images default to None (no flag) = assumed good quality
+    - Images default to no flags = assumed good quality
     - Only flag images with actual detected problems
     - Manual annotations always take precedence over automatic
 
-QC Flags:
-    - None: Good quality image (default, no flag needed)
-    - BLUR: Image is blurry (low variance of Laplacian)
-    - CORRUPT: Cannot read/process image
-    - DARK: Image is too dark
-    - BRIGHT: Image is overexposed
-    - MANUAL_REJECT: Human reviewer flagged as problematic
+NEW JSON STRUCTURE:
+==================
+The QC system now uses a hierarchical JSON format in experiment_data_qc.json:
+
+{
+    "valid_qc_flag_categories": {
+        "experiment_level": {"POOR_IMAGING_CONDITIONS": "Description", ...},
+        "video_level": {"DRY_WELL": "Description", "FOCUS_DRIFT": "Description", ...},
+        "image_level": {"BLUR": "Description", "DARK": "Description", ...},
+        "embryo_level": {"DEAD_EMBRYO": "Description", ...}
+    },
+    "experiments": {
+        "20241215": {
+            "flags": ["POOR_IMAGING_CONDITIONS"],
+            "authors": ["mcolon"],
+            "notes": ["Manual review notes"],
+            "videos": {
+                "20241215_A01": {
+                    "flags": ["DRY_WELL"],
+                    "authors": ["mcolon"],
+                    "notes": ["Well dried out after frame 50"],
+                    "images": {
+                        "20241215_A01_t001": {
+                            "flags": ["BLUR"],
+                            "authors": ["automatic"],
+                            "notes": ["blur_score=45 < threshold=100"]
+                        }
+                    },
+                    "embryos": {
+                        "20241215_A01_t001_e01": {
+                            "flags": ["DEAD_EMBRYO"],
+                            "authors": ["expert_reviewer"],
+                            "notes": ["No movement detected"]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 FUNCTION BREAKDOWN:
 ===================
 
 📋 INITIALIZATION FUNCTIONS:
-    - initialize_qc_file()
-        Purpose: Populates QC CSV with ALL images from experiment metadata
+    - initialize_qc_structure_from_metadata()
+        Purpose: Populates QC JSON with ALL experiments/videos/images from metadata
         Input: experiment_metadata.json file
-        Output: QC CSV with image entries (qc_flag=None by default)
-        Philosophy: Every image starts as None (assumed good quality)
+        Output: QC JSON with hierarchical structure (no flags by default)
+        Philosophy: Every entity starts unflagged (assumed good quality)
 
 🏷️ QC FLAGGING FUNCTIONS:
-    - flag_qc()
-        Purpose: Adds/updates QC flags for specific problematic images
-        Input: image_ids, qc_flag, annotator (manual/automatic)
-        Output: Updated QC CSV with flags only for problem images
+    - add_qc_flag()
+        Purpose: Adds QC flags at any level (experiment/video/image/embryo)
+        Input: level, entity_id, qc_flag, author, notes, parent_ids
+        Output: Updated QC JSON with flags only for problem entities
         Philosophy: Only flag when there's an actual quality issue
+    
+    - flag_image(), flag_video(), flag_experiment(), flag_embryo()
+        Purpose: Convenience functions for flagging specific entity types
+        Input: entity_id, qc_flag, author, notes
+        Output: Updated QC JSON
 
 📊 QC DATA MANAGEMENT:
     - load_qc_data()
-        Purpose: Loads current QC CSV state
-        Returns: DataFrame with all QC records
-    - check_existing_qc()
-        Purpose: Checks if images already have QC annotations
-        Returns: Dict mapping image_id to existing flags (or None)
+        Purpose: Loads current QC JSON state
+        Returns: Dict with hierarchical QC structure
+    - get_qc_flags()
+        Purpose: Gets QC flags for specific entity
+        Returns: Dict with flags, authors, notes for entity
+    - get_qc_summary()
+        Purpose: Summarizes QC flags across all levels
+        Returns: Dict with flag counts by level
 
 🔍 IMAGE ANALYSIS FUNCTIONS:
     - calculate_image_metrics()
@@ -69,28 +110,30 @@ FUNCTION BREAKDOWN:
 🔄 WORKFLOW ORCHESTRATION:
     - main()
         Purpose: Orchestrates full QC workflow (Initialize → Automatic QC)
-        Steps: 1) Initialize QC CSV from metadata
+        Steps: 1) Initialize QC JSON from metadata
                2) Run automatic analysis on unflagged images  
                3) Flag only images with detected problems
                4) Generate summary report
 
 🎯 KEY DESIGN PRINCIPLES:
-    - Images default to None (no flag) = assumed good quality
-    - Only flag images with actual detected problems
+    - Hierarchical structure mirrors experiment_metadata.json organization
+    - Images default to no flags = assumed good quality
+    - Only flag entities with actual detected problems
     - Manual annotations always take precedence over automatic
     - Batch processing for efficiency with parallel workers
     - Clear separation: initialization vs. analysis vs. flagging
     - Preserve existing manual QC decisions (never overwrite)
+    - Multi-level QC: experiment, video, image, and embryo levels
+    - Author tracking for manual vs automatic annotations
 
 This script respects existing manual annotations and only processes images
 that haven't been manually reviewed. The philosophy is "innocent until proven guilty" -
-images are assumed to be good quality unless specifically flagged.
+entities are assumed to be good quality unless specifically flagged.
 """
 
 import argparse
 import cv2
 import numpy as np
-import pandas as pd
 from pathlib import Path
 import json
 from datetime import datetime
@@ -100,15 +143,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 import os
 
-# Add utils to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils', 'image_quality_qc_utils'))
-from image_quality_qc_utils import (
-    initialize_qc_file,  # CRITICAL: Initialize QC CSV from metadata first
-    get_qc_csv_path, 
-    load_qc_data, 
-    check_existing_qc, 
-    flag_qc, 
-    QC_FLAGS
+# Import from scripts directory
+from experiment_data_qc_utils import (
+    initialize_qc_structure_from_metadata,  # CRITICAL: Initialize QC JSON from metadata first
+    load_qc_data,
+    get_qc_flags,
+    flag_image,
+    get_qc_summary,
+    parse_image_id,
+    VALID_QC_FLAG_CATEGORIES
 )
 
 # QC thresholds (can be adjusted based on your data)
@@ -117,7 +160,10 @@ QC_THRESHOLDS = {
 }
 
 def calculate_image_metrics(image_path: Path) -> Dict:
-    """Calculate quality metrics for an image."""
+    """
+    Calculate quality metrics for an image.
+    Returns dict with 'qc_flag' (None if good quality) and 'metrics'.
+    """
     try:
         image = cv2.imread(str(image_path))
         if image is None:
@@ -146,10 +192,20 @@ def calculate_image_metrics(image_path: Path) -> Dict:
     except Exception as e:
         return {'qc_flag': 'CORRUPT', 'metrics': {'error': str(e)}}
 
-def process_single_image(image_id: str, images_dir: Path, data_dir: Path, overwrite: bool) -> Tuple[str, Optional[str]]:
+def process_single_image(image_id: str, images_dir: Path, quality_control_dir: Path, overwrite: bool) -> Tuple[str, Optional[str]]:
     """
     Process a single image for QC. Returns (image_id, qc_flag) or (image_id, None) if no flag needed.
     """
+    # Check if image already has QC flags (and we're not overwriting)
+    if not overwrite:
+        try:
+            parent_ids = parse_image_id(image_id)
+            existing_flags = get_qc_flags(quality_control_dir, "image", image_id, parent_ids)
+            if existing_flags["flags"]:  # Has existing flags
+                return image_id, None  # Skip processing
+        except (ValueError, KeyError):
+            pass  # Continue with processing
+    
     # Find the JPEG file
     jpeg_path = images_dir / f"{image_id}.jpg"
     if not jpeg_path.exists():
@@ -158,15 +214,13 @@ def process_single_image(image_id: str, images_dir: Path, data_dir: Path, overwr
     # Calculate QC metrics
     qc_result = calculate_image_metrics(jpeg_path)
     
-    # Skip if QC result indicates passing quality
-    if qc_result['qc_flag'] is None:
-        return image_id, None
-    
+    # Return flag if there's a problem, None if good quality
     return image_id, qc_result['qc_flag']
 
 def process_experiment_qc(
     experiment_id: str,
-    data_dir: Path,
+    raw_data_dir: Path,
+    quality_control_dir: Path,
     metadata: Dict,
     overwrite: bool = False,
     verbose: bool = True,
@@ -181,10 +235,6 @@ def process_experiment_qc(
     experiment_data = metadata['experiments'][experiment_id]
     if verbose:
         print(f"\nProcessing QC for experiment: {experiment_id}")
-    
-    # Load QC data once for the entire experiment
-    qc_df = load_qc_data(data_dir)
-    existing_image_ids = set(qc_df['image_id'].tolist()) if len(qc_df) > 0 else set()
     
     processed_count = 0
     skipped_count = 0
@@ -201,9 +251,17 @@ def process_experiment_qc(
         # Filter images that need processing
         images_to_process = []
         for image_id in image_ids:
-            if not overwrite and image_id in existing_image_ids:
-                skipped_count += 1
-                continue
+            # Check if image already has flags
+            if not overwrite:
+                try:
+                    parent_ids = parse_image_id(image_id)
+                    existing_flags = get_qc_flags(quality_control_dir, "image", image_id, parent_ids)
+                    if existing_flags["flags"]:
+                        skipped_count += 1
+                        continue
+                except (ValueError, KeyError):
+                    pass  # Continue with processing
+            
             images_to_process.append(image_id)
         
         if not images_to_process:
@@ -219,7 +277,7 @@ def process_experiment_qc(
         with ThreadPoolExecutor(max_workers=workers) as executor:
             # Submit all tasks
             future_to_image = {
-                executor.submit(process_single_image, image_id, images_dir, data_dir, overwrite): image_id
+                executor.submit(process_single_image, image_id, images_dir, quality_control_dir, overwrite): image_id
                 for image_id in images_to_process
             }
             
@@ -231,7 +289,7 @@ def process_experiment_qc(
                              leave=False):
                 try:
                     image_id, qc_flag = future.result()
-                    if qc_flag is not None:
+                    if qc_flag is not None:  # Only add if there's actually a problem
                         qc_flags_to_add.append((image_id, qc_flag))
                 except Exception as e:
                     image_id = future_to_image[future]
@@ -240,11 +298,11 @@ def process_experiment_qc(
         # Add all QC flags in batch
         for image_id, qc_flag in qc_flags_to_add:
             try:
-                flag_qc(
-                    data_dir=data_dir,
-                    image_ids=[image_id],
+                flag_image(
+                    quality_control_dir=quality_control_dir,
+                    image_id=image_id,
                     qc_flag=qc_flag,
-                    annotator='automatic',
+                    author='automatic',
                     notes=f"Automatic QC: {qc_flag}",
                     overwrite=overwrite
                 )
@@ -260,11 +318,29 @@ def process_experiment_qc(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated image quality assessment for MorphSeq pipeline"
+        description="Automated image quality assessment for MorphSeq pipeline using hierarchical JSON structure",
+        epilog="""
+Examples:
+  # Process all experiments
+  python 02_image_quality_qc.py \\
+    --raw_data_dir /path/to/data/raw_data_organized \\
+    --quality_control_dir /path/to/data/quality_control
+
+  # Process specific experiments  
+  python 02_image_quality_qc.py \\
+    --raw_data_dir /path/to/data/raw_data_organized \\
+    --quality_control_dir /path/to/data/quality_control \\
+    --experiments_to_process 20241215,20241216
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--data_dir", type=str, required=True,
-        help="Path to raw_data_organized directory"
+        "--raw_data_dir", type=str, required=True,
+        help="Path to raw_data_organized directory (contains experiment_metadata.json)"
+    )
+    parser.add_argument(
+        "--quality_control_dir", type=str, required=True,
+        help="Path to quality_control directory (where experiment_data_qc.json will be stored)"
     )
     parser.add_argument(
         "--experiments_to_process", type=str,
@@ -286,54 +362,55 @@ def main():
     
     args = parser.parse_args()
     
-    data_dir = Path(args.data_dir)
-    if not data_dir.exists():
-        print(f"Error: Data directory not found: {data_dir}")
+    raw_data_dir = Path(args.raw_data_dir)
+    quality_control_dir = Path(args.quality_control_dir)
+    
+    if not raw_data_dir.exists():
+        print(f"Error: Raw data directory not found: {raw_data_dir}")
         return 1
     
     # Load metadata
-    metadata_path = data_dir / "experiment_metadata.json"
+    metadata_path = raw_data_dir / "experiment_metadata.json"
     if not metadata_path.exists():
         print(f"Error: Metadata file not found: {metadata_path}")
         print("Run 01_prepare_videos.py first to generate metadata")
         return 1
-    
+
     with open(metadata_path, 'r') as f:
         metadata = json.load(f)
     
     # Ensure QC directory exists
-    qc_dir = data_dir / "quality_control"
-    qc_dir.mkdir(exist_ok=True)
+    quality_control_dir.mkdir(parents=True, exist_ok=True)
     
-    # STEP 1: INITIALIZE QC CSV FROM METADATA (CRITICAL FIRST STEP)
-    print("🔄 Step 1: Initializing QC system from metadata...")
-    print("   → Scanning experiment_metadata.json for all images")
-    print("   → Detecting new images not yet in QC system")
-    print("   → Adding new entries to image_quality_qc.csv")
+    # STEP 1: INITIALIZE QC STRUCTURE FROM METADATA (CRITICAL FIRST STEP)
+    print("🔄 Step 1: Initializing hierarchical QC structure from metadata...")
+    print("   → Scanning experiment_metadata.json for all experiments/videos/images")
+    print("   → Creating hierarchical JSON structure mirroring metadata organization")
+    print("   → Adding new entries to experiment_data_qc.json")
     
-    # Initialize QC file to ensure ALL images from metadata are tracked
-    qc_df_before = load_qc_data(data_dir)
-    existing_count = len(qc_df_before)
+    # Initialize QC structure to ensure ALL entities from metadata are tracked
+    qc_data_before = load_qc_data(quality_control_dir)
+    existing_experiments = len(qc_data_before.get("experiments", {}))
     
-    qc_df_after = initialize_qc_file(
-        data_dir=data_dir,
+    qc_data_after = initialize_qc_structure_from_metadata(
+        quality_control_dir=quality_control_dir,
         experiment_metadata_path=metadata_path,
         overwrite=False  # Preserve existing manual annotations
     )
     
-    new_images_added = len(qc_df_after) - existing_count
-    print(f"✅ QC initialization complete!")
-    print(f"   📈 Total images now tracked: {len(qc_df_after)}")
-    print(f"   ➕ New images added from metadata: {new_images_added}")
-    print(f"   💾 Existing QC annotations preserved: {existing_count}")
+    new_experiments = len(qc_data_after.get("experiments", {})) - existing_experiments
+    print(f"✅ QC structure initialization complete!")
+    print(f"   📈 Total experiments now tracked: {len(qc_data_after.get('experiments', {}))}")
+    print(f"   ➕ New experiments added from metadata: {new_experiments}")
+    print(f"   💾 Existing QC annotations preserved")
     
-    if new_images_added > 0:
-        print("   📝 These new images are ready for manual/automatic QC")
+    if new_experiments > 0:
+        print("   📝 New entities are ready for manual/automatic QC")
     else:
-        print("   ✅ All images already in image quality QC file")
+        print("   ✅ All entities already in QC structure")
     
     # STEP 2: AUTOMATIC QC PROCESSING
-    print(f"\n🤖 Step 2: Automatic QC processing...")
+    print(f"\n🤖 Step 2: Automatic image-level QC processing...")
     print("   → Processing images algorithmically (blur detection, etc.)")
     print("   → Only flagging images that fail quality checks")
     print("   → Manual annotations take precedence over automatic")
@@ -346,13 +423,12 @@ def main():
     
     print(f"Processing QC for {len(experiments_to_process)} experiments")
     
-
     # Process each experiment with automatic QC
     total_processed = 0
     total_skipped = 0
     for experiment_id in experiments_to_process:
         processed, skipped = process_experiment_qc(
-            experiment_id, data_dir, metadata, 
+            experiment_id, raw_data_dir, quality_control_dir, metadata, 
             args.overwrite, args.verbose, args.workers
         )
         total_processed += processed
@@ -364,15 +440,16 @@ def main():
     print(f"   ⏭️  Total images skipped (already flagged): {total_skipped}")
     
     # Load final QC data for summary
-    qc_df = load_qc_data(data_dir)
-    print(f"\nQC processing complete. Total QC records: {len(qc_df)}")
+    qc_summary = get_qc_summary(quality_control_dir)
+    print(f"\nQC processing complete. Summary by level:")
     
-    # Print summary
-    if len(qc_df) > 0:
-        print("\nQC Summary:")
-        print(qc_df['qc_flag'].value_counts())
-        print(f"\nAnnotator breakdown:")
-        print(qc_df['annotator'].value_counts())
+    for level, flags in qc_summary.items():
+        if flags:
+            print(f"\n{level.replace('_', ' ').title()}:")
+            for flag, count in flags.items():
+                print(f"  {flag}: {count}")
+    
+    return 0
     
     return 0
 

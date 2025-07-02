@@ -35,13 +35,15 @@ All pipeline stages now include experiment and video identifiers:
 }
 ```
 
-### 6. **Image Quality Control (QC) System Refactor**
-- **Unified Core Utilities**: All QC-related logic (flagging, removing, loading, saving) is now centralized in `utils/image_quality_qc_utils/image_quality_qc_utils.py`.
-- **Simplified CLI**: A single command-line tool, `utils/image_quality_qc_utils/image_quality_qc.py`, now handles all manual and automated QC operations.
-- **Centralized QC Data**: All QC flags are stored in a single CSV file at `data/quality_control/image_quality_qc.csv`, eliminating data fragmentation.
-- **Streamlined Automated QC**: The automated QC script (`scripts/02_image_quality_qc.py`) now uses only the blur metric and supports parallel processing for better performance.
-- **Updated Jupyter Demo**: The notebook `utils/image_quality_qc_utils/image_quality_qc_demo.ipynb` has been revamped to provide a clear guide to the new system.
-- **Code Cleanup**: Redundant scripts (e.g., `manual_image_quality_qc.py`) have been removed to create a cleaner codebase.
+### 6. **Experiment Data Quality Control (QC) System Refactor**
+- **Hierarchical JSON Structure**: QC system now uses `experiment_data_qc.json` with hierarchical organization mirroring experiment metadata
+- **Multi-level QC**: Support for QC flags at experiment, video, image, and embryo levels
+- **Unified Core Utilities**: All QC-related logic moved to `scripts/experiment_data_qc_utils.py` (moved from utils to scripts)
+- **Author Tracking**: Every QC flag tracks who added it (manual vs automatic) with timestamps and notes
+- **Flexible Flag Categories**: Predefined QC flag categories for each level with descriptions
+- **COCO-inspired Structure**: JSON format inspired by COCO annotations for better organization
+- **Legacy Compatibility**: Backward compatibility functions for existing CSV-based workflows
+- **Better Maintenance**: Single JSON file eliminates data fragmentation and improves QC tracking
 
 ## Expected Input Structure
 

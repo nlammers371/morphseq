@@ -2,11 +2,32 @@
 """
 image_qc_utils.py
 
-Utilities for managing image quality control flags for the MorphSeq pipeline.
-Provides functions for manual and automatic QC flag management in a shared CSV file.
+⚠️  DEPRECATED LEGACY MODULE ⚠️
 
-The QC system uses a shared CSV file (image_quality_qc.csv) where both manual and 
-automatic QC flags are stored, with an 'annotator' column to track the source.
+This CSV-based QC system has been replaced with a hierarchical JSON-based system.
+
+🔄 MIGRATION GUIDE:
+===================
+
+OLD (this file):                    NEW (use instead):
+------------------                   -------------------
+image_quality_qc.csv                experiment_data_qc.json  
+utils/image_quality_qc_utils/        scripts/experiment_data_qc_utils.py
+QC_FLAGS                             VALID_QC_FLAG_CATEGORIES
+validate_qc_flag(flag)               validate_qc_flag(flag, level, qc_data)
+flag_qc(image_ids, flag, ...)        flag_image(image_id, flag, author, ...)
+
+🏗️  NEW FEATURES:
+- Multi-level QC (experiment/video/image/embryo)
+- Author tracking with timestamps
+- Hierarchical organization mirroring metadata
+- Better validation and error handling
+- Single JSON file instead of CSV
+
+📍 NEW LOCATION: scripts/experiment_data_qc_utils.py
+
+For compatibility, basic functions are provided below, but new code should use
+the new hierarchical system in scripts/experiment_data_qc_utils.py
 """
 
 import pandas as pd
@@ -14,8 +35,17 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 from datetime import datetime
+import warnings
 
-# Standard QC flag types
+# Issue deprecation warning
+warnings.warn(
+    "image_quality_qc_utils is deprecated. Use scripts/experiment_data_qc_utils.py instead. "
+    "See migration guide in module docstring.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+# Legacy QC flags for backward compatibility (image-level only)
 QC_FLAGS = {
     'BLUR': 'Image is blurry (low variance of Laplacian)',
     'DARK': 'Image is too dark (low mean brightness)',
@@ -30,12 +60,167 @@ QC_FLAGS = {
 }
 
 def get_qc_csv_path(data_dir: Union[str, Path]) -> Path:
-    """Get the path to the QC CSV file."""
-    # Save QC files to the data/quality_control directory (sibling to raw_data_organized)
-    data_parent = Path(data_dir).parent  # Go up from raw_data_organized to data level
+    """LEGACY: Get path to QC CSV file. Use experiment_data_qc.json instead."""
+    data_parent = Path(data_dir).parent
     return data_parent / "quality_control" / "image_quality_qc.csv"
 
-def load_or_create_qc_csv(qc_csv_path: Union[str, Path]) -> pd.DataFrame:
+def validate_qc_flag(qc_flag: str) -> None:
+    """LEGACY: Validate QC flag. Use experiment_data_qc_utils.validate_qc_flag(flag, level, qc_data) instead."""
+    if qc_flag not in QC_FLAGS:
+        valid_flags = list(QC_FLAGS.keys())
+        raise ValueError(f"Invalid QC flag '{qc_flag}'. Valid flags: {valid_flags}")
+
+def load_qc_data(data_dir: Union[str, Path]) -> pd.DataFrame:
+    """LEGACY: Load QC data as DataFrame. Use experiment_data_qc_utils.load_qc_data() instead."""
+    qc_csv_path = get_qc_csv_path(data_dir)
+    
+    if qc_csv_path.exists():
+        df = pd.read_csv(qc_csv_path)
+        print(f"Loaded legacy QC data: {len(df)} records")
+    else:
+        df = pd.DataFrame(columns=[
+            'experiment_id', 'video_id', 'image_id', 'qc_flag', 'notes', 'annotator'
+        ])
+        print("Created empty legacy QC DataFrame")
+    
+    return df
+
+def save_qc_data(qc_df: pd.DataFrame, data_dir: Union[str, Path]) -> None:
+    """LEGACY: Save QC DataFrame to CSV. Use experiment_data_qc_utils.save_qc_data() instead."""
+    qc_csv_path = get_qc_csv_path(data_dir)
+    qc_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    qc_df.to_csv(qc_csv_path, index=False)
+    print(f"Saved legacy QC data to: {qc_csv_path}")
+
+def parse_image_id(image_id: str) -> tuple:
+    """LEGACY: Parse image_id. Use experiment_data_qc_utils.parse_image_id() instead."""
+    parts = image_id.split('_')
+    if len(parts) < 3:
+        raise ValueError(f"Invalid image_id format: {image_id}")
+    
+    experiment_id = parts[0]
+    well_id = parts[1] 
+    timepoint = parts[2]
+    video_id = f"{experiment_id}_{well_id}"
+    
+    return experiment_id, video_id, well_id, timepoint
+
+# Minimal legacy functions for critical compatibility
+def flag_qc(data_dir: Union[str, Path], image_ids: List[str], qc_flag: str, 
+           annotator: str = 'manual', notes: str = '', overwrite: bool = False) -> pd.DataFrame:
+    """LEGACY: Flag images. Use experiment_data_qc_utils.flag_image() instead."""
+    print("⚠️  WARNING: Using deprecated flag_qc(). Migrate to experiment_data_qc_utils.flag_image()")
+    
+    validate_qc_flag(qc_flag)
+    qc_df = load_qc_data(data_dir)
+    
+    new_records = []
+    for image_id in image_ids:
+        exp_id, vid_id, well_id, timepoint = parse_image_id(image_id)
+        
+        # Check for existing records
+        mask = (qc_df['image_id'] == image_id)
+        if mask.any() and not overwrite:
+            continue
+        
+        # Remove existing if overwriting
+        if overwrite:
+            qc_df = qc_df[~mask]
+        
+        new_records.append({
+            'experiment_id': exp_id,
+            'video_id': vid_id,
+            'image_id': image_id,
+            'qc_flag': qc_flag,
+            'notes': notes,
+            'annotator': annotator
+        })
+    
+    if new_records:
+        new_df = pd.DataFrame(new_records)
+        qc_df = pd.concat([qc_df, new_df], ignore_index=True)
+    
+    save_qc_data(qc_df, data_dir)
+    return qc_df
+
+def get_qc_summary(data_dir: Union[str, Path]) -> Dict:
+    """LEGACY: Get QC summary. Use experiment_data_qc_utils.get_qc_summary() instead."""
+    qc_df = load_qc_data(data_dir)
+    
+    if len(qc_df) == 0:
+        return {"total_images": 0, "qc_flags": {}, "annotators": {}}
+    
+    return {
+        "total_images": len(qc_df),
+        "qc_flags": qc_df['qc_flag'].value_counts().to_dict(),
+        "annotators": qc_df['annotator'].value_counts().to_dict(),
+        "experiments": qc_df['experiment_id'].nunique(),
+        "videos": qc_df['video_id'].nunique()
+    }
+
+def check_existing_qc(data_dir: Union[str, Path], image_ids: List[str]) -> Dict[str, str]:
+    """LEGACY: Check existing QC. Use experiment_data_qc_utils.get_qc_flags() instead."""
+    qc_df = load_qc_data(data_dir)
+    
+    result = {}
+    for image_id in image_ids:
+        existing = qc_df[qc_df['image_id'] == image_id]
+        if len(existing) > 0:
+            result[image_id] = existing.iloc[0]['qc_flag']
+        else:
+            result[image_id] = ""
+    
+    return result
+
+# Additional legacy compatibility functions
+def initialize_qc_file(data_dir: Union[str, Path], experiment_metadata_path: Optional[Union[str, Path]] = None, overwrite: bool = False) -> pd.DataFrame:
+    """LEGACY: Use experiment_data_qc_utils.initialize_qc_structure_from_metadata() instead."""
+    print("⚠️  WARNING: Using deprecated initialize_qc_file(). Migrate to initialize_qc_structure_from_metadata()")
+    
+    if experiment_metadata_path is None:
+        experiment_metadata_path = Path(data_dir) / "experiment_metadata.json"
+    
+    with open(experiment_metadata_path, 'r') as f:
+        metadata = json.load(f)
+    
+    all_images = []
+    for exp_id, exp_data in metadata['experiments'].items():
+        for video_id, video_data in exp_data['videos'].items():
+            for image_id in video_data.get('image_ids', []):
+                all_images.append({
+                    'experiment_id': exp_id,
+                    'video_id': video_id,
+                    'image_id': image_id,
+                    'qc_flag': None,
+                    'notes': None,
+                    'annotator': None
+                })
+    
+    qc_df = pd.DataFrame(all_images)
+    save_qc_data(qc_df, data_dir)
+    return qc_df
+
+# Additional convenience functions for compatibility
+def get_flagged_images(qc_df: pd.DataFrame, exclude_none: bool = True) -> List[str]:
+    """LEGACY: Get flagged images."""
+    if exclude_none:
+        flagged = qc_df.dropna(subset=['qc_flag'])
+    else:
+        flagged = qc_df.copy()
+    return flagged['image_id'].tolist()
+
+def get_unflagged_images(qc_df: pd.DataFrame) -> List[str]:
+    """LEGACY: Get unflagged images."""
+    unflagged = qc_df[qc_df['qc_flag'].isna()]
+    return unflagged['image_id'].tolist()
+
+def manual_qc(data_dir: Union[str, Path], annotator: str, **kwargs) -> pd.DataFrame:
+    """LEGACY: Manual QC wrapper."""
+    return flag_qc(data_dir=data_dir, annotator=annotator, **kwargs)
+
+def auto_qc(data_dir: Union[str, Path], **kwargs) -> pd.DataFrame:
+    """LEGACY: Auto QC wrapper."""
+    return flag_qc(data_dir=data_dir, annotator='auto', **kwargs)
     """
     Load or create QC CSV file with correct column structure.
     
