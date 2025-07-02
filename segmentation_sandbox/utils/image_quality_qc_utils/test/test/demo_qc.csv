@@ -1,0 +1,5 @@
+experiment_id,video_id,image_id,qc_flag,notes,annotator
+20250101,20250101_A01,20250101_A01_t001,OUT_OF_FOCUS,Manual review - changed from BLUR to OUT_OF_FOCUS,mcolon
+20250101,20250101_A01,20250101_A01_t002,,,
+20250101,20250101_B01,20250101_B01_t001,BLUR,Automatic: Laplacian variance < threshold (blur_threshold=100),automatic
+20250102,20250102_A01,20250102_A01_t001,DARK,Automatic: Mean brightness < threshold (brightness_threshold=50),automatic
