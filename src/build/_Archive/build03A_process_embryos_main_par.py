@@ -1115,7 +1115,7 @@ if __name__ == "__main__":
     
     # print('Compiling well metadata...')
     build_well_metadata_master(root)
-    # #
+
     # # print('Compiling embryo metadata...')
     segment_wells(root, par_flag=False, overwrite_well_stats=True)
 

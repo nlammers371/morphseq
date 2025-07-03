@@ -6,6 +6,8 @@ from torch.utils.data import Dataset
 from typing import Tuple, Any
 from src.build.export_utils import im_rescale
 from collections import OrderedDict
+from pathlib import Path
+import os
 
 class DatasetOutput(OrderedDict):
     """Base ModelOutput class fixing the output type from the models. This class is inspired from
@@ -45,10 +47,20 @@ class MultiTileZStackDataset(Dataset):
         entry       = self.samples[idx]
         stacks  = []
         
+        # 0) get max z size and use this to standardize
+        max_z = max(len(ez) for ez in entry["tile_zpaths"])
+
         # 1) load each tile’s Z-stack
         for zpaths in entry["tile_zpaths"]:
-            stack = np.stack([skio.imread(str(p)) for p in zpaths], axis=0)
-            stacks.append(stack.astype(self.ff_dtype))
+
+            stack = np.stack([skio.imread(str(p)) for p in zpaths if p and Path(p).is_file()], axis=0)
+            if stack.shape[0] == max_z:
+                stacks.append(stack.astype(self.ff_dtype))
+            else:
+                z_vec = np.asarray([int(os.path.basename(zp).split("_")[-2][1:]) for zp in zpaths])
+                stack_alt = np.zeros((max_z, stack.shape[1], stack.shape[2]), dtype=self.ff_dtype)
+                stack_alt[z_vec-1, :, :] = stack
+                stacks.append(stack_alt)
 
         # 2) compute one shared percentile‐range across _every_ voxel in every tile
         # cap by max_samples

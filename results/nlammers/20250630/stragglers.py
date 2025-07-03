@@ -10,9 +10,9 @@ sys.path.insert(0, str(REPO_ROOT))
 from src.build.pipeline_objects import Experiment, ExperimentManager
 
 if __name__ == "__main__":
+    
     # export everything dated later than XX
-    later_than = 20230901
-    earlier_than = 20240501
+    experiments = ['20250612_24hpf_wfs1_ctcf']#, '20250622_chem_28C_T00_1425', '20250622_chem_34C_T00_1256', '20250622_chem_35C_T00_1223_check']
     force_update = True
 
     # call pipeline functions
@@ -22,4 +22,5 @@ if __name__ == "__main__":
     manager = ExperimentManager(root=root)
 
     # Export 
-    manager.export_experiments(later_than=later_than, earlier_than=earlier_than, force_update=force_update)
+    manager.export_experiments(experiments=experiments, force_update=force_update)
+    manager.stitch_experiments(experiments=experiments, force_update=force_update)

@@ -23,7 +23,8 @@ from pathlib import Path
 from glob2 import glob
 import skimage.io as skio
 from skimage import exposure, util
-from src.build.export_utils import (trim_to_shape, estimate_max_blocks, save_images_parallel, LoG_focus_stacker, scrape_keyence_metadata)
+from src.build.export_utils import (trim_to_shape, estimate_max_blocks, save_images_parallel, LoG_focus_stacker, scrape_keyence_metadata,
+                                    _get_keyence_tile_orientation, build_experiment_metadata)
 from src.build.data_classes import MultiTileZStackDataset
 from torch.utils.data import DataLoader
 
@@ -86,16 +87,6 @@ def flatten_master_params(master_json):
     return master_json
 
 
-### Helper functions
-# def _load_images(indices: List[int], file_list: List[str]) -> List[np.ndarray]:
-#     return [skio.imread(file_list[i]) for i in indices]
-
-# def _write_ff(ff: np.ndarray, out_dir: Path, pos_string: str):
-#     out_dir.mkdir(parents=True, exist_ok=True)
-#     if ff.dtype == np.uint16:
-#         ff = skimage.util.img_as_ubyte(ff)
-#     # skio.use_plugin("imageio")
-#     skio.imsave(out_dir / f"im_{pos_string}.jpg", ff, check_contrast=False)
 
 # build path dictionary
 def get_image_paths(
@@ -263,8 +254,8 @@ def stitch_experiment(
 
     # trim & invert
     stitched = trim_to_shape(stitched, target)
-    # maxv = np.iinfo(stitched.dtype).max
-    # stitched = maxv - stitched
+    maxv = np.iinfo(stitched.dtype).max
+    stitched = maxv - stitched
 
     out_png.parent.mkdir(parents=True, exist_ok=True)
     skio.imsave(out_png, stitched, check_contrast=False)
@@ -275,6 +266,7 @@ def build_ff_from_keyence(data_root: Path | str,
                           exp_name: str,
                           ff_filter_res_um: float=3.0,
                           overwrite: bool=False,
+                          metadata_only: bool=False,
                           ff_proc_dtype: torch.dtype=torch.float16):
     
     # figure out how to utilize compute resources
@@ -305,82 +297,92 @@ def build_ff_from_keyence(data_root: Path | str,
     # call function to walk through directories and compile list of image paths
     sample_list, meta_df = get_image_paths(well_list=well_list, cytometer_flag=cytometer_flag)
 
+    meta_df = build_experiment_metadata(root=data_root, exp_name=exp_name, meta_df=meta_df)
 
-    ds = MultiTileZStackDataset(sample_list)
+    if not metadata_only:
+        # sample_list = [sample_list[i] for i in range(28, len(sample_list))]
+        if exp_name == "20231207": # this one experiment has variable numbers of tiles
+            EXPECTED_TILES = 2      # or 3, whatever the normal case is
+            sample_list = [s for s in sample_list if len(s["tile_zpaths"]) == EXPECTED_TILES]
+            
+        ds = MultiTileZStackDataset(sample_list)
+        # check image size to gauge memory footprint
+        im0 = ds[0]["data"]
+        # sample_bytes = int(im0.nbytes)
+        # gpu_bs, _ = estimate_batch_sizes(sample_bytes)
 
-    # check image size to gauge memory footprint
-    im0 = ds[0]["data"]
-    # sample_bytes = int(im0.nbytes)
-    # gpu_bs, _ = estimate_batch_sizes(sample_bytes)
+        # get device
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        Z, Y, X = im0[0].shape
+        X = X * len(im0)
+        bs, _= estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
+        if bs > 2:
+            bs = 2
+        print(f"Batch size: {bs}")
+        log.info("Calculating FF for %s", exp_name)
 
-    # get device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Z, Y, X = im0[0].shape
-    X = X * len(im0)
-    bs, _= estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
-    print(f"Batch size: {bs}")
-    log.info("Calculating FF for %s", exp_name)
-
-    loader = DataLoader(ds,
-                        batch_size=bs,            # only ever load 1 sample at a time
-                        num_workers=2,           # only one worker process
-                        pin_memory=True,
-                        prefetch_factor=1,       # only prefetch 1 batch
-                        persistent_workers=False)
-    
-    
-    for batch in tqdm(loader, "Doing FF projections..."):
-        # batch.shape == (batch_size, n_tiles, Z, H, W)
-       
-        # now you can FF-project each tile—for instance by reshaping:
-        data = batch["data"]
-        meta_dict = batch["path"]
-        data = data.to(device, non_blocking=True)
-        b, t, z, h, w = data.shape
-        flat = data.view(b*t, z, h, w) # treat each tile as its own volume
-
-        # calculate size of filter to use
-        pixel_size_um = meta_dict["pixel_size_um"][0].numpy()
-        filter_rad = max(1, int(round(ff_filter_res_um/ pixel_size_um)))
-        filter_size = 2 * filter_rad + 1
-        ff, _   = LoG_focus_stacker(flat, filter_size=filter_size) 
-        
-        # prepare to save              # returns shape (b*t, H, W)
-        ff   = ff.view(b, t, h, w).cpu().numpy()
-        ff_list = [util.img_as_ubyte(ff[b][p]) for b in range(ff.shape[0]) for p in range(ff.shape[1])]
-
-        # build lists file and folder names
-        
-        n_tiles = len(meta_dict["tile_zpaths"])
-        well_names = meta_dict["well"]
-        time_indices = meta_dict["time_id"]
-        all_paths = [
-            Path(ff_dir) / f"ff_{w}_t{t:04}" / f"im_p{p:04}.jpg"
-            for w, t in zip(well_names, time_indices)
-            for p in range(n_tiles)
-            ]
+        loader = DataLoader(ds,
+                            batch_size=bs,            # only ever load 1 sample at a time
+                            num_workers=2,           # only one worker process
+                            pin_memory=True,
+                            prefetch_factor=1,       # only prefetch 1 batch
+                            persistent_workers=False)
         
         
-        # us parallel processing to save images
-        save_images_parallel(images=ff_list,
-                             paths=all_paths,
-                             n_workers=min(2, bs))
-
+        for batch in tqdm(loader, "Doing FF projections..."):
+            # batch.shape == (batch_size, n_tiles, Z, H, W)
         
-    # load previous metadata
-    df_path = META / f"{exp_name}_metadata.csv"
-    if not overwrite and os.path.isfile(df_path):
-        df_prev = pd.read_csv(df_path)
-        df_prev = [df_prev]
+            # now you can FF-project each tile—for instance by reshaping:
+            data = batch["data"]
+            meta_dict = batch["path"]
+            data = data.to(device, non_blocking=True)
+            b, t, z, h, w = data.shape
+            flat = data.view(b*t, z, h, w) # treat each tile as its own volume
+
+            # calculate size of filter to use
+            pixel_size_um = meta_dict["pixel_size_um"][0].numpy()
+            filter_rad = max(1, int(round(ff_filter_res_um/ pixel_size_um)))
+            filter_size = 2 * filter_rad + 1
+            ff, _   = LoG_focus_stacker(flat, filter_size=filter_size) 
+            
+            # prepare to save              # returns shape (b*t, H, W)
+            ff   = ff.view(b, t, h, w).cpu().numpy()
+            ff_list = [util.img_as_ubyte(ff[b][p]) for b in range(ff.shape[0]) for p in range(ff.shape[1])]
+
+            # build lists file and folder names
+            
+            n_tiles = len(meta_dict["tile_zpaths"])
+            well_names = meta_dict["well"]
+            time_indices = meta_dict["time_id"]
+            all_paths = [
+                Path(ff_dir) / f"ff_{w}_t{t:04}" / f"im_p{p:04}.jpg"
+                for w, t in zip(well_names, time_indices)
+                for p in range(n_tiles)
+                ]
+            
+            
+            # us parallel processing to save images
+            save_images_parallel(images=ff_list,
+                                paths=all_paths,
+                                n_workers=min(2, bs))
     else:
-        df_prev = []
+        log.info("Skipping FF for %s", exp_name)
+    # load previous metadata
+    # df_path = META / f"{exp_name}_metadata.csv"
+    # if not overwrite and os.path.isfile(df_path):
+    #     df_prev = pd.read_csv(df_path)
+    #     df_prev = [df_prev]
+    # else:
+    #     df_prev = []
 
-    if meta_df.shape[0] > 0:
-        meta_df.drop_duplicates(subset=["well", "time_string"])
-        meta_df["Time Rel (s)"] = meta_df["Time (s)"] - meta_df["Time (s)"].min()
-        meta_df.to_csv(META / f"{exp_name}_metadata.csv", index=False)
+    # if meta_df.shape[0] > 0:
+    meta_df.drop_duplicates(subset=["well", "time_string"])
+    meta_df["Time Rel (s)"] = meta_df["Time (s)"] - meta_df["Time (s)"].min()
+    out_path = META / f"{exp_name}_metadata.csv"
+    meta_df.to_csv(META / out_path, index=False)
 
-    print('Done.')
+    log.info(f"✔️  Wrote {out_path}")
+    log.info('Done.')
 
 
 ######
@@ -398,10 +400,11 @@ def stitch_ff_from_keyence(data_root: str | Path,
     WRITE_ROOT = Path(data_root)
     META_ROOT  = Path(data_root) / "metadata" / "built_metadata_files"
 
+    log.info("Stitching FF tiles for %s", exp_name)
     # -----------------------------------------------------------------------
     # for acq, orientation in zip(acq_dirs, orientation_list):
         # inside stitch_ff_from_keyence() – one acquisition folder “acq”
-    ff_tile_root = WRITE_ROOT / "built_image_data" / "keyence" / "FF_images" / exp_name
+    ff_tile_root = WRITE_ROOT / "built_image_data" / "Keyence" / "FF_images" / exp_name
     stitch_root  = WRITE_ROOT / "built_image_data" / "stitched_FF_images" / exp_name
     stitch_root.mkdir(parents=True, exist_ok=True)
 
@@ -428,10 +431,9 @@ def stitch_ff_from_keyence(data_root: str | Path,
             stitch_experiment(f, ff_folders, str(ff_tile_root), str(stitch_root), overwrite, size_factor, orientation=orientation)
 
     else:
-        process_map(partial(stitch_experiment, ff_folder_list=ff_folders, ff_tile_dir=str(ff_tile_root), 
-                            stitch_ff_dir=str(stitch_root), overwrite=overwrite, size_factor=size_factor, orientation=orientation),
+        process_map(partial(stitch_experiment, ff_folders=ff_folders, ff_tile_dir=str(ff_tile_root), 
+                            out_dir=str(stitch_root), overwrite=overwrite, size_factor=size_factor, orientation=orientation),
                                     range(len(ff_folders)), max_workers=n_workers, chunksize=1)
-
 
 
 if __name__ == "__main__":
@@ -440,4 +442,5 @@ if __name__ == "__main__":
 
     data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
     
-    build_ff_from_keyence(data_root=data_root, exp_name="20250529_36hpf_ctrl_atf6")
+    build_ff_from_keyence(data_root=data_root, exp_name='20250612_24hpf_wfs1_ctcf', metadata_only=True)
+    # stitch_ff_from_keyence(data_root=data_root, exp_name="20250612_24hpf_wfs1_ctcf", overwrite=False, n_workers=1)

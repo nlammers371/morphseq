@@ -7,7 +7,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]   # adjust “2” if levels dif
 # Put that directory at the *front* of sys.path so Python looks there first
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.build.build03A_process_embryos_main_par import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
+from src.build.build03A_process_images import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
 import multiprocessing
 
 def main():

@@ -1,3 +1,12 @@
+from pathlib import Path
+import sys
+
+# Path to the project *root* (the directory that contains the `src/` folder)
+REPO_ROOT = Path(__file__).resolve().parents[2]   # adjust “2” if levels differ
+
+# Put that directory at the *front* of sys.path so Python looks there first
+sys.path.insert(0, str(REPO_ROOT))
+
 # script to define functions_folder for loading and standardizing fish movies
 import os
 import numpy as np
@@ -30,6 +39,7 @@ logging.getLogger("stitch2d").setLevel(logging.ERROR)
 # -------------------------------------------------------------
 def list_time_dirs(pos_dir: Path) -> list[Path]:
     """Return [T0001/, T0002/, …] or [pos_dir] if no sub-folders."""
+    pos_dir = Path(pos_dir)
     t_dirs = sorted(p for p in pos_dir.glob("T*") if p.is_dir())
     return t_dirs or [pos_dir]
 
@@ -100,6 +110,7 @@ def get_alignment_coords(n_pos_tiles, orientation, ff_tile_dir):
     coords_prior = template.params["coords"] 
 
     return coords_prior
+
 
 def stitch_well_z(
     w: int,
@@ -184,10 +195,10 @@ def stitch_z_from_keyence(data_root: Path | str,
     par_flag = n_workers > 1
     orientation = _get_keyence_tile_orientation(exp_name)
 
-    RAW = Path(data_root) / "raw_image_data" / "keyence"
+    RAW = Path(data_root) / "raw_image_data" / "Keyence"
     META  = Path(data_root) / "metadata" / "built_metadata_files"
-    BUILT = Path(data_root) / "built_image_data" / "keyence"
-    BUILTZ = Path(data_root) / "built_image_data" / "keyence_stitched_z"
+    BUILT = Path(data_root) / "built_image_data" / "Keyence"
+    BUILTZ = Path(data_root) / "built_image_data" / "Keyence_stitched_z"
     
     # handle paths
     # acq_dirs = valid_acq_dirs(RAW, dir_list)
@@ -230,9 +241,8 @@ if __name__ == "__main__":
 
     overwrite = True
 
-    # data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
-    # dir_list = ["20230525", "20231207"]
-    # # build FF images
-    # build_ff_from_keyence(data_root, overwrite=overwrite, dir_list=dir_list)
-    # # stitch FF images
-    # stitch_ff_from_keyence(data_root, overwrite=overwrite, dir_list=dir_list)
+    data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    stitch_z_from_keyence(data_root=data_root, 
+                          exp_name='20250612_24hpf_wfs1_ctcf',
+                          n_workers=1, 
+                          overwrite=True)

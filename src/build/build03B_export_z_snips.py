@@ -8,7 +8,7 @@ import pandas as pd
 from src.functions.utilities import path_leaf
 from src.functions.image_utils import crop_embryo_image, get_embryo_angle, process_masks, rotate_image
 from src.functions.image_utils import LoG_focus_stacker
-from src.build.build03A_process_embryos_main_par import estimate_image_background
+from src.build.build03A_process_images import estimate_image_background
 from functools import partial
 import scipy
 import warnings

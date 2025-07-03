@@ -38,7 +38,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         im_dims = [576, 320]  # NL: can I read this off of the loaded model object?
 
     # generate directory for model predictions
-    path_to_labels = os.path.join(root, "built_image_data", 'segmentation', model_name + '_predictions', '')
+    path_to_labels = os.path.join(root, 'segmentation', model_name + '_predictions', '')
 
     if make_sample_figures:
         sample_fig_path = os.path.join(path_to_labels, "sample_figures")
@@ -112,7 +112,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['state_dict'])
     else:
-        model.load_state_dict(torch.load(os.path.join(root, "built_image_data", 'segmentation_models', model_name), map_location=device))
+        model.load_state_dict(torch.load(os.path.join(root, 'segmentation', 'segmentation_models', model_name), map_location=device))
     model = model.to(device)
     model.eval()
 
@@ -147,7 +147,8 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                 lb_temp = np.squeeze(lb_predicted[b, :, :])
                 im_path = im_paths[b]
                 suffix = im_path.replace(path_to_images[:-1], "")
-                out_path = os.path.join(path_to_labels, suffix.replace(".png", "") + ".jpg")
+                suffix = suffix.replace(".png", "") if suffix.endswith(".png") else suffix.replace(".jpg", "") 
+                out_path = os.path.join(path_to_labels, suffix + ".jpg")
                 io.imsave(out_path, lb_temp, check_contrast=False)
 
                 # make figure

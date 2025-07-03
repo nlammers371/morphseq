@@ -13,7 +13,7 @@ from src.build.build01AB_stitch_keyence_z_slices import stitch_z_from_keyence
 from src.build.build01B_compile_yx1_images_torch import build_ff_from_yx1
 import pandas as pd
 import multiprocessing
-from typing import Literal, Optional, Dict, List
+from typing import Literal, Optional, Dict, List, Sequence
 import torch
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,10 +23,15 @@ import pandas as pd
 import glob2 as glob
 import functools
 import os
+import logging
+import itertools
+from src.build.export_utils import PATTERNS, _match_files, has_output, newest_mtime, _mod_time
 
 
-def _mod_time(path: Optional[Path]) -> float:
-    return path.stat().st_mtime if path and path.exists() else 0.0
+log = logging.getLogger(__name__)
+logging.basicConfig(format="%(level_name)s | %(message)s", level=logging.INFO)
+
+
 
 def record(step: str):
     """
@@ -65,7 +70,6 @@ class Experiment:
         self._sync_with_disk()
 
     # # ——— public API ——————————————————————————————————————————————————
-
     def record_step(self, step: str):
         """Mark `step` done right now and save state."""
         now = datetime.utcnow().isoformat()
@@ -118,16 +122,32 @@ class Experiment:
     def raw_path(self) -> Optional[Path]:
         m = self.microscope
         return (self.data_root/"raw_image_data"/m/self.date) if m else None
-
+    
     @property
-    def ff_path(self) -> Optional[Path]:
-        p = self.data_root/"built_image_data"/"stitched_FF_images"/self.date
+    def meta_path(self) -> Optional[Path]:
+        p = self.data_root/"metadata"/"well_metadata"/ f"{self.date}_well_metadata.xlsx"
         return p if p.exists() else None
 
     @property
+    def ff_path(self) -> Optional[Path]:
+        if self.microscope=="Keyence":
+            p = self.data_root/"built_image_data"/"Keyence"/"FF_images"/self.date
+        else:
+            p = self.data_root/"built_image_data"/"stitched_FF_images"/self.date
+        return p if p.exists() else None
+
+    @property
+    def stitch_ff_path(self) -> Optional[Path]:
+        if self.microscope=="Keyence":
+            p = self.data_root/"built_image_data"/"stitched_FF_images"/self.date
+        else:
+            p = self.raw_path
+        return p if p and p.exists() else None
+    
+    @property
     def stitch_z_path(self) -> Optional[Path]:
         if self.microscope=="Keyence":
-            p = self.data_root/"built_image_data"/"keyence_stitched_z"/self.date
+            p = self.data_root/"built_image_data"/"Keyence_stitched_z"/self.date
         else:
             p = self.raw_path
         return p if p and p.exists() else None
@@ -148,19 +168,26 @@ class Experiment:
     
     @property
     def needs_export(self) -> bool:
-        """True if raw data is newer than last-export timestamp."""
-        return (_mod_time(self.raw_path) >
-                datetime.fromisoformat(self.timestamps.get("export", "1970-01-01T00:00:00")).timestamp())
+        # last_run = self.timestamps.get("export", 0)
+        # newest   = newest_mtime(self.raw_path, PATTERNS["raw"])
+        return not self.flags["ff"]
 
-    @property
-    def needs_build_metadata(self) -> bool:
-        return (_mod_time(self.ff_path) >
-                datetime.fromisoformat(self.timestamps.get("metadata", "1970-01-01T00:00:00")).timestamp())
+    # @property
+    # def needs_build_metadata(self) -> bool:
+    #     return (_mod_time(self.ff_path) >
+    #             datetime.fromisoformat(self.timestamps.get("metadata", "1970-01-01T00:00:00")).timestamp())
 
     @property
     def needs_stitch(self) -> bool:
-        return (_mod_time(self.ff_path) >
-                datetime.fromisoformat(self.timestamps.get("stitch", "1970-01-01T00:00:00")).timestamp())
+        last_run = self.timestamps.get("stitch", 0)
+        newest   = newest_mtime(self.raw_path, PATTERNS["stitch"])
+        return newest > last_run
+
+    @property
+    def needs_stitch_z(self) -> bool:
+        last_run = self.timestamps.get("stitch_z", 0)
+        newest   = newest_mtime(self.raw_path, PATTERNS["stitch_z"])
+        return newest > last_run
 
     @property
     def needs_segment(self) -> bool:
@@ -168,53 +195,71 @@ class Experiment:
                 datetime.fromisoformat(self.timestamps.get("segment", "1970-01-01T00:00:00")).timestamp())
 
     # ——— internal sync logic —————————————————————————————————————————————
-
-    def _sync_with_disk(self):
-        """
-        Check each pipeline step’s path on disk,
-        update flags + timestamps if they’ve just appeared/disappeared.
-        """
-        steps = {
-            "raw":     self.raw_path,
-            "ff":      self.ff_path,
-            "stitch":  self.stitch_z_path,
-            "segment": self.segment_path,
-        }
+    def _sync_with_disk(self) -> None:
+        """Called once from __post_init__ to refresh flags + timestamps."""
         changed = False
-        for step, path in steps.items():
-            exists = bool(path and path.exists())
-            prev   = self.flags.get(step, False)
-
-            if exists and not prev:
-                # step just became available
-                self.flags[step] = True
-                self.timestamps[step] = datetime.utcnow().isoformat()
-                changed = True
-            elif not exists and prev:
-                # step vanished
-                self.flags[step] = False
-                self.timestamps.pop(step, None)
-                changed = True
+        for step, path in {
+            "raw"    : self.raw_path,
+            "meta"   : self.meta_path,
+            "ff"     : self.ff_path,
+            "stitch" : self.stitch_ff_path,
+            "stitch_z" : self.stitch_z_path,
+            "segment": self.segment_path,
+            }.items():
+            
+            if step != "meta":
+                present  = has_output(path, PATTERNS[step])
             else:
-                # no change: ensure the flag is recorded
-                self.flags.setdefault(step, exists)
+                present = path is not None
+
+            previous = self.flags.get(step, None)
+
+            # flag housekeeping ---------------------------------------------------
+            if present != previous:
+                self.flags[step] = present
+                changed = True
+
+            # timestamp housekeeping ---------------------------------------------
+            if present:
+                if step != "meta":
+                    mt = newest_mtime(path, PATTERNS[step])
+                else:
+                    mt = path.stat().st_mtime
+                self.timestamps[step] = mt
+            else:
+                self.timestamps.pop(step, None)
 
         if changed:
             self._save_state()
 
+
     # ——— call pipeline functions —————————————————————————————————————————————
     @record("ff")
     def export_images(self):
-
         if self.microscope == "Keyence":
             build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True)
         else:
             build_ff_from_yx1(data_root=self.data_root, exp_name=self.date, overwrite=True)
 
+    def export_metadata(self):
+        if self.microscope == "Keyence":
+            build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, metadata_only=True)
+        else:
+            build_ff_from_yx1(data_root=self.data_root, exp_name=self.date, overwrite=True, metadata_only=True)
+
+
     @record("stitch")
     def stitch_images(self):
         if self.microscope == "Keyence":
             stitch_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
+            stitch_z_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
+        else:
+            pass
+
+    # @record("stitch")
+    def stitch_z_images(self):
+        if self.microscope == "Keyence":
+            # stitch_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
             stitch_z_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
         else:
             pass
@@ -241,6 +286,8 @@ class ExperimentManager:
         self.exp_dir = self.root / "metadata" / "experiments"
         self.experiments: dict[str, Experiment] = {}
         self.discover_experiments()
+        self.update_experiment_status()
+
 
     def discover_experiments(self):
         # scan "raw_image_data" subfolders for dates
@@ -258,61 +305,125 @@ class ExperimentManager:
         for date in sorted(set(dates)):
             self.experiments[date] = Experiment(date, self.root)
 
+    # Helper to update all experiments to reflect presence/absence of files on disk
+    def update_experiment_status(self):
+        for exp in self.experiments.values():
+            exp._sync_with_disk()
+
     def export_all(self):
         for exp in self.experiments.values():
             if exp.needs_export:
-                exp.export_images()
-
-    def export_experiments(self,
-                            experiments: list[str] | None = None,
-                            later_than: int | None = None,
-                            earlier_than: int | None = 99999999, 
-                            force_update: bool = False
-                          ):
-        
-        # ensure exactly one selector is provided
-        if (experiments is None) == (later_than is None):
-            raise ValueError("Must specify exactly one of `experiments` or `later_than`")
-
-        to_export: list[Experiment] = []
-        dates: list[str] = []
-
-        if experiments is not None:
-            # explicit list
-            for exp in self.experiments.values():
-                if exp.date in experiments and (exp.needs_export or force_update):
-                    to_export.append(exp)
-                    dates.append(exp.date)
-        else:
-            # all experiments after a cutoff date
-            for exp in self.experiments.values():
                 try:
-                    date_int = int(exp.date[:8])
-                    if (date_int >= later_than) and (date_int < earlier_than) and (exp.needs_export or force_update):
-                        to_export.append(exp)
-                        dates.append(exp.date)
+                    exp.export_images()
                 except:
-                    pass
+                    log.exception("Export & FF build failed for %s", exp.date)
+    
+    def export_all_metadata(self):
+        for exp in self.experiments.values():
+            try:
+                exp.export_metadata()
+            except:
+                log.exception("Metadata build failed for %s", exp.date)
+            
+    def stitch_all(self):
+        for exp in self.experiments.values():
+            if exp.needs_stitch:
+                try:
+                    exp.stitch_images()
+                except:
+                    log.exception("Stitching  failed for %s", exp.date) 
 
-        if not to_export:
-            print("No experiments to export.")
+
+    def _run_step(
+        self,
+        step: str,                                   # name of Experiment method to call
+        need_attr: str,                              # the corresponding “needs_*” flag
+        *,
+        experiments: list[str] | None = None,
+        later_than: int | None = None,
+        earlier_than: int = 99_999_999,
+        force_update: bool = False,
+        extra_filter: callable[[Experiment], bool] | None = None,
+        friendly_name: str | None = None,            # text used in printouts
+    ) -> None:
+        """Find experiments that should run *step* and call it.
+
+        extra_filter(exp) → bool lets you add step-specific constraints
+        (e.g. microscope == "Keyence").  Leave it None if not needed.
+        """
+        # 0) sanity check ------------------------------------------------------
+        if (experiments is None) == (later_than is None):
+            raise ValueError("pass *either* experiments or later_than (not both)")
+
+        # 1) pick the candidates ----------------------------------------------
+        selected, dates = [], []
+        for exp in self.experiments.values():
+            # --- user-provided subset
+            if experiments is not None and exp.date not in experiments:
+                continue
+            # --- date window
+            if experiments is None:
+                try:
+                    di = int(exp.date[:8])
+                except ValueError:
+                    continue
+                if not (later_than <= di < earlier_than):
+                    continue
+            # --- “needs_*” or forced
+            if not getattr(exp, need_attr) and not force_update:
+                continue
+            # --- custom predicate
+            if extra_filter and not extra_filter(exp):
+                continue
+
+            selected.append(exp)
+            dates.append(exp.date)
+
+        if not selected:
+            print(f"No experiments to {friendly_name or step}.")
             return
 
-        # report what’s going to run
-        print("Exporting:", ", ".join(dates))
+        print(f"{friendly_name or step.capitalize()}:", ", ".join(sorted(dates)))
 
-        for exp in to_export:
-            exp.export_images()
+        # 2) run the step ------------------------------------------------------
+        for exp in selected:
+            try:
+                getattr(exp, step)()          # e.g. exp.export_images()
+            except Exception as e:
+                log.exception("❌  %s failed for %s", step, exp.date)
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # thin façade methods
+    def export_experiments(self, **kwargs):
+        self._run_step(
+            "export_images", "needs_export",
+            friendly_name="export",
+            **kwargs
+        )
 
-    def build_metadata_all(self):
-        for exp in self.experiments.values():
-            if exp.needs_build_metadata():
-                exp.build_image_metadata()
+    def stitch_experiments(self, **kwargs):
+        self._run_step(
+            "stitch_images", "needs_stitch",
+            extra_filter=lambda e: e.microscope == "Keyence",
+            friendly_name="stitch",
+            **kwargs
+        )
+
+    def stitch_z_experiments(self, **kwargs):
+        self._run_step(
+            "stitch_z_images", "needs_stitch_z",
+            extra_filter=lambda e: e.microscope == "Keyence",
+            friendly_name="stitch_z",
+            **kwargs
+        )
+    # def build_metadata_all(self):
+    #     for exp in self.experiments.values():
+    #         if exp.needs_build_metadata():
+    #             exp.build_image_metadata()
 
     def report(self):
         for date, exp in self.experiments.items():
-            print(f"{date}: raw={exp.flags['raw']}, ff={exp.flags['ff']}, stitch={exp.flags['stitch']}, segment={exp.flags['segment']}")
+            print(f"{date}: raw={exp.flags['raw']}, meta={exp.flags['meta']}, ff={exp.flags['ff']}, stitch={exp.flags['stitch']}, stitch_z={exp.flags['stitch_z']}, segment={exp.flags['segment']}")
 
 
 
@@ -324,11 +435,16 @@ if __name__ == '__main__':
 
     # load master experiment log
     manager = ExperimentManager(root=root)
-    # exp = manager.experiments["20230525"]
-    # exp.export_images()
-    manager.export_all()   
+    manager.report()
 
-    print("check")
+    
+    # export everything dated later than XX
+    later_than = 20230524
+    earlier_than = 20230901
+    force_update = True
+
+    # Export 
+    manager.stitch_z_experiments(later_than=later_than, earlier_than=earlier_than, force_update=force_update)
     # first, assess status of each experiment within the pipeline
     # run_export_flags = master_log["microscope"].isin(["Keyence", "YX1"])
 

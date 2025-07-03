@@ -12,8 +12,8 @@ from src.build.pipeline_objects import Experiment, ExperimentManager
 if __name__ == "__main__":
     
     # export everything dated later than XX
-    later_than = 20230901
-    earlier_than = 20240501
+    later_than = 20240101
+    earlier_than = 20260101
     force_update = True
 
     # call pipeline functions
@@ -23,4 +23,4 @@ if __name__ == "__main__":
     manager = ExperimentManager(root=root)
 
     # Export 
-    manager.export_experiments(later_than=later_than, earlier_than=earlier_than, force_update=force_update)
+    manager.stitch_z_experiments(later_than=later_than, earlier_than=earlier_than, force_update=force_update)

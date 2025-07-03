@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from typing import List, Sequence
+from typing import List, Sequence, Optional, Iterable
 from stitch2d.tile import OpenCVTile
 from skimage import feature, color
 from skimage import exposure, util
@@ -10,6 +10,198 @@ import torch.nn.functional as F
 from concurrent.futures import ThreadPoolExecutor
 import skimage.io as skio
 import os, psutil, torch
+import itertools
+import pandas as pd
+
+
+def build_experiment_metadata(root: str | Path, exp_name: str, meta_df: pd.DataFrame): #, microscope: str):
+
+    # print("Compiling metadata...")
+
+    # set paths
+    root = Path(root)
+    meta_root = root / "metadata"
+    plate_meta_path = meta_root / "well_metadata" / f"{exp_name}_well_metadata.xlsx"
+    # built_meta = meta_root / "built_metadata_files"
+    # well_meta = meta_root / "well_metadata"
+    # combined_out = meta_root / "combined_metadata_files"
+    # exp_meta_csv = meta_root / "experiment_metadata.csv"
+
+    # 1) experiment-level metadata, filter to use_flag
+    # exp_df = (
+    #     pd.read_csv(exp_meta_csv, parse_dates=["start_date"])
+    #       .loc[lambda df: df["use_flag"] == 1, 
+    #            ["start_date", "experiment_id", "temperature", "has_sci_data", "microscope"]]
+    #       .rename(columns={"start_date": "experiment_date"})
+    # )
+    # exp_df["experiment_date"] = exp_df["experiment_date"].astype(str)
+    # exp_dates = set(exp_df["experiment_date"])
+
+    # 2) well-level built metadata CSVs
+    # csv_paths = sorted(built_meta.glob("*_metadata.csv"))
+    # dfs = []
+    # for p in csv_paths:
+    #     date = p.stem.replace("_metadata","")
+    #     if date not in exp_dates:
+    #         continue
+    #     df = pd.read_csv(p)
+    #     df = df.drop_duplicates(subset=["well","time_int"], keep="first")
+    #     df["experiment_date"] = date
+    #     dfs.append(df)
+    # if not dfs:
+    #     raise RuntimeError("No built metadata files matched experiment dates!")
+
+    # master = pd.concat(dfs, ignore_index=True)
+    meta_df["experiment_date"] = exp_name
+    # if "microscope" in master_well_table.columns:
+    #     master_well_table = master_well_table.drop(labels="microscope", axis=1)
+
+    # master = master.merge(
+    #     exp_df, on="experiment_date", how="left", indicator=True
+    # )
+    # if not (master["_merge"] == "both").all():
+    #     missing = master.loc[master["_merge"]!="both","experiment_date"].unique()
+    #     raise ValueError(f"Experiment dates missing in experiment_metadata.csv: {missing}")
+    # master = master.drop(columns=["_merge"])
+
+
+    # 3) load per-well Excel sheets and stack
+    # if well_sheets is None:
+    well_sheets = ["medium", "genotype", "chem_perturbation", "start_age_hpf", "embryos_per_well"]
+    # well_meta_dir = meta_root / "well_metadata"
+    # well_xl_paths = sorted(well_meta.glob("*_well_metadata.xlsx"))
+
+    # sheet_dfs = []
+    
+    # xlf = pd.ExcelFile(xl)
+    with pd.ExcelFile(plate_meta_path) as xlf:
+        # build base well names A01…H12
+        wells = [f"{r}{c:02}" for r in "ABCDEFGH" for c in range(1,13)]
+        plate_df = pd.DataFrame({"well": wells})
+        plate_df["experiment_date"] = exp_name
+
+        # parse each sheet into one vector
+        for sheet in well_sheets:
+            arr = xlf.parse(sheet).iloc[:8,1:13].to_numpy().ravel()
+            plate_df[sheet] = arr
+
+        # optional temperature sheet
+        if "temperature" in xlf.sheet_names:
+            temp = xlf.parse("temperature").iloc[:8,1:13].to_numpy().ravel()
+            plate_df["temperature"] = np.nan_to_num(temp, nan=0).astype(float)
+        else:
+            plate_df["temperature"] = np.nan
+
+        # optional QC sheet
+        if "qc" in xlf.sheet_names:
+            qc = xlf.parse("qc").iloc[:8,1:13].to_numpy().ravel()
+            plate_df["well_qc_flag"] = np.nan_to_num(qc, nan=0).astype(int)
+        else:
+            plate_df["well_qc_flag"] = 0
+
+            
+    # well_df_long = pd.concat(sheet_dfs, axis=0, ignore_index=True)
+    # plate_df["experiment_date"] = well_df_long["experiment_date"].astype(str)
+
+    # add to main dataset
+    # 4) final merge
+    meta_df = meta_df.merge(
+        plate_df, on=["well","experiment_date"], how="left", indicator=True
+    )
+    if not (meta_df["_merge"]=="both").all():
+        missing = meta_df.loc[meta_df["_merge"]!="both", ["well","experiment_date"]]
+        raise ValueError(f"Missing well metadata for:\n{missing}")
+    meta_df = meta_df.drop(columns=["_merge"])
+
+    meta_df["well_id"] = meta_df["experiment_date"] + "_" + meta_df["well"]
+
+    # 6) reorder columns so well_id is first
+    cols = ["well_id"] + [c for c in meta_df.columns if c!="well_id"]
+    meta_df = meta_df[cols]
+
+    # 7) write out
+    # built_meta.mkdir(parents=True, exist_ok=True)
+    # out_csv = built_meta / f"{exp_name}_metadata.csv"
+    # meta_df.to_csv(out_csv, index=False)
+
+    
+    return meta_df
+
+
+
+# patterns to use for file checking
+PATTERNS = {
+    "raw"     : ("W*", "XY*", "*.nd2"),
+    "meta"    : {"*.xlsx"},
+    "ff"      : ("*.jpg", "*.png", "ff_*"),
+    "stitch"  : ("*_stitch.jpg",),
+    "stitch_z"  : ("*_stack.tif",), 
+    "segment" : ("*.npy", "*.npz"),
+}
+
+# def _match_files(p: Path, patterns: Sequence[str], max_files:int=1) -> list[Path]:
+#     """Return every file in *p* that matches ANY of the glob patterns."""
+#     if not p or not p.exists():
+#         return []
+#     matches = itertools.chain.from_iterable(p.glob(pat) for pat in patterns)[:max_files]
+#     return [m for m in matches if m.is_file()]
+
+def _match_files(folder: Path | str, patterns: Iterable[str]) -> List[Path]:
+    """
+    Return a list with *at most one* matching file in `folder`
+    (empty list ↔ no match).  Fast because we stop after the first hit.
+    """
+    folder = Path(folder)
+    if not folder.is_dir():
+        return []
+
+    for pat in patterns:
+        hit = next(folder.glob(pat), None)     # grab first match, if any
+        if hit is not None:
+            return [hit]                       # early exit
+
+    return []                                  
+
+
+def has_output(path: Path | None, patterns: Sequence[str]) -> bool:
+    """Does *path* contain at least one matching file?"""
+    if not path:
+        return False
+    return bool(_match_files(Path(path), patterns))
+
+def newest_mtime(path: Path | None, patterns: Sequence[str]) -> float:
+    """
+    mtime of the newest file that matches *patterns*.
+    Returns 0 if nothing matches.
+    """
+    if not path:
+        return 0.0
+    
+    files = _match_files(Path(path), patterns)
+    if not files:
+        return 0.0
+    
+    return max(f.stat().st_mtime for f in files)
+
+    
+
+
+def _mod_time(path: Optional[Path]) -> float:
+    return path.stat().st_mtime if path and path.exists() else 0.0
+
+def _write_ff(out_root: Path,
+        well: str,
+        t_idx: int,
+        ch_idx: int,
+        ff: np.ndarray,
+        overwrite: bool = False,
+    ):
+    name = f"{well}_t{t_idx:04}_ch{ch_idx:02}_stitch.jpg"
+    out_root.mkdir(parents=True, exist_ok=True)
+    f = out_root / name
+    if f.exists() and not overwrite:
+        return
+    skio.imsave(f, ff, check_contrast=False)
 
 
 def get_n_cpu_workers(frac: float = 0.5, max_workers: int = 12) -> int:
@@ -111,7 +303,7 @@ def _get_keyence_tile_orientation(experiment_date):
     if year_int < 2024:
         orientation = "vertical"
     else:
-        orentation = "horizontal"
+        orientation = "horizontal"
 
     return orientation
 
