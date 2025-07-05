@@ -24,10 +24,8 @@
 # 3. conda activate segmentation_grounded_sam
 # 4. bash install_grounded_sam.sh
 #
-# IMPORTANT: Install with CUDA environment
-# If you plan to use CUDA/GPU acceleration later (even if you want to run on CPU sometimes),
-# Even with CUDA installed, you can still run models on CPU by specifying device='cpu'
-# in your Python code. Building with CUDA gives you maximum flexibility.
+# IMPORTANT: Install with CUDA environment 
+# if you compile with CUDA you have to use the CUDA, and same for cpu
 # =================================================================
 
 set -e  # Exit on any error
@@ -77,12 +75,34 @@ pip install jupyter matplotlib
 # Download checkpoints
 mkdir -p checkpoints
 cd checkpoints
+echo "Downloading SAM2 checkpoints..."
 wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt
 wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_base_plus.pt
 wget -q https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_small.pt
+
+# Verify SAM2 checkpoint downloads
+echo "Verifying SAM2 checkpoint downloads..."
+for checkpoint in sam2.1_hiera_large.pt sam2.1_hiera_base_plus.pt sam2.1_hiera_small.pt; do
+    if [ ! -f "$checkpoint" ]; then
+        echo "❌ ERROR: $checkpoint not found!"
+        exit 1
+    fi
+    
+    file_size=$(stat -c%s "$checkpoint" 2>/dev/null || stat -f%z "$checkpoint" 2>/dev/null || echo "0")
+    if [ "$file_size" -eq 0 ]; then
+        echo "❌ ERROR: $checkpoint is empty (0 bytes)!"
+        echo "Download may have failed. Please check your internet connection and try again."
+        exit 1
+    fi
+    
+    # Convert bytes to MB for display
+    file_size_mb=$((file_size / 1024 / 1024))
+    echo "✓ $checkpoint: ${file_size_mb}MB"
+done
+
 cd ../..
 
-echo "✓ SAM2 installed"
+echo "✓ SAM2 installed with verified checkpoints"
 
 # ----------------------------------------------------------------------------
 # ----------------------------------------------------------------------------
@@ -102,10 +122,32 @@ if [ -f setup.py ]; then
 fi
 mkdir weights
 cd weights
-curl -sO https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
-curl -sO https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha2/groundingdino_swinb_cogcoor.pth
+echo "Downloading GroundingDINO weights..."
+curl -L -o groundingdino_swint_ogc.pth https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth
+curl -L -o groundingdino_swinb_cogcoor.pth https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha2/groundingdino_swinb_cogcoor.pth
+
+# Verify downloads
+echo "Verifying GroundingDINO weights downloads..."
+for weights_file in groundingdino_swint_ogc.pth groundingdino_swinb_cogcoor.pth; do
+    if [ ! -f "$weights_file" ]; then
+        echo "❌ ERROR: $weights_file not found!"
+        exit 1
+    fi
+    
+    file_size=$(stat -c%s "$weights_file" 2>/dev/null || stat -f%z "$weights_file" 2>/dev/null || echo "0")
+    if [ "$file_size" -eq 0 ]; then
+        echo "❌ ERROR: $weights_file is empty (0 bytes)!"
+        echo "Download may have failed. Please check your internet connection and try again."
+        exit 1
+    fi
+    
+    # Convert bytes to MB for display
+    file_size_mb=$((file_size / 1024 / 1024))
+    echo "✓ $weights_file: ${file_size_mb}MB"
+done
+
 cd ..
-echo "✓ Official GroundingDINO installed"
+echo "✓ Official GroundingDINO installed with verified weights"
 
 # ----------------------------------------------------------------------------
 # Step 7: Install Open-GroundingDino
@@ -146,6 +188,54 @@ echo "✓ Open-GroundingDino installed"
 echo "=== Step 8: Verify Package Installation ==="
 pip list | grep -E "supervision|groundingdino|torch|opencv|numpy"
 echo "✓ Package verification complete"
+
+# ----------------------------------------------------------------------------
+# Step 8.5: Final Model Files Verification
+# ----------------------------------------------------------------------------
+echo "=== Step 8.5: Final Model Files Verification ==="
+cd "$MORPHSEQ_HOME/segmentation_sandbox/models"
+
+# Check GroundingDINO weights
+echo "Checking GroundingDINO weights..."
+gdino_weights_dir="GroundingDINO/weights"
+for weights_file in groundingdino_swint_ogc.pth groundingdino_swinb_cogcoor.pth; do
+    weights_path="$gdino_weights_dir/$weights_file"
+    if [ ! -f "$weights_path" ]; then
+        echo "❌ CRITICAL ERROR: $weights_path not found!"
+        exit 1
+    fi
+    
+    file_size=$(stat -c%s "$weights_path" 2>/dev/null || stat -f%z "$weights_path" 2>/dev/null || echo "0")
+    if [ "$file_size" -eq 0 ]; then
+        echo "❌ CRITICAL ERROR: $weights_path is empty!"
+        exit 1
+    fi
+    
+    file_size_mb=$((file_size / 1024 / 1024))
+    echo "✓ $weights_file: ${file_size_mb}MB"
+done
+
+# Check SAM2 checkpoints
+echo "Checking SAM2 checkpoints..."
+sam2_checkpoints_dir="sam2/checkpoints"
+for checkpoint in sam2.1_hiera_large.pt sam2.1_hiera_base_plus.pt sam2.1_hiera_small.pt; do
+    checkpoint_path="$sam2_checkpoints_dir/$checkpoint"
+    if [ ! -f "$checkpoint_path" ]; then
+        echo "❌ CRITICAL ERROR: $checkpoint_path not found!"
+        exit 1
+    fi
+    
+    file_size=$(stat -c%s "$checkpoint_path" 2>/dev/null || stat -f%z "$checkpoint_path" 2>/dev/null || echo "0")
+    if [ "$file_size" -eq 0 ]; then
+        echo "❌ CRITICAL ERROR: $checkpoint_path is empty!"
+        exit 1
+    fi
+    
+    file_size_mb=$((file_size / 1024 / 1024))
+    echo "✓ $checkpoint: ${file_size_mb}MB"
+done
+
+echo "✅ All model files verified successfully!"
 
 # ----------------------------------------------------------------------------
 # Step 9: Smoke Tests

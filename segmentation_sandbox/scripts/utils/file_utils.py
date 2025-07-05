@@ -374,6 +374,50 @@ def validate_file_structure(required_files: List[Union[str, Path]],
     return validation_results
 
 
+def get_jpg_files(directory: Union[str, Path], recursive: bool = True) -> List[str]:
+    """
+        # Use directly with gdino function
+        jpg_files = get_jpg_files("dataset/images/")
+        results = gdino_inference_with_visualization(model, jpg_files, ["person", "car"])
+    """
+    directory = Path(directory)
+    
+    if not directory.exists():
+        raise ValueError(f"Directory does not exist: {directory}")
+    
+    if not directory.is_dir():
+        raise ValueError(f"Path is not a directory: {directory}")
+    
+    # Define search patterns for different jpg extensions
+    patterns = ['*.jpg', '*.jpeg', '*.JPG', '*.JPEG']
+    jpg_files = []
+    
+    for pattern in patterns:
+        if recursive:
+            # Search recursively in all subdirectories
+            search_pattern = directory / "**" / pattern
+            jpg_files.extend(glob.glob(str(search_pattern), recursive=True))
+        else:
+            # Search only in the specified directory
+            search_pattern = directory / pattern
+            jpg_files.extend(glob.glob(str(search_pattern)))
+    
+    # Remove duplicates and sort
+    jpg_files = sorted(list(set(jpg_files)))
+    
+    print(f"📁 Found {len(jpg_files)} JPG files in {directory}")
+    if recursive:
+        print(f"   🔄 (searched recursively)")
+    else:
+        print(f"   📂 (current directory only)")
+    
+    if len(jpg_files) > 0:
+        print(f"   📝 First few files: {[Path(f).name for f in jpg_files[:3]]}" + 
+              ("..." if len(jpg_files) > 3 else ""))
+    
+    return jpg_files
+
+
 # Example usage and testing
 if __name__ == "__main__":
     # Test file utilities

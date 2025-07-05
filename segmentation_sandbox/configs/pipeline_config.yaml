@@ -41,7 +41,7 @@ paths:
 models:
   groundingdino:
     config: "models/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
-    weights: "models/GroundingDINO/groundingdino_swint_ogc.pth"
+    weights: "models/GroundingDINO/weights/groundingdino_swint_ogc.pth"
     
   sam2:
     config: "models/sam2/sam2_configs/sam2_hiera_l.yaml"
@@ -50,7 +50,7 @@ models:
 # Detection parameters
 detection:
   # GroundedDINO parameters
-  text_prompt: "individual embryo."
+  text_prompt: "individual embryo"
   box_threshold: 0.46
   text_threshold: 0.2
   
