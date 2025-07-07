@@ -1,4 +1,4 @@
-from src.assess.assess_hydra_results import assess_hydra_results
+from src.analyze.assess_hydra_results import assess_hydra_results
 import os
 
 if __name__ == "__main__":

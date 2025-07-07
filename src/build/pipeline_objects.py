@@ -26,6 +26,7 @@ import os
 import logging
 import itertools
 from src.build.export_utils import PATTERNS, _match_files, has_output, newest_mtime, _mod_time
+from src.build.build03A_process_images import segment_wells, compile_embryo_stats, extract_embryo_snips
 
 
 log = logging.getLogger(__name__)
@@ -61,11 +62,17 @@ class Experiment:
     n_workers: int = 1
     flags:      Dict[str,bool] = field(init=False)
     timestamps: Dict[str,str]  = field(init=False)
+    repo_root:  Path = field(init=False)
 
     def __post_init__(self):
         self.data_root = Path(self.data_root)
         self.flags = {}
         self.timestamps = {}
+
+        # Determine repo path relative to this script
+        script_path = Path(__file__).resolve()
+        self.repo_root = script_path.parents[2]
+
         self._load_state()
         self._sync_with_disk()
 
@@ -125,7 +132,22 @@ class Experiment:
     
     @property
     def meta_path(self) -> Optional[Path]:
-        p = self.data_root/"metadata"/"well_metadata"/ f"{self.date}_well_metadata.xlsx"
+        p = self.repo_root/"metadata"/"plate_metadata"/ f"{self.date}_well_metadata.xlsx"
+        return p if p.exists() else None
+    
+    @property
+    def meta_path_built(self) -> Optional[Path]:
+        p = self.data_root/"metadata"/"built_metadata_files"/ f"{self.date}_metadata.csv"
+        return p if p.exists() else None
+    
+    @property
+    def meta_path_embryo(self) -> Optional[Path]:
+        p = self.data_root/"metadata"/"embryo_metadata_files"/ f"{self.date}_embryo_metadata.csv"
+        return p if p.exists() else None
+    
+    @property
+    def snip_path(self) -> Optional[Path]:
+        p = self.data_root/"training_data"/"bf_embryo_snips"/ self.date
         return p if p.exists() else None
 
     @property
@@ -153,7 +175,7 @@ class Experiment:
         return p if p and p.exists() else None
 
     @property
-    def segment_path(self) -> Optional[Path]:
+    def mask_path(self) -> Optional[Path]:
         seg_root = self.data_root/"segmentation"
         masks = [d for d in seg_root.glob("mask*") if d.is_dir()]
         if not masks: return None
@@ -191,7 +213,7 @@ class Experiment:
 
     @property
     def needs_segment(self) -> bool:
-        return (_mod_time(self.stitch_z_path) >
+        return (_mod_time(self.mask_path) >
                 datetime.fromisoformat(self.timestamps.get("segment", "1970-01-01T00:00:00")).timestamp())
 
     # ——— internal sync logic —————————————————————————————————————————————
@@ -201,13 +223,16 @@ class Experiment:
         for step, path in {
             "raw"    : self.raw_path,
             "meta"   : self.meta_path,
+            "meta_built" : self.meta_path_built,
+            "meta_embryo": self.meta_path_embryo,
             "ff"     : self.ff_path,
             "stitch" : self.stitch_ff_path,
             "stitch_z" : self.stitch_z_path,
-            "segment": self.segment_path,
+            "segment": self.mask_path,
+            "snips": self.snip_path,
             }.items():
             
-            if step != "meta":
+            if step not in ["meta", "meta_built", "meta_embryo"]:
                 present  = has_output(path, PATTERNS[step])
             else:
                 present = path is not None
@@ -221,7 +246,7 @@ class Experiment:
 
             # timestamp housekeeping ---------------------------------------------
             if present:
-                if step != "meta":
+                if step not in ["meta", "meta_built", "meta_embryo"]:
                     mt = newest_mtime(path, PATTERNS[step])
                 else:
                     mt = path.stat().st_mtime
@@ -237,10 +262,11 @@ class Experiment:
     @record("ff")
     def export_images(self):
         if self.microscope == "Keyence":
-            build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True)
+            build_ff_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True)
         else:
-            build_ff_from_yx1(data_root=self.data_root, exp_name=self.date, overwrite=True)
+            build_ff_from_yx1(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True)
 
+    @record("meta_built")
     def export_metadata(self):
         if self.microscope == "Keyence":
             build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, metadata_only=True)
@@ -251,8 +277,8 @@ class Experiment:
     @record("stitch")
     def stitch_images(self):
         if self.microscope == "Keyence":
-            stitch_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
-            stitch_z_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
+            stitch_ff_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
+            stitch_z_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
         else:
             pass
 
@@ -264,6 +290,11 @@ class Experiment:
         else:
             pass
 
+    # @record()
+    def process_image_masks(self, force_update: bool=False):
+        tracked_df = segment_wells(root=self.data_root, exp_name=self.date)
+        stats_df = compile_embryo_stats(root=self.data_root, tracked_df=tracked_df)
+        extract_embryo_snips(root, stats_df=stats_df, overwrite_flag=force_update)
 
     # ——— load/save ——————————————————————————————————————————————————
 
@@ -295,7 +326,7 @@ class ExperimentManager:
         # collect all the dates first
         dates = []
         for mic in raw.iterdir():
-            if not mic.is_dir(): 
+            if (not mic.is_dir()) or (mic.name=="ignore"): 
                 continue
             for d in mic.iterdir():
                 if d.is_dir():
@@ -437,16 +468,6 @@ if __name__ == '__main__':
     manager = ExperimentManager(root=root)
     manager.report()
 
-    
-    # export everything dated later than XX
-    later_than = 20230524
-    earlier_than = 20230901
-    force_update = True
-
-    # Export 
-    manager.stitch_z_experiments(later_than=later_than, earlier_than=earlier_than, force_update=force_update)
-    # first, assess status of each experiment within the pipeline
-    # run_export_flags = master_log["microscope"].isin(["Keyence", "YX1"])
-
-
-    # next, run export scripts as needed
+    exp = Experiment(date="20250625_chem02_34C_T02_1301", data_root=root)
+    exp.process_image_masks()
+    print("check")

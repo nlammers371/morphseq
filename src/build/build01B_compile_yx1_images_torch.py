@@ -144,6 +144,7 @@ def _focus_stack(
 
 def build_ff_from_yx1(
     data_root: str | Path,
+    repo_root: str | Path,
     exp_name: str,
     overwrite: bool = False,
     # dir_list: Sequence[str] | None = None,
@@ -283,7 +284,7 @@ def build_ff_from_yx1(
     else:
         log.info("Skipping FF for %s", exp_name)
 
-    meta_df = build_experiment_metadata(root=data_root, exp_name=exp_name, meta_df=well_df)
+    meta_df = build_experiment_metadata(repo_root=repo_root, exp_name=exp_name, meta_df=well_df)
     first_time = np.min(well_df['Time (s)'].copy())
     meta_df['Time Rel (s)'] = meta_df['Time (s)'] - first_time
     

@@ -1,5 +1,5 @@
 from src.run.training import train_vae
-from src.assess.assess_vae_results import assess_vae_results
+from src.analyze.assess_vae_results import assess_vae_results
 
 if __name__ == "__main__":
 

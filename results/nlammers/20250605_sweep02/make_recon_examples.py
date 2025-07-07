@@ -1,4 +1,4 @@
-from src.assess.get_recon_examples import recon_wrapper
+from src.analyze.get_recon_examples import recon_wrapper
 import os
 from glob2 import glob
 

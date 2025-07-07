@@ -14,14 +14,14 @@ import itertools
 import pandas as pd
 
 
-def build_experiment_metadata(root: str | Path, exp_name: str, meta_df: pd.DataFrame): #, microscope: str):
+def build_experiment_metadata(repo_root: str | Path, exp_name: str, meta_df: pd.DataFrame): #, microscope: str):
 
     # print("Compiling metadata...")
 
     # set paths
-    root = Path(root)
-    meta_root = root / "metadata"
-    plate_meta_path = meta_root / "well_metadata" / f"{exp_name}_well_metadata.xlsx"
+    # data_root = Path(data_root)
+    repo_root = Path(repo_root)
+    plate_meta_path = repo_root / "metadata"/ "plate_metadata" / f"{exp_name}_well_metadata.xlsx"
     # built_meta = meta_root / "built_metadata_files"
     # well_meta = meta_root / "well_metadata"
     # combined_out = meta_root / "combined_metadata_files"
@@ -132,11 +132,11 @@ def build_experiment_metadata(root: str | Path, exp_name: str, meta_df: pd.DataF
 # patterns to use for file checking
 PATTERNS = {
     "raw"     : ("W*", "XY*", "*.nd2"),
-    "meta"    : {"*.xlsx"},
     "ff"      : ("*.jpg", "*.png", "ff_*"),
     "stitch"  : ("*_stitch.jpg",),
     "stitch_z"  : ("*_stack.tif",), 
-    "segment" : ("*.npy", "*.npz"),
+    "segment" : ("*.jpg"),
+    "snips" : ("*.jpg"),
 }
 
 # def _match_files(p: Path, patterns: Sequence[str], max_files:int=1) -> list[Path]:
@@ -151,6 +151,9 @@ def _match_files(folder: Path | str, patterns: Iterable[str]) -> List[Path]:
     Return a list with *at most one* matching file in `folder`
     (empty list ↔ no match).  Fast because we stop after the first hit.
     """
+    if isinstance(patterns, str):
+        patterns = [patterns]
+
     folder = Path(folder)
     if not folder.is_dir():
         return []

@@ -14,7 +14,7 @@ import pickle
 from src.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from src.data.dataset_configs import BaseDataConfig
-from src.assess.assess_hydra_results import get_hydra_runs, initialize_model_to_asses, parse_hydra_paths
+from src.analyze.assess_hydra_results import get_hydra_runs, initialize_model_to_asses, parse_hydra_paths
 
 torch.set_float32_matmul_precision("medium")   # good default
 

@@ -263,6 +263,7 @@ def stitch_experiment(
 
 
 def build_ff_from_keyence(data_root: Path | str, 
+                          repo_root: Path | str, 
                           exp_name: str,
                           ff_filter_res_um: float=3.0,
                           overwrite: bool=False,
@@ -297,7 +298,7 @@ def build_ff_from_keyence(data_root: Path | str,
     # call function to walk through directories and compile list of image paths
     sample_list, meta_df = get_image_paths(well_list=well_list, cytometer_flag=cytometer_flag)
 
-    meta_df = build_experiment_metadata(root=data_root, exp_name=exp_name, meta_df=meta_df)
+    meta_df = build_experiment_metadata(repo_root=Path(repo_root), exp_name=exp_name, meta_df=meta_df)
 
     if not metadata_only:
         # sample_list = [sample_list[i] for i in range(28, len(sample_list))]
