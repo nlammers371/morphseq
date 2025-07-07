@@ -31,6 +31,40 @@ class BasicDataset(datasets.ImageFolder):
             return DatasetOutput(data=X, label=self.samples[index], index=index)
 
 
+class BasicEvalDataset(datasets.ImageFolder):
+    def __init__(self, root, experiments=None, return_name=False,
+                 transform=None):
+        self.return_name = return_name
+        self.root = root
+        self.transform = transform
+        self.experiments = experiments  # e.g., ['date1', 'date2']
+
+        # Let ImageFolder initialize full dataset
+        super().__init__(root=root, transform=transform, target_transform=None)
+
+        if experiments is not None:
+            # Map class names to class indices
+            allowed_indices = [self.class_to_idx[c] for c in experiments]
+
+            # Filter samples and targets
+            filtered_samples = [
+                (path, label)
+                for (path, label) in self.samples
+                if label in allowed_indices
+            ]
+            self.samples = filtered_samples
+            self.targets = [s[1] for s in self.samples]
+
+    def __getitem__(self, index):
+        X, _ = super().__getitem__(index)
+        if self.transform:
+            X = self.transform(X)
+
+        if not self.return_name:
+            return DatasetOutput(data=X)
+        else:
+            return DatasetOutput(data=X, label=self.samples[index], index=index)
+
 class NTXentDataset(datasets.ImageFolder):
 
     def __init__(self, cfg, transform=None, target_transform=None,):
