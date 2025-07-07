@@ -62,7 +62,7 @@ def calculate_morph_embeddings(data_root: str | Path,
         enc_path = model_dir / "encoder.pkl"
         dec_path = model_dir / "decoder.pkl"  # optional
 
-        encoder = torch.load(enc_path, map_location="cpu")
+        encoder = torch.load(enc_path, map_location=lambda storage, loc: "cpu")
         encoder.eval()
 
     else:

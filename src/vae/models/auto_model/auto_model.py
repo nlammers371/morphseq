@@ -4,7 +4,7 @@ import os
 
 import torch.nn as nn
 
-from src.vae.models import hf_hub_is_available
+# from src.vae.models import hf_hub_is_available
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -239,15 +239,15 @@ class AutoModel(nn.Module):
                 ``decoder.pkl``) if a custom encoder (resp. decoder) was provided
         """
 
-        if not hf_hub_is_available():
-            raise ModuleNotFoundError(
-                "`huggingface_hub` package must be installed to load models from the HF hub. "
-                "Run `python -m pip install huggingface_hub` and log in to your account with "
-                "`huggingface-cli login`."
-            )
+        # if not hf_hub_is_available():
+        #     raise ModuleNotFoundError(
+        #         "`huggingface_hub` package must be installed to load models from the HF hub. "
+        #         "Run `python -m pip install huggingface_hub` and log in to your account with "
+        #         "`huggingface-cli login`."
+        #     )
 
-        else:
-            from huggingface_hub import hf_hub_download
+        # else:
+        from huggingface_hub import hf_hub_download
 
         logger.info(f"Downloading config file ...")
 
