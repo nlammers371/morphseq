@@ -12,7 +12,8 @@ from src.build.pipeline_objects import Experiment, ExperimentManager
 if __name__ == "__main__":
     
     # export everything dated later than XX
-    later_than = 20250501
+    # later_than = 20250501
+    experiments = ["20240812"]
 
     # call pipeline functions
     root = Path("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
@@ -21,6 +22,6 @@ if __name__ == "__main__":
     manager = ExperimentManager(root=root)
 
     # Export 
-    # manager.export_experiments(later_than=later_than, force_update=False)
-    manager.stitch_experiments(later_than=later_than, force_update=False)
-    manager.stitch_z_experiments(later_than=later_than, force_update=False)
+    # manager.export_experiments(experiments=experiments, force_update=False)
+    # manager.stitch_experiments(experiments=experiments, force_update=False)
+    # manager.stitch_z_experiments(later_than=later_than, force_update=False)
