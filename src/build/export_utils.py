@@ -67,7 +67,7 @@ def build_experiment_metadata(repo_root: str | Path, exp_name: str, meta_df: pd.
 
     # 3) load per-well Excel sheets and stack
     # if well_sheets is None:
-    well_sheets = ["medium", "genotype", "chem_perturbation", "start_age_hpf", "embryos_per_well"]
+    well_sheets = ["medium", "genotype", "chem_perturbation", "start_age_hpf", "embryos_per_well", "temperature"]
     # well_meta_dir = meta_root / "well_metadata"
     # well_xl_paths = sorted(well_meta.glob("*_well_metadata.xlsx"))
 
@@ -82,22 +82,36 @@ def build_experiment_metadata(repo_root: str | Path, exp_name: str, meta_df: pd.
 
         # parse each sheet into one vector
         for sheet in well_sheets:
-            arr = xlf.parse(sheet).iloc[:8,1:13].to_numpy().ravel()
-            plate_df[sheet] = arr
+            if sheet in xlf.sheet_names:
+                df = xlf.parse(sheet, header=0)           # keep blanks as NaN
+                block = df.iloc[:8, 1:13]                    # whatever made it through
 
-        # optional temperature sheet
-        if "temperature" in xlf.sheet_names:
-            temp = xlf.parse("temperature").iloc[:8,1:13].to_numpy().ravel()
-            plate_df["temperature"] = np.nan_to_num(temp, nan=0).astype(float)
-        else:
-            plate_df["temperature"] = np.nan
+                # ensure 8 rows, 12 cols
+                if sheet in ["start_age_hpf", "temperature", "embryos_per_well"]:
+                    block = block.reindex(index=range(8), columns=range(1,13), fill_value=np.nan)
+                    arr = block.to_numpy(dtype=float).ravel() 
+                else:
+                    block = block.reindex(index=range(8), columns=range(1,13), fill_value='')
+                    arr = block.to_numpy(dtype=str).ravel() 
+                plate_df[sheet] = arr
+            else:                   
+                plate_df[sheet] = np.nan
+            
 
-        # optional QC sheet
-        if "qc" in xlf.sheet_names:
-            qc = xlf.parse("qc").iloc[:8,1:13].to_numpy().ravel()
-            plate_df["well_qc_flag"] = np.nan_to_num(qc, nan=0).astype(int)
-        else:
-            plate_df["well_qc_flag"] = 0
+        plate_df = plate_df.dropna(subset=["start_age_hpf"]).reset_index(drop=True)
+        # # optional temperature sheet
+        # if "temperature" in xlf.sheet_names:
+        #     temp = xlf.parse("temperature").iloc[:8,1:13].to_numpy().ravel()
+        #     plate_df["temperature"] = np.nan_to_num(temp, nan=0).astype(float)
+        # else:
+        #     plate_df["temperature"] = np.nan
+
+        # # optional QC sheet
+        # if "qc" in xlf.sheet_names:
+        #     qc = xlf.parse("qc").iloc[:8,1:13].to_numpy().ravel()
+        #     plate_df["well_qc_flag"] = np.nan_to_num(qc, nan=0).astype(int)
+        # else:
+        #     plate_df["well_qc_flag"] = 0
 
             
     # well_df_long = pd.concat(sheet_dfs, axis=0, ignore_index=True)

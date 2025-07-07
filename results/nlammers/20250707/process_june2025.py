@@ -12,7 +12,7 @@ from src.build.pipeline_objects import Experiment, ExperimentManager
 if __name__ == "__main__":
     
     # export everything dated later than XX
-    later_than = "20250501"
+    later_than = 20250501
 
     # call pipeline functions
     root = Path("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
