@@ -202,14 +202,14 @@ class Experiment:
     @property
     def needs_stitch(self) -> bool:
         last_run = self.timestamps.get("stitch", 0)
-        newest   = newest_mtime(self.raw_path, PATTERNS["stitch"])
-        return newest > last_run
+        newest   = newest_mtime(self.raw_path, PATTERNS["raw"])
+        return newest >= last_run
 
     @property
     def needs_stitch_z(self) -> bool:
         last_run = self.timestamps.get("stitch_z", 0)
-        newest   = newest_mtime(self.raw_path, PATTERNS["stitch_z"])
-        return newest > last_run
+        newest   = newest_mtime(self.raw_path, PATTERNS["raw"])
+        return newest >= last_run
 
     @property
     def needs_segment(self) -> bool:
@@ -277,8 +277,8 @@ class Experiment:
     @record("stitch")
     def stitch_images(self):
         if self.microscope == "Keyence":
-            stitch_ff_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
-            stitch_z_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
+            stitch_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
+            stitch_z_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
         else:
             pass
 
@@ -468,6 +468,7 @@ if __name__ == '__main__':
     manager = ExperimentManager(root=root)
     manager.report()
 
-    exp = Experiment(date="20250625_chem02_34C_T02_1301", data_root=root)
+    exp = Experiment(date="20250703_chem3_34C_T01_1457", data_root=root)
+    exp.needs_stitch
     exp.process_image_masks()
     print("check")

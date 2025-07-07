@@ -75,13 +75,13 @@ class UrrDataConfig:
             self.train_indices = train_indices
 
 
-@dataclass(config_wrapper=ConfigDict(arbitrary_types_allowed=True))
+@dataclass(config=ConfigDict(arbitrary_types_allowed=True))
 class EvalDataConfig:
 
     experiments:   List[str]
     return_sample_names: bool = True
 
-    transforms: List[Any] = [None]
+    transforms: List[Any] = field(default_factory=dict)
     batch_size: int = 64
     num_workers: int = 4
     wrap: bool = True

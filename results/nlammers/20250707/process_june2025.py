@@ -21,6 +21,6 @@ if __name__ == "__main__":
     manager = ExperimentManager(root=root)
 
     # Export 
-    manager.export_experiments(later_than=later_than, force_update=False)
+    # manager.export_experiments(later_than=later_than, force_update=False)
     manager.stitch_experiments(later_than=later_than, force_update=False)
     manager.stitch_z_experiments(later_than=later_than, force_update=False)

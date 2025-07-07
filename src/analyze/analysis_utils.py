@@ -1,21 +1,30 @@
+import sys
+from pathlib import Path
+
+# Path to the project *root* (the directory that contains the `src/` folder)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Put that directory at the *front* of sys.path so Python looks there first
+sys.path.insert(0, str(REPO_ROOT))
+
 # from src.functions.dataset_utils import *
 import torch
 from PIL.ImImagePlugin import split
 from torch.utils.data.sampler import SubsetRandomSampler
-from src.run.run_utils import initialize_model, parse_model_paths
+# from src.run.run_utils import initialize_model, parse_model_paths
 from torchvision.utils import save_image
 from pytorch_lightning import Trainer
-from pathlib import Path, Optional, Any
+from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 import os
 from omegaconf import OmegaConf
 import pickle
-from typing import List, Literal
+from typing import List, Literal, Optional, Any
 from src.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from src.data.dataset_configs import EvalDataConfig
-from src.analyze.assess_hydra_results import get_hydra_runs, initialize_model_to_asses, parse_hydra_paths
+from src.analyze.assess_hydra_results import initialize_model_to_asses, parse_hydra_paths
 import pytorch_lightning as pl
 
 from src.build.pipeline_objects import Experiment
@@ -35,18 +44,21 @@ class LegacyWrapper(pl.LightningModule):  # ✓ looks like Lightning
 
 
 
-def recon_wrapper(data_root: str | Path,
+def calculate_morph_embeddings(data_root: str | Path,
                   model_name: str,
                   experiments: List[str],
-                  out_path: str | Path,
+                  cfg: Optional[Any] = None,
+                  out_path: Optional[str | Path] = None,
                   batch_size: int = 64,
-                  cfg: Optional[Any] = None):
+                  ):
+
 
     legacy = cfg is None
-
+    data_root = Path(data_root)
     if legacy:
         # ---- load the old encoder (and decoder if you need it) ----
-        model_dir = Path(model_name) if Path(model_name).is_dir() else Path(model_name).parent
+        model_dir = data_root / "training_data" / "models" / "active_models" / model_name 
+        # model_dir = Path(model_name) if Path(model_name).is_dir() else Path(model_name).parent
         enc_path = model_dir / "encoder.pkl"
         dec_path = model_dir / "decoder.pkl"  # optional
 
@@ -146,3 +158,9 @@ def assess_image_reconstructions(
             )
             grid = torch.stack([p["orig"][i], p["recon"][i]], dim=0)  # 2×C×H×W
             save_image(grid, fpath, nrow=2, pad_value=1)
+
+if __name__ == "__main__":
+    data_root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
+    model_name = "20241107_ds_sweep01_optimum"
+    experiments = ["20250703_chem3_35C_T00_1101"]
+    calculate_morph_embeddings(data_root=data_root, model_name=model_name, experiments=experiments)
