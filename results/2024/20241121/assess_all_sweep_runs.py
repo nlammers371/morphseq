@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from src.vae import assess_vae_results
+from src._Archive.vae import assess_vae_results
 from tqdm import tqdm 
 
 # set key path parameters

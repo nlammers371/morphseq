@@ -7,7 +7,7 @@ sys.path.insert(0, code_root)
 # import glob as glob
 # from src.functions.dataset_utils import *
 # import os
-from src.vae import AutoModel
+from src._Archive.vae import AutoModel
 import pandas as pd
 from glob import glob
 from tqdm import tqdm

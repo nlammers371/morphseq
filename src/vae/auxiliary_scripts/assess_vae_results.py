@@ -3,7 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model
 from src.functions.dataset_utils import *
 import os
-from src.vae.models.auto_model import AutoModel
+from src._Archive.vae import AutoModel
 import matplotlib.pyplot as plt
 import umap.umap_ as umap
 import numpy as np

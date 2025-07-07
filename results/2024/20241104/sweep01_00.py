@@ -1,7 +1,7 @@
 import os
 import sys
 sys.path.append('/projects/morphseq')
-from src.vae import train_vae
+from src._Archive.vae import train_vae
 import multiprocessing
 import pandas as pd
 import numpy as np

@@ -1,5 +1,5 @@
 import os
-from src.vae import AutoModel
+from src._Archive.vae import AutoModel
 import torch.nn.functional as F
 import pandas as pd
 from tqdm import tqdm

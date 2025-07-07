@@ -1,13 +1,11 @@
-from dataclasses import  field, fields
-# from ..base.base_config import BaseAEConfig
-from pydantic import BaseModel
-from pydantic.dataclasses import dataclass # as pydantic_dataclass
-from typing import Any, Dict, Optional, Literal
-from src.run.run_utils import deep_merge, LossOptions
-from omegaconf import OmegaConf
+from pydantic.dataclasses import dataclass
+from typing_extensions import Literal
+from src._Archive.vae import make_seq_key, make_train_test_split
+from ..base.base_config import BaseAEConfig
+import pandas as pd
 
 @dataclass
-class VAEConfig:
+class VAEConfig(BaseAEConfig):
     """VAE config class.
 
     Parameters:
@@ -15,48 +13,47 @@ class VAEConfig:
         latent_dim (int): The latent space dimension. Default: None.
         reconstruction_loss (str): The reconstruction loss to use ['bce', 'mse']. Default: 'mse'
     """
-    name: str = "VAE"
-    ddconfig: Dict[str, Any] = field(default_factory=
-                                lambda: { "latent_dim": 64,
-                                          "input_dim": (1, 288, 128),
-                                          "n_channels_out": 16,
-                                          "n_conv_layers": 5,
-                                })
-    objective: Literal['vae_loss_basic'] = 'vae_loss_basic'
-    base_learning_rate: float = 1e-4
+    orth_flag: bool = False
+    n_conv_layers: int = 5  # number of convolutional layers
+    n_out_channels: int = 16
+    beta: float = 1.0  # tunes the weight of the KL normalization term
+    reconstruction_loss: Literal["bce", "mse"] = "mse"
+    data_root: str = ''
+    train_folder: str = ''
+    age_key_path: str = ''
+    pert_time_key_path: str = ''
 
-    @classmethod
-    def from_cfg(cls, cfg):
+    def __init__(self, data_root, train_folder, age_key_path, pert_time_key_path):
+        self.data_root = data_root
+        self.train_folder = train_folder
+        self.age_key_path = age_key_path
+        self.pert_time_key_path = pert_time_key_path
 
-        # pull out model-specific params
-        model_cfg = cfg.pop("model", OmegaConf.create())
+    def split_train_test(self):
+        """
+        Load the dataset from the specified file path using pandas.
+        """
+        # get seq key
+        seq_key = make_seq_key(self.data_root, self.train_folder)
 
-        # filter only the fields we know about
-        valid = {f.name for f in cls.__dataclass_fields__.values()}
-        clean = {k: v for k, v in model_cfg.items() if k in valid}
+        if self.age_key_path != '':
+            age_key_df = pd.read_csv(self.age_key_path, index_col=0)
+            age_key_df = age_key_df.loc[:, ["snip_id", "inferred_stage_hpf_reg"]]
+            seq_key = seq_key.merge(age_key_df, how="left", on="snip_id")
+        else:
+            # raise Warning("No age key path provided")
+            seq_key["inferred_stage_hpf_reg"] = 1
 
-        # pull out loss-related params
-        loss_cfg = cfg.pop("objective", OmegaConf.create())
-        clean["objective"] = loss_cfg["target"]
+        if self.pert_time_key_path != '':
+            pert_time_key = pd.read_csv(self.pert_time_key_path)
+        else:
+            pert_time_key = None
 
-        # get defaults
-        defaults = {f.name: getattr(cls(), f.name) for f in fields(cls)}
+        seq_key, train_indices, eval_indices, test_indices = make_train_test_split(seq_key, pert_time_key=pert_time_key)
 
-        data = {}
-        for k, default in defaults.items():
-            if k in clean.keys():
-                override = clean[k]
-                # If it's a dict‐default, do a deep merge
-                if isinstance(default, dict) and isinstance(override, dict):
-                    merged = deep_merge(default, override)
-                    data[k] = merged
-                else:
-                    data[k] = override
-            else:
-                data[k] = default
+        self.seq_key = seq_key
+        self.eval_indices = eval_indices
+        self.test_indices = test_indices
+        self.train_indices = train_indices
 
-        # now validate Literals, etc.
-        inst = cls(**data)
-
-        return inst
 

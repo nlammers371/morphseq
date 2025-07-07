@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import numpy as np
-from src.vae import assess_vae_results
+from src._Archive.vae import assess_vae_results
 
 # set key path parameters
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/" # path to top of the data directory
