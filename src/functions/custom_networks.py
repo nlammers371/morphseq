@@ -1,7 +1,7 @@
 import sys
 sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
-from src._Archive.vae.models.nn import BaseEncoder, BaseDecoder
-from src._Archive.vae.models.base.base_utils import ModelOutput
+from src.vae.models import BaseEncoder, BaseDecoder
+from src.vae.models import ModelOutput
 import torch.nn as nn
 import torch
 import numpy as np

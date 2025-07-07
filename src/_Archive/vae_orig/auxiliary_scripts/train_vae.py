@@ -6,10 +6,10 @@ sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 
 from src.functions.dataset_utils import make_dynamic_rs_transform, ContrastiveLearningDataset, SeqPairDatasetCached,  TripletDatasetCached, DatasetCached
 import os
-from src._Archive.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE, MorphIAFVAE, MorphIAFVAEConfig
+from src.vae import VAE, VAEConfig, SeqVAEConfig, SeqVAE, MorphIAFVAE, MorphIAFVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
-from src._Archive.vae import BaseTrainerConfig
-from src._Archive.vae import TrainingPipeline
+from src.vae import BaseTrainerConfig
+from src.vae import TrainingPipeline
 
 
 def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_data=False, train_suffix='', **kwargs):

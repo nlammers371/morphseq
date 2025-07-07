@@ -14,7 +14,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import SubsetRandomSampler
-from src._Archive.vae.customexception import ModelError
+from src.vae import ModelError
 from pythae.data.datasets import BaseDataset, collate_dataset_output
 from pythae.models import BaseAE
 from ..trainer_utils import set_seed

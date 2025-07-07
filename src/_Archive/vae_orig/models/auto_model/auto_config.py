@@ -1,6 +1,6 @@
 from pydantic.dataclasses import dataclass
 
-from src._Archive.vae.config import BaseConfig
+from src.vae import BaseConfig
 
 
 @dataclass
@@ -131,32 +131,32 @@ class AutoConfig(BaseConfig):
             model_config = WAE_MMD_Config.from_json_file(json_path)
 
         elif config_name == "MAFConfig":
-            from src._Archive.vae import MAFConfig
+            from src.vae import MAFConfig
 
             model_config = MAFConfig.from_json_file(json_path)
 
         elif config_name == "IAFConfig":
-            from src._Archive.vae import IAFConfig
+            from src.vae import IAFConfig
 
             model_config = IAFConfig.from_json_file(json_path)
 
         elif config_name == "PlanarFlowConfig":
-            from src._Archive.vae import PlanarFlowConfig
+            from src.vae import PlanarFlowConfig
 
             model_config = PlanarFlowConfig.from_json_file(json_path)
 
         elif config_name == "RadialFlowConfig":
-            from src._Archive.vae import RadialFlowConfig
+            from src.vae import RadialFlowConfig
 
             model_config = RadialFlowConfig.from_json_file(json_path)
 
         elif config_name == "MADEConfig":
-            from src._Archive.vae import MADEConfig
+            from src.vae import MADEConfig
 
             model_config = MADEConfig.from_json_file(json_path)
 
         elif config_name == "PixelCNNConfig":
-            from src._Archive.vae import PixelCNNConfig
+            from src.vae import PixelCNNConfig
 
             model_config = PixelCNNConfig.from_json_file(json_path)
 
@@ -181,7 +181,7 @@ class AutoConfig(BaseConfig):
             model_config = PIWAEConfig.from_json_file(json_path)
 
         elif config_name == "MetricVAEConfig":
-            from src._Archive.vae import MetricVAEConfig
+            from src.vae import MetricVAEConfig
 
             model_config = MetricVAEConfig.from_json_file(json_path)
 
@@ -191,7 +191,7 @@ class AutoConfig(BaseConfig):
             model_config = SeqVAEConfig.from_json_file(json_path)
 
         elif config_name == "MorphIAFVAEConfig":
-            from src._Archive.vae import MorphIAFVAEConfig
+            from src.vae import MorphIAFVAEConfig
 
             model_config = MorphIAFVAEConfig.from_json_file(json_path)
 

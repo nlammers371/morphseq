@@ -3,7 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model
 from src.functions.dataset_utils import *
 import os
-from src._Archive.vae.models.auto_model import AutoModel
+from src.vae.models.auto_model import AutoModel
 import matplotlib.pyplot as plt
 import umap.umap_ as umap
 import numpy as np
@@ -22,12 +22,10 @@ from typing import Any, Dict
 import ntpath
 
 
-def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
+def generate_sample_images(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
                        skip_figures_flag=False, batch_size=64, models_to_assess=None):
     # mode_vec = ["train", "eval", "test"]
 
-    # set paths
-    # metadata_path = os.path.join(root, 'metadata', '')
     train_dir = os.path.join(root, "training_data", train_name, '')
 
     # get list of models in this folder
@@ -36,7 +34,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
 
     for m_iter, model_name in enumerate(models_to_assess):
 
-        embryo_metadata_df = pd.read_csv(os.path.join(train_dir, "embryo_metadata_df_train.csv"))
+        # embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df_final.csv"))
 
         # make sure morphseq datasets make it through
         # morphseq_dates = ["20230830", "20230831", "20231207", "20231208"]
@@ -44,13 +42,11 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         # embryo_metadata_df.loc[ms_bool_vec, "use_embryo_flag"] = True
 
         # strip down the full dataset
-        embryo_df = embryo_metadata_df[
-            ["snip_id", "embryo_id", "Time Rel (s)", "experiment_date", "temperature", "medium", "short_pert_name", "control_flag", "phenotype", "predicted_stage_hpf", "surface_area_um",
-             "length_um", "width_um"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        embryo_df = embryo_df.rename(columns={"Time Rel (s)":"experiment_time"})
-        
+        # embryo_df = embryo_metadata_df[
+        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf", "surface_area_um",
+        #      "length_um", "width_um", "reference_flag"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
         # embryo_df.loc[embryo_df["reference_flag"].astype(str)=="nan", "reference_flag"] = False
-        embryo_df = embryo_df.reset_index()
+        # embryo_df = embryo_df.reset_index()
 
         # set path to output dir
         output_dir = os.path.join(train_dir, architecture_name, model_name)
@@ -58,6 +54,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
         # initialize model assessment
         trained_model, meta_df, figure_path, data_sampler_vec, continue_flag, device = initialize_assessment(train_dir, output_dir, batch_size=batch_size)
 
+        embryo_df = pd.read_csv(os.path.join(output_dir, "figures", 'embryo_stats_df.csv'), index_col=0)
         ########
         #  Skip if no model data or a previous assessment output exists and overwrite_flag==False
         if continue_flag:
@@ -81,53 +78,7 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
                                                  device=device, skip_figures=skip_figures_flag)
 
 
-        # Calculate UMAPs
-        embryo_df = calculate_UMAPs(embryo_df)
-        print(f"Saving data...")
-        #save latent arrays and UMAP
-        embryo_df = embryo_df.iloc[:, 1:]
-        embryo_df.to_csv(os.path.join(figure_path, "embryo_stats_df.csv"))
-
-        # make a narrower DF with just the UMAP cols and key metadata
-        emb_cols = embryo_df.columns
-        umap_cols = [col for col in emb_cols if "UMAP" in col]
-        umap_df = embryo_df[
-            ["snip_id", "experiment_date", "medium", "short_pert_name", "predicted_stage_hpf", "train_cat",
-             "recon_mse"] + umap_cols].copy()
-        umap_df.to_csv(os.path.join(figure_path, "umap_df.csv"))
-
-        ############################################
-        # Compare latent encodings of contrastive pairs
-        # strip down the full dataset
-        # contrastive_df = embryo_metadata_df[
-        #     ["snip_id", "experiment_date", "medium", "master_perturbation", "predicted_stage_hpf"]].iloc[np.where(embryo_metadata_df["use_embryo_flag"] == 1)].copy()
-        # contrastive_df = contrastive_df.reset_index()
-        #
-        # latent_df = calculate_contrastive_distances(trained_model, train_dir, device=device, batch_size=batch_size)#,
-        #
-        # # duplicate base contrastive DF and join on latent dimensions
-        # cdf0 = contrastive_df
-        # cdf1 = cdf0.copy()
-        # cdf0["contrast_id"] = 0
-        # cdf1["contrast_id"] = 1
-        #
-        # contrastive_df_final = pd.concat([cdf0, cdf1], axis=0, ignore_index=True)
-        # contrastive_df_final = contrastive_df_final.merge(latent_df, how="left", on=["snip_id", "contrast_id"])
-        #
-        # contrastive_df_final.to_csv(os.path.join(figure_path, "contrastive_df.csv"))
-
-        # #########################################
-        # Test how predictive latent space is of developmental age
-        # age_df, perturbation_df, meta_df = bio_prediction_wrapper(embryo_df, meta_df)
-
-        # age_df.to_csv(os.path.join(figure_path, "age_pd_df.csv"))
-        # perturbation_df.to_csv(os.path.join(figure_path, "perturbation_pd_df.csv"))
-
-        meta_df["model_name"] = model_name
-        meta_df.to_csv(os.path.join(figure_path, "meta_summary_df.csv"))
-
         print("Done.")
-        return figure_path
 
 
 def clean_path_names(path_list):
@@ -207,7 +158,7 @@ def calculate_contrastive_distances(trained_model, train_dir, device, batch_size
             new_cols = []
             for n in range(trained_model.latent_dim):
 
-                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE") or (trained_model.model_name == "MorphIAFVAE"):
+                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
                     if n in trained_model.nuisance_indices:
                         new_cols.append(f"z_mu_n_{n:02}")
                     else:
@@ -345,22 +296,20 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
     snip_id_vec = list(embryo_df["snip_id"])
 
     # initialize latent variable columns
-    new_mu_cols = []
-    new_sigma_cols = []
+    new_cols = []
     for n in range(trained_model.latent_dim):
 
-        if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE") or (trained_model.model_name == "MorphIAFVAE"):
+        if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
             if n in trained_model.nuisance_indices:
-                new_mu_cols.append(f"z_mu_n_{n:02}")
-                new_sigma_cols.append(f"z_sigma_n_{n:02}")
+                new_cols.append(f"z_mu_n_{n:02}")
+                new_cols.append(f"z_sigma_n_{n:02}")
             else:
-                new_mu_cols.append(f"z_mu_b_{n:02}")
-                new_sigma_cols.append(f"z_sigma_b_{n:02}")
+                new_cols.append(f"z_mu_b_{n:02}")
+                new_cols.append(f"z_sigma_b_{n:02}")
         else:
-            new_mu_cols.append(f"z_mu_{n:02}")
-            new_sigma_cols.append(f"z_sigma_{n:02}")
-    embryo_df.loc[:, new_mu_cols] = np.nan
-    embryo_df.loc[:, new_sigma_cols] = np.nan
+            new_cols.append(f"z_mu_{n:02}")
+            new_cols.append(f"z_sigma_{n:02}")
+    embryo_df.loc[:, new_cols] = np.nan
 
     print("Making image figures...")
     for m, mode in enumerate(mode_vec):
@@ -388,12 +337,7 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             mu, log_var = encoder_output.embedding, encoder_output.log_covariance
             std = torch.exp(0.5 * log_var)
 
-            z0, eps = trained_model._sample_gauss(mu, std)
-            if trained_model.model_name == "MorphIAFVAE":
-                flow_output = trained_model.af_flow.inverse(z0)  # sampling
-                z_out = flow_output.out
-            else:
-                z_out = z0
+            z_out, eps = trained_model._sample_gauss(mu, std)
             recon_x_out = trained_model.decoder(z_out)["reconstruction"]
             # .detach().cpu()
 
@@ -414,19 +358,17 @@ def assess_image_reconstructions(embryo_df, trained_model, figure_path, data_sam
             # add latent encodings
             zm_array = np.asarray(encoder_output[0].detach().cpu())
             zs_array = np.asarray(encoder_output[1].detach().cpu())
-            embryo_df.loc[df_ind_vec, new_mu_cols] = zm_array
-            embryo_df.loc[df_ind_vec, new_sigma_cols] = zs_array
-            # for z in range(trained_model.latent_dim):
-            #     if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE") or (trained_model.model_name == "MorphIAFVAE"):
-            #         if z in trained_model.nuisance_indices:
-            #             embryo_df.loc[df_ind_vec, f"z_mu_n_{z:02}"] = zm_array[:, z]
-            #             embryo_df.loc[df_ind_vec, f"z_sigma_n_{z:02}"] = zs_array[:, z]
-            #         else:
-            #             embryo_df.loc[df_ind_vec, f"z_mu_b_{z:02}"] = zm_array[:, z]
-            #             embryo_df.loc[df_ind_vec, f"z_sigma_b_{z:02}"] = zs_array[:, z]
-            #     else:
-            #         embryo_df.loc[df_ind_vec, f"z_mu_{z:02}"] = zm_array[:, z]
-            #         embryo_df.loc[df_ind_vec, f"z_sigma_{z:02}"] = zs_array[:, z]
+            for z in range(trained_model.latent_dim):
+                if (trained_model.model_name == "MetricVAE") or (trained_model.model_name == "SeqVAE"):
+                    if z in trained_model.nuisance_indices:
+                        embryo_df.loc[df_ind_vec, f"z_mu_n_{z:02}"] = zm_array[:, z]
+                        embryo_df.loc[df_ind_vec, f"z_sigma_n_{z:02}"] = zs_array[:, z]
+                    else:
+                        embryo_df.loc[df_ind_vec, f"z_mu_b_{z:02}"] = zm_array[:, z]
+                        embryo_df.loc[df_ind_vec, f"z_sigma_b_{z:02}"] = zs_array[:, z]
+                else:
+                    embryo_df.loc[df_ind_vec, f"z_mu_{z:02}"] = zm_array[:, z]
+                    embryo_df.loc[df_ind_vec, f"z_sigma_{z:02}"] = zs_array[:, z]
 
             # recon_loss_array[i] = recon_loss
             for b in range(len(y)):

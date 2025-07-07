@@ -51,17 +51,17 @@ visualization/__pychache__/
 .idea/
 src/__pycache__/
 src/functions/__pycache__/
-src/_Archive/vae/models/__pycache__/
-src/_Archive/vae/models/base/__pycache__/
-src/_Archive/vae/models/_Archive/metric_vae/__pycache__/
-src/_Archive/vae/models/seq_vae/__pycache__/
-src/_Archive/vae/models/nn/__pycache__/
-src/_Archive/vae/__pycache__/
-src/_Archive/vae/models/vae/__pycache__/
-src/_Archive/vae/pipelines/__pycache__/
-src/_Archive/vae/trainers/__pycache__/
-src/_Archive/vae/auxiliary_scripts/__pycache__/
-src/_Archive/vae/trainers/base_trainer/__pycache__/
+src/vae/models/__pycache__/
+src/vae/models/base/__pycache__/
+src/vae/models/_Archive/metric_vae/__pycache__/
+src/vae/models/seq_vae/__pycache__/
+src/vae/models/nn/__pycache__/
+src/vae/__pycache__/
+src/vae/models/vae/__pycache__/
+src/vae/pipelines/__pycache__/
+src/vae/trainers/__pycache__/
+src/vae/auxiliary_scripts/__pycache__/
+src/vae/trainers/base_trainer/__pycache__/
 
 visualization/__pycache__/*
 

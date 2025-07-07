@@ -1,4 +1,4 @@
-from src._Archive.vae.auxiliary_scripts.generate_sample_images import generate_sample_images
+from src.vae import generate_sample_images
 
 root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
 

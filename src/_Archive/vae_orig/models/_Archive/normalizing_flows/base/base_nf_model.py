@@ -7,9 +7,9 @@ import torch
 import torch.nn as nn
 
 from pythae.data.datasets import BaseDataset
-from src._Archive.vae.models.auto_model import AutoConfig
-from src._Archive.vae.models.base.base_config import EnvironmentConfig
-from src._Archive.vae.models.base.base_utils import ModelOutput
+from src.vae import AutoConfig
+from src.vae.models.base.base_config import EnvironmentConfig
+from src.vae.models import ModelOutput
 from .base_nf_config import BaseNFConfig
 
 

@@ -4,7 +4,7 @@ from typing import Union
 import torch.nn as nn
 from pydantic.dataclasses import dataclass
 
-from src._Archive.vae.config import BaseConfig
+from src.vae import BaseConfig
 
 
 @dataclass

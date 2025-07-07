@@ -1,7 +1,7 @@
 import glob as glob
 from src.functions.dataset_utils import *
 import os
-from src._Archive.vae.models.auto_model import AutoModel
+from src.vae import AutoModel
 import numpy as np
 import pandas as pd
 from tqdm import tqdm

@@ -5,11 +5,11 @@ import torch
 import torch.nn.functional as F
 from torch.nn import TripletMarginLoss
 from pythae.data.datasets import BaseDataset
-from src._Archive.vae import IAF, IAFConfig
-from src._Archive.vae.models.base import BaseAE
-from src._Archive.vae.models.base.base_utils import ModelOutput
-from src._Archive.vae.models.nn import BaseDecoder, BaseEncoder
-from src._Archive.vae.models.nn.default_architectures import Encoder_VAE_MLP
+from src.vae import IAF, IAFConfig
+from src.vae.models import BaseAE
+from src.vae.models import ModelOutput
+from src.vae.models import BaseDecoder, BaseEncoder
+from src.vae.models.nn.default_architectures import Encoder_VAE_MLP
 from .morph_iaf_vae_config import MorphIAFVAEConfig
 
 

@@ -1,4 +1,4 @@
-from src._Archive.vae.auxiliary_scripts.train_vae import train_vae
+from src.vae import train_vae
 import multiprocessing
 
 #######################

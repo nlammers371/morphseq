@@ -1,4 +1,4 @@
-from src._Archive.vae.auxiliary_scripts.assess_vae_results import assess_vae_results
+from src.vae import assess_vae_results
 
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 # root = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\"
