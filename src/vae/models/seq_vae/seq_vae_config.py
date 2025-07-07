@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
-from src.vae.models import VAEConfig
+from src._Archive.vae import VAEConfig
 import pandas as pd
-from src.vae.auxiliary_scripts.make_training_key import make_seq_key, make_train_test_split
+from src._Archive.vae import make_seq_key, make_train_test_split
 import os
 import numpy as np
 

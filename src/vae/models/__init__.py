@@ -23,6 +23,10 @@ __all__ = [
     "BaseAEConfig",
     "VAE",
     "VAEConfig",
+    "MetricVAE",
+    "MetricVAEConfig",
     "SeqVAE",
     "SeqVAEConfig",
+    "MorphIAFVAE",
+    "MorphIAFVAEConfig"
 ]
