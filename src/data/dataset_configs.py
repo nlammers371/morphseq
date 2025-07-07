@@ -1,15 +1,15 @@
-from torch.utils.data import Dataset
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 from typing import Literal, List, Type, Callable, Any, Dict, Optional
 from src.data.dataset_utils import make_seq_key, make_train_test_split
 from src.data.data_transforms import basic_transform, contrastive_transform
-from src.data.dataset_classes import BasicDataset, NTXentDataset
+from src.data.dataset_classes import BasicDataset, NTXentDataset, BasicEvalDataset
 import os
 import numpy as np
 import pandas as pd
 from src.data.dataset_utils import smart_read_csv
 from pydantic   import ConfigDict
+from pathlib import Path
 
 
 @dataclass(config=ConfigDict(arbitrary_types_allowed=True))
@@ -74,6 +74,34 @@ class UrrDataConfig:
             self.test_indices = test_indices
             self.train_indices = train_indices
 
+
+@dataclass(config_wrapper=ConfigDict(arbitrary_types_allowed=True))
+class EvalDataConfig:
+
+    experiments:   List[str]
+    return_sample_names: bool = True
+
+    transforms: List[Any] = [None]
+    batch_size: int = 64
+    num_workers: int = 4
+    wrap: bool = True
+    root: str | Path = "./data"
+
+    def image_path(self) -> str:
+        return os.path.join(self.root, "bf_embryo_snips")
+
+    def make_metadata(self):
+        self.split_train_test()
+
+    def create_dataset(self):
+
+        # instantiate your dataset with both fixed and configurable args
+        return BasicEvalDataset(
+            root=self.image_path,
+            experiments=self.experiments,
+            transform=self.transforms,
+            return_name=self.return_sample_names
+        )
 
 @dataclass# (config_wrapper=ConfigDict(arbitrary_types_allowed=True))
 class BaseDataConfig(UrrDataConfig):
