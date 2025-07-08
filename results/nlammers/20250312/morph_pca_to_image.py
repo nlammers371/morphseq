@@ -7,7 +7,7 @@ sys.path.insert(0, code_root)
 # import glob as glob
 # from src.functions.dataset_utils import *
 # import os
-from src._Archive.vae import AutoModel
+from src.vae import AutoModel
 # import umap.umap_ as umap
 # import numpy as np
 # from sklearn.preprocessing import StandardScaler

@@ -9,6 +9,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 # from src.functions.dataset_utils import *
 import torch
+from src.vae.models.auto_model import AutoModel
 from PIL.ImImagePlugin import split
 from torch.utils.data.sampler import SubsetRandomSampler
 # from src.run.run_utils import initialize_model, parse_model_paths
@@ -23,10 +24,12 @@ import pickle
 from typing import List, Literal, Optional, Any
 from src.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
+from src.data.data_transforms import basic_transform
 from src.data.dataset_configs import EvalDataConfig
 from src.analyze.assess_hydra_results import initialize_model_to_asses, parse_hydra_paths
 import pytorch_lightning as pl
-
+import io
+import pandas as pd
 from src.build.pipeline_objects import Experiment
 
 torch.set_float32_matmul_precision("medium")   # good default
@@ -42,6 +45,12 @@ class LegacyWrapper(pl.LightningModule):  # ✓ looks like Lightning
         with torch.no_grad():
             return self.enc(x)
 
+# 3. Create a custom Unpickler that maps all CUDA -> CPU
+class CPU_Unpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        return super().find_class(module, name)
 
 
 def calculate_morph_embeddings(data_root: str | Path,
@@ -55,15 +64,18 @@ def calculate_morph_embeddings(data_root: str | Path,
 
     legacy = cfg is None
     data_root = Path(data_root)
+
+    
     if legacy:
         # ---- load the old encoder (and decoder if you need it) ----
         model_dir = data_root / "training_data" / "models" / "active_models" / model_name 
         # model_dir = Path(model_name) if Path(model_name).is_dir() else Path(model_name).parent
-        enc_path = model_dir / "encoder.pkl"
-        dec_path = model_dir / "decoder.pkl"  # optional
+        # enc_path = model_dir / "encoder.pkl"
+        # dec_path = model_dir / "decoder.pkl"  # optional
 
-        encoder = torch.load(enc_path, map_location=lambda storage, loc: "cpu")
-        encoder.eval()
+        lit_model = AutoModel.load_from_folder(model_dir)
+
+        input_size = (288, 128)
 
     else:
         if isinstance(cfg, str):
@@ -84,26 +96,28 @@ def calculate_morph_embeddings(data_root: str | Path,
         run_path = os.path.dirname(os.path.dirname(cfg))
         latest_ckpt = parse_hydra_paths(run_path=run_path)
 
+        raise Exception("Need to add way to assess image size")
+
+    transform = basic_transform(target_size=input_size)
 
     # initialize new data config for evaluation
     eval_data_config = EvalDataConfig(experiments=experiments,
                                       root=data_root,
-                                      return_sample_names=True)
-
-    eval_data_config.make_metadata()
-    if legacy:
-        lit_model = LegacyWrapper(encoder)
-    else:
-        # load model
+                                      return_sample_names=True, 
+                                      transforms=transform)
+    
+    if not legacy:
         lit_model = LitModel.load_from_checkpoint(latest_ckpt,
                                                   model=model,
                                                   loss_fn=loss_fn,
                                                   data_cfg=eval_data_config)
+        
+        
 
     lit_model.eval()  # 1) turn off dropout / switch BN to eval
-    lit_model.freeze()
+    # lit_model.freeze()
 
-    print("Generating embeddings using model " + os.path.basename(run_path) + ')')
+    # print("Generating embeddings using model " + os.path.basename(run_path) + ')')
 
     # get dictionary of dataloaders
     dataset = eval_data_config.create_dataset()
@@ -116,22 +130,109 @@ def calculate_morph_embeddings(data_root: str | Path,
     )
 
     # construct out path
-    folder_name = os.path.basename(os.path.dirname(run_path))
-    mdl_name = model_config.ddconfig.name
-    pips_wt = model_config.lossconfig.pips_weight
-    gan_wt = model_config.lossconfig.gan_weight
-    attn = model_config.ddconfig.dec_use_local_attn
-    out_name = f"{mdl_name}_p{int(10*pips_wt)}_g{int(np.ceil(100*gan_wt))}_attn{attn}_GAN{model_config.lossconfig.gan_net}_{folder_name}"
-    mdl_folder = os.path.join(out_path, out_name)
-    os.makedirs(mdl_folder, exist_ok=True)
+    # folder_name = os.path.basename(os.path.dirname(run_path))
+    # mdl_name = model_config.ddconfig.name
+    # pips_wt = model_config.lossconfig.pips_weight
+    # gan_wt = model_config.lossconfig.gan_weight
+    # attn = model_config.ddconfig.dec_use_local_attn
+    # out_name = f"{mdl_name}_p{int(10*pips_wt)}_g{int(np.ceil(100*gan_wt))}_attn{attn}_GAN{model_config.lossconfig.gan_net}_{folder_name}"
+    # mdl_folder = os.path.join(out_path, out_name)
+    # os.makedirs(mdl_folder, exist_ok=True)
 
     # look at image reconstructions
-    assess_image_reconstructions(
-                            lit_model= lit_model,
-                            dataloader= dl,  # {"train":…, "eval":…, "test":…}
-                            out_dir=mdl_folder,
-                            device= lit_model.device
-                            )
+    if legacy:
+        extract_embeddings_legacy(lit_model=lit_model,
+                                  dataloader=dl,
+                                  device="cpu")
+    
+    return {}
+
+
+def extract_embeddings_legacy(
+    lit_model:  Any,
+    dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
+    device:      str | torch.device = "cuda",
+    ):
+
+    lit_model.to(device).eval()
+
+    new_mu_cols = []
+    new_sigma_cols = []
+    
+    for n in range(lit_model.latent_dim):
+
+        if (lit_model.model_name == "MetricVAE") or (lit_model.model_name == "SeqVAE"):
+            if n in lit_model.nuisance_indices:
+                new_mu_cols.append(f"z_mu_n_{n:02}")
+                new_sigma_cols.append(f"z_sigma_n_{n:02}")
+            else:
+                new_mu_cols.append(f"z_mu_b_{n:02}")
+                new_sigma_cols.append(f"z_sigma_b_{n:02}")
+        else:
+            new_mu_cols.append(f"z_mu_{n:02}")
+            new_sigma_cols.append(f"z_sigma_{n:02}")
+            
+    # embryo_df.loc[:, new_mu_cols] = np.nan
+    # embryo_df.loc[:, new_sigma_cols] = np.nan
+
+    df_list = []
+
+    for n, inputs in enumerate(tqdm(dataloader, f"Getting embeddings...")):
+
+        inputs = inputs.to(device)
+        x = inputs["data"].to(device)
+
+        labels = list(inputs["label"][0])
+        snip_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-1]) for lb in labels])
+        emb_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-2]) for lb in labels])
+        exp_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-3]) for lb in labels])
+
+        encoder_output = lit_model.encoder(x)
+        # mu, log_var = encoder_output.embedding, encoder_output.log_covariance
+        # std = torch.exp(0.5 * log_var)
+
+        # z0, eps = lit_model._sample_gauss(mu, std)
+
+        # add latent encodings
+        zm_array = np.asarray(encoder_output[0].detach().cpu())
+        zs_array = np.asarray(encoder_output[1].detach().cpu())
+
+        temp_df = pd.DataFrame(np.stack((exp_id_vec[:, None], emb_id_vec[:, None], snip_id_vec[:, None]), axis=1), columns=["experiment_date", "embryo_id", "snip_id"])
+        temp_df[new_mu_cols] = zm_array
+        temp_df[new_sigma_cols] = zs_array
+        df_list.append(temp_df)
+
+    latent_df = pd.concat(df_list, ignore_index=True)
+    return latent_df
+
+
+
+def extract_embeddings_pl(
+    lit_model:  LitModel,
+    dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
+    out_dir:     str,
+    device:      str | torch.device = "cuda",
+):
+    lit_model.to(device).eval().freeze()
+
+    trainer = Trainer(accelerator="auto", devices=1, limit_predict_batches=1)
+    lit_model.current_mode = "test"
+    preds = trainer.predict(lit_model, dataloaders=dataloader)
+
+    # concat batch dictionaries
+    # snip_ids = sum([list(p["snip_ids"]) for p in preds], [])
+    # snip_ids = [os.path.basename(s).replace(".jpg", "") for s in snip_ids]
+
+    # make im fig
+    for p in preds:
+        for i in range(p["orig"].size(0)):
+            snip_name = os.path.basename(p['snip_ids'][i]).replace(".jpg", "")
+            fpath = os.path.join(
+                out_dir, f"{snip_name}_loss{int(p['recon_loss'][i]):05}.png"
+            )
+            grid = torch.stack([p["orig"][i], p["recon"][i]], dim=0)  # 2×C×H×W
+            save_image(grid, fpath, nrow=2, pad_value=1)
+
 
 def assess_image_reconstructions(
     lit_model:  LitModel,

@@ -51,6 +51,17 @@ class TrainingPipeline(Pipeline):
         if training_config is None:
                 training_config = BaseTrainerConfig()
 
+
+        # elif model.model_name == "VAEGAN":
+        #     if not isinstance(
+        #         training_config, CoupledOptimizerAdversarialTrainerConfig
+        #     ):
+        #
+        #         raise AssertionError(
+        #             "A 'CoupledOptimizerAdversarialTrainer' "
+        #             "is expected for training a VAEGAN"
+        #         )
+
         if (not isinstance(training_config, BaseTrainerConfig)) & \
            (not isinstance(training_config, BaseTrainerConfig)):
             raise AssertionError(

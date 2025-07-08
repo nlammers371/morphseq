@@ -57,8 +57,8 @@ class BasicEvalDataset(datasets.ImageFolder):
 
     def __getitem__(self, index):
         X, _ = super().__getitem__(index)
-        if self.transform:
-            X = self.transform(X)
+        # if self.transform:
+        #     X = self.transform(X)
 
         if not self.return_name:
             return DatasetOutput(data=X)

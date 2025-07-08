@@ -451,7 +451,7 @@ def count_embryo_regions(index, meta_lookup, image_list, master_df_update, max_s
 
     sa_vec = np.asarray([rg["Area"] for rg in regions]) * ff_size / lb_size * pixel_size_raw**2 - 1
     keep      = (sa_vec >= min_sa_um) & (sa_vec <= max_sa_um)
-    ranks     = np.argsort(-sa_vec)
+    ranks     = np.argsort(np.argsort(-sa_vec))
 
     i_pass = 0
     for i, r in enumerate(regions):
@@ -705,123 +705,6 @@ def get_embryo_stats(index: int,
     
     return row_out
 
-
-####################
-# Main process function 1
-####################
-def build_well_metadata_master(root: str | Path, well_sheets=None):
-
-    # print("Compiling metadata...")
-
-    # set paths
-    root = Path(root)
-    meta_root = root / "metadata"
-    built_meta = meta_root / "built_metadata_files"
-    well_meta = meta_root / "well_metadata"
-    combined_out = meta_root / "combined_metadata_files"
-    exp_meta_csv = meta_root / "experiment_metadata.csv"
-
-    # 1) experiment-level metadata, filter to use_flag
-    exp_df = (
-        pd.read_csv(exp_meta_csv, parse_dates=["start_date"])
-          .loc[lambda df: df["use_flag"] == 1, 
-               ["start_date", "experiment_id", "temperature", "has_sci_data", "microscope"]]
-          .rename(columns={"start_date": "experiment_date"})
-    )
-    exp_df["experiment_date"] = exp_df["experiment_date"].astype(str)
-    exp_dates = set(exp_df["experiment_date"])
-
-    # 2) well-level built metadata CSVs
-    csv_paths = sorted(built_meta.glob("*_metadata.csv"))
-    dfs = []
-    for p in csv_paths:
-        date = p.stem.replace("_metadata","")
-        if date not in exp_dates:
-            continue
-        df = pd.read_csv(p)
-        df = df.drop_duplicates(subset=["well","time_int"], keep="first")
-        df["experiment_date"] = date
-        dfs.append(df)
-    if not dfs:
-        raise RuntimeError("No built metadata files matched experiment dates!")
-
-    master = pd.concat(dfs, ignore_index=True)
-    master["experiment_date"] = master["experiment_date"].astype(str)
-    # if "microscope" in master_well_table.columns:
-    #     master_well_table = master_well_table.drop(labels="microscope", axis=1)
-
-    master = master.merge(
-        exp_df, on="experiment_date", how="left", indicator=True
-    )
-    if not (master["_merge"] == "both").all():
-        missing = master.loc[master["_merge"]!="both","experiment_date"].unique()
-        raise ValueError(f"Experiment dates missing in experiment_metadata.csv: {missing}")
-    master = master.drop(columns=["_merge"])
-
-
-    # 3) load per-well Excel sheets and stack
-    if well_sheets is None:
-        well_sheets = ["medium","genotype","chem_perturbation","start_age_hpf","embryos_per_well"]
-    # well_meta_dir = meta_root / "well_metadata"
-    well_xl_paths = sorted(well_meta.glob("*_well_metadata.xlsx"))
-
-    sheet_dfs = []
-    # read once per file
-    for xl in well_xl_paths:
-        date = xl.stem.replace("_well_metadata","")
-        if date not in exp_dates:
-            continue
-        # xlf = pd.ExcelFile(xl)
-        with pd.ExcelFile(xl) as xlf:
-            # build base well names A01…H12
-            wells = [f"{r}{c:02}" for r in "ABCDEFGH" for c in range(1,13)]
-            df = pd.DataFrame({"well": wells})
-            df["experiment_date"] = date
-
-            # parse each sheet into one vector
-            for sheet in well_sheets:
-                arr = xlf.parse(sheet).iloc[:8,1:13].to_numpy().ravel()
-                df[sheet] = arr
-
-            # optional QC sheet
-            if "qc" in xlf.sheet_names:
-                qc = xlf.parse("qc").iloc[:8,1:13].to_numpy().ravel()
-                df["well_qc_flag"] = np.nan_to_num(qc, nan=0).astype(int)
-            else:
-                df["well_qc_flag"] = 0
-
-            sheet_dfs.append(df)
-
-    if not sheet_dfs:
-        raise RuntimeError("No well_metadata Excel sheets found!")
-            
-    well_df_long = pd.concat(sheet_dfs, axis=0, ignore_index=True)
-    well_df_long["experiment_date"] = well_df_long["experiment_date"].astype(str)
-
-    # add to main dataset
-    # 4) final merge
-    master = master.merge(
-        well_df_long, on=["well","experiment_date"], how="left", indicator=True
-    )
-    if not (master["_merge"]=="both").all():
-        missing = master.loc[master["_merge"]!="both", ["well","experiment_date"]]
-        raise ValueError(f"Missing well metadata for:\n{missing}")
-    master = master.drop(columns=["_merge"])
-
-    master["well_id"] = master["experiment_date"] + "_" + master["well"]
-
-    # 6) reorder columns so well_id is first
-    cols = ["well_id"] + [c for c in master.columns if c!="well_id"]
-    master = master[cols]
-
-    # 7) write out
-    combined_out.mkdir(parents=True, exist_ok=True)
-    out_csv = combined_out / "master_well_metadata.csv"
-    master.to_csv(out_csv, index=False)
-
-    print(f"✔️  Wrote {out_csv}")
-    return {}
-
 ####################
 # Main process function 2
 ####################
@@ -948,6 +831,8 @@ def segment_wells(
 
         # print(f"✔️  wrote {track_ckpt}")
 
+        tracked = tracked.dropna(subset=["region_label"])
+
         return tracked
 
 
@@ -1031,7 +916,8 @@ def compile_embryo_stats(root: str,
     tracked_df["use_embryo_flag"] = ~(
             tracked_df["bubble_flag"].values.astype(bool) | tracked_df["focus_flag"].values.astype(bool) |
             tracked_df["frame_flag"].values.astype(bool) | tracked_df["dead_flag"].values.astype(bool) |
-            tracked_df["no_yolk_flag"].values.astype(bool) | (tracked_df["well_qc_flag"].values==1).astype(bool))
+            tracked_df["no_yolk_flag"].values.astype(bool)
+            ) #| (tracked_df["well_qc_flag"].values==1).astype(bool))
 
     # tracked_df.to_csv(os.path.join(meta_root, "embryo_metadata_df.csv"))
 

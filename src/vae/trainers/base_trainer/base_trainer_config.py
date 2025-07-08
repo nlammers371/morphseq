@@ -1,10 +1,11 @@
 import os
 from dataclasses import field
 from typing import Union
+import numpy as np
 import torch.nn as nn
 from pydantic.dataclasses import dataclass
 
-from src._Archive.vae import BaseConfig
+from src.vae.config import BaseConfig
 
 
 @dataclass

@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
-from src._Archive.vae import VAEConfig
+from src.vae.models.vae.vae_config import VAEConfig
 import pandas as pd
-from src._Archive.vae import make_seq_key, make_train_test_split
+from src.vae.auxiliary_scripts.make_training_key import make_seq_key, make_train_test_split
 import os
 import numpy as np
 
@@ -42,7 +42,7 @@ class SeqVAEConfig(VAEConfig):
     # set sequential hyperparameters
     time_window: float = 1.5  # max permitted age difference between sequential pairs
     self_target_prob: float = 0.5  # fraction of time to load self-pair vs. alternative comparison
-    time_only_flag: float = 0  # binary flag. If 0, use only staging info for metric learning
+    time_only_flag: float = 0 # binary flag. If 0, use only staging info for metric learning
     other_age_penalty: float = 1.0  # added similarity delta for cross-embryo comparisons (currently not used)
 
     def __init__(self,

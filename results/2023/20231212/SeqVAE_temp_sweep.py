@@ -3,7 +3,7 @@ sys.path.append("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/")
 sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 
 import os
-from src._Archive.vae import train_vae
+from src.vae import train_vae
 
 
 if __name__ == "__main__":

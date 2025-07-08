@@ -215,6 +215,12 @@ class Experiment:
     def needs_segment(self) -> bool:
         return (_mod_time(self.mask_path) >
                 datetime.fromisoformat(self.timestamps.get("segment", "1970-01-01T00:00:00")).timestamp())
+    
+    @property
+    def needs_stats(self) -> bool:
+        last_run = newest_mtime(self.mask_path, PATTERNS["snips"])
+        newest   = newest_mtime(self.snip_path, PATTERNS["segment"])
+        return newest >= last_run
 
     # ——— internal sync logic —————————————————————————————————————————————
     def _sync_with_disk(self) -> None:
@@ -294,7 +300,7 @@ class Experiment:
     def process_image_masks(self, force_update: bool=False):
         tracked_df = segment_wells(root=self.data_root, exp_name=self.date)
         stats_df = compile_embryo_stats(root=self.data_root, tracked_df=tracked_df)
-        extract_embryo_snips(root, stats_df=stats_df, overwrite_flag=force_update)
+        extract_embryo_snips(root=self.data_root, stats_df=stats_df, overwrite_flag=force_update)
 
     # ——— load/save ——————————————————————————————————————————————————
 
@@ -447,6 +453,13 @@ class ExperimentManager:
             friendly_name="stitch_z",
             **kwargs
         )
+
+    def get_embryo_stats(self, **kwargs):
+        self._run_step(
+            "process_image_masks", "needs_stats",
+            friendly_name="mask_stats",
+            **kwargs
+        )
     # def build_metadata_all(self):
     #     for exp in self.experiments.values():
     #         if exp.needs_build_metadata():
@@ -469,6 +482,5 @@ if __name__ == '__main__':
     manager.report()
 
     exp = Experiment(date="20250703_chem3_34C_T01_1457", data_root=root)
-    exp.needs_stitch
     exp.process_image_masks()
     print("check")

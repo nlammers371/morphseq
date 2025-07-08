@@ -5,16 +5,18 @@ import os
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Union
 import numpy as np
+import torch.nn as nn
 import pandas as pd
+from src.functions.utilities import path_leaf
 import torch
 import torch.distributed as dist
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import SubsetRandomSampler
-from src._Archive.vae import ModelError
+from src.vae.customexception import ModelError
 from pythae.data.datasets import BaseDataset, collate_dataset_output
 from pythae.models import BaseAE
 from ..trainer_utils import set_seed

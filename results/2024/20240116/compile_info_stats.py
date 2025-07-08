@@ -1,4 +1,4 @@
-from src._Archive.vae import calculate_latent_info_stats
+from src.vae import calculate_latent_info_stats
 
 # root = "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"

@@ -4,7 +4,7 @@ import os
 
 import torch.nn as nn
 
-# from src.vae.models import hf_hub_is_available
+from src.vae import hf_hub_is_available
 
 logger = logging.getLogger(__name__)
 console = logging.StreamHandler()
@@ -145,32 +145,32 @@ class AutoModel(nn.Module):
             model = WAE_MMD.load_from_folder(dir_path=dir_path)
 
         elif model_name == "MAFConfig":
-            from src._Archive.vae import MAF
+            from src.vae import MAF
 
             model = MAF.load_from_folder(dir_path=dir_path)
 
         elif model_name == "IAFConfig":
-            from src._Archive.vae import IAF
+            from src.vae import IAF
 
             model = IAF.load_from_folder(dir_path=dir_path)
 
         elif model_name == "PlanarFlowConfig":
-            from src._Archive.vae import PlanarFlow
+            from src.vae import PlanarFlow
 
             model = PlanarFlow.load_from_folder(dir_path=dir_path)
 
         elif model_name == "RadialFlowConfig":
-            from src._Archive.vae import RadialFlow
+            from src.vae import RadialFlow
 
             model = RadialFlow.load_from_folder(dir_path=dir_path)
 
         elif model_name == "MADEConfig":
-            from src._Archive.vae import MADE
+            from src.vae import MADE
 
             model = MADE.load_from_folder(dir_path=dir_path)
 
         elif model_name == "PixelCNNConfig":
-            from src._Archive.vae import PixelCNN
+            from src.vae import PixelCNN
 
             model = PixelCNN.load_from_folder(dir_path=dir_path)
 
@@ -195,7 +195,7 @@ class AutoModel(nn.Module):
             model = PIWAE.load_from_folder(dir_path=dir_path)
 
         elif model_name == "MetricVAEConfig":
-            from src._Archive.vae import MetricVAE
+            from src.vae import MetricVAE
 
             model = MetricVAE.load_from_folder(dir_path=dir_path)
 
@@ -205,7 +205,7 @@ class AutoModel(nn.Module):
             model = SeqVAE.load_from_folder(dir_path=dir_path)
 
         elif model_name == "MorphIAFVAEConfig":
-            from src._Archive.vae import MorphIAFVAE
+            from src.vae import MorphIAFVAE
 
             model = MorphIAFVAE.load_from_folder(dir_path=dir_path)
 
@@ -239,15 +239,15 @@ class AutoModel(nn.Module):
                 ``decoder.pkl``) if a custom encoder (resp. decoder) was provided
         """
 
-        # if not hf_hub_is_available():
-        #     raise ModuleNotFoundError(
-        #         "`huggingface_hub` package must be installed to load models from the HF hub. "
-        #         "Run `python -m pip install huggingface_hub` and log in to your account with "
-        #         "`huggingface-cli login`."
-        #     )
+        if not hf_hub_is_available():
+            raise ModuleNotFoundError(
+                "`huggingface_hub` package must be installed to load models from the HF hub. "
+                "Run `python -m pip install huggingface_hub` and log in to your account with "
+                "`huggingface-cli login`."
+            )
 
-        # else:
-        from huggingface_hub import hf_hub_download
+        else:
+            from huggingface_hub import hf_hub_download
 
         logger.info(f"Downloading config file ...")
 
@@ -405,42 +405,42 @@ class AutoModel(nn.Module):
             )
 
         elif model_name == "MAFConfig":
-            from src._Archive.vae import MAF
+            from src.vae import MAF
 
             model = MAF.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
             )
 
         elif model_name == "IAFConfig":
-            from src._Archive.vae import IAF
+            from src.vae import IAF
 
             model = IAF.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
             )
 
         elif model_name == "PlanarFlowConfig":
-            from src._Archive.vae import PlanarFlow
+            from src.vae import PlanarFlow
 
             model = PlanarFlow.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
             )
 
         elif model_name == "RadialFlowConfig":
-            from src._Archive.vae import RadialFlow
+            from src.vae import RadialFlow
 
             model = RadialFlow.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
             )
 
         elif model_name == "MADEConfig":
-            from src._Archive.vae import MADE
+            from src.vae import MADE
 
             model = MADE.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
             )
 
         elif model_name == "PixelCNNConfig":
-            from src._Archive.vae import PixelCNN
+            from src.vae import PixelCNN
 
             model = PixelCNN.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle

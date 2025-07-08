@@ -6,15 +6,16 @@ sys.path.append("E:\\Nick\\Dropbox (Cole Trapnell's Lab)\\Nick\\morphseq\\")
 
 from src.functions.dataset_utils import make_dynamic_rs_transform, ContrastiveLearningDataset, SeqPairDatasetCached,  TripletDatasetCached, DatasetCached
 import os
-from src._Archive.vae import VAE, VAEConfig, SeqVAEConfig, SeqVAE, MorphIAFVAE, MorphIAFVAEConfig
+from src.vae.models import VAE, VAEConfig, MetricVAE, MetricVAEConfig, SeqVAEConfig, SeqVAE, MorphIAFVAE, MorphIAFVAEConfig
 from src.functions.custom_networks import Encoder_Conv_VAE, Decoder_Conv_VAE
-from src._Archive.vae import BaseTrainerConfig
-from src._Archive.vae import TrainingPipeline
-
+from src.vae.trainers import BaseTrainerConfig
+from src.vae.pipelines.training import TrainingPipeline
+from torch.utils.data.sampler import SubsetRandomSampler
 
 def train_vae(root, train_folder, n_epochs, model_type, input_dim=None, cache_data=False, train_suffix='', **kwargs):
 
-    training_keys = ["batch_size", "learning_rate", "n_load_workers"]  # optional training config kywords
+    training_keys = ["batch_size", "learning_rate", "n_load_workers"] # optional training config kywords
+    # model_keys = ["n_latent", "n_out_channels", "zn_frac", "depth", "nt_xent_temperature"]
     training_args = dict({})
     model_args = dict({})
     for key, value in kwargs.items():

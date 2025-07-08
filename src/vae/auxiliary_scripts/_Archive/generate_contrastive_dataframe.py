@@ -1,16 +1,24 @@
 import glob as glob
+from sklearn.neural_network import MLPRegressor
+from sklearn import linear_model
 from src.functions.dataset_utils import *
 import os
-from src._Archive.vae import AutoModel
+from src.vae.models.auto_model import AutoModel
+import matplotlib.pyplot as plt
+import umap.umap_ as umap
 import numpy as np
+from sklearn.preprocessing import StandardScaler
+import torch.nn.functional as F
 import pandas as pd
 from tqdm import tqdm
+from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression
 # from pythae.trainers.base_trainer_verbose import base_trainer_verbose
 from src.functions.dataset_utils import ContrastiveLearningDataset, ContrastiveLearningViewGenerator
 from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Union
 import ntpath
 
 def clean_path_names(path_list):

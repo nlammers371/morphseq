@@ -81,14 +81,16 @@ class EvalDataConfig:
     experiments:   List[str]
     return_sample_names: bool = True
 
-    transforms: List[Any] = field(default_factory=dict)
+    transforms: Any = None
     batch_size: int = 64
     num_workers: int = 4
     wrap: bool = True
     root: str | Path = "./data"
 
-    def image_path(self) -> str:
-        return os.path.join(self.root, "bf_embryo_snips")
+    @property
+    def data_path(self) -> Path:
+        root = Path(self.root)
+        return root / "training_data" / "bf_embryo_snips"
 
     def make_metadata(self):
         self.split_train_test()
@@ -97,7 +99,7 @@ class EvalDataConfig:
 
         # instantiate your dataset with both fixed and configurable args
         return BasicEvalDataset(
-            root=self.image_path,
+            root=self.data_path,
             experiments=self.experiments,
             transform=self.transforms,
             return_name=self.return_sample_names
@@ -114,7 +116,7 @@ class BaseDataConfig(UrrDataConfig):
 
     # similarly for transform
     transform_name:   Literal["basic", "simclr"] = "simclr"
-    transform_kwargs: Dict[str,Any]                = field(default_factory=dict)
+    transform_kwargs: Dict[str, Any]                = field(default_factory=dict)
 
     return_sample_names: bool = False
 

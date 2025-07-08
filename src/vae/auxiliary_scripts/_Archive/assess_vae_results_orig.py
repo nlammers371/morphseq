@@ -3,7 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn import linear_model
 from src.functions.dataset_utils import *
 import os
-from src._Archive.vae import AutoModel
+from src.vae.models.auto_model import AutoModel
 import matplotlib.pyplot as plt
 import umap.umap_ as umap
 import numpy as np
@@ -19,7 +19,7 @@ from pythae.data.datasets import collate_dataset_output
 from torch.utils.data import DataLoader
 from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Union
 import ntpath
 
 def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,

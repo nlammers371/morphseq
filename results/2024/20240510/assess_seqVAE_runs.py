@@ -1,4 +1,4 @@
-from src._Archive.vae import assess_vae_results
+from src.vae import assess_vae_results
 
 root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"
 
