@@ -45,17 +45,27 @@ Usage:
 """
 
 import os
+import re
+import sys
+import json
 import argparse
 import cv2
+import numpy as np
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import re
 from tqdm import tqdm
 from collections import defaultdict
-import shutil
-import json
 from datetime import datetime
 from typing import Union, Tuple, List, Optional, Dict
+import shutil
+
+# Add the project root to the path so we can import our utilities
+SANDBOX_ROOT = Path(__file__).parent.parent
+if str(SANDBOX_ROOT) not in sys.path:
+    sys.path.append(str(SANDBOX_ROOT))
+
+# Import our enhanced metadata manager
+from scripts.utils.experiment_metadata_utils import ExperimentMetadata
 
 # Try to import pyvips for faster image I/O
 try:
@@ -65,12 +75,7 @@ except ImportError:
     PYVIPS_AVAILABLE = False
     print("Warning: pyvips not available, falling back to OpenCV (slower). Install with: pip install pyvips")
 
-# global checkpoint variables
-videos_written = 0
-METADATA_PATH = None
-
 # --- Configuration for Image and Video Processing ---
-MAX_DIMENSION = 512  # Max width or height for both JPEGs and video
 JPEG_QUALITY = 90
 VIDEO_FPS = 5
 VIDEO_CODEC = 'mp4v' # More compatible than H264, use 'avc1' for H264
@@ -232,7 +237,7 @@ def create_video_from_jpegs(
 def process_experiment(
     experiment_dir: Path,
     output_dir: Path,
-    metadata: Dict,
+    metadata: ExperimentMetadata,
     overwrite: bool = False,
     verbose: bool = True,
     workers: int = 4
@@ -251,16 +256,8 @@ def process_experiment(
         print(f"Processing experiment: {experiment_id}")
         print(f"{'='*20}")
 
-    # Add experiment to metadata if it's new
-    if experiment_id not in metadata['experiments']:
-        metadata['experiments'][experiment_id] = {
-            "experiment_id": experiment_id,
-            "first_processed_time": datetime.now().isoformat(),
-            "videos": {}
-        }
-        metadata['experiment_ids'].append(experiment_id)
-
-    metadata['experiments'][experiment_id]['last_processed_time'] = datetime.now().isoformat()
+    # Add experiment to metadata
+    metadata.add_experiment(experiment_id)
     
     experiment_output_dir = output_dir / experiment_id
     
@@ -321,7 +318,7 @@ def process_experiment(
             print(f"  Video ID: {video_id}")
         
         # Skip well if already processed (only skip video creation when not overwriting)
-        if not overwrite and video_id in metadata['video_ids']:
+        if not overwrite and metadata.has_video(video_id):
             if verbose:
                 print(f"  Skipping already-processed well/video: {video_id}")
             continue
@@ -335,7 +332,7 @@ def process_experiment(
         image_dimensions = []
         
         # Get existing image IDs for this video, if any
-        image_ids = metadata['experiments'][experiment_id].get('videos', {}).get(video_id, {}).get('image_ids', [])
+        image_ids = metadata.get_video_image_ids(experiment_id, video_id)
 
         if verbose:
             print(f"  Converting {len(image_paths)} images to JPEG using {workers} workers...")
@@ -350,7 +347,7 @@ def process_experiment(
             jpeg_path = video_frame_dir / f"{image_id}.jpg"
             
             # Skip if already processed and not overwriting
-            if image_id in metadata['image_ids'] and not overwrite and jpeg_path.exists():
+            if metadata.has_image(image_id) and not overwrite and jpeg_path.exists():
                 # Still need to collect existing paths and dimensions
                 if PYVIPS_AVAILABLE:
                     try:
@@ -391,8 +388,7 @@ def process_experiment(
                             new_images_processed += 1
                             processed_jpeg_paths.append(jpeg_path)
                             image_dimensions.append(dims)
-                            if image_id not in metadata['image_ids']:
-                                metadata['image_ids'].append(image_id)
+                            # Add image ID to the metadata's lists (will be consolidated later)
                             if image_id not in image_ids:
                                 image_ids.append(image_id)
                     except Exception as e:
@@ -459,30 +455,21 @@ def process_experiment(
         elif verbose:
             print(f"  Warning: No valid frames for video creation in well {well_id}")
 
-        # Update metadata for the video
-        if video_id not in metadata['video_ids']:
-            metadata['video_ids'].append(video_id)
-
-        # --- checkpoint logic ---
-        global videos_written, METADATA_PATH
-        videos_written += 1
-        if videos_written % 100 == 0:
-            with open(METADATA_PATH, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            if verbose:
-                print(f"[checkpoint] Saved metadata after {videos_written} videos")
-
-        metadata['experiments'][experiment_id]['videos'][video_id] = {
-            "video_id": video_id,
-            "well_id": well_id,
+        # Update metadata for the video using the class methods
+        video_metadata = {
             "mp4_path": str(video_path) if video_path else None,
             "processed_jpg_images_dir": str(video_frame_dir),
-            "image_ids": sorted(image_ids),
             "total_source_images": len(image_paths),
             "valid_frames": len(processed_jpeg_paths),
-            "video_resolution": list(final_video_size) if final_video_size else None,
-            "last_processed_time": datetime.now().isoformat()
+            "video_resolution": list(final_video_size) if final_video_size else None
         }
+        metadata.add_video(experiment_id, well_id, video_metadata)
+        
+        # Add image IDs to the video
+        if image_ids:
+            metadata.add_images(video_id, image_ids)
+        
+        # Auto-save will be triggered automatically by the class
 
     if warning_count >= max_warnings:
         print(f"\n... and {warning_count - max_warnings} more image reading warnings (suppressed)")
@@ -491,29 +478,6 @@ def process_experiment(
         print(f"\nFinished processing experiment {experiment_id}.")
     
     return True
-
-def load_or_initialize_metadata(path: Path) -> Dict:
-    """Loads metadata from a JSON file or returns a new structure."""
-    if path.exists():
-        try:
-            with open(path, 'r') as f:
-                data = json.load(f)
-                # Basic validation
-                if 'experiments' in data and 'image_ids' in data:
-                    print(f"Loaded existing metadata from {path}")
-                    return data
-        except (json.JSONDecodeError, TypeError):
-            print(f"Warning: Could not parse existing metadata file at {path}. Starting fresh.")
-    
-    print("Initializing new metadata file.")
-    return {
-        "script_version": "01_prepare_videos.py",
-        "creation_time": datetime.now().isoformat(),
-        "experiment_ids": [],
-        "video_ids": [],
-        "image_ids": [],
-        "experiments": {}
-    }
 
 def main():
     """Main entry point for the script."""
@@ -557,12 +521,13 @@ def main():
         print(f"Error: Directory with experiments not found: {experiments_dir}")
         return 1
 
-    # Load existing metadata or create a new one
+    # Initialize metadata manager with auto-save capability
     metadata_path = output_dir / "experiment_metadata.json"
-    metadata = load_or_initialize_metadata(metadata_path)
-    # set global path for checkpoints
-    global METADATA_PATH
-    METADATA_PATH = metadata_path
+    metadata = ExperimentMetadata(metadata_path, verbose=args.verbose, auto_save_interval=5)
+    
+    if args.verbose:
+        print(f"📊 Current metadata status:")
+        metadata.print_summary()
 
     # First, generate a list of all available experiment directories
     all_available_experiments = sorted([d for d in experiments_dir.iterdir() if d.is_dir()])
@@ -625,16 +590,24 @@ def main():
         if success:
             successful_count += 1
 
-    # Save the updated metadata once at the very end
+    # Save the updated metadata and clean up old backups
     if args.verbose:
-        print(f"\nSaving updated metadata to: {metadata_path}")
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
+        print(f"\n💾 Saving final metadata and cleaning up old backups...")
+    metadata.save()
+    metadata.cleanup_old_backups()  # Keep only 1 most recent backup
 
+    # Print final summary
     print(f"\nBatch processing complete. Successfully processed {successful_count}/{len(experiments_to_process)} experiments.")
-    print(f"Total experiments in metadata: {len(metadata['experiment_ids'])}")
-    print(f"Total videos in metadata: {len(metadata['video_ids'])}")
-    print(f"Total images in metadata: {len(metadata['image_ids'])}")
+    
+    if args.verbose:
+        print(f"\n📊 Final metadata summary:")
+        metadata.print_summary()
+    else:
+        summary = metadata.get_summary()
+        print(f"Total experiments: {summary['total_experiments']}")
+        print(f"Total videos: {summary['total_videos']}")
+        print(f"Total images: {summary['total_images']}")
+    
     return 0
 
 if __name__ == "__main__":
