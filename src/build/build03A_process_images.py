@@ -544,7 +544,7 @@ def do_embryo_tracking(
     out_rows: List[pd.DataFrame] = []
     for track in range(max_n):
         # select time‐points where track was assigned
-        times, cols = np.where(~np.isnan(ids[:, track]))
+        times, cols = np.where(~np.isnan(ids[:, track][:, None]))
         if len(times) == 0:
             continue
         subtrk = sub.iloc[times].copy().reset_index(drop=True)

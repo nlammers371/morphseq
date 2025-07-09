@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import Literal, List, Type, Callable, Any, Dict, Optional
+from typing import Literal, List, Type, Callable, Any, Dict, Optional, Union
 from src.data.dataset_utils import make_seq_key, make_train_test_split
 from src.data.data_transforms import basic_transform, contrastive_transform
 from src.data.dataset_classes import BasicDataset, NTXentDataset, BasicEvalDataset
@@ -83,9 +85,9 @@ class EvalDataConfig:
 
     transforms: Any = None
     batch_size: int = 64
-    num_workers: int = 4
+    num_workers: int = 2
     wrap: bool = True
-    root: str | Path = "./data"
+    root: Union[str, Path] = "./data"
 
     @property
     def data_path(self) -> Path:

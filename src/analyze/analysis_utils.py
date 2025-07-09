@@ -21,18 +21,71 @@ from tqdm import tqdm
 import os
 from omegaconf import OmegaConf
 import pickle
-from typing import List, Literal, Optional, Any
+from typing import List, Literal, Optional, Any, Union
 from src.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from src.data.data_transforms import basic_transform
 from src.data.dataset_configs import EvalDataConfig
-from src.analyze.assess_hydra_results import initialize_model_to_asses, parse_hydra_paths
+# from src.analyze.assess_hydra_results import initialize_model_to_asses, parse_hydra_paths
+from src.models.factories import build_from_config
 import pytorch_lightning as pl
 import io
 import pandas as pd
-from src.build.pipeline_objects import Experiment
+import importlib
+import glob2 as glob
+# from src.build.pipeline_objects import Experiment
 
 torch.set_float32_matmul_precision("medium")   # good default
+
+def parse_hydra_paths(run_path, version=None, ckpt=None):
+
+    # if version is None:  # find most recent version
+    #     all_versions = glob(os.path.join(run_path, "*"))
+    #     all_versions = sorted([v for v in all_versions if os.path.isdir(v)])
+    #     model_dir = all_versions[-1]
+    # else:
+    #     model_dir = os.path.join(run_path, version, "")
+    # get checkpoint
+    ckpt_dir = os.path.join(run_path, "checkpoints", "")
+    # find all .ckpt files
+    if ckpt is None:
+        latest_ckpt = os.path.join(ckpt_dir, "last.ckpt")
+        if not os.path.isfile(latest_ckpt):
+            all_ckpts = glob(os.path.join(ckpt_dir, "*.ckpt"))
+            # pick the one with the latest modification time
+            if len(all_ckpts) > 0:
+                latest_ckpt = max(all_ckpts, key=os.path.getmtime)
+            else:
+                latest_ckpt = None
+    else:
+        latest_ckpt = ckpt_dir + ckpt + ".ckpt"
+
+    return latest_ckpt
+
+def get_obj_from_str(string, reload=False):
+    module, cls = string.rsplit(".", 1)
+    if reload:
+        module_imp = importlib.import_module(module)
+        importlib.reload(module_imp)
+    return getattr(importlib.import_module(module, package=None), cls)
+
+def initialize_model_to_asses(config):
+
+    # initialize the model
+    config_full = config.copy()
+    model_dict = config.pop("model", OmegaConf.create())
+    target = model_dict["config_target"]
+    model_config = get_obj_from_str(target)
+    model_config = model_config.from_cfg(cfg=config_full)
+
+    # parse dataset related options and merge with defaults as needed
+    # data_config = model_config.dataconfig
+    # data_config.make_metadata()
+
+    # initialize model
+    model = build_from_config(model_config)
+
+    return model, model_config
 
 
 class LegacyWrapper(pl.LightningModule):  # ✓ looks like Lightning
@@ -53,18 +106,17 @@ class CPU_Unpickler(pickle.Unpickler):
         return super().find_class(module, name)
 
 
-def calculate_morph_embeddings(data_root: str | Path,
+def calculate_morph_embeddings(data_root: Union[str, Path],
                   model_name: str,
                   experiments: List[str],
                   cfg: Optional[Any] = None,
-                  out_path: Optional[str | Path] = None,
                   batch_size: int = 64,
                   ):
 
 
     legacy = cfg is None
     data_root = Path(data_root)
-
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     
     if legacy:
         # ---- load the old encoder (and decoder if you need it) ----
@@ -141,9 +193,18 @@ def calculate_morph_embeddings(data_root: str | Path,
 
     # look at image reconstructions
     if legacy:
-        extract_embeddings_legacy(lit_model=lit_model,
+        latent_df = extract_embeddings_legacy(lit_model=lit_model,
                                   dataloader=dl,
-                                  device="cpu")
+                                  device=device)
+        
+    print("Saving embeddings...")
+    save_root = data_root / "analysis" / "latent_embeddings" 
+    
+    for exp in experiments:
+        exp_df = latent_df.loc[latent_df["experiment_date"]==exp]
+        out_path = save_root / exp 
+        os.makedirs(out_path, exist_ok=True)
+        exp_df.to_csv(out_path / f"morph_latends_{model_name}.csv", index=False)
     
     return {}
 
@@ -151,7 +212,7 @@ def calculate_morph_embeddings(data_root: str | Path,
 def extract_embeddings_legacy(
     lit_model:  Any,
     dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
-    device:      str | torch.device = "cuda",
+    device:      Union[str, torch.device] = "cuda",
     ):
 
     lit_model.to(device).eval()
@@ -179,7 +240,7 @@ def extract_embeddings_legacy(
 
     for n, inputs in enumerate(tqdm(dataloader, f"Getting embeddings...")):
 
-        inputs = inputs.to(device)
+        # inputs = inputs.to(device)
         x = inputs["data"].to(device)
 
         labels = list(inputs["label"][0])
@@ -197,9 +258,10 @@ def extract_embeddings_legacy(
         zm_array = np.asarray(encoder_output[0].detach().cpu())
         zs_array = np.asarray(encoder_output[1].detach().cpu())
 
-        temp_df = pd.DataFrame(np.stack((exp_id_vec[:, None], emb_id_vec[:, None], snip_id_vec[:, None]), axis=1), columns=["experiment_date", "embryo_id", "snip_id"])
-        temp_df[new_mu_cols] = zm_array
-        temp_df[new_sigma_cols] = zs_array
+        temp_df = pd.DataFrame(np.concatenate((exp_id_vec[:, None], emb_id_vec[:, None], snip_id_vec[:, None]), axis=1), columns=["experiment_date", "embryo_id", "snip_id"])
+        temp_df[new_mu_cols + new_sigma_cols] = np.concatenate((zm_array, zs_array), axis=1)
+        # temp_df[new_sigma_cols] = zs_array
+        temp_df = temp_df.copy()
         df_list.append(temp_df)
 
     latent_df = pd.concat(df_list, ignore_index=True)
@@ -211,7 +273,7 @@ def extract_embeddings_pl(
     lit_model:  LitModel,
     dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
     out_dir:     str,
-    device:      str | torch.device = "cuda",
+    device:      Union[str, torch.device] = "cuda",
 ):
     lit_model.to(device).eval().freeze()
 
@@ -238,7 +300,7 @@ def assess_image_reconstructions(
     lit_model:  LitModel,
     dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
     out_dir:     str,
-    device:      str | torch.device = "cuda",
+    device:      Union[str, torch.device] = "cuda",
 ):
     lit_model.to(device).eval().freeze()
 

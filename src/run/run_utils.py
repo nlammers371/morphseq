@@ -8,7 +8,7 @@ import torch, warnings
 import os
 from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning.loggers import TensorBoardLogger
-import hydra
+# import hydra
 from src.lightning.pl_wrappers import LitModel
 import pytorch_lightning as pl
 from src.lightning.callbacks import SaveRunMetadata, EpochListCheckpoint
