@@ -1168,8 +1168,9 @@ def get_experiment_image_ids_safe(experiment_id: str, metadata: Dict) -> List[st
         experiment_data = metadata.get("experiments", {}).get(experiment_id, {})
         image_ids = []
         
-        for video_id, video_data in experiment_data.get("videos", {}).items():
-            image_ids.extend(video_data.get("image_ids", []))
+        for video_id in experiment_data.get("videos", {}).keys():
+            video_images = get_video_image_ids_safe(video_id, metadata)
+            image_ids.extend(video_images)
         
         return image_ids
     except Exception as e:
@@ -1654,3 +1655,353 @@ def inference_and_visualize(model, image_path: Union[str, Path], text_prompt: st
         title=f"Detections for: {Path(image_path).name}\nPrompt: '{text_prompt}'"
     )
     return boxes, logits, phrases
+
+# -------------------------------------------------------------------------
+# Block 3: Quality Filtering Methods
+# -------------------------------------------------------------------------
+
+def calculate_detection_iou(self, box1_xywh: List[float], box2_xywh: List[float]) -> float:
+        """
+        Calculate IoU between two bounding boxes in xywh format (normalized coordinates).
+        
+        Args:
+            box1_xywh: [x_center, y_center, width, height] normalized
+            box2_xywh: [x_center, y_center, width, height] normalized
+            
+        Returns:
+            IoU value between 0 and 1
+        """
+        # Convert xywh to xyxy format
+        def xywh_to_xyxy(box):
+            x_center, y_center, width, height = box
+            x1 = x_center - width / 2
+            y1 = y_center - height / 2
+            x2 = x_center + width / 2
+            y2 = y_center + height / 2
+            return [x1, y1, x2, y2]
+        
+        box1_xyxy = xywh_to_xyxy(box1_xywh)
+        box2_xyxy = xywh_to_xyxy(box2_xywh)
+        
+        # Calculate intersection
+        x1 = max(box1_xyxy[0], box2_xyxy[0])
+        y1 = max(box1_xyxy[1], box2_xyxy[1])
+        x2 = min(box1_xyxy[2], box2_xyxy[2])
+        y2 = min(box1_xyxy[3], box2_xyxy[3])
+        
+        if x2 <= x1 or y2 <= y1:
+            return 0.0
+        
+        intersection = (x2 - x1) * (y2 - y1)
+        
+        # Calculate areas
+        area1 = (box1_xyxy[2] - box1_xyxy[0]) * (box1_xyxy[3] - box1_xyxy[1])
+        area2 = (box2_xyxy[2] - box2_xyxy[0]) * (box2_xyxy[3] - box2_xyxy[1])
+        
+        # Calculate union
+        union = area1 + area2 - intersection
+        
+        if union <= 0:
+            return 0.0
+        
+        return intersection / union
+    
+def filter_annotations_by_confidence(self, prompt: str, confidence_threshold: float = 0.5) -> Dict:
+        """
+        Filter annotations for a specific prompt by confidence threshold.
+        Apply to ALL annotations for quality tracking.
+        
+        Args:
+            prompt: The prompt to filter (e.g., "individual embryo")
+            confidence_threshold: Minimum confidence score to keep
+            
+        Returns:
+            Dictionary with filtering statistics and quality metrics
+        """
+        stats = {
+            "original_count": 0,
+            "filtered_count": 0,
+            "removed_count": 0,
+            "confidence_scores_original": [],
+            "confidence_scores_filtered": [],
+            "images_processed": 0
+        }
+        
+        for image_id, image_data in self.annotations.get("images", {}).items():
+            annotations = image_data.get("annotations", [])
+            
+            for ann_idx, annotation in enumerate(annotations):
+                if annotation.get("prompt") == prompt:
+                    stats["images_processed"] += 1
+                    detections = annotation.get("detections", [])
+                    original_detections = detections.copy()
+                    
+                    # Collect original confidence scores
+                    for det in original_detections:
+                        confidence = det.get("confidence", 0.0)
+                        stats["confidence_scores_original"].append(confidence)
+                        stats["original_count"] += 1
+                    
+                    # Filter by confidence
+                    filtered_detections = [
+                        det for det in detections 
+                        if det.get("confidence", 0.0) >= confidence_threshold
+                    ]
+                    
+                    # Collect filtered confidence scores
+                    for det in filtered_detections:
+                        confidence = det.get("confidence", 0.0)
+                        stats["confidence_scores_filtered"].append(confidence)
+                        stats["filtered_count"] += 1
+                    
+                    # Update annotation
+                    annotation["detections"] = filtered_detections
+                    annotation["num_detections"] = len(filtered_detections)
+                    
+                    break
+        
+        stats["removed_count"] = stats["original_count"] - stats["filtered_count"]
+        
+        if self.verbose:
+            print(f"🎯 Confidence filtering results for '{prompt}':")
+            print(f"   Original detections: {stats['original_count']}")
+            print(f"   Filtered detections: {stats['filtered_count']}")
+            print(f"   Removed detections: {stats['removed_count']}")
+            print(f"   Images processed: {stats['images_processed']}")
+        
+        self._unsaved_changes = True
+        return stats
+    
+def remove_overlapping_detections(self, prompt: str, iou_threshold: float = 0.5) -> Dict:
+        """
+        Remove overlapping detections for a specific prompt using IoU threshold.
+        Apply to ALL annotations for duplicate analysis.
+        
+        Args:
+            prompt: The prompt to process (e.g., "individual embryo")
+            iou_threshold: IoU threshold above which detections are considered overlapping
+            
+        Returns:
+            Dictionary with overlap removal statistics
+        """
+        stats = {
+            "original_count": 0,
+            "filtered_count": 0,
+            "removed_count": 0,
+            "iou_values": [],
+            "images_processed": 0
+        }
+        
+        for image_id, image_data in self.annotations.get("images", {}).items():
+            annotations = image_data.get("annotations", [])
+            
+            for ann_idx, annotation in enumerate(annotations):
+                if annotation.get("prompt") == prompt:
+                    stats["images_processed"] += 1
+                    detections = annotation.get("detections", [])
+                    original_count = len(detections)
+                    stats["original_count"] += original_count
+                    
+                    if len(detections) <= 1:
+                        stats["filtered_count"] += len(detections)
+                        continue
+                    
+                    # Remove overlapping detections
+                    filtered_detections = []
+                    for i, det1 in enumerate(detections):
+                        keep_detection = True
+                        
+                        for j, det2 in enumerate(detections):
+                            if i != j:
+                                iou = self.calculate_detection_iou(
+                                    det1.get("box_xywh", []),
+                                    det2.get("box_xywh", [])
+                                )
+                                stats["iou_values"].append(iou)
+                                
+                                # If overlap is high, keep the one with higher confidence
+                                if iou > iou_threshold:
+                                    conf1 = det1.get("confidence", 0.0)
+                                    conf2 = det2.get("confidence", 0.0)
+                                    
+                                    # Keep detection with higher confidence
+                                    if conf1 < conf2:
+                                        keep_detection = False
+                                        break
+                                    elif conf1 == conf2 and i > j:
+                                        # If same confidence, keep the first one
+                                        keep_detection = False
+                                        break
+                        
+                        if keep_detection:
+                            filtered_detections.append(det1)
+                    
+                    stats["filtered_count"] += len(filtered_detections)
+                    
+                    # Update annotation
+                    annotation["detections"] = filtered_detections
+                    annotation["num_detections"] = len(filtered_detections)
+                    
+                    break
+        
+        stats["removed_count"] = stats["original_count"] - stats["filtered_count"]
+        
+        if self.verbose:
+            print(f"🔄 Overlap removal results for '{prompt}':")
+            print(f"   Original detections: {stats['original_count']}")
+            print(f"   Filtered detections: {stats['filtered_count']}")
+            print(f"   Removed detections: {stats['removed_count']}")
+            print(f"   Images processed: {stats['images_processed']}")
+            if stats["iou_values"]:
+                print(f"   Average IoU: {np.mean(stats['iou_values']):.3f}")
+                print(f"   Max IoU: {max(stats['iou_values']):.3f}")
+        
+        self._unsaved_changes = True
+        return stats
+    
+def generate_quality_histogram(self, prompt: str, save_path: Optional[str] = None) -> Dict:
+        """
+        Generate quality histogram for confidence scores of a specific prompt.
+        Should be extension to GroundedDinoAnnotations class, not pipeline step.
+        
+        Args:
+            prompt: The prompt to analyze (e.g., "individual embryo")
+            save_path: Optional path to save the histogram plot
+            
+        Returns:
+            Dictionary with histogram data and statistics
+        """
+        confidence_scores = []
+        detection_counts = []
+        
+        for image_id, image_data in self.annotations.get("images", {}).items():
+            annotations = image_data.get("annotations", [])
+            
+            for annotation in annotations:
+                if annotation.get("prompt") == prompt:
+                    detections = annotation.get("detections", [])
+                    detection_counts.append(len(detections))
+                    
+                    for det in detections:
+                        confidence = det.get("confidence", 0.0)
+                        confidence_scores.append(confidence)
+        
+        if not confidence_scores:
+            if self.verbose:
+                print(f"⚠️  No detections found for prompt '{prompt}'")
+            return {"confidence_scores": [], "detection_counts": []}
+        
+        # Generate histogram data
+        import matplotlib.pyplot as plt
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Confidence score histogram
+        ax1.hist(confidence_scores, bins=20, alpha=0.7, edgecolor='black')
+        ax1.set_xlabel('Confidence Score')
+        ax1.set_ylabel('Frequency')
+        ax1.set_title(f'Confidence Score Distribution\nPrompt: "{prompt}"')
+        ax1.grid(True, alpha=0.3)
+        
+        # Detection count histogram
+        ax2.hist(detection_counts, bins=max(1, max(detection_counts)) if detection_counts else 1, 
+                alpha=0.7, edgecolor='black')
+        ax2.set_xlabel('Number of Detections per Image')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title(f'Detection Count Distribution\nPrompt: "{prompt}"')
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            if self.verbose:
+                print(f"📊 Saved quality histogram to: {save_path}")
+        
+        # Calculate statistics
+        stats = {
+            "confidence_scores": confidence_scores,
+            "detection_counts": detection_counts,
+            "confidence_mean": np.mean(confidence_scores),
+            "confidence_std": np.std(confidence_scores),
+            "confidence_min": min(confidence_scores),
+            "confidence_max": max(confidence_scores),
+            "total_detections": len(confidence_scores),
+            "total_images": len(detection_counts),
+            "avg_detections_per_image": np.mean(detection_counts) if detection_counts else 0,
+        }
+        
+        if self.verbose:
+            print(f"📊 Quality statistics for '{prompt}':")
+            print(f"   Total detections: {stats['total_detections']}")
+            print(f"   Total images: {stats['total_images']}")
+            print(f"   Avg detections per image: {stats['avg_detections_per_image']:.2f}")
+            print(f"   Confidence mean: {stats['confidence_mean']:.3f}")
+            print(f"   Confidence std: {stats['confidence_std']:.3f}")
+            print(f"   Confidence range: [{stats['confidence_min']:.3f}, {stats['confidence_max']:.3f}]")
+        
+        return stats
+    
+    def save_high_quality_annotations(self, output_path: str, prompt: str = "individual embryo") -> Dict:
+        """
+        Save high-quality annotations to a new JSON file.
+        
+        Args:
+            output_path: Path for the output gdino_high_quality_annotations.json
+            prompt: The prompt to filter for
+            
+        Returns:
+            Dictionary with save statistics
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Create filtered annotations structure
+        filtered_annotations = {
+            "file_info": {
+                "creation_time": datetime.now().isoformat(),
+                "source_file": str(self.filepath),
+                "filter_prompt": prompt,
+                "description": "High-quality filtered annotations from GroundedDINO",
+            },
+            "images": {}
+        }
+        
+        stats = {
+            "total_images": 0,
+            "filtered_images": 0,
+            "total_detections": 0,
+            "filtered_detections": 0
+        }
+        
+        # Filter annotations
+        for image_id, image_data in self.annotations.get("images", {}).items():
+            annotations = image_data.get("annotations", [])
+            
+            for annotation in annotations:
+                if annotation.get("prompt") == prompt:
+                    stats["total_images"] += 1
+                    detections = annotation.get("detections", [])
+                    stats["total_detections"] += len(detections)
+                    
+                    # Only include if there are detections after filtering
+                    if len(detections) > 0:
+                        filtered_annotations["images"][image_id] = {
+                            "annotations": [annotation]
+                        }
+                        stats["filtered_images"] += 1
+                        stats["filtered_detections"] += len(detections)
+                    break
+        
+        # Save filtered annotations
+        with open(output_path, 'w') as f:
+            json.dump(filtered_annotations, f, indent=2)
+        
+        if self.verbose:
+            print(f"💾 Saved high-quality annotations to: {output_path}")
+            print(f"   Original images: {stats['total_images']}")
+            print(f"   Filtered images: {stats['filtered_images']}")
+            print(f"   Original detections: {stats['total_detections']}")
+            print(f"   Filtered detections: {stats['filtered_detections']}")
+        
+        return stats

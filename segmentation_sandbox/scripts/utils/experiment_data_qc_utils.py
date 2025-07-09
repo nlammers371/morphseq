@@ -117,6 +117,7 @@ DEFAULT_QC_FLAG_CATEGORIES = {
     },
     "video_level": {
         "TECHNICAL_ISSUE": "Technical problems during video acquisition"
+    }}
 =======
 Utilities for managing hierarchical experiment data quality control flags for the MorphSeq pipeline.
 Uses a JSON structure inspired by COCO and embryo_metadata.json for better organization
