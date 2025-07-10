@@ -24,7 +24,7 @@ Usage:
       --annotations /path/to/gdino_high_quality_annotations.json \
       --output /path/to/grounded_sam_annotations.json
 """
-
+@ functions should be put into the grounded_sam_utils file to do thtese thing in a class that wraps around the GroundedDdinoannotations Class
 import os
 import sys
 import json
