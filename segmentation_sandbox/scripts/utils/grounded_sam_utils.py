@@ -3,77 +3,87 @@
 Enhanced GroundedDINO Utilities: Inference + Annotation Management
 =================================================================
 
-🎯 DUAL CAPABILITIES
-====================
 This module provides a complete pipeline for GroundedDINO workflows with:
+- Standalone and batch inference with visualization
+- Annotation management with model metadata tracking
+- High-quality annotation filtering with confidence and IoU thresholds
+- Experiment metadata integration for batch processing
 
-**🔍 INFERENCE CAPABILITIES:**
-- Standalone inference with immediate visualization
-- Batch inference across multiple prompts/images  
-- Exploration workflows with save/display options
-- Smart confidence-based result filtering
+ANNOTATION FILE FORMAT
+======================
 
-**📝 ANNOTATION MANAGEMENT:**
-- Individual and batch annotation operations
-- Flexible batch building (accumulate vs. direct application)
-- Memory-efficient processing with deferred saves
-- Integration with inference results
-
-
-🔧 WHAT'S STORED WITH EACH ANNOTATION
-=====================================
-
-Each annotation now includes complete model information for reproducibility:
+The annotations JSON file has this structure:
 
 {
-  "annotation_id": "ann_20241215143022123456",
-  "prompt": "person car",
-  "model_metadata": {
-    "model_weights_path": "/path/to/groundingdino_swint_ogc.pth",
-    "model_config_path": "/path/to/GroundingDINO_SwinT_OGC.py", 
-    "device": "cuda",
-    "total_parameters": 463688768,
-    "model_size_mb": 1770.1,
-    "loading_timestamp": "2024-12-15T14:30:22.123456",
-    "model_architecture": "GroundedDINO",
-    "config_content": { ... full pipeline config ... }
+  "file_info": {
+    "creation_time": "2024-12-15T14:30:22.123456",
+    "last_updated": "2024-12-15T15:45:30.789012"
   },
-  "inference_params": {
-    "box_threshold": 0.35,
-    "text_threshold": 0.25
+  "images": {
+    "image_001": {
+      "annotations": [
+        {
+          "annotation_id": "ann_20241215143022123456",
+          "prompt": "individual embryo",
+          "model_metadata": {
+            "model_config_path": "GroundingDINO_SwinT_OGC.py",
+            "model_weights_path": "groundingdino_swint_ogc.pth",
+            "loading_timestamp": "2024-12-15T14:30:22.123456",
+            "model_architecture": "GroundedDINO"
+          },
+          "inference_params": {
+            "box_threshold": 0.35,
+            "text_threshold": 0.25
+          },
+          "timestamp": "2024-12-15T14:30:22.789012",
+          "num_detections": 2,
+          "detections": [
+            {
+              "box_xywh": [0.5, 0.3, 0.2, 0.4],  // [x_center, y_center, width, height] normalized
+              "confidence": 0.85,
+              "phrase": "individual embryo"
+            },
+            {
+              "box_xywh": [0.7, 0.6, 0.15, 0.25],
+              "confidence": 0.72,
+              "phrase": "individual embryo"
+            }
+          ]
+        }
+      ]
+    }
   },
-  "timestamp": "2024-12-15T14:30:22.789012",
-  "num_detections": 3,
-  "detections": [...]
+  "high_quality_annotations": {
+    "experiment_20231206": {
+      "prompt": "individual embryo",
+      "confidence_threshold": 0.5,
+      "iou_threshold": 0.5,
+      "timestamp": "2024-12-15T14:30:22.123456",
+      "filtered": {
+        "image_001": [
+          {
+            "box_xywh": [0.5, 0.3, 0.2, 0.4],
+            "confidence": 0.85,
+            "phrase": "individual embryo"
+          }
+        ],
+        "image_002": [
+          {
+            "box_xywh": [0.3, 0.4, 0.18, 0.22],
+            "confidence": 0.78,
+            "phrase": "individual embryo"
+          }
+        ]
+      }
+    }
+  }
 }
 
-💡 KEY BENEFITS
-===============
-✅ Full reproducibility - exact model weights and config saved
-✅ No more guessing which model version was used
-✅ Separate storage of model info vs. inference parameters
-✅ You can apply your own filters later using the raw data
-✅ Complete audit trail for scientific reproducibility
-
-
-**Inference Functions:**
-- inference_with_visualization(): Single prompt with display/save options
-- batch_inference_with_visualization(): Multiple prompts with display/save
-- run_inference(): Core inference without visualization
-- explore_and_annotate_workflow(): Complete exploration → annotation pipeline
-
-**Annotation Management:**
-- GroundedDinoAnnotations: Main annotation manager class
-- gen_annotation_batch(): Most flexible batch building (accumulate vs. direct)
-- batch_inference_and_annotate(): High-level batch annotation
-- add_annotation_batch(): Apply accumulated batches
-
-💡 RECOMMENDED WORKFLOW
-=======================
-1. **Explore**: Use gdino_inference_with_visualization() to see what gets detected
-2. **Review**: Check confidence scores and detection quality  
-3. **Annotate**: Use gen_annotation_batch() to selectively add good results
-4. **Save**: Call annotations.save() to persist your curated annotations
+KEY DIFFERENCES:
+- Regular annotations: Organized by image_id → annotations[] 
+- High-quality annotations: Organized by experiment_id → filtered{image_id → detections[]}
+- High-quality annotations store only the detection objects (no annotation metadata)
+- High-quality annotations include filtering parameters for reproducibility
 """
 
 import os
@@ -90,6 +100,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import shutil
+from collections import defaultdict
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -122,7 +133,7 @@ def load_groundingdino_model(config: Dict, device: str = "cuda") -> "torch.nn.Mo
         model = load_model(str(model_config_path), str(model_weights_path), device=device)
         print(f"GroundedDINO model loaded successfully on {device}.")
         
-        # Store model metadata for annotations - simplified for JSON serialization
+        # Store model metadata for annotations
         model._annotation_metadata = {
             "model_config_path": str(model_config_path),
             "model_weights_path": str(model_weights_path), 
@@ -137,16 +148,10 @@ def load_groundingdino_model(config: Dict, device: str = "cuda") -> "torch.nn.Mo
         raise RuntimeError(f"Failed to load GroundingDINO model: {e}")
 
 def get_model_metadata(model) -> Dict:
-    """
-    Extract model metadata for annotation storage (simplified to avoid JSON serialization issues).
-    
-    Returns:
-        Dictionary containing only model config and weights filenames
-    """
+    """Extract model metadata for annotation storage."""
     if hasattr(model, '_annotation_metadata'):
         base_metadata = model._annotation_metadata.copy()
     else:
-        # Fallback if metadata not available
         base_metadata = {
             "model_config_path": "unknown",
             "model_weights_path": "unknown",
@@ -154,7 +159,6 @@ def get_model_metadata(model) -> Dict:
             "model_architecture": "GroundedDINO"
         }
     
-    # Return only the filenames, not full paths, and ensure JSON serializable
     return {
         "model_config_path": Path(base_metadata.get("model_config_path", "unknown")).name,
         "model_weights_path": Path(base_metadata.get("model_weights_path", "unknown")).name,
@@ -162,62 +166,45 @@ def get_model_metadata(model) -> Dict:
         "model_architecture": base_metadata.get("model_architecture", "GroundedDINO")
     }
 
+def calculate_detection_iou(box1_xywh: List[float], box2_xywh: List[float]) -> float:
+    """Calculate IoU between two bounding boxes in xywh format (normalized coordinates)."""
+    def xywh_to_xyxy(box):
+        x_center, y_center, width, height = box
+        x1 = x_center - width / 2
+        y1 = y_center - height / 2
+        x2 = x_center + width / 2
+        y2 = y_center + height / 2
+        return [x1, y1, x2, y2]
+    
+    box1_xyxy = xywh_to_xyxy(box1_xywh)
+    box2_xyxy = xywh_to_xyxy(box2_xywh)
+    
+    x1 = max(box1_xyxy[0], box2_xyxy[0])
+    y1 = max(box1_xyxy[1], box2_xyxy[1])
+    x2 = min(box1_xyxy[2], box2_xyxy[2])
+    y2 = min(box1_xyxy[3], box2_xyxy[3])
+    
+    if x2 <= x1 or y2 <= y1:
+        return 0.0
+    
+    intersection = (x2 - x1) * (y2 - y1)
+    area1 = (box1_xyxy[2] - box1_xyxy[0]) * (box1_xyxy[3] - box1_xyxy[1])
+    area2 = (box2_xyxy[2] - box2_xyxy[0]) * (box2_xyxy[3] - box2_xyxy[1])
+    union = area1 + area2 - intersection
+    
+    return intersection / union if union > 0 else 0.0
+
 
 class GroundedDinoAnnotations:
     """
-    Enhanced GroundingDINO annotation manager with experiment metadata integration.
+    GroundingDINO annotation manager with experiment metadata integration.
     
-    This class provides efficient annotation management with:
-    - Simple annotation storage and retrieval
-    - Direct visualization from stored annotations (no re-inference needed)
-    - Integration with gdino_inference_with_visualization results
-    - Experiment metadata integration for batch processing
-    - Smart detection of missing annotations
-    - Selective processing by experiment, video, or image
-    
-    Key Features:
-    - Store annotations with full model metadata
-    - Visualize annotations directly from stored data
-    - Batch import from inference results
-    - Controlled verbosity for clean workflows
-    - Automatic discovery of unprocessed images from metadata
-    - Selective processing with experiment/video/image filters
-    
-    Basic Usage:
-        # Store annotations from inference results
-        annotations = GroundedDinoAnnotations("annotations.json")
-        results = gdino_inference_with_visualization(model, images, prompts)
-        annotations.add_from_inference_results(results, model)
-        
-        # Visualize stored annotations (no re-inference needed!)
-        annotations.visualize_annotation("image_001", "person")
-        annotations.save()
-    
-    Metadata Integration:
-        # Process all unprocessed images from experiment metadata
-        annotations = GroundedDinoAnnotations("annotations.json", metadata_path="experiment_metadata.json")
-        annotations.process_missing_annotations(model, ["person", "vehicle"])
-        
-        # Process specific experiments only
-        annotations.process_missing_annotations(model, ["person"], experiment_ids=["20231206", "20231207"])
-        
-        # Process specific videos only  
-        annotations.process_missing_annotations(model, ["person"], video_ids=["20231206_A01", "20231206_A02"])
+    Provides annotation storage, retrieval, batch processing, and high-quality filtering.
     """
-    # -------------------------------------------------------------------------
-    # Initialization and Save (with temporary backup)
-    # -------------------------------------------------------------------------
 
     def __init__(self, filepath: Union[str, Path], verbose: bool = True, 
                  metadata_path: Optional[Union[str, Path]] = None):
-        """
-        Initialize the annotation manager.
-        
-        Args:
-            filepath: Path to annotations JSON file
-            verbose: Whether to print status messages
-            metadata_path: Optional path to experiment_metadata.json for integration
-        """
+        """Initialize the annotation manager."""
         self.filepath = Path(filepath)
         self.verbose = verbose
         self.metadata_path = Path(metadata_path) if metadata_path else None
@@ -227,7 +214,7 @@ class GroundedDinoAnnotations:
         # Load metadata if provided
         self._metadata = None
         if self.metadata_path and self.metadata_path.exists():
-            self._metadata = load_experiment_metadata_safe(self.metadata_path)
+            self._metadata = load_experiment_metadata(self.metadata_path)
             if self.verbose and self._metadata:
                 print(f"📂 Loaded experiment metadata: {len(self._metadata.get('image_ids', []))} total images")
 
@@ -244,7 +231,6 @@ class GroundedDinoAnnotations:
                 "images": {}
             }
         
-        # Try to load the file
         try:
             if self.verbose:
                 print(f"📁 Loading existing annotations from: {self.filepath}")
@@ -260,7 +246,6 @@ class GroundedDinoAnnotations:
             if self.verbose:
                 print(f"❌ JSON corruption detected: {e}")
             
-            # Move corrupted file to backup and start fresh
             backup_path = self.filepath.with_suffix('.json.backup')
             shutil.move(self.filepath, backup_path)
             
@@ -288,13 +273,11 @@ class GroundedDinoAnnotations:
                 "images": {}
             }
 
-    # Replace your existing save method with this:
     def save(self):
-        """Save annotations to file with atomic write and cleanup backup."""
+        """Save annotations to file with atomic write."""
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
         self.annotations["file_info"]["last_updated"] = datetime.now().isoformat()
         
-        # Atomic write: write to temp file first, then rename
         temp_path = self.filepath.with_suffix('.json.tmp')
         backup_path = self.filepath.with_suffix('.json.backup')
         
@@ -302,10 +285,8 @@ class GroundedDinoAnnotations:
             with open(temp_path, 'w') as f:
                 json.dump(self.annotations, f, indent=2)
             
-            # Atomic rename
             shutil.move(temp_path, self.filepath)
             
-            # Save successful - remove the corrupted backup since we have a good file now
             if backup_path.exists():
                 backup_path.unlink()
                 if self.verbose:
@@ -316,22 +297,17 @@ class GroundedDinoAnnotations:
                 print(f"💾 Saved annotations to: {self.filepath}")
                 
         except Exception as e:
-            # Clean up temp file if write failed
             if temp_path.exists():
                 temp_path.unlink()
             if self.verbose:
                 print(f"❌ Failed to save annotations: {e}")
             raise
 
-    # -------------------------------------------------------------------------
-    # Experiment Metadata Integration
-    # -------------------------------------------------------------------------
-
     def set_metadata_path(self, metadata_path: Union[str, Path]):
         """Set or update the experiment metadata path."""
         self.metadata_path = Path(metadata_path)
         if self.metadata_path.exists():
-            self._metadata = load_experiment_metadata_safe(self.metadata_path)
+            self._metadata = load_experiment_metadata(self.metadata_path)
             if self.verbose:
                 print(f"📂 Updated metadata: {len(self._metadata.get('image_ids', []))} total images")
         else:
@@ -342,43 +318,20 @@ class GroundedDinoAnnotations:
     def get_all_metadata_image_ids(self) -> List[str]:
         """Get all image IDs from experiment metadata."""
         if not self._metadata:
-            if self.verbose:
-                print("❌ No metadata loaded. Use set_metadata_path() first.")
             return []
         return self._metadata.get("image_ids", [])
 
-    def get_annotated_image_ids(self, prompt: Optional[str] = None, 
-                              model_metadata: Optional[Dict] = None,
-                              consider_different_if_different_weights: bool = False) -> List[str]:
-        """
-        Get image IDs that already have annotations.
-        
-        Args:
-            prompt: Optional specific prompt to check for
-            model_metadata: Optional model metadata to match against
-            consider_different_if_different_weights: If True, only count as annotated if same model weights
-            
-        Returns:
-            List of image IDs that have annotations (for the specific prompt if provided)
-        """
+    def get_annotated_image_ids(self, prompt: Optional[str] = None) -> List[str]:
+        """Get image IDs that already have annotations."""
         annotated_ids = []
         for image_id, image_data in self.annotations.get("images", {}).items():
             annotations = image_data.get("annotations", [])
             if prompt:
-                # Check for specific prompt
                 for ann in annotations:
                     if ann.get("prompt") == prompt:
-                        if consider_different_if_different_weights and model_metadata:
-                            # Only consider annotated if model weights match
-                            if self._models_match(ann.get("model_metadata", {}), model_metadata):
-                                annotated_ids.append(image_id)
-                                break
-                        else:
-                            # Standard behavior - any annotation with this prompt counts
-                            annotated_ids.append(image_id)
-                            break
+                        annotated_ids.append(image_id)
+                        break
             else:
-                # Check for any annotations
                 if len(annotations) > 0:
                     annotated_ids.append(image_id)
         return annotated_ids
@@ -386,43 +339,24 @@ class GroundedDinoAnnotations:
     def get_missing_annotations(self, prompts: List[str], 
                               experiment_ids: Optional[List[str]] = None,
                               video_ids: Optional[List[str]] = None,
-                              image_ids: Optional[List[str]] = None,
-                              model_metadata: Optional[Dict] = None,
-                              consider_different_if_different_weights: bool = False) -> Dict[str, List[str]]:
-        """
-        Find images that are missing annotations for given prompts.
-        
-        Args:
-            prompts: List of prompts to check for
-            experiment_ids: Optional filter for specific experiments
-            video_ids: Optional filter for specific videos
-            image_ids: Optional filter for specific images
-            model_metadata: Optional model metadata to check against
-            consider_different_if_different_weights: If True, consider different model weights as missing
-            
-        Returns:
-            Dictionary mapping prompt to list of image_ids that need processing
-        """
+                              image_ids: Optional[List[str]] = None) -> Dict[str, List[str]]:
+        """Find images that are missing annotations for given prompts."""
         if not self._metadata:
             if self.verbose:
                 print("❌ No metadata loaded. Cannot find missing annotations.")
             return {prompt: [] for prompt in prompts}
 
-        # Get filtered image IDs based on criteria
         target_image_ids = self._get_filtered_image_ids(experiment_ids, video_ids, image_ids)
         
         missing_by_prompt = {}
         for prompt in prompts:
-            annotated_for_prompt = set(self.get_annotated_image_ids(
-                prompt, model_metadata, consider_different_if_different_weights
-            ))
+            annotated_for_prompt = set(self.get_annotated_image_ids(prompt))
             missing_for_prompt = [img_id for img_id in target_image_ids 
                                 if img_id not in annotated_for_prompt]
             missing_by_prompt[prompt] = missing_for_prompt
             
             if self.verbose:
-                model_note = " (same model)" if consider_different_if_different_weights else ""
-                print(f"📊 Prompt '{prompt}'{model_note}: {len(missing_for_prompt)} missing, {len(annotated_for_prompt)} annotated")
+                print(f"📊 Prompt '{prompt}': {len(missing_for_prompt)} missing, {len(annotated_for_prompt)} annotated")
         
         return missing_by_prompt
 
@@ -433,89 +367,44 @@ class GroundedDinoAnnotations:
         if not self._metadata:
             return []
         
-        # If specific image_ids provided, just filter those that exist in metadata
         if image_ids:
             all_metadata_ids = set(self.get_all_metadata_image_ids())
             return [img_id for img_id in image_ids if img_id in all_metadata_ids]
         
-        # If video_ids provided, get images from those videos
         if video_ids:
             target_image_ids = []
             for video_id in video_ids:
-                video_images = get_video_image_ids_safe(video_id, self._metadata)
-                target_image_ids.extend(video_images)
+                parts = video_id.split('_')
+                if len(parts) >= 2:
+                    experiment_id = parts[0]
+                    exp_data = self._metadata.get("experiments", {}).get(experiment_id, {})
+                    video_data = exp_data.get("videos", {}).get(video_id, {})
+                    target_image_ids.extend(video_data.get("image_ids", []))
             return target_image_ids
         
-        # If experiment_ids provided, get images from those experiments
         if experiment_ids:
             target_image_ids = []
             for exp_id in experiment_ids:
-                exp_images = get_experiment_image_ids_safe(exp_id, self._metadata)
-                target_image_ids.extend(exp_images)
+                exp_data = self._metadata.get("experiments", {}).get(exp_id, {})
+                for video_data in exp_data.get("videos", {}).values():
+                    target_image_ids.extend(video_data.get("image_ids", []))
             return target_image_ids
         
-        # No filters - return all images from metadata
         return self.get_all_metadata_image_ids()
-    def process_missing_annotations(self, model, prompts: Union[str, List[str]],
-                                experiment_ids: Optional[List[str]] = None,
-                                video_ids: Optional[List[str]] = None,
-                                image_ids: Optional[List[str]] = None,
-                                save_dir: Optional[Union[str, Path]] = None,
-                                box_threshold: float = 0.35, text_threshold: float = 0.25,
-                                show_anno: bool = False, text_size: float = 1.0,
-                                max_images_per_prompt: Optional[int] = None,
-                                consider_different_if_different_weights: bool = False,
-                                overwrite: bool = False,
-                                store_image_source: bool = False,
-                                auto_save_interval: Optional[int] = None) -> Dict[str, Dict[str, Tuple]]:
-                                
-        """
-        Process missing annotations by running inference on unprocessed images.
-        
-        Args:
-            model: GroundingDINO model
-            prompts: Prompt(s) to process
-            experiment_ids: Optional filter for specific experiments
-            video_ids: Optional filter for specific videos  
-            image_ids: Optional filter for specific images
-            save_dir: Optional directory to save visualizations
-            box_threshold: Box confidence threshold
-            text_threshold: Text confidence threshold
-            show_anno: Whether to display annotations during inference
-            text_size: Text size for visualizations
-            max_images_per_prompt: Optional limit on images processed per prompt
-            consider_different_if_different_weights: If True, treat different model weights as different annotations
-            overwrite: If True, overwrite existing annotations with same prompt/image/model
-            auto_save_interval: If provided, automatically save annotations every N processed images
-            
-        Returns:
-            Results from gdino_inference_with_visualization
-        """
+
+    def process_missing_annotations(self, model, prompts: Union[str, List[str]], **kwargs):
+        """Process missing annotations by running inference on unprocessed images."""
         if isinstance(prompts, str):
             prompts = [prompts]
         
         if not self._metadata:
             if self.verbose:
-                print("❌ No metadata loaded. Use set_m s stadata_path() first.")
+                print("❌ No metadata loaded.")
             return {}
         
-        # Get model metadata for comparison
-        model_metadata = get_model_metadata(model)
-        
-        if self.verbose:
-            print(f"🔍 Finding missing annotations for {len(prompts)} prompt(s)...")
-            if consider_different_if_different_weights:
-                weights_name = Path(model_metadata.get("model_weights_path", "unknown")).name
-                print(f"🔧 Model-specific mode: Only considering annotations from {weights_name}")
-        
-        # Find missing annotations
-        missing_by_prompt = self.get_missing_annotations(
-            prompts, experiment_ids, video_ids, image_ids, 
-            model_metadata, consider_different_if_different_weights
-        )
-        
-        # Count total missing
+        missing_by_prompt = self.get_missing_annotations(prompts, **kwargs)
         total_missing = sum(len(img_ids) for img_ids in missing_by_prompt.values())
+        
         if total_missing == 0:
             if self.verbose:
                 print("✅ No missing annotations found!")
@@ -524,28 +413,17 @@ class GroundedDinoAnnotations:
         if self.verbose:
             print(f"📊 Found {total_missing} missing annotations to process")
         
-        # Process each prompt
         all_results = {}
         for prompt in prompts:
             missing_image_ids = missing_by_prompt[prompt]
-            
             if len(missing_image_ids) == 0:
-                if self.verbose:
-                    print(f"✅ No missing annotations for prompt '{prompt}'")
                 continue
-            
-            # Apply limit if specified
-            if max_images_per_prompt and len(missing_image_ids) > max_images_per_prompt:
-                if self.verbose:
-                    print(f"⚠️  Limiting '{prompt}' to {max_images_per_prompt} images (found {len(missing_image_ids)})")
-                missing_image_ids = missing_image_ids[:max_images_per_prompt]
             
             if self.verbose:
                 print(f"\n🔄 Processing {len(missing_image_ids)} images for prompt '{prompt}'...")
             
-            # Get image paths
             try:
-                image_paths = get_image_paths_safe(missing_image_ids, self._metadata)
+                image_paths = get_image_id_paths(missing_image_ids, self._metadata)
                 if self.verbose:
                     print(f"📁 Found paths for {len(image_paths)} images")
             except Exception as e:
@@ -553,193 +431,353 @@ class GroundedDinoAnnotations:
                     print(f"❌ Error getting image paths: {e}")
                 continue
             
-            # Prepare inference parameters
-            inference_params = {"box_threshold": box_threshold, "text_threshold": text_threshold}
-            
-            # Run inference with auto-save capability
             results = gdino_inference_with_visualization(
-                model, image_paths, prompt,
-                box_threshold=box_threshold, text_threshold=text_threshold,
-                show_anno=show_anno, save_dir=save_dir, text_size=text_size,
-                verbose=self.verbose,
-                annotations_manager=self,  # Pass self as the annotation manager
-                auto_save_interval=auto_save_interval,  # Pass through auto-save setting
-                inference_params=inference_params,
-                overwrite=overwrite,
-                store_image_source=store_image_source,
+                model, image_paths, prompt, verbose=self.verbose,
+                annotations_manager=self, **kwargs
             )
             
-            # Merge results
             for image_name, image_results in results.items():
                 if image_name not in all_results:
                     all_results[image_name] = {}
                 all_results[image_name].update(image_results)
         
-        if self.verbose:
-            total_processed = sum(len(img_results) for img_results in all_results.values())
-            print(f"\n✅ Processed {total_processed} image-prompt combinations")
-            if auto_save_interval is None:
-                print("💾 Remember to call .save() to persist annotations!")
-            else:
-                print("💾 Annotations auto-saved during processing!")
-        
         return all_results
-    def sync_with_metadata(self, model, prompts: Union[str, List[str]],
-                          save_dir: Optional[Union[str, Path]] = None,
-                          consider_different_if_different_weights: bool = False,
-                          overwrite: bool = False, **kwargs) -> Dict[str, Dict[str, Tuple]]:
-        """
-        Sync annotations with experiment metadata (alias for process_missing_annotations).
-        
-        This method ensures all images in the metadata have annotations for the given prompts.
-        
-        Args:
-            model: GroundingDINO model
-            prompts: Prompt(s) to process
-            save_dir: Optional directory to save visualizations
-            consider_different_if_different_weights: If True, treat different model weights as different annotations
-            overwrite: If True, overwrite existing annotations with same prompt/image/model
-            **kwargs: Additional arguments passed to process_missing_annotations
-        
-        Example:
-            # Ensure all images have person and vehicle annotations
-            annotations.sync_with_metadata(model, ["person", "vehicle"])
-            
-            # Sync with model-specific consideration
-            annotations.sync_with_metadata(
-                model, ["person"], consider_different_if_different_weights=True
-            )
-        """
-        return self.process_missing_annotations(
-            model, prompts, save_dir=save_dir,
-            consider_different_if_different_weights=consider_different_if_different_weights,
-            overwrite=overwrite, **kwargs
-        )
 
-    def get_processing_summary(self, prompts: List[str], 
-                             consider_different_if_different_weights: bool = False) -> Dict:
-        """
-        Get a summary of annotation coverage for given prompts.
-        
-        Args:
-            prompts: List of prompts to analyze
-            consider_different_if_different_weights: If True, provide model-specific breakdown
-        
-        Returns:
-            Dictionary with coverage statistics
-        """
+    def _get_image_to_experiment_map(self) -> Dict[str, str]:
+        """Create mapping from image_id to experiment_id using metadata."""
         if not self._metadata:
-            return {"error": "No metadata loaded"}
+            return {}
         
-        total_images = len(self.get_all_metadata_image_ids())
+        image_to_exp = {}
+        for exp_id, exp_data in self._metadata.get("experiments", {}).items():
+            for video_data in exp_data.get("videos", {}).values():
+                for image_id in video_data.get("image_ids", []):
+                    image_to_exp[image_id] = exp_id
+        
+        return image_to_exp
+
+    def calculate_detection_iou(self, box1_xywh: List[float], box2_xywh: List[float]) -> float:
+        """Calculate IoU between two bounding boxes."""
+        return calculate_detection_iou(box1_xywh, box2_xywh)
+
+    def generate_high_quality_annotations(self,
+                                        image_ids: List[str],
+                                        prompt: str = "individual embryo",
+                                        confidence_threshold: float = 0.5,
+                                        iou_threshold: float = 0.5,
+                                        overwrite: bool = False,
+                                        save_to_self: bool = True) -> Dict:
+        """Generate high-quality annotations by filtering existing annotations."""
+        if self.verbose:
+            print(f"🎯 Generating high-quality annotations for {len(image_ids)} images")
+            print(f"   Prompt: '{prompt}', Confidence: {confidence_threshold}, IoU: {iou_threshold}")
+        
+        image_to_exp = self._get_image_to_experiment_map()
+        
+        # Step 1: Collect raw detections
+        raw_detections = []
+        for image_id in image_ids:
+            if image_id in self.annotations.get("images", {}):
+                annotations = self.annotations["images"][image_id].get("annotations", [])
+                for annotation in annotations:
+                    if annotation.get("prompt") == prompt:
+                        for detection in annotation.get("detections", []):
+                            raw_detections.append({
+                                'image_id': image_id,
+                                'detection': detection,
+                                'annotation_id': annotation.get('annotation_id'),
+                                'confidence': detection.get('confidence', 0),
+                                'experiment_id': image_to_exp.get(image_id, 'unknown')
+                            })
+        
+        if self.verbose:
+            print(f"   Found {len(raw_detections)} raw detections")
+            
+            # Report confidence statistics before filtering
+            if raw_detections:
+                confidences = [det['confidence'] for det in raw_detections]
+                mean_conf = np.mean(confidences)
+                median_conf = np.median(confidences)
+                
+                print("   📈 Confidence Statistics (before filtering):")
+                print(f"      Total detections: {len(confidences)}")
+                print(f"      Mean: {mean_conf:.3f}")
+                print(f"      Median: {median_conf:.3f}")
+                print(f"      Min: {np.min(confidences):.3f}")
+                print(f"      Max: {np.max(confidences):.3f}")
+                print(f"      Q90: {np.percentile(confidences, 90):.3f}")
+                print(f"      Q95: {np.percentile(confidences, 95):.3f}")
+        
+        # Step 2: Filter by confidence
+        high_conf_detections = [
+            det for det in raw_detections 
+            if det['confidence'] >= confidence_threshold
+        ]
+        
+        removed_by_confidence = len(raw_detections) - len(high_conf_detections)
+        if self.verbose:
+            print(f"   After confidence filter: {len(high_conf_detections)} ({removed_by_confidence} removed)")
+        
+        # Step 3: Filter by IoU (Non-Maximum Suppression within each image)
+        detections_by_image = defaultdict(list)
+        for det in high_conf_detections:
+            detections_by_image[det['image_id']].append(det)
+        
+        filtered_detections = []
+        total_iou_removed = 0
+        
+        for image_id, detections in detections_by_image.items():
+            if len(detections) <= 1:
+                filtered_detections.extend(detections)
+                continue
+            
+            detections.sort(key=lambda x: x['confidence'], reverse=True)
+            
+            keep_detections = []
+            for det in detections:
+                should_keep = True
+                for kept_det in keep_detections:
+                    iou = self.calculate_detection_iou(
+                        det['detection']['box_xywh'],
+                        kept_det['detection']['box_xywh']
+                    )
+                    if iou > iou_threshold:
+                        should_keep = False
+                        total_iou_removed += 1
+                        break
+                
+                if should_keep:
+                    keep_detections.append(det)
+            
+            filtered_detections.extend(keep_detections)
+        
+        if self.verbose:
+            print(f"   After IoU filter: {len(filtered_detections)} ({total_iou_removed} removed)")
+        
+        # Step 4: Group by experiment
+        results_by_experiment = defaultdict(lambda: {
+            "prompt": prompt,
+            "confidence_threshold": confidence_threshold,
+            "iou_threshold": iou_threshold,
+            "timestamp": datetime.now().isoformat(),
+            "filtered": {}
+        })
+        
+        for det in filtered_detections:
+            exp_id = det['experiment_id']
+            image_id = det['image_id']
+            
+            if image_id not in results_by_experiment[exp_id]["filtered"]:
+                results_by_experiment[exp_id]["filtered"][image_id] = []
+            
+            results_by_experiment[exp_id]["filtered"][image_id].append(det['detection'])
+        
+        results = dict(results_by_experiment)
+        
+        # Step 5: Save to self if requested
+        if save_to_self:
+            if "high_quality_annotations" not in self.annotations:
+                self.annotations["high_quality_annotations"] = {}
+            
+            for exp_id, exp_data in results.items():
+                if not overwrite and exp_id in self.annotations["high_quality_annotations"]:
+                    if self.verbose:
+                        print(f"   Skipping experiment {exp_id} (already exists, use overwrite=True)")
+                    continue
+                
+                self.annotations["high_quality_annotations"][exp_id] = exp_data
+                if self.verbose:
+                    total_images = len(exp_data["filtered"])
+                    total_dets = sum(len(dets) for dets in exp_data["filtered"].values())
+                    print(f"   Saved experiment {exp_id}: {total_images} images, {total_dets} detections")
+            
+            self._unsaved_changes = True
+        
+        # Step 6: Return results with statistics
+        total_images = sum(len(exp_data["filtered"]) for exp_data in results.values())
+        total_final_detections = sum(
+            sum(len(dets) for dets in exp_data["filtered"].values()) 
+            for exp_data in results.values()
+        )
+        
         summary = {
-            "total_images_in_metadata": total_images,
-            "prompts": {}
+            "filtered": results,
+            "statistics": {
+                "original_detections": len(raw_detections),
+                "confidence_removed": removed_by_confidence,
+                "iou_removed": total_iou_removed,
+                "final_detections": total_final_detections,
+                "final_images": total_images,
+                "retention_rate": total_final_detections / len(raw_detections) if len(raw_detections) > 0 else 0,
+                "experiments_processed": len(results)
+            }
         }
         
-        for prompt in prompts:
-            if consider_different_if_different_weights:
-                # Get model-specific breakdown
-                models_used = self.list_models_for_prompt(prompt)
-                model_breakdown = {}
-                
-                for model_metadata in models_used:
-                    annotated = len(self.get_annotated_image_ids(prompt, model_metadata, True))
-                    weights_name = Path(model_metadata.get("model_weights_path", "unknown")).name
-                    model_breakdown[weights_name] = {
-                        "annotated": annotated,
-                        "model_metadata": model_metadata
-                    }
-                
-                # Total annotated (any model)
-                total_annotated = len(self.get_annotated_image_ids(prompt))
-                missing = total_images - total_annotated
-                coverage = (total_annotated / total_images * 100) if total_images > 0 else 0
-                
-                summary["prompts"][prompt] = {
-                    "annotated": total_annotated,
-                    "missing": missing,
-                    "coverage_percent": coverage,
-                    "models_used": len(models_used),
-                    "model_breakdown": model_breakdown
-                }
-            else:
-                # Standard summary
-                annotated = len(self.get_annotated_image_ids(prompt))
-                missing = total_images - annotated
-                coverage = (annotated / total_images * 100) if total_images > 0 else 0
-                
-                summary["prompts"][prompt] = {
-                    "annotated": annotated,
-                    "missing": missing,
-                    "coverage_percent": coverage
-                }
+        if self.verbose:
+            stats = summary["statistics"]
+            print(f"   📊 Final summary:")
+            print(f"      Original: {stats['original_detections']} detections")
+            print(f"      Final: {stats['final_detections']} detections")
+            print(f"      Retention: {stats['retention_rate']:.1%}")
+            print(f"      Experiments: {stats['experiments_processed']}")
         
         return summary
 
-    def print_processing_summary(self, prompts: List[str], 
-                               consider_different_if_different_weights: bool = False):
-        """
-        Print a formatted summary of annotation coverage.
+    def get_or_generate_high_quality_annotations(self,
+                                               image_ids: List[str],
+                                               prompt: str = "individual embryo",
+                                               confidence_threshold: float = 0.5,
+                                               iou_threshold: float = 0.5,
+                                               save_to_self: bool = False) -> Dict:
+        """Get high-quality annotations, generating them if they don't exist."""
+        result = {}
+        existing_hq = self.annotations.get("high_quality_annotations", {})
         
-        Args:
-            prompts: List of prompts to analyze
-            consider_different_if_different_weights: If True, show model-specific breakdown
-        """
-        summary = self.get_processing_summary(prompts, consider_different_if_different_weights)
+        # Check existing high-quality annotations
+        for exp_id, content in existing_hq.items():
+            if (content.get("prompt") == prompt and
+                content.get("confidence_threshold") == confidence_threshold and
+                content.get("iou_threshold") == iou_threshold):
+                
+                filtered = {
+                    img_id: ann for img_id, ann in content.get("filtered", {}).items() 
+                    if img_id in image_ids
+                }
+                result.update(filtered)
         
-        if "error" in summary:
-            print(f"❌ {summary['error']}")
-            return
+        # Find missing image_ids
+        missing_image_ids = [img_id for img_id in image_ids if img_id not in result]
         
-        print(f"\n📊 ANNOTATION COVERAGE SUMMARY")
-        print(f"=" * 40)
-        print(f"📸 Total images in metadata: {summary['total_images_in_metadata']}")
-        
-        for prompt, stats in summary["prompts"].items():
-            print(f"\n🏷️  Prompt: '{prompt}'")
-            print(f"   ✅ Annotated: {stats['annotated']}")
-            print(f"   ❌ Missing: {stats['missing']}")
-            print(f"   📊 Coverage: {stats['coverage_percent']:.1f}%")
+        if missing_image_ids:
+            if self.verbose:
+                print(f"🔄 Generating high-quality annotations for {len(missing_image_ids)} missing images")
             
-            if consider_different_if_different_weights and "model_breakdown" in stats:
-                print(f"   🔧 Models used: {stats['models_used']}")
-                for model_name, model_stats in stats["model_breakdown"].items():
-                    print(f"      • {model_name}: {model_stats['annotated']} images")
+            gen_result = self.generate_high_quality_annotations(
+                image_ids=missing_image_ids,
+                prompt=prompt,
+                confidence_threshold=confidence_threshold,
+                iou_threshold=iou_threshold,
+                overwrite=False,
+                save_to_self=save_to_self
+            )
+            
+            # Extract the filtered annotations
+            for exp_data in gen_result.get("filtered", {}).values():
+                for img_id, detections in exp_data.get("filtered", {}).items():
+                    result[img_id] = detections
+        
+        return result
 
-    # -------------------------------------------------------------------------
-    # Core Annotation Management (unchanged from previous version)
-    # -------------------------------------------------------------------------
+    def generate_missing_high_quality_annotations(self,
+                                                prompt: str = "individual embryo",
+                                                confidence_threshold: float = 0.5,
+                                                iou_threshold: float = 0.5) -> None:
+        """Generate high-quality annotations for all unprocessed images."""
+        if self.verbose:
+            print(f"🔄 Generating missing high-quality annotations")
+            print(f"   Prompt: '{prompt}', Thresholds: confidence={confidence_threshold}, iou={iou_threshold}")
+        
+        # Get all processed image IDs
+        processed_ids = set()
+        for content in self.annotations.get("high_quality_annotations", {}).values():
+            if (content.get("prompt") == prompt and
+                content.get("confidence_threshold") == confidence_threshold and
+                content.get("iou_threshold") == iou_threshold):
+                processed_ids.update(content.get("filtered", {}).keys())
+        
+        # Get all available image IDs
+        all_image_ids = list(self.annotations.get("images", {}).keys())
+        unprocessed = [img_id for img_id in all_image_ids if img_id not in processed_ids]
+        
+        if self.verbose:
+            print(f"   Found {len(unprocessed)} unprocessed images out of {len(all_image_ids)} total")
+        
+        if unprocessed:
+            self.generate_high_quality_annotations(
+                image_ids=unprocessed,
+                prompt=prompt,
+                confidence_threshold=confidence_threshold,
+                iou_threshold=iou_threshold,
+                overwrite=True,
+                save_to_self=True
+            )
+            self._unsaved_changes = True
+        else:
+            if self.verbose:
+                print("   ✅ All images already have high-quality annotations")
 
+    def export_high_quality_annotations(self, export_path: Union[str, Path]) -> None:
+        """Export high-quality annotations to a JSON file."""
+        export_path = Path(export_path)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        hq_data = self.annotations.get("high_quality_annotations", {})
+        
+        with open(export_path, 'w') as f:
+            json.dump(hq_data, f, indent=2)
+        
+        if self.verbose:
+            experiments = len(hq_data)
+            total_images = sum(len(exp.get("filtered", {})) for exp in hq_data.values())
+            print(f"✅ Exported high-quality annotations to: {export_path}")
+            print(f"   Experiments: {experiments}, Images: {total_images}")
+
+    def import_high_quality_annotations(self, import_path: Union[str, Path], overwrite: bool = False) -> None:
+        """Import high-quality annotations from a JSON file."""
+        import_path = Path(import_path)
+        
+        if not import_path.exists():
+            raise FileNotFoundError(f"Import file not found: {import_path}")
+        
+        with open(import_path, 'r') as f:
+            imported = json.load(f)
+        
+        if "high_quality_annotations" not in self.annotations:
+            self.annotations["high_quality_annotations"] = {}
+        
+        imported_count = 0
+        skipped_count = 0
+        
+        for exp_id, content in imported.items():
+            if not overwrite and exp_id in self.annotations["high_quality_annotations"]:
+                if self.verbose:
+                    print(f"🔁 Skipped experiment {exp_id} — already exists")
+                skipped_count += 1
+                continue
+            
+            self.annotations["high_quality_annotations"][exp_id] = content
+            if self.verbose:
+                images = len(content.get("filtered", {}))
+                print(f"✅ Imported experiment {exp_id}: {images} images")
+            imported_count += 1
+        
+        if imported_count > 0:
+            self._unsaved_changes = True
+        
+        if self.verbose:
+            print(f"📊 Import summary: {imported_count} imported, {skipped_count} skipped")
+
+    def has_high_quality(self, image_id: str, prompt: str = "individual embryo") -> bool:
+        """Check if an image has high-quality annotations for a given prompt."""
+        for exp_data in self.annotations.get("high_quality_annotations", {}).values():
+            if exp_data.get("prompt") == prompt and image_id in exp_data.get("filtered", {}):
+                return True
+        return False
 
     def add_annotation(self, image_id: str, prompt: str, model, 
                     boxes: np.ndarray, logits: np.ndarray, phrases: List[str],
                     inference_params: Optional[Dict] = None, image_source: Optional[np.ndarray] = None,
                     overwrite: bool = False):
-        """
-        Add a single annotation with enhanced tensor safety.
-        
-        Args:
-            image_id: Identifier for the image
-            prompt: Text prompt used for inference
-            model: The GroundingDINO model (to capture metadata)
-            boxes: Detection boxes (should be numpy array, not tensors)
-            logits: Confidence scores (should be numpy array, not tensors)
-            phrases: Detected phrases
-            inference_params: Optional inference parameters
-            image_source: Optional original image for visualization
-            overwrite: If True, overwrite existing annotation with same prompt/image/model
-        """
-        # Capture model metadata
+        """Add a single annotation."""
         model_metadata = get_model_metadata(model)
         
-        # Ensure boxes and logits are numpy arrays and on CPU
-        if hasattr(boxes, 'cpu'):  # It's a tensor
+        # Ensure numpy arrays
+        if hasattr(boxes, 'cpu'):
             boxes = boxes.cpu().numpy()
         elif not isinstance(boxes, np.ndarray):
             boxes = np.array(boxes)
             
-        if hasattr(logits, 'cpu'):  # It's a tensor  
+        if hasattr(logits, 'cpu'):
             logits = logits.cpu().numpy()
         elif not isinstance(logits, np.ndarray):
             logits = np.array(logits)
@@ -755,71 +793,50 @@ class GroundedDinoAnnotations:
         
         for ann in existing_annotations:
             if ann.get("prompt") == prompt:
-                # Found existing annotation with same prompt
-                if overwrite and self._models_match(ann.get("model_metadata", {}), model_metadata):
-                    # Same prompt + same model + overwrite=True -> replace this annotation
+                if overwrite:
                     annotation_replaced = True
                     if self.verbose:
-                        weights_name = Path(model_metadata.get("model_weights_path", "unknown")).name
-                        print(f"🔄 Overwriting existing annotation for '{image_id}' + '{prompt}' (model: {weights_name})")
-                    continue  # Skip adding the old annotation
-                elif not self._models_match(ann.get("model_metadata", {}), model_metadata):
-                    # Same prompt but different model -> keep both
-                    updated_annotations.append(ann)
+                        print(f"🔄 Overwriting existing annotation for '{image_id}' + '{prompt}'")
+                    continue
                 else:
-                    # Same prompt + same model + overwrite=False -> keep existing, skip new
                     if self.verbose:
-                        weights_name = Path(model_metadata.get("model_weights_path", "unknown")).name
-                        print(f"⚠️  Skipping duplicate annotation for '{image_id}' + '{prompt}' (model: {weights_name}). Use overwrite=True to replace.")
-                    return  # Don't add the new annotation
+                        print(f"⚠️  Skipping duplicate annotation for '{image_id}' + '{prompt}'")
+                    return
             else:
-                # Different prompt -> keep this annotation
                 updated_annotations.append(ann)
 
-        # Create new annotation with guaranteed JSON-serializable data
+        # Create new annotation
         new_annotation = {
             "annotation_id": f"ann_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
             "prompt": prompt,
             "model_metadata": model_metadata,
             "inference_params": inference_params or {},
             "timestamp": datetime.now().isoformat(),
-            "num_detections": int(len(boxes)),  # Ensure int
+            "num_detections": int(len(boxes)),
             "detections": [
                 {
-                    "box_xywh": box.tolist(),  # numpy -> list
-                    "confidence": float(logit),  # numpy scalar -> float
-                    "phrase": str(phrase)  # Ensure string
+                    "box_xywh": box.tolist(),
+                    "confidence": float(logit),
+                    "phrase": str(phrase)
                 } for box, logit, phrase in zip(boxes, logits, phrases)
             ]
         }
         
-        # Add new annotation
         updated_annotations.append(new_annotation)
         self.annotations["images"][image_id]["annotations"] = updated_annotations
         self._unsaved_changes = True
     
         if self.verbose and not annotation_replaced:
-            weights_path = model_metadata.get("model_weights_path", "unknown")
             print(f"✅ Added annotation for '{image_id}' + '{prompt}' ({len(boxes)} detections)")
-            print(f"   📂 Model: {Path(weights_path).name}")
-
 
     def add_from_inference_results(self, results: Dict[str, Dict[str, Tuple]], model, 
                                    inference_params: Optional[Dict] = None, overwrite: bool = False):
-        """
-        Add annotations from gdino_inference_with_visualization results.
-        
-        Args:
-            results: Output from gdino_inference_with_visualization
-            model: The GroundingDINO model used for inference
-            inference_params: Optional inference parameters used
-            overwrite: If True, overwrite existing annotations with same prompt/image/model
-        """
+        """Add annotations from inference results."""
         total_added = 0
         
         for image_name, image_results in results.items():
             for prompt, (boxes, logits, phrases, image_source) in image_results.items():
-                if len(boxes) > 0:  # Only add if detections found
+                if len(boxes) > 0:
                     self.add_annotation(
                         image_name, prompt, model, boxes, logits, phrases, 
                         inference_params, image_source, overwrite=overwrite
@@ -829,135 +846,6 @@ class GroundedDinoAnnotations:
         if self.verbose:
             action = "Added/updated" if overwrite else "Added"
             print(f"📊 {action} {total_added} annotations from inference results")
-
-    def inference_and_annotate(self, model, images: Union[str, Path, List[Union[str, Path]]], 
-                              prompts: Union[str, List[str]], save_dir: Optional[Union[str, Path]] = None,
-                              box_threshold: float = 0.35, text_threshold: float = 0.25,
-                              show_anno: bool = False, text_size: float = 1.0) -> Dict[str, Dict[str, Tuple]]:
-        """Run inference and automatically store annotations (one-step workflow)."""
-        if self.verbose:
-            print(f"🔄 Running inference and storing annotations...")
-        
-        # Run inference with controlled verbosity
-        results = gdino_inference_with_visualization(
-            model, images, prompts, 
-            box_threshold=box_threshold, text_threshold=text_threshold,
-            show_anno=show_anno, save_dir=save_dir, text_size=text_size,
-            verbose=self.verbose
-        )
-        
-        # Store annotations
-        inference_params = {"box_threshold": box_threshold, "text_threshold": text_threshold}
-        self.add_from_inference_results(results, model, inference_params)
-        
-        return results
-
-    # -------------------------------------------------------------------------
-    # Visualization from Stored Annotations (unchanged from previous version)
-    # -------------------------------------------------------------------------
-
-    def visualize_annotation(self, image_id: str, prompt: str, image_path: Optional[Union[str, Path]] = None,
-                           text_size: float = 1.0, show_anno: bool = True, save_path: Optional[str] = None):
-        """Visualize a stored annotation without re-running inference."""
-        # Get stored annotation
-        annotation = self._get_annotation(image_id, prompt)
-        if annotation is None:
-            if self.verbose:
-                print(f"❌ No annotation found for '{image_id}' + '{prompt}'")
-            return
-        
-        # Load image (try to auto-find if not provided)
-        if image_path is None:
-            if self._metadata:
-                try:
-                    image_path = get_image_paths_safe([image_id], self._metadata)[0]
-                    if self.verbose:
-                        print(f"📁 Auto-found image path: {image_path}")
-                except:
-                    if self.verbose:
-                        print(f"❌ Could not auto-find image path for '{image_id}'")
-                    return
-            else:
-                if self.verbose:
-                    print(f"❌ Image path required for visualization (no metadata loaded)")
-                return
-        
-        try:
-            # Load image using GroundingDINO's load_image function
-            from groundingdino.util.inference import load_image
-            image_source, _ = load_image(str(image_path))
-        except Exception as e:
-            if self.verbose:
-                print(f"❌ Error loading image {image_path}: {e}")
-            return
-        
-        # Extract detection data from stored annotation
-        detections = annotation["detections"]
-        if len(detections) == 0:
-            if self.verbose:
-                print(f"📭 No detections in stored annotation for '{image_id}' + '{prompt}'")
-            return
-        
-        # Convert back to numpy arrays
-        boxes = np.array([det["box_xywh"] for det in detections])
-        logits = np.array([det["confidence"] for det in detections])
-        phrases = [det["phrase"] for det in detections]
-        
-        # Convert to torch tensors (for compatibility with visualize_detections)
-        boxes_tensor = torch.tensor(boxes)
-        logits_tensor = torch.tensor(logits)
-        
-        # Create title
-        title = f"Stored Annotation: {image_id} | '{prompt}'\n{len(boxes)} detections (from {annotation['timestamp'][:10]})"
-        
-        # Visualize using the existing function
-        visualize_detections(
-            image_source, boxes_tensor, logits_tensor, phrases,
-            title=title, save_path=save_path, text_size=text_size, 
-            show_anno=show_anno, verbose=self.verbose
-        )
-
-    def visualize_all_annotations(self, image_id: str, image_path: Optional[Union[str, Path]] = None,
-                                text_size: float = 1.0, show_anno: bool = True, save_dir: Optional[Union[str, Path]] = None):
-        """Visualize all stored annotations for an image."""
-        image_annotations = self.get_annotations_for_image(image_id)
-        
-        if len(image_annotations) == 0:
-            if self.verbose:
-                print(f"📭 No annotations found for image '{image_id}'")
-            return
-        
-        # Auto-find image path if not provided
-        if image_path is None and self._metadata:
-            try:
-                image_path = get_image_paths_safe([image_id], self._metadata)[0]
-                if self.verbose:
-                    print(f"📁 Auto-found image path: {image_path}")
-            except:
-                if self.verbose:
-                    print(f"❌ Could not auto-find image path for '{image_id}'")
-                return
-        
-        if self.verbose:
-            print(f"🎨 Visualizing {len(image_annotations)} annotations for '{image_id}'")
-        
-        for annotation in image_annotations:
-            prompt = annotation["prompt"]
-            
-            save_path = None
-            if save_dir:
-                save_dir = Path(save_dir)
-                save_dir.mkdir(parents=True, exist_ok=True)
-                safe_prompt = prompt.replace(" ", "_").replace("/", "_")
-                save_path = save_dir / f"{image_id}_{safe_prompt}_stored.jpg"
-            
-            self.visualize_annotation(
-                image_id, prompt, image_path, text_size, show_anno, str(save_path) if save_path else None
-            )
-
-    # -------------------------------------------------------------------------
-    # Data Management (mostly unchanged)
-    # -------------------------------------------------------------------------
 
     def get_annotations_for_image(self, image_id: str) -> List[Dict]:
         """Get all annotations for an image."""
@@ -977,7 +865,6 @@ class GroundedDinoAnnotations:
             for img_data in self.annotations["images"].values()
         )
         
-        # Add metadata integration info
         summary = {
             "total_images": total_images,
             "total_annotations": total_annotations,
@@ -992,6 +879,16 @@ class GroundedDinoAnnotations:
             summary.update({
                 "metadata_total_images": metadata_images,
                 "annotated_vs_metadata": f"{total_images}/{metadata_images}"
+            })
+        
+        # Add high-quality annotation stats
+        hq_annotations = self.annotations.get("high_quality_annotations", {})
+        if hq_annotations:
+            hq_experiments = len(hq_annotations)
+            hq_images = sum(len(exp.get("filtered", {})) for exp in hq_annotations.values())
+            summary.update({
+                "high_quality_experiments": hq_experiments,
+                "high_quality_images": hq_images
             })
         
         return summary
@@ -1010,94 +907,10 @@ class GroundedDinoAnnotations:
         if summary['metadata_loaded']:
             print(f"📂 Metadata integration: ✅ ({summary['annotated_vs_metadata']} coverage)")
         else:
-            print(f"📂 Metadata integration: ❌ (use set_metadata_path() to enable)")
-
-
-    def _get_annotation(self, image_id: str, prompt: str) -> Optional[Dict]:
-        """Helper to get a specific annotation."""
-        annotations = self.get_annotations_for_image(image_id)
-        for ann in annotations:
-            if ann.get("prompt") == prompt:
-                return ann
-        return None
-
-    def _models_match(self, metadata1: Dict, metadata2: Dict) -> bool:
-        """
-        Check if two model metadata represent the same model.
+            print(f"📂 Metadata integration: ❌")
         
-        Compares model weights path and config path to determine if annotations
-        are from the same model checkpoint.
-        
-        Args:
-            metadata1: First model metadata dictionary
-            metadata2: Second model metadata dictionary
-            
-        Returns:
-            True if models match, False otherwise
-        """
-        # Compare model weights path (primary identifier)
-        weights1 = metadata1.get("model_weights_path", "")
-        weights2 = metadata2.get("model_weights_path", "")
-        
-        # Compare config path (secondary identifier)
-        config1 = metadata1.get("model_config_path", "")
-        config2 = metadata2.get("model_config_path", "")
-        
-        # Models match if both weights and config paths are the same
-        weights_match = weights1 == weights2 and weights1 != ""
-        config_match = config1 == config2 and config1 != ""
-        
-        return weights_match and config_match
-
-    def get_annotations_by_model(self, image_id: str, prompt: str) -> List[Dict]:
-        """
-        Get all annotations for a specific image and prompt, grouped by model.
-        
-        Args:
-            image_id: Image identifier
-            prompt: Prompt to filter by
-            
-        Returns:
-            List of annotations with the specified prompt for the image
-            
-        Example:
-            # Get all 'person' annotations for an image (may include multiple models)
-            person_annotations = annotations.get_annotations_by_model("img_001", "person")
-            for ann in person_annotations:
-                model_name = Path(ann["model_metadata"]["model_weights_path"]).name
-                print(f"Model: {model_name}, Detections: {ann['num_detections']}")
-        """
-        image_annotations = self.get_annotations_for_image(image_id)
-        return [ann for ann in image_annotations if ann.get("prompt") == prompt]
-
-    def list_models_for_prompt(self, prompt: str) -> List[Dict]:
-        """
-        List all different models that have been used for a specific prompt.
-        
-        Args:
-            prompt: Prompt to analyze
-            
-        Returns:
-            List of unique model metadata dictionaries used for this prompt
-        """
-        unique_models = []
-        seen_model_signatures = set()
-        
-        for image_id, image_data in self.annotations.get("images", {}).items():
-            for ann in image_data.get("annotations", []):
-                if ann.get("prompt") == prompt:
-                    model_metadata = ann.get("model_metadata", {})
-                    
-                    # Create signature for uniqueness check
-                    weights_path = model_metadata.get("model_weights_path", "")
-                    config_path = model_metadata.get("model_config_path", "")
-                    signature = (weights_path, config_path)
-                    
-                    if signature not in seen_model_signatures and weights_path:
-                        seen_model_signatures.add(signature)
-                        unique_models.append(model_metadata)
-        
-        return unique_models
+        if "high_quality_experiments" in summary:
+            print(f"⭐ High-quality annotations: {summary['high_quality_experiments']} experiments, {summary['high_quality_images']} images")
 
     @property
     def has_unsaved_changes(self) -> bool:
@@ -1109,228 +922,72 @@ class GroundedDinoAnnotations:
         summary = self.get_summary()
         status = "✅ saved" if not self._unsaved_changes else "⚠️ unsaved"
         metadata_status = "📂 metadata" if summary['metadata_loaded'] else "📂 no-metadata"
-        return f"GroundedDinoAnnotations(images={summary['total_images']}, annotations={summary['total_annotations']}, {status}, {metadata_status})"
-
-
-# -------------------------------------------------------------------------
-# Utility Functions for Experiment Metadata Integration
-# -------------------------------------------------------------------------
-
-def load_experiment_metadata_safe(metadata_path: Union[str, Path]) -> Optional[Dict]:
-    """
-    Safely load experiment metadata with error handling.
-    
-    Args:
-        metadata_path: Path to experiment_metadata.json
-        
-    Returns:
-        Metadata dictionary or None if loading fails
-    """
-    try:
-        # Import function from experiment metadata utils
-        from scripts.utils.experiment_metadata_utils import load_experiment_metadata
-        return load_experiment_metadata(metadata_path)
-    except Exception as e:
-        print(f"⚠️  Could not load experiment metadata from {metadata_path}: {e}")
-        return None
-
-def get_image_paths_safe(image_ids: List[str], metadata: Dict) -> List[Path]:
-    """
-    Safely get image paths with error handling.
-    
-    Args:
-        image_ids: List of image IDs
-        metadata: Loaded metadata dictionary
-        
-    Returns:
-        List of image paths
-    """
-    try:
-        # Import function from experiment metadata utils
-        from scripts.utils.experiment_metadata_utils import get_image_id_paths
-        return get_image_id_paths(image_ids, metadata)
-    except Exception as e:
-        print(f"⚠️  Error getting image paths: {e}")
-        raise
-
-def get_experiment_image_ids_safe(experiment_id: str, metadata: Dict) -> List[str]:
-    """
-    Get all image IDs for a specific experiment.
-    
-    Args:
-        experiment_id: Experiment identifier (e.g., "20231206")
-        metadata: Loaded metadata dictionary
-        
-    Returns:
-        List of image IDs in the experiment
-    """
-    try:
-        experiment_data = metadata.get("experiments", {}).get(experiment_id, {})
-        image_ids = []
-        
-        for video_id in experiment_data.get("videos", {}).keys():
-            video_images = get_video_image_ids_safe(video_id, metadata)
-            image_ids.extend(video_images)
-        
-        return image_ids
-    except Exception as e:
-        print(f"⚠️  Error getting experiment images: {e}")
-        return []
-
-def get_video_image_ids_safe(video_id: str, metadata: Dict) -> List[str]:
-    """
-    Get all image IDs for a specific video.
-    
-    Args:
-        video_id: Video identifier (e.g., "20231206_A01")
-        metadata: Loaded metadata dictionary
-        
-    Returns:
-        List of image IDs in the video
-    """
-    try:
-        # Parse video_id to get experiment_id
-        parts = video_id.split('_')
-        if len(parts) < 2:
-            print(f"⚠️  Invalid video_id format: {video_id}")
-            return []
-        
-        experiment_id = parts[0]
-        experiment_data = metadata.get("experiments", {}).get(experiment_id, {})
-        video_data = experiment_data.get("videos", {}).get(video_id, {})
-        
-        return video_data.get("image_ids", [])
-    except Exception as e:
-        print(f"⚠️  Error getting video images: {e}")
-        return []
-
-def validate_entity_ids(entity_ids: List[str], entity_type: str, metadata: Dict) -> Tuple[List[str], List[str]]:
-    """
-    Validate that entity IDs exist in metadata.
-    
-    Args:
-        entity_ids: List of entity IDs to validate
-        entity_type: Type of entity ("experiment", "video", "image")
-        metadata: Loaded metadata dictionary
-        
-    Returns:
-        Tuple of (valid_ids, invalid_ids)
-    """
-    if entity_type == "experiment":
-        valid_set = set(metadata.get("experiments", {}).keys())
-    elif entity_type == "video":
-        valid_set = set(metadata.get("video_ids", []))
-    elif entity_type == "image":
-        valid_set = set(metadata.get("image_ids", []))
-    else:
-        raise ValueError(f"Unknown entity_type: {entity_type}")
-    
-    valid_ids = [eid for eid in entity_ids if eid in valid_set]
-    invalid_ids = [eid for eid in entity_ids if eid not in valid_set]
-    
-    return valid_ids, invalid_ids
-
-
+        hq_status = f", ⭐ {summary.get('high_quality_experiments', 0)} hq-exp" if "high_quality_experiments" in summary else ""
+        return f"GroundedDinoAnnotations(images={summary['total_images']}, annotations={summary['total_annotations']}, {status}, {metadata_status}{hq_status})"
 
 
 def visualize_detections(image_source: np.ndarray, boxes: torch.Tensor, logits: torch.Tensor, 
                          phrases: List[str], title: str = "Detections", save_path: Optional[str] = None,
                          text_size: float = 1.0, show_anno: bool = True, verbose: bool = True):
-    """Visualize detections on an image with improved annotation display."""
+    """Visualize detections on an image."""
     annotated_frame = image_source.copy()
     h, w, _ = annotated_frame.shape
     
-    # Define colors for different detections
     colors = [
-        (0, 100, 200),    # Dark Red
-        (0, 80, 160),     # Dark Orange  
-        (20, 120, 20),    # Dark Green
-        (150, 50, 0),     # Dark Blue
-        (120, 20, 120),   # Dark Purple
-        (0, 140, 140),    # Dark Yellow/Brown
-        (100, 0, 100),    # Dark Magenta
-        (80, 80, 0),      # Dark Cyan
-        (60, 20, 140),    # Dark Red-Purple
-        (0, 60, 100),     # Dark Orange-Red
-        (40, 100, 0),     # Dark Blue-Green
-        (100, 60, 20),    # Dark Blue-Purple
+        (0, 100, 200), (0, 80, 160), (20, 120, 20), (150, 50, 0),
+        (120, 20, 120), (0, 140, 140), (100, 0, 100), (80, 80, 0)
     ]
     
-    # Calculate font parameters based on text_size
-    base_font_scale = 2.0
-    base_thickness = 10
-    
-    font_scale = base_font_scale * text_size
-    thickness = max(1, int(base_thickness * text_size))  # Ensure thickness is at least 1
+    font_scale = 2.0 * text_size
+    thickness = max(1, int(10 * text_size))
     
     for i, (box, logit, phrase) in enumerate(zip(boxes, logits, phrases)):
-        # Convert normalized coordinates to pixel coordinates
         if isinstance(box, torch.Tensor):
             box_norm = box.clone()
         else:
             box_norm = torch.tensor(box)
             
-        # Convert from center format to corner format
         cx, cy, bw, bh = box_norm
         x1 = int((cx - bw/2) * w)
         y1 = int((cy - bh/2) * h)
         x2 = int((cx + bw/2) * w)
         y2 = int((cy + bh/2) * h)
         
-        # Choose color
         color = colors[i % len(colors)]
-        
-        # Draw bounding box
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
         
-        # Prepare label with confidence
         confidence = float(logit) if isinstance(logit, torch.Tensor) else logit
         label = f"{phrase}: {confidence:.2f}"
         
-        # Get text size for background
         font = cv2.FONT_HERSHEY_SIMPLEX
         (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
         
-        # Draw label background
         cv2.rectangle(annotated_frame, 
                       (x1, y1 - text_height - 10), 
                       (x1 + text_width, y1), 
                       color, -1)
         
-        # Draw label text
         cv2.putText(annotated_frame, label, 
                    (x1, y1 - 5), font, font_scale, (255, 255, 255), thickness)
 
-    # Display
     plt.figure(figsize=(12, 8))
     plt.imshow(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
     plt.title(title)
     plt.axis('off')
     
-    # Save if path provided
     if save_path:
         plt.savefig(save_path, bbox_inches='tight', dpi=150)
         if verbose:
             print(f"Visualization saved to: {save_path}")
     
-    # Only show if requested
     if show_anno:
         plt.show()
     else:
-        plt.close()  # Close the figure to prevent display
+        plt.close()
 
 def run_inference(model, image_path: Union[str, Path], text_prompt: str, 
                   box_threshold: float = 0.35, text_threshold: float = 0.25) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray]:
-    """
-    Run GroundingDINO inference and return results and the source image.
-    
-    Returns:
-        Tuple of (boxes, logits, phrases, image_source) where:
-        - boxes: numpy array of bounding boxes (converted from CUDA tensors)
-        - logits: numpy array of confidence scores (converted from CUDA tensors) 
-        - phrases: list of detected phrases
-        - image_source: source image as numpy array
-    """
+    """Run GroundingDINO inference and return results."""
     from groundingdino.util.inference import load_image, predict
     
     image_source, image_tensor = load_image(str(image_path))
@@ -1344,7 +1001,6 @@ def run_inference(model, image_path: Union[str, Path], text_prompt: str,
             text_threshold=text_threshold
         )
     
-    # Convert CUDA tensors to CPU numpy arrays to ensure JSON serializability
     if isinstance(boxes_tensor, torch.Tensor):
         boxes = boxes_tensor.cpu().numpy()
     else:
@@ -1356,7 +1012,6 @@ def run_inference(model, image_path: Union[str, Path], text_prompt: str,
         logits = np.array(logits_tensor)
         
     return boxes, logits, phrases, image_source
-
 
 def gdino_inference_with_visualization(
     model, 
@@ -1374,57 +1029,8 @@ def gdino_inference_with_visualization(
     overwrite: bool = False,
     store_image_source: bool = True
 ) -> Dict[str, Dict[str, Tuple]]:
-    """
-    Unified function for GroundingDINO inference with visualization support and optional auto-save.
-    
-    This single function handles all combinations with optional annotation management:
-    - Single image + single prompt
-    - Single image + multiple prompts  
-    - Multiple images + single prompt
-    - Multiple images + multiple prompts
-    
-    Args:
-        model: Loaded GroundingDINO model
-        images: Single image path or list of image paths
-        prompts: Single prompt or list of prompts
-        box_threshold: Box confidence threshold (default: 0.35)
-        text_threshold: Text confidence threshold (default: 0.25)
-        show_anno: Whether to display annotated images (default: True)
-        save_dir: Optional directory to save annotated images
-        text_size: Text size multiplier for annotations (default: 1.0)
-        verbose: Whether to print progress and detection info (default: True)
-        annotations_manager: Optional GroundedDinoAnnotations instance for auto-saving
-        auto_save_interval: If provided with annotations_manager, save every N processed images
-        inference_params: Optional inference parameters for annotations
-        overwrite: If True, overwrite existing annotations with same prompt/image/model
-    
-    Returns:
-        Nested dictionary: {image_name: {prompt: (boxes, logits, phrases, image_source)}}
-        
-    Examples:
-        # Standard usage (no auto-save)
-        results = gdino_inference_with_visualization(
-            model, ["img1.jpg", "img2.jpg"], ["person", "car"]
-        )
-        
-        # With auto-save every 25 images
-        annotations = GroundedDinoAnnotations("annotations.json")
-        results = gdino_inference_with_visualization(
-            model, image_list, ["person", "vehicle"],
-            annotations_manager=annotations,
-            auto_save_interval=25,
-            inference_params={"box_threshold": 0.35, "text_threshold": 0.25}
-        )
-        
-        # Auto-save with overwrite for existing annotations
-        results = gdino_inference_with_visualization(
-            model, image_paths, prompts,
-            annotations_manager=annotations,
-            auto_save_interval=10,
-            overwrite=True
-        )
-    """
-    # Normalize inputs to lists
+    """Unified function for GroundingDINO inference with visualization support."""
+    # Normalize inputs
     if isinstance(images, (str, Path)):
         image_list = [Path(images)]
     else:
@@ -1435,30 +1041,21 @@ def gdino_inference_with_visualization(
     else:
         prompt_list = prompts
     
-    # Prepare save directory if needed
     if save_dir:
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
     
-    # Initialize results structure
     results = {}
-    
-    # Calculate total operations for progress tracking
     total_ops = len(image_list) * len(prompt_list)
     current_op = 0
-    
-    # Auto-save tracking
     processed_images_count = 0
     auto_save_enabled = annotations_manager is not None and auto_save_interval is not None
     
     if verbose:
         print(f"🔍 Starting inference for {len(image_list)} image(s) × {len(prompt_list)} prompt(s) = {total_ops} operations")
-        if text_size != 1.0:
-            print(f"📝 Using text size multiplier: {text_size}x")
         if auto_save_enabled:
             print(f"💾 Auto-save enabled: saving annotations every {auto_save_interval} processed images")
     
-    # Process each image
     for img_idx, image_path in enumerate(image_list):
         image_name = image_path.stem
         results[image_name] = {}
@@ -1467,27 +1064,23 @@ def gdino_inference_with_visualization(
         if verbose:
             print(f"\n📸 Processing image [{img_idx+1}/{len(image_list)}]: {image_name}")
         
-        # Process each prompt for this image
         for prompt in prompt_list:
             current_op += 1
             if verbose:
                 print(f"   🔍 [{current_op}/{total_ops}] Running prompt: '{prompt}'")
             
             try:
-                # Run inference
                 boxes, logits, phrases, image_source = run_inference(
                     model, image_path, prompt, box_threshold, text_threshold
                 )
                 
-                # Store results
                 if store_image_source:
                     results[image_name][prompt] = (boxes, logits, phrases, image_source)
                 else:
-                    results[image_name][prompt] = (boxes, logits, phrases, None)  # Save memory
+                    results[image_name][prompt] = (boxes, logits, phrases, None)
 
-                # Add to annotations if manager provided
                 if annotations_manager is not None:
-                    if len(boxes) > 0:  # Only add if detections found
+                    if len(boxes) > 0:
                         annotations_manager.add_annotation(
                             image_name, prompt, model, boxes, logits, phrases,
                             inference_params or {"box_threshold": box_threshold, "text_threshold": text_threshold},
@@ -1495,22 +1088,17 @@ def gdino_inference_with_visualization(
                         )
                         image_has_new_annotations = True
                 
-                # Print detection summary
                 if verbose:
                     print(f"      📍 Found {len(boxes)} detections")
                     if len(phrases) > 0:
                         max_conf = float(max(logits)) if len(logits) > 0 else 0.0
                         print(f"      🏆 Max confidence: {max_conf:.3f}")
-                        print(f"      🏷️  Detected: {', '.join(phrases[:3])}" + 
-                              ("..." if len(phrases) > 3 else ""))
                 
-                # Handle visualization and saving
                 if show_anno or save_dir:
                     title = f"Image: {image_name} | Prompt: '{prompt}'\n{len(boxes)} detections found"
                     
                     save_path = None
                     if save_dir:
-                        # Create filename: {image_name}_{prompt}.jpg
                         safe_prompt = prompt.replace(" ", "_").replace("/", "_").replace("\\", "_")
                         save_filename = f"{image_name}_{safe_prompt}.jpg"
                         save_path = save_dir / save_filename
@@ -1527,481 +1115,35 @@ def gdino_inference_with_visualization(
             except Exception as e:
                 if verbose:
                     print(f"      ❌ Error processing '{prompt}' on {image_name}: {e}")
-                # Store empty results for failed operations
                 results[image_name][prompt] = (
                     np.array([]), np.array([]), [], 
-                    np.zeros((100, 100, 3), dtype=np.uint8)  # Placeholder image
+                    np.zeros((100, 100, 3), dtype=np.uint8)
                 )
                 continue
         
-        # Update processed images counter and auto-save if needed
         if image_has_new_annotations:
             processed_images_count += 1
             
             if auto_save_enabled and processed_images_count >= auto_save_interval:
                 if verbose:
-                    print(f"      💾 Auto-saving annotations (processed {processed_images_count} images with new annotations)...")
+                    print(f"      💾 Auto-saving annotations...")
                 annotations_manager.save()
-                processed_images_count = 0  # Reset counter after saving
+                processed_images_count = 0
     
-    # Final save if there are remaining unsaved changes
     if auto_save_enabled and annotations_manager.has_unsaved_changes:
         if verbose:
-            print(f"💾 Final auto-save (processed {processed_images_count} additional images with annotations)...")
+            print(f"💾 Final auto-save...")
         annotations_manager.save()
     
-    # Print final summary (if verbose)
     if verbose:
-        print(f"\n✅ Inference complete!")
-        print(f"📊 Summary by image:")
-    
-    # Calculate summary (always needed for potential return info)
-    total_detections = 0
-    for image_name, image_results in results.items():
-        image_detections = 0
-        successful_prompts = 0
-        
-        for prompt, (boxes, logits, phrases, img) in image_results.items():
-            detection_count = len(boxes)
-            image_detections += detection_count
-            if detection_count > 0:
-                successful_prompts += 1
-        
-        total_detections += image_detections
-        
-        # Print individual image summary if verbose
-        if verbose:
-            print(f"   📸 {image_name}: {image_detections} total detections ({successful_prompts}/{len(prompt_list)} prompts found objects)")
-    
-    # Print final totals if verbose
-    if verbose:
-        print(f"🎯 Grand total: {total_detections} detections across all images and prompts")
+        total_detections = sum(
+            sum(len(results[img][prompt][0]) for prompt in results[img])
+            for img in results
+        )
+        print(f"\n✅ Inference complete! {total_detections} total detections")
         
         if save_dir:
             saved_files = len([f for f in save_dir.glob("*.jpg")])
             print(f"💾 Saved {saved_files} annotated images to: {save_dir}")
-        
-        if auto_save_enabled:
-            print(f"💾 Annotations auto-saved during processing!")
     
     return results
-def compare_annotations(image_source: np.ndarray, annotations_list: List[Dict], 
-                       image_id: str, save_path: Optional[str] = None):
-    """Compare multiple annotation sets for the same image side by side."""
-    num_annotations = len(annotations_list)
-    if num_annotations == 0:
-        print("No annotations to compare.")
-        return
-    
-    fig, axes = plt.subplots(1, num_annotations, figsize=(6*num_annotations, 6))
-    if num_annotations == 1:
-        axes = [axes]
-    
-    for i, annotation in enumerate(annotations_list):
-        # Extract detection data
-        dets = annotation['detections']
-        if len(dets) > 0:
-            boxes = torch.tensor([d['box_xywh'] for d in dets])
-            logits = torch.tensor([d['confidence'] for d in dets])
-            phrases = [d['phrase'] for d in dets]
-            
-            # Create annotated image
-            annotated_frame = image_source.copy()
-            h, w, _ = annotated_frame.shape
-            
-            colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255)]
-            
-            for j, (box, logit, phrase) in enumerate(zip(boxes, logits, phrases)):
-                cx, cy, bw, bh = box
-                x1 = int((cx - bw/2) * w)
-                y1 = int((cy - bh/2) * h)
-                x2 = int((cx + bw/2) * w)
-                y2 = int((cy + bh/2) * h)
-                
-                color = colors[j % len(colors)]
-                cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
-                
-                label = f"{phrase}: {logit:.2f}"
-                cv2.putText(annotated_frame, label, (x1, y1 - 5), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-        else:
-            annotated_frame = image_source.copy()
-        
-        # Display
-        axes[i].imshow(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
-        axes[i].set_title(f"Prompt: '{annotation['prompt']}'\n{annotation['num_detections']} detections")
-        axes[i].axis('off')
-    
-    plt.suptitle(f"Annotation Comparison - {image_id}", fontsize=16)
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, bbox_inches='tight', dpi=150)
-        print(f"Comparison saved to: {save_path}")
-    
-    plt.show()
-
-def inference_and_visualize(model, image_path: Union[str, Path], text_prompt: str, 
-                            box_threshold: float = 0.35, text_threshold: float = 0.25):
-    """A wrapper to run inference and visualize the results immediately."""
-    boxes, logits, phrases, image_source = run_inference(
-        model, image_path, text_prompt, box_threshold, text_threshold
-    )
-    
-    print(f"Found {len(boxes)} detections for prompt: '{text_prompt}'")
-    
-    visualize_detections(
-        image_source, boxes, logits, phrases,
-        title=f"Detections for: {Path(image_path).name}\nPrompt: '{text_prompt}'"
-    )
-    return boxes, logits, phrases
-
-# -------------------------------------------------------------------------
-# Block 3: Quality Filtering Methods
-# -------------------------------------------------------------------------
-
-def calculate_detection_iou(self, box1_xywh: List[float], box2_xywh: List[float]) -> float:
-        """
-        Calculate IoU between two bounding boxes in xywh format (normalized coordinates).
-        
-        Args:
-            box1_xywh: [x_center, y_center, width, height] normalized
-            box2_xywh: [x_center, y_center, width, height] normalized
-            
-        Returns:
-            IoU value between 0 and 1
-        """
-        # Convert xywh to xyxy format
-        def xywh_to_xyxy(box):
-            x_center, y_center, width, height = box
-            x1 = x_center - width / 2
-            y1 = y_center - height / 2
-            x2 = x_center + width / 2
-            y2 = y_center + height / 2
-            return [x1, y1, x2, y2]
-        
-        box1_xyxy = xywh_to_xyxy(box1_xywh)
-        box2_xyxy = xywh_to_xyxy(box2_xywh)
-        
-        # Calculate intersection
-        x1 = max(box1_xyxy[0], box2_xyxy[0])
-        y1 = max(box1_xyxy[1], box2_xyxy[1])
-        x2 = min(box1_xyxy[2], box2_xyxy[2])
-        y2 = min(box1_xyxy[3], box2_xyxy[3])
-        
-        if x2 <= x1 or y2 <= y1:
-            return 0.0
-        
-        intersection = (x2 - x1) * (y2 - y1)
-        
-        # Calculate areas
-        area1 = (box1_xyxy[2] - box1_xyxy[0]) * (box1_xyxy[3] - box1_xyxy[1])
-        area2 = (box2_xyxy[2] - box2_xyxy[0]) * (box2_xyxy[3] - box2_xyxy[1])
-        
-        # Calculate union
-        union = area1 + area2 - intersection
-        
-        if union <= 0:
-            return 0.0
-        
-        return intersection / union
-    
-def filter_annotations_by_confidence(self, prompt: str, confidence_threshold: float = 0.5) -> Dict:
-        """
-        Filter annotations for a specific prompt by confidence threshold.
-        Apply to ALL annotations for quality tracking.
-        
-        Args:
-            prompt: The prompt to filter (e.g., "individual embryo")
-            confidence_threshold: Minimum confidence score to keep
-            
-        Returns:
-            Dictionary with filtering statistics and quality metrics
-        """
-        stats = {
-            "original_count": 0,
-            "filtered_count": 0,
-            "removed_count": 0,
-            "confidence_scores_original": [],
-            "confidence_scores_filtered": [],
-            "images_processed": 0
-        }
-        
-        for image_id, image_data in self.annotations.get("images", {}).items():
-            annotations = image_data.get("annotations", [])
-            
-            for ann_idx, annotation in enumerate(annotations):
-                if annotation.get("prompt") == prompt:
-                    stats["images_processed"] += 1
-                    detections = annotation.get("detections", [])
-                    original_detections = detections.copy()
-                    
-                    # Collect original confidence scores
-                    for det in original_detections:
-                        confidence = det.get("confidence", 0.0)
-                        stats["confidence_scores_original"].append(confidence)
-                        stats["original_count"] += 1
-                    
-                    # Filter by confidence
-                    filtered_detections = [
-                        det for det in detections 
-                        if det.get("confidence", 0.0) >= confidence_threshold
-                    ]
-                    
-                    # Collect filtered confidence scores
-                    for det in filtered_detections:
-                        confidence = det.get("confidence", 0.0)
-                        stats["confidence_scores_filtered"].append(confidence)
-                        stats["filtered_count"] += 1
-                    
-                    # Update annotation
-                    annotation["detections"] = filtered_detections
-                    annotation["num_detections"] = len(filtered_detections)
-                    
-                    break
-        
-        stats["removed_count"] = stats["original_count"] - stats["filtered_count"]
-        
-        if self.verbose:
-            print(f"🎯 Confidence filtering results for '{prompt}':")
-            print(f"   Original detections: {stats['original_count']}")
-            print(f"   Filtered detections: {stats['filtered_count']}")
-            print(f"   Removed detections: {stats['removed_count']}")
-            print(f"   Images processed: {stats['images_processed']}")
-        
-        self._unsaved_changes = True
-        return stats
-    
-def remove_overlapping_detections(self, prompt: str, iou_threshold: float = 0.5) -> Dict:
-        """
-        Remove overlapping detections for a specific prompt using IoU threshold.
-        Apply to ALL annotations for duplicate analysis.
-        
-        Args:
-            prompt: The prompt to process (e.g., "individual embryo")
-            iou_threshold: IoU threshold above which detections are considered overlapping
-            
-        Returns:
-            Dictionary with overlap removal statistics
-        """
-        stats = {
-            "original_count": 0,
-            "filtered_count": 0,
-            "removed_count": 0,
-            "iou_values": [],
-            "images_processed": 0
-        }
-        
-        for image_id, image_data in self.annotations.get("images", {}).items():
-            annotations = image_data.get("annotations", [])
-            
-            for ann_idx, annotation in enumerate(annotations):
-                if annotation.get("prompt") == prompt:
-                    stats["images_processed"] += 1
-                    detections = annotation.get("detections", [])
-                    original_count = len(detections)
-                    stats["original_count"] += original_count
-                    
-                    if len(detections) <= 1:
-                        stats["filtered_count"] += len(detections)
-                        continue
-                    
-                    # Remove overlapping detections
-                    filtered_detections = []
-                    for i, det1 in enumerate(detections):
-                        keep_detection = True
-                        
-                        for j, det2 in enumerate(detections):
-                            if i != j:
-                                iou = self.calculate_detection_iou(
-                                    det1.get("box_xywh", []),
-                                    det2.get("box_xywh", [])
-                                )
-                                stats["iou_values"].append(iou)
-                                
-                                # If overlap is high, keep the one with higher confidence
-                                if iou > iou_threshold:
-                                    conf1 = det1.get("confidence", 0.0)
-                                    conf2 = det2.get("confidence", 0.0)
-                                    
-                                    # Keep detection with higher confidence
-                                    if conf1 < conf2:
-                                        keep_detection = False
-                                        break
-                                    elif conf1 == conf2 and i > j:
-                                        # If same confidence, keep the first one
-                                        keep_detection = False
-                                        break
-                        
-                        if keep_detection:
-                            filtered_detections.append(det1)
-                    
-                    stats["filtered_count"] += len(filtered_detections)
-                    
-                    # Update annotation
-                    annotation["detections"] = filtered_detections
-                    annotation["num_detections"] = len(filtered_detections)
-                    
-                    break
-        
-        stats["removed_count"] = stats["original_count"] - stats["filtered_count"]
-        
-        if self.verbose:
-            print(f"🔄 Overlap removal results for '{prompt}':")
-            print(f"   Original detections: {stats['original_count']}")
-            print(f"   Filtered detections: {stats['filtered_count']}")
-            print(f"   Removed detections: {stats['removed_count']}")
-            print(f"   Images processed: {stats['images_processed']}")
-            if stats["iou_values"]:
-                print(f"   Average IoU: {np.mean(stats['iou_values']):.3f}")
-                print(f"   Max IoU: {max(stats['iou_values']):.3f}")
-        
-        self._unsaved_changes = True
-        return stats
-    
-def generate_quality_histogram(self, prompt: str, save_path: Optional[str] = None) -> Dict:
-        """
-        Generate quality histogram for confidence scores of a specific prompt.
-        Should be extension to GroundedDinoAnnotations class, not pipeline step.
-        
-        Args:
-            prompt: The prompt to analyze (e.g., "individual embryo")
-            save_path: Optional path to save the histogram plot
-            
-        Returns:
-            Dictionary with histogram data and statistics
-        """
-        confidence_scores = []
-        detection_counts = []
-        
-        for image_id, image_data in self.annotations.get("images", {}).items():
-            annotations = image_data.get("annotations", [])
-            
-            for annotation in annotations:
-                if annotation.get("prompt") == prompt:
-                    detections = annotation.get("detections", [])
-                    detection_counts.append(len(detections))
-                    
-                    for det in detections:
-                        confidence = det.get("confidence", 0.0)
-                        confidence_scores.append(confidence)
-        
-        if not confidence_scores:
-            if self.verbose:
-                print(f"⚠️  No detections found for prompt '{prompt}'")
-            return {"confidence_scores": [], "detection_counts": []}
-        
-        # Generate histogram data
-        import matplotlib.pyplot as plt
-        
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-        
-        # Confidence score histogram
-        ax1.hist(confidence_scores, bins=20, alpha=0.7, edgecolor='black')
-        ax1.set_xlabel('Confidence Score')
-        ax1.set_ylabel('Frequency')
-        ax1.set_title(f'Confidence Score Distribution\nPrompt: "{prompt}"')
-        ax1.grid(True, alpha=0.3)
-        
-        # Detection count histogram
-        ax2.hist(detection_counts, bins=max(1, max(detection_counts)) if detection_counts else 1, 
-                alpha=0.7, edgecolor='black')
-        ax2.set_xlabel('Number of Detections per Image')
-        ax2.set_ylabel('Frequency')
-        ax2.set_title(f'Detection Count Distribution\nPrompt: "{prompt}"')
-        ax2.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            if self.verbose:
-                print(f"📊 Saved quality histogram to: {save_path}")
-        
-        # Calculate statistics
-        stats = {
-            "confidence_scores": confidence_scores,
-            "detection_counts": detection_counts,
-            "confidence_mean": np.mean(confidence_scores),
-            "confidence_std": np.std(confidence_scores),
-            "confidence_min": min(confidence_scores),
-            "confidence_max": max(confidence_scores),
-            "total_detections": len(confidence_scores),
-            "total_images": len(detection_counts),
-            "avg_detections_per_image": np.mean(detection_counts) if detection_counts else 0,
-        }
-        
-        if self.verbose:
-            print(f"📊 Quality statistics for '{prompt}':")
-            print(f"   Total detections: {stats['total_detections']}")
-            print(f"   Total images: {stats['total_images']}")
-            print(f"   Avg detections per image: {stats['avg_detections_per_image']:.2f}")
-            print(f"   Confidence mean: {stats['confidence_mean']:.3f}")
-            print(f"   Confidence std: {stats['confidence_std']:.3f}")
-            print(f"   Confidence range: [{stats['confidence_min']:.3f}, {stats['confidence_max']:.3f}]")
-        
-        return stats
-    
-    def save_high_quality_annotations(self, output_path: str, prompt: str = "individual embryo") -> Dict:
-        """
-        Save high-quality annotations to a new JSON file.
-        
-        Args:
-            output_path: Path for the output gdino_high_quality_annotations.json
-            prompt: The prompt to filter for
-            
-        Returns:
-            Dictionary with save statistics
-        """
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Create filtered annotations structure
-        filtered_annotations = {
-            "file_info": {
-                "creation_time": datetime.now().isoformat(),
-                "source_file": str(self.filepath),
-                "filter_prompt": prompt,
-                "description": "High-quality filtered annotations from GroundedDINO",
-            },
-            "images": {}
-        }
-        
-        stats = {
-            "total_images": 0,
-            "filtered_images": 0,
-            "total_detections": 0,
-            "filtered_detections": 0
-        }
-        
-        # Filter annotations
-        for image_id, image_data in self.annotations.get("images", {}).items():
-            annotations = image_data.get("annotations", [])
-            
-            for annotation in annotations:
-                if annotation.get("prompt") == prompt:
-                    stats["total_images"] += 1
-                    detections = annotation.get("detections", [])
-                    stats["total_detections"] += len(detections)
-                    
-                    # Only include if there are detections after filtering
-                    if len(detections) > 0:
-                        filtered_annotations["images"][image_id] = {
-                            "annotations": [annotation]
-                        }
-                        stats["filtered_images"] += 1
-                        stats["filtered_detections"] += len(detections)
-                    break
-        
-        # Save filtered annotations
-        with open(output_path, 'w') as f:
-            json.dump(filtered_annotations, f, indent=2)
-        
-        if self.verbose:
-            print(f"💾 Saved high-quality annotations to: {output_path}")
-            print(f"   Original images: {stats['total_images']}")
-            print(f"   Filtered images: {stats['filtered_images']}")
-            print(f"   Original detections: {stats['total_detections']}")
-            print(f"   Filtered detections: {stats['filtered_detections']}")
-        
-        return stats

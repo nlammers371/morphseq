@@ -12,6 +12,7 @@ Features:
 - Processes images incrementally (skips already processed ones)
 - Saves detections with confidence scores and prompts
 - Tracks model checkpoints and processing metadata
+- Integrated high-quality annotation filtering
 """
 
 import os
@@ -38,7 +39,10 @@ SANDBOX_ROOT = SCRIPT_DIR.parent
 sys.path.append(str(SANDBOX_ROOT))
 
 # Import GroundedDINO utilities
-from scripts.utils.grounded_sam_utils import load_config, load_groundingdino_model, GroundedDinoAnnotations
+from scripts.utils.grounded_sam_utils import (
+    load_config, load_groundingdino_model, GroundedDinoAnnotations,
+    calculate_detection_iou
+)
 from scripts.utils.experiment_metadata_utils import load_experiment_metadata, get_image_id_paths
 
 
@@ -62,9 +66,10 @@ if __name__ == "__main__":
     # Load model
     config = load_config(args.config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
+    print(f"Using device: {device}")
     model = load_groundingdino_model(config, device=device)
-    print("Model loaded successfullyand fixed memory issue ")
+    print("Model loaded successfully")
+    
     # Load experiment metadata
     metadata = load_experiment_metadata(args.metadata)
     image_ids = metadata.get("image_ids", [])
@@ -72,7 +77,6 @@ if __name__ == "__main__":
     # Initialize annotations manager
     annotations = GroundedDinoAnnotations(args.annotations)
     annotations.set_metadata_path(args.metadata)  # Set metadata path for annotations manager
-
 
     # Save any new annotations
     annotations.process_missing_annotations(model, args.prompts, auto_save_interval=100, store_image_source=False)
@@ -86,174 +90,64 @@ if __name__ == "__main__":
     print("Initial GroundedDINO detections completed. Now applying quality filtering...")
 
     # =================================================================================
-    # Block 3: High Quality Annotations Filtering  
+    # Block 3: High Quality Annotations Filtering (Using New Methods)
     # =================================================================================
     
     print("\n=== Block 3: Quality Filtering for GroundedDINO Annotations ===")
     
-   # Load the generated annotations
-    with open(args.annotations, 'r') as f:
-        all_annotations = json.load(f)
+    # Get all image IDs that have annotations for the target prompt
+    target_prompt = args.prompts
+    all_image_ids = []
     
-    # Extract all "individual embryo" detections and collect confidence scores
-    individual_embryo_detections = []
+    for image_id, image_data in annotations.annotations.get("images", {}).items():
+        for annotation in image_data.get("annotations", []):
+            if annotation.get("prompt") == target_prompt:
+                all_image_ids.append(image_id)
+                break
     
-    print("Extracting individual embryo detections...")
-    for image_id, data in all_annotations.get("images", {}).items():
-        if 'annotations' in data:
-            for annotation in data['annotations']:
-                if annotation.get('prompt') == 'individual embryo':
-                    for detection in annotation.get('detections', []):
-                        if detection.get('phrase') == 'individual embryo':
-                        individual_embryo_detections.append({
-                            'image_id': image_id,
-                            'detection': detection,
-                            'annotation_id': annotation.get('annotation_id'),
-                            'confidence': detection.get('confidence', 0)
-                        })
+    print(f"Found {len(all_image_ids)} images with '{target_prompt}' annotations")
     
-    print(f"Found {len(individual_embryo_detections)} individual embryo detections")
-    
-    # Gather confidences directly from detections
-    confidences = [d['confidence'] for d in individual_embryo_detections]
-    if not confidences:
-        print("❌ No individual embryo detections found. Exiting.")
+    if not all_image_ids:
+        print("❌ No individual embryo annotations found. Exiting.")
         sys.exit(1)
-    
 
+    # Generate high-quality annotations using the new method
+    print(f"\n🎯 Generating high-quality annotations...")
+    print(f"   Confidence threshold: {args.confidence_threshold}")
+    print(f"   IoU threshold: {args.iou_threshold}")
     
+    for prompt in args.prompts:
+        print(f"\nGenerating high quality annotations for : {prompt}")
+        result = annotations.generate_high_quality_annotations(
+            image_ids=all_image_ids,
+            prompt=target_prompt,
+            confidence_threshold=args.confidence_threshold,
+            iou_threshold=args.iou_threshold,
+            overwrite=True,
+            save_to_self=True
+        )
 
-    
-    # Print confidence statistics
-    print("📈 Confidence Statistics:")
-    print(f"   Total detections: {len(confidences)}")
-    print(f"   Mean: {mean_conf:.3f}")
-    print(f"   Median: {median_conf:.3f}")
-    print(f"   Min: {np.min(confidences):.3f}")
-    print(f"   Max: {np.max(confidences):.3f}")
-    print(f"   Q90: {np.percentile(confidences, 90):.3f}")
-    print(f"   Q95: {np.percentile(confidences, 95):.3f}")
-    
-    # Apply confidence threshold filter
-    confidence_threshold = args.confidence_threshold
-    print(f"\n🔍 Applying confidence threshold filter (>= {confidence_threshold})...")
-    
-    high_confidence_detections = [
-        det for det in individual_embryo_detections 
-        if det['detection']['confidence'] >= confidence_threshold
-    ]
-    
-    removed_by_confidence = len(individual_embryo_detections) - len(high_confidence_detections)
-    print(f"   Removed {removed_by_confidence} low-confidence detections")
-    print(f"   Retained {len(high_confidence_detections)} high-confidence detections")
-    
-    # Group detections by image_id for IoU filtering
-    print(f"\n🔍 Applying IoU-based duplicate removal...")
-    detections_by_image = defaultdict(list)
-    for det in high_confidence_detections:
-        detections_by_image[det['image_id']].append(det)
-    
-    # Apply IoU-based non-maximum suppression
-    iou_threshold = args.iou_threshold
-    filtered_detections = []
-    total_iou_removed = 0
-    
-    for image_id, detections in detections_by_image.items():
-        if len(detections) <= 1:
-            filtered_detections.extend(detections)
-            continue
+          # Save the updated annotations
+        annotations.save()
         
-        # Sort by confidence (highest first)
-        detections.sort(key=lambda x: x['detection']['confidence'], reverse=True)
+        # Print filtering results
+        stats = result["statistics"]
+        print(f"\n🎯 Filtering Summary:")
+        print(f"   Original detections: {stats['original_detections']}")
+        print(f"   Confidence removed: {stats['confidence_removed']}")
+        print(f"   IoU removed: {stats['iou_removed']}")
+        print(f"   Final detections: {stats['final_detections']}")
+        print(f"   Retention rate: {stats['retention_rate']:.1%}")
+        print(f"   Final images: {stats['final_images']}")
+        print(f"   Experiments processed: {stats['experiments_processed']}")
         
-        keep_detections = []
-        for i, det in enumerate(detections):
-            should_keep = True
-            for kept_det in keep_detections:
-                iou = calculate_detection_iou(
-                    det['detection']['box_xywh'],
-                    kept_det['detection']['box_xywh']
-                )
-                if iou > iou_threshold:
-                    should_keep = False
-                    total_iou_removed += 1
-                    break
-            
-            if should_keep:
-                keep_detections.append(det)
+        # # Export high-quality annotations to separate file
+        # high_quality_path = Path(args.annotations).parent / "gdino_high_quality_annotations.json"
+        # annotations.export_high_quality_annotations(high_quality_path)
         
-        filtered_detections.extend(keep_detections)
-    
-    print(f"   Removed {total_iou_removed} overlapping detections")
-    print(f"   Final high-quality detections: {len(filtered_detections)}")
-    
-    # Create high quality annotations JSON structure
-    print(f"\n💾 Creating high-quality annotations file...")
-    high_quality_annotations = {"images": {}}
-    
-    # Group filtered detections back by image_id
-    filtered_by_image = defaultdict(list)
-    for det in filtered_detections:
-        filtered_by_image[det['image_id']].append(det)
-    
-    # Build the high-quality annotations structure
-    for image_id, detections in filtered_by_image.items():
-        if image_id not in high_quality_annotations["images"]:
-            high_quality_annotations["images"][image_id] = {"annotations": []}
-        
-        # Group detections by annotation_id
-        detections_by_annotation = defaultdict(list)
-        for det in detections:
-            detections_by_annotation[det['annotation_id']].append(det['detection'])
-        
-        # Create filtered annotations
-        for annotation_id, detection_list in detections_by_annotation.items():
-            # Find the original annotation to copy metadata
-            original_annotation = None
-            for annotation in all_annotations["images"][image_id]['annotations']:
-                if annotation.get('annotation_id') == annotation_id:
-                    original_annotation = annotation
-                    break
-            
-            if original_annotation:
-                # Create filtered annotation
-                filtered_annotation = original_annotation.copy()
-                filtered_annotation['detections'] = detection_list
-                filtered_annotation['num_detections'] = len(detection_list)
-                high_quality_annotations["images"][image_id]['annotations'].append(filtered_annotation)
-    
-    # Add filtering metadata
-    high_quality_annotations["filtering_metadata"] = {
-        "original_detections": len(individual_embryo_detections),
-        "confidence_threshold": confidence_threshold,
-        "confidence_removed": removed_by_confidence,
-        "iou_threshold": iou_threshold,
-        "iou_removed": total_iou_removed,
-        "final_detections": len(filtered_detections),
-        "retention_rate": len(filtered_detections) / len(individual_embryo_detections) if len(individual_embryo_detections) > 0 else 0,
-        "processing_timestamp": datetime.now().isoformat(),
-        "script_version": "03_initial_gdino_detections.py"
-    }
-    
-    # Save high quality annotations
-    high_quality_path = Path(args.annotations).parent / "gdino_high_quality_annotations.json"
-    with open(high_quality_path, 'w') as f:
-        json.dump(high_quality_annotations, f, indent=2)
-    
-    print(f"✅ High-quality annotations saved to: {high_quality_path}")
-    
-    # Print summary
-    retention_rate = (len(filtered_detections) / len(individual_embryo_detections)) * 100
-    print(f"\n🎯 Filtering Summary:")
-    print(f"   Original detections: {len(individual_embryo_detections)}")
-    print(f"   After confidence filter: {len(high_confidence_detections)}")
-    print(f"   After IoU filter: {len(filtered_detections)}")
-    print(f"   Retention rate: {retention_rate:.1f}%")
-    print(f"   Images with high-quality detections: {len(filtered_by_image)}")
-    
-    print(f"\n✅ Block 3 (Quality Filtering) completed successfully!")
-    print(f"📁 Next step: Use '{high_quality_path}' for SAM2 processing in Block 4")
+        # print(f"✅ High-quality annotations saved to: {high_quality_path}")
+        # print(f"\n✅ Block 3 (Quality Filtering) completed successfully!")
+        # print(f"📁 Next step: Use high-quality annotations for SAM2 processing in Block 4")
 
-
-
+# Example usage:
 # python3 /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/scripts/03_initial_gdino_detections.py --config /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/configs/pipeline_config.yaml --metadata /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/experiment_metadata.json --annotations /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations.json --prompts "individual embryo"
