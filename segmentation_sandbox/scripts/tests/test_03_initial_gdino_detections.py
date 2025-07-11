@@ -33,7 +33,7 @@ SANDBOX_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 # Import the main script as a module
-MAIN_SCRIPT = SCRIPTS_DIR / "03_initial_gdino_detections.py"
+MAIN_SCRIPT = SCRIPTS_DIR / "03_gdino_detection_with_filtering.py"
 
 
 class TestGDinoDetectionScript(unittest.TestCase):

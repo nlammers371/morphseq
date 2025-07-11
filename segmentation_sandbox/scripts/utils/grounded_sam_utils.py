@@ -39,12 +39,12 @@ The annotations JSON file has this structure:
           "num_detections": 2,
           "detections": [
             {
-              "box_xywh": [0.5, 0.3, 0.2, 0.4],  // [x_center, y_center, width, height] normalized
+              "box_xyxy": [0.3, 0.1, 0.7, 0.5],  // [x1, y1, x2, y2] normalized
               "confidence": 0.85,
               "phrase": "individual embryo"
             },
             {
-              "box_xywh": [0.7, 0.6, 0.15, 0.25],
+              "box_xyxy": [0.625, 0.475, 0.775, 0.725],
               "confidence": 0.72,
               "phrase": "individual embryo"
             }
@@ -62,14 +62,14 @@ The annotations JSON file has this structure:
       "filtered": {
         "image_001": [
           {
-            "box_xywh": [0.5, 0.3, 0.2, 0.4],
+            "box_xyxy": [0.3, 0.1, 0.7, 0.5],
             "confidence": 0.85,
             "phrase": "individual embryo"
           }
         ],
         "image_002": [
           {
-            "box_xywh": [0.3, 0.4, 0.18, 0.22],
+            "box_xyxy": [0.12, 0.29, 0.30, 0.51],
             "confidence": 0.78,
             "phrase": "individual embryo"
           }
@@ -166,18 +166,8 @@ def get_model_metadata(model) -> Dict:
         "model_architecture": base_metadata.get("model_architecture", "GroundedDINO")
     }
 
-def calculate_detection_iou(box1_xywh: List[float], box2_xywh: List[float]) -> float:
-    """Calculate IoU between two bounding boxes in xywh format (normalized coordinates)."""
-    def xywh_to_xyxy(box):
-        x_center, y_center, width, height = box
-        x1 = x_center - width / 2
-        y1 = y_center - height / 2
-        x2 = x_center + width / 2
-        y2 = y_center + height / 2
-        return [x1, y1, x2, y2]
-    
-    box1_xyxy = xywh_to_xyxy(box1_xywh)
-    box2_xyxy = xywh_to_xyxy(box2_xywh)
+def calculate_detection_iou(box1_xyxy: List[float], box2_xyxy: List[float]) -> float:
+    """Calculate IoU between two bounding boxes in xyxy format (normalized coordinates)."""
     
     x1 = max(box1_xyxy[0], box2_xyxy[0])
     y1 = max(box1_xyxy[1], box2_xyxy[1])
@@ -321,7 +311,9 @@ class GroundedDinoAnnotations:
             return []
         return self._metadata.get("image_ids", [])
 
-    def get_annotated_image_ids(self, prompt: Optional[str] = None) -> List[str]:
+    def get_annotated_image_ids(self, prompt: Optional[str] = None, 
+                              model_metadata: Optional[Dict] = None,
+                              consider_different_if_different_weights: bool = False) -> List[str]:
         """Get image IDs that already have annotations."""
         annotated_ids = []
         for image_id, image_data in self.annotations.get("images", {}).items():
@@ -329,8 +321,20 @@ class GroundedDinoAnnotations:
             if prompt:
                 for ann in annotations:
                     if ann.get("prompt") == prompt:
-                        annotated_ids.append(image_id)
-                        break
+                        # If considering different weights, check model metadata
+                        if consider_different_if_different_weights and model_metadata:
+                            ann_model_metadata = ann.get("model_metadata", {})
+                            current_weights = Path(model_metadata.get("model_weights_path", "")).name
+                            ann_weights = Path(ann_model_metadata.get("model_weights_path", "")).name
+                            
+                            # Only consider annotated if weights match
+                            if current_weights == ann_weights:
+                                annotated_ids.append(image_id)
+                                break
+                        else:
+                            # Standard case - any annotation with this prompt counts
+                            annotated_ids.append(image_id)
+                            break
             else:
                 if len(annotations) > 0:
                     annotated_ids.append(image_id)
@@ -339,7 +343,9 @@ class GroundedDinoAnnotations:
     def get_missing_annotations(self, prompts: List[str], 
                               experiment_ids: Optional[List[str]] = None,
                               video_ids: Optional[List[str]] = None,
-                              image_ids: Optional[List[str]] = None) -> Dict[str, List[str]]:
+                              image_ids: Optional[List[str]] = None,
+                              model_metadata: Optional[Dict] = None,
+                              consider_different_if_different_weights: bool = False) -> Dict[str, List[str]]:
         """Find images that are missing annotations for given prompts."""
         if not self._metadata:
             if self.verbose:
@@ -350,13 +356,21 @@ class GroundedDinoAnnotations:
         
         missing_by_prompt = {}
         for prompt in prompts:
-            annotated_for_prompt = set(self.get_annotated_image_ids(prompt))
+            annotated_for_prompt = set(self.get_annotated_image_ids(
+                prompt, 
+                model_metadata=model_metadata,
+                consider_different_if_different_weights=consider_different_if_different_weights
+            ))
             missing_for_prompt = [img_id for img_id in target_image_ids 
                                 if img_id not in annotated_for_prompt]
             missing_by_prompt[prompt] = missing_for_prompt
             
             if self.verbose:
-                print(f"📊 Prompt '{prompt}': {len(missing_for_prompt)} missing, {len(annotated_for_prompt)} annotated")
+                weights_info = ""
+                if consider_different_if_different_weights and model_metadata:
+                    weights_name = Path(model_metadata.get("model_weights_path", "unknown")).name
+                    weights_info = f" (for {weights_name})"
+                print(f"📊 Prompt '{prompt}'{weights_info}: {len(missing_for_prompt)} missing, {len(annotated_for_prompt)} annotated")
         
         return missing_by_prompt
 
@@ -392,8 +406,48 @@ class GroundedDinoAnnotations:
         
         return self.get_all_metadata_image_ids()
 
-    def process_missing_annotations(self, model, prompts: Union[str, List[str]], **kwargs):
-        """Process missing annotations by running inference on unprocessed images."""
+    def process_missing_annotations(
+        self, 
+        model, 
+        prompts: Union[str, List[str]], 
+        # Parameters for get_missing_annotations
+        experiment_ids: Optional[List[str]] = None,
+        video_ids: Optional[List[str]] = None,
+        image_ids: Optional[List[str]] = None,
+        # Local parameters (not passed to inference)
+        consider_different_if_different_weights: bool = False,
+        # Parameters for gdino_inference_with_visualization
+        box_threshold: float = 0.35,
+        text_threshold: float = 0.25,
+        show_anno: bool = True,
+        save_dir: Optional[Union[str, Path]] = None,
+        text_size: float = 1.0,
+        auto_save_interval: Optional[int] = None,
+        overwrite: bool = False,
+        store_image_source: bool = True
+    ):
+        """
+        Process missing annotations by running inference on unprocessed images.
+        
+        Args:
+            model: The GroundedDINO model to use for inference
+            prompts: Text prompt(s) for detection (string or list of strings)
+            experiment_ids: Specific experiment IDs to check (optional)
+            video_ids: Specific video IDs to check (optional) 
+            image_ids: Specific image IDs to check (optional)
+            consider_different_if_different_weights: Whether to consider annotations as different if weights differ
+            box_threshold: Box confidence threshold for GroundingDINO
+            text_threshold: Text confidence threshold for GroundingDINO
+            show_anno: Whether to display annotations during inference
+            save_dir: Optional directory to save visualizations
+            text_size: Text size for visualizations
+            auto_save_interval: How often to auto-save during inference
+            overwrite: Whether to overwrite existing annotations
+            store_image_source: Whether to store image source info in annotations
+        
+        Returns:
+            Dict of results from inference
+        """
         if isinstance(prompts, str):
             prompts = [prompts]
         
@@ -401,8 +455,23 @@ class GroundedDinoAnnotations:
             if self.verbose:
                 print("❌ No metadata loaded.")
             return {}
+
+        # Get model metadata for weight comparison
+        model_metadata = get_model_metadata(model)
         
-        missing_by_prompt = self.get_missing_annotations(prompts, **kwargs)
+        if self.verbose and consider_different_if_different_weights:
+            weights_name = Path(model_metadata.get("model_weights_path", "unknown")).name
+            print(f"🔧 Model-specific mode: Only considering annotations from {weights_name}")
+
+        # Get missing annotations with filtering parameters
+        missing_by_prompt = self.get_missing_annotations(
+            prompts, 
+            experiment_ids=experiment_ids,
+            video_ids=video_ids, 
+            image_ids=image_ids,
+            model_metadata=model_metadata,
+            consider_different_if_different_weights=consider_different_if_different_weights
+        )
         total_missing = sum(len(img_ids) for img_ids in missing_by_prompt.values())
         
         if total_missing == 0:
@@ -431,9 +500,27 @@ class GroundedDinoAnnotations:
                     print(f"❌ Error getting image paths: {e}")
                 continue
             
+            # Create inference params dict for annotations
+            inference_params = {
+                "box_threshold": box_threshold,
+                "text_threshold": text_threshold
+            }
+            
             results = gdino_inference_with_visualization(
-                model, image_paths, prompt, verbose=self.verbose,
-                annotations_manager=self, **kwargs
+                model=model,
+                images=image_paths, 
+                prompts=prompt, 
+                box_threshold=box_threshold,
+                text_threshold=text_threshold,
+                show_anno=show_anno,
+                save_dir=save_dir,
+                text_size=text_size,
+                verbose=self.verbose,
+                annotations_manager=self,
+                auto_save_interval=auto_save_interval,
+                inference_params=inference_params,
+                overwrite=overwrite,
+                store_image_source=store_image_source
             )
             
             for image_name, image_results in results.items():
@@ -456,9 +543,9 @@ class GroundedDinoAnnotations:
         
         return image_to_exp
 
-    def calculate_detection_iou(self, box1_xywh: List[float], box2_xywh: List[float]) -> float:
+    def calculate_detection_iou(self, box1_xyxy: List[float], box2_xyxy: List[float]) -> float:
         """Calculate IoU between two bounding boxes."""
-        return calculate_detection_iou(box1_xywh, box2_xywh)
+        return calculate_detection_iou(box1_xyxy, box2_xyxy)
 
     def generate_high_quality_annotations(self,
                                         image_ids: List[str],
@@ -538,8 +625,8 @@ class GroundedDinoAnnotations:
                 should_keep = True
                 for kept_det in keep_detections:
                     iou = self.calculate_detection_iou(
-                        det['detection']['box_xywh'],
-                        kept_det['detection']['box_xywh']
+                        det['detection']['box_xyxy'],
+                        kept_det['detection']['box_xyxy']
                     )
                     if iou > iou_threshold:
                         should_keep = False
@@ -815,7 +902,7 @@ class GroundedDinoAnnotations:
             "num_detections": int(len(boxes)),
             "detections": [
                 {
-                    "box_xywh": box.tolist(),
+                    "box_xyxy": box.tolist(),
                     "confidence": float(logit),
                     "phrase": str(phrase)
                 } for box, logit, phrase in zip(boxes, logits, phrases)
@@ -912,315 +999,44 @@ class GroundedDinoAnnotations:
         if "high_quality_experiments" in summary:
             print(f"⭐ High-quality annotations: {summary['high_quality_experiments']} experiments, {summary['high_quality_images']} images")
 
-    def merge_annotations(self, 
-                         other: Union['GroundedDinoAnnotations', str, Path],
-                         conflict_strategy: str = "skip",
-                         merge_high_quality: bool = True,
-                         dry_run: bool = False) -> Dict:
-        """
-        Merge annotations from another GroundedDinoAnnotations instance or file.
-        
-        Args:
-            other: Another GroundedDinoAnnotations instance or path to JSON file
-            conflict_strategy: How to handle conflicts ("skip", "overwrite", "merge")
-                - "skip": Keep existing annotations, skip conflicting ones from other
-                - "overwrite": Replace existing annotations with ones from other  
-                - "merge": Combine annotations for same image (different annotation_ids)
-            merge_high_quality: Whether to merge high-quality annotations
-            dry_run: If True, show what would be merged without actually doing it
+    def print_processing_summary(self, prompts: List[str], 
+                               consider_different_if_different_weights: bool = False):
+        """Print a summary of processing status for debugging."""
+        if not self._metadata:
+            print("❌ No metadata loaded for processing summary")
+            return
             
-        Returns:
-            Dictionary with merge statistics
-        """
-        # Load other annotations
-        if isinstance(other, (str, Path)):
-            other_path = Path(other)
-            if not other_path.exists():
-                raise FileNotFoundError(f"File not found: {other_path}")
+        print(f"\n📊 PROCESSING SUMMARY")
+        print(f"=" * 40)
+        
+        total_metadata_images = len(self.get_all_metadata_image_ids())
+        total_annotated_images = len(self.get_all_image_ids())
+        
+        print(f"📂 Total images in metadata: {total_metadata_images}")
+        print(f"📝 Total images with annotations: {total_annotated_images}")
+        
+        for prompt in prompts:
+            annotated_ids = self.get_annotated_image_ids(prompt)
+            print(f"\n🔍 Prompt: '{prompt}'")
+            print(f"   • Images with annotations: {len(annotated_ids)}")
             
-            with open(other_path, 'r') as f:
-                other_data = json.load(f)
-            other_annotations = other_data
-        elif isinstance(other, GroundedDinoAnnotations):
-            other_annotations = other.annotations
-        else:
-            raise ValueError("Other must be GroundedDinoAnnotations instance or file path")
-        
-        if self.verbose:
-            print(f"🔄 Merging annotations (strategy: {conflict_strategy}, dry_run: {dry_run})")
-            if isinstance(other, (str, Path)):
-                print(f"   Source: {other}")
-        
-        # Initialize merge statistics
-        stats = {
-            "images_added": 0,
-            "images_merged": 0,
-            "annotations_added": 0,
-            "annotations_skipped": 0,
-            "annotations_overwritten": 0,
-            "high_quality_experiments_added": 0,
-            "high_quality_experiments_skipped": 0,
-            "conflicts_found": [],
-            "dry_run": dry_run
-        }
-        
-        # Merge regular annotations
-        other_images = other_annotations.get("images", {})
-        
-        for image_id, other_image_data in other_images.items():
-            other_annotations_list = other_image_data.get("annotations", [])
-            
-            if image_id not in self.annotations["images"]:
-                # New image - add all annotations
-                if not dry_run:
-                    self.annotations["images"][image_id] = other_image_data.copy()
-                stats["images_added"] += 1
-                stats["annotations_added"] += len(other_annotations_list)
+            if consider_different_if_different_weights:
+                # Group by model weights
+                weights_groups = defaultdict(list)
+                for image_id in annotated_ids:
+                    image_data = self.annotations.get("images", {}).get(image_id, {})
+                    for ann in image_data.get("annotations", []):
+                        if ann.get("prompt") == prompt:
+                            weights_path = ann.get("model_metadata", {}).get("model_weights_path", "unknown")
+                            weights_name = Path(weights_path).name
+                            weights_groups[weights_name].append(image_id)
+                            break
                 
-                if self.verbose:
-                    print(f"   ✅ Added new image '{image_id}' with {len(other_annotations_list)} annotations")
-            
-            else:
-                # Existing image - handle conflicts
-                stats["images_merged"] += 1
-                existing_annotations = self.annotations["images"][image_id]["annotations"]
-                
-                # Create lookup for existing annotations by prompt
-                existing_by_prompt = {}
-                for ann in existing_annotations:
-                    prompt = ann.get("prompt", "")
-                    if prompt not in existing_by_prompt:
-                        existing_by_prompt[prompt] = []
-                    existing_by_prompt[prompt].append(ann)
-                
-                annotations_to_add = []
-                
-                for other_ann in other_annotations_list:
-                    other_prompt = other_ann.get("prompt", "")
-                    
-                    if other_prompt not in existing_by_prompt:
-                        # No conflict - add annotation
-                        annotations_to_add.append(other_ann)
-                        stats["annotations_added"] += 1
-                        
-                        if self.verbose:
-                            print(f"   ✅ Adding annotation '{image_id}' + '{other_prompt}'")
-                    
-                    else:
-                        # Conflict detected
-                        conflict_info = {
-                            "image_id": image_id,
-                            "prompt": other_prompt,
-                            "existing_count": len(existing_by_prompt[other_prompt]),
-                            "strategy_applied": conflict_strategy
-                        }
-                        stats["conflicts_found"].append(conflict_info)
-                        
-                        if conflict_strategy == "skip":
-                            stats["annotations_skipped"] += 1
-                            if self.verbose:
-                                print(f"   ⚠️  Skipping conflicting annotation '{image_id}' + '{other_prompt}'")
-                        
-                        elif conflict_strategy == "overwrite":
-                            # Remove existing annotations with same prompt
-                            if not dry_run:
-                                self.annotations["images"][image_id]["annotations"] = [
-                                    ann for ann in existing_annotations 
-                                    if ann.get("prompt") != other_prompt
-                                ]
-                            annotations_to_add.append(other_ann)
-                            stats["annotations_overwritten"] += 1
-                            
-                            if self.verbose:
-                                print(f"   🔄 Overwriting annotation '{image_id}' + '{other_prompt}'")
-                        
-                        elif conflict_strategy == "merge":
-                            # Add with new annotation_id to avoid conflicts
-                            merged_ann = other_ann.copy()
-                            merged_ann["annotation_id"] = f"merged_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-                            annotations_to_add.append(merged_ann)
-                            stats["annotations_added"] += 1
-                            
-                            if self.verbose:
-                                print(f"   🔀 Merging annotation '{image_id}' + '{other_prompt}' (new ID)")
-                
-                # Apply changes if not dry run
-                if not dry_run and annotations_to_add:
-                    self.annotations["images"][image_id]["annotations"].extend(annotations_to_add)
-        
-        # Merge high-quality annotations
-        if merge_high_quality:
-            other_hq = other_annotations.get("high_quality_annotations", {})
-            
-            if other_hq:
-                if "high_quality_annotations" not in self.annotations:
-                    self.annotations["high_quality_annotations"] = {}
-                
-                for exp_id, other_exp_data in other_hq.items():
-                    if exp_id not in self.annotations["high_quality_annotations"]:
-                        # New experiment - add it
-                        if not dry_run:
-                            self.annotations["high_quality_annotations"][exp_id] = other_exp_data.copy()
-                        stats["high_quality_experiments_added"] += 1
-                        
-                        if self.verbose:
-                            filtered_images = len(other_exp_data.get("filtered", {}))
-                            print(f"   ⭐ Added high-quality experiment '{exp_id}' ({filtered_images} images)")
-                    
-                    else:
-                        # Existing experiment - check if parameters match
-                        existing_exp = self.annotations["high_quality_annotations"][exp_id]
-                        
-                        params_match = (
-                            existing_exp.get("prompt") == other_exp_data.get("prompt") and
-                            existing_exp.get("confidence_threshold") == other_exp_data.get("confidence_threshold") and
-                            existing_exp.get("iou_threshold") == other_exp_data.get("iou_threshold")
-                        )
-                        
-                        if params_match:
-                            # Same parameters - merge filtered annotations
-                            if not dry_run:
-                                existing_filtered = existing_exp.get("filtered", {})
-                                other_filtered = other_exp_data.get("filtered", {})
-                                
-                                for img_id, detections in other_filtered.items():
-                                    if img_id not in existing_filtered:
-                                        existing_filtered[img_id] = detections
-                            
-                            if self.verbose:
-                                new_images = len([img for img in other_exp_data.get("filtered", {}) 
-                                               if img not in existing_exp.get("filtered", {})])
-                                print(f"   ⭐ Merged {new_images} new images into experiment '{exp_id}'")
-                        
-                        else:
-                            # Different parameters - skip
-                            stats["high_quality_experiments_skipped"] += 1
-                            if self.verbose:
-                                print(f"   ⚠️  Skipping high-quality experiment '{exp_id}' (parameter mismatch)")
-        
-        # Update file metadata
-        if not dry_run and (stats["annotations_added"] > 0 or stats["annotations_overwritten"] > 0 or 
-                           stats["high_quality_experiments_added"] > 0):
-            self.annotations["file_info"]["last_updated"] = datetime.now().isoformat()
-            if "merge_history" not in self.annotations["file_info"]:
-                self.annotations["file_info"]["merge_history"] = []
-            
-            merge_record = {
-                "timestamp": datetime.now().isoformat(),
-                "source": str(other) if isinstance(other, (str, Path)) else "GroundedDinoAnnotations_instance",
-                "strategy": conflict_strategy,
-                "stats": {k: v for k, v in stats.items() if k != "conflicts_found"}
-            }
-            self.annotations["file_info"]["merge_history"].append(merge_record)
-            
-            self._unsaved_changes = True
-        
-        # Print summary
-        if self.verbose:
-            print(f"\n📊 Merge Summary:")
-            print(f"   Images added: {stats['images_added']}")
-            print(f"   Images merged: {stats['images_merged']}")
-            print(f"   Annotations added: {stats['annotations_added']}")
-            print(f"   Annotations skipped: {stats['annotations_skipped']}")
-            print(f"   Annotations overwritten: {stats['annotations_overwritten']}")
-            print(f"   High-quality experiments added: {stats['high_quality_experiments_added']}")
-            print(f"   High-quality experiments skipped: {stats['high_quality_experiments_skipped']}")
-            print(f"   Conflicts found: {len(stats['conflicts_found'])}")
-            
-            if dry_run:
-                print(f"   🔍 DRY RUN - No changes were made")
-            elif self._unsaved_changes:
-                print(f"   💾 Remember to call .save() to persist changes")
-        
-        return stats
+                print(f"   • Breakdown by model weights:")
+                for weights_name, img_ids in weights_groups.items():
+                    print(f"      - {weights_name}: {len(img_ids)} images")
 
-    @classmethod
-    def merge_multiple_files(cls, 
-                            file_paths: List[Union[str, Path]], 
-                            output_path: Union[str, Path],
-                            conflict_strategy: str = "skip",
-                            merge_high_quality: bool = True,
-                            verbose: bool = True) -> 'GroundedDinoAnnotations':
-        """
-        Merge multiple annotation files into a single file.
-        
-        Args:
-            file_paths: List of paths to annotation JSON files
-            output_path: Path for the merged output file
-            conflict_strategy: How to handle conflicts ("skip", "overwrite", "merge")
-            merge_high_quality: Whether to merge high-quality annotations
-            verbose: Whether to print progress information
-            
-        Returns:
-            New GroundedDinoAnnotations instance with merged data
-        """
-        if not file_paths:
-            raise ValueError("At least one file path must be provided")
-        
-        if verbose:
-            print(f"🔄 Merging {len(file_paths)} annotation files")
-            print(f"   Strategy: {conflict_strategy}")
-            print(f"   Output: {output_path}")
-        
-        # Start with the first file
-        merged = cls(output_path, verbose=verbose)
-        first_file_stats = merged.merge_annotations(
-            file_paths[0], 
-            conflict_strategy=conflict_strategy,
-            merge_high_quality=merge_high_quality,
-            dry_run=False
-        )
-        
-        if verbose:
-            print(f"   📁 Loaded base file: {file_paths[0]}")
-        
-        # Merge remaining files
-        total_stats = first_file_stats.copy()
-        
-        for i, file_path in enumerate(file_paths[1:], 1):
-            if verbose:
-                print(f"   📁 Merging file {i+1}/{len(file_paths)}: {file_path}")
-            
-            file_stats = merged.merge_annotations(
-                file_path,
-                conflict_strategy=conflict_strategy, 
-                merge_high_quality=merge_high_quality,
-                dry_run=False
-            )
-            
-            # Accumulate statistics
-            for key in ["images_added", "images_merged", "annotations_added", 
-                       "annotations_skipped", "annotations_overwritten",
-                       "high_quality_experiments_added", "high_quality_experiments_skipped"]:
-                total_stats[key] += file_stats[key]
-            
-            total_stats["conflicts_found"].extend(file_stats["conflicts_found"])
-        
-        # Save merged result
-        merged.save()
-        
-        if verbose:
-            print(f"\n🎯 Final Merge Summary:")
-            print(f"   Total images: {len(merged.get_all_image_ids())}")
-            print(f"   Total annotations added: {total_stats['annotations_added']}")
-            print(f"   Total conflicts: {len(total_stats['conflicts_found'])}")
-            print(f"   ✅ Merged file saved to: {output_path}")
-        
-        return merged
-
-    @property
-    def has_unsaved_changes(self) -> bool:
-        """Check for unsaved changes."""
-        return self._unsaved_changes
-
-    def __repr__(self) -> str:
-        """String representation."""
-        summary = self.get_summary()
-        status = "✅ saved" if not self._unsaved_changes else "⚠️ unsaved"
-        metadata_status = "📂 metadata" if summary['metadata_loaded'] else "📂 no-metadata"
-        hq_status = f", ⭐ {summary.get('high_quality_experiments', 0)} hq-exp" if "high_quality_experiments" in summary else ""
-        return f"GroundedDinoAnnotations(images={summary['total_images']}, annotations={summary['total_annotations']}, {status}, {metadata_status}{hq_status})"
-
+    # ...existing code...
 
 def visualize_detections(image_source: np.ndarray, boxes: torch.Tensor, logits: torch.Tensor, 
                          phrases: List[str], title: str = "Detections", save_path: Optional[str] = None,
@@ -1243,11 +1059,12 @@ def visualize_detections(image_source: np.ndarray, boxes: torch.Tensor, logits: 
         else:
             box_norm = torch.tensor(box)
             
-        cx, cy, bw, bh = box_norm
-        x1 = int((cx - bw/2) * w)
-        y1 = int((cy - bh/2) * h)
-        x2 = int((cx + bw/2) * w)
-        y2 = int((cy + bh/2) * h)
+        # boxes are now in xyxy format (normalized)
+        x1, y1, x2, y2 = box_norm
+        x1 = int(x1 * w)
+        y1 = int(y1 * h)
+        x2 = int(x2 * w)
+        y2 = int(y2 * h)
         
         color = colors[i % len(colors)]
         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
@@ -1283,7 +1100,7 @@ def visualize_detections(image_source: np.ndarray, boxes: torch.Tensor, logits: 
 
 def run_inference(model, image_path: Union[str, Path], text_prompt: str, 
                   box_threshold: float = 0.35, text_threshold: float = 0.25) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray]:
-    """Run GroundingDINO inference and return results."""
+    """Run GroundingDINO inference and return results with boxes in xyxy format."""
     from groundingdino.util.inference import load_image, predict
     
     image_source, image_tensor = load_image(str(image_path))
@@ -1298,14 +1115,26 @@ def run_inference(model, image_path: Union[str, Path], text_prompt: str,
         )
     
     if isinstance(boxes_tensor, torch.Tensor):
-        boxes = boxes_tensor.cpu().numpy()
+        boxes_xywh = boxes_tensor.cpu().numpy()
     else:
-        boxes = np.array(boxes_tensor)
+        boxes_xywh = np.array(boxes_tensor)
     
     if isinstance(logits_tensor, torch.Tensor):
         logits = logits_tensor.cpu().numpy()
     else:
         logits = np.array(logits_tensor)
+    
+    # Convert boxes from xywh (center format) to xyxy (corner format)
+    boxes_xyxy = []
+    for box in boxes_xywh:
+        cx, cy, w, h = box
+        x1 = cx - w/2
+        y1 = cy - h/2
+        x2 = cx + w/2
+        y2 = cy + h/2
+        boxes_xyxy.append([x1, y1, x2, y2])
+    
+    boxes = np.array(boxes_xyxy) if boxes_xyxy else np.array([]).reshape(0, 4)
         
     return boxes, logits, phrases, image_source
 
