@@ -214,6 +214,7 @@ if __name__ == "__main__":
 #   --segmentation-format rle \
 #   --verbose
 
+# /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations.json
 # For testing with limited videos:
 
 # python scripts/04_sam2_video_processing.py \
