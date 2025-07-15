@@ -77,12 +77,19 @@ class Phenotype(AnnotationBase):
 @dataclass
 class Genotype(AnnotationBase):
     """Genotype annotation with overwrite protection."""
-    value: str
+    allele: Optional[str] = None
+    zygosity: Optional[str] = None
+    confidence: float = 1.0
     confirmed: bool = False
     method: Optional[str] = None
 
     def to_dict(self) -> Dict:
         data = super().to_dict()
+        if self.allele:
+            data["allele"] = self.allele
+        if self.zygosity:
+            data["zygosity"] = self.zygosity
+        data["confidence"] = self.confidence
         data["confirmed"] = self.confirmed
         if self.method:
             data["method"] = self.method
@@ -91,12 +98,17 @@ class Genotype(AnnotationBase):
 @dataclass
 class Flag(AnnotationBase):
     """Quality control flag."""
-    value: str
+    flag_type: str = "quality"
+    priority: str = "medium"
+    confidence: float = 1.0
     severity: str = "warning"
     auto_generated: bool = False
 
     def to_dict(self) -> Dict:
         data = super().to_dict()
+        data["flag_type"] = self.flag_type
+        data["priority"] = self.priority
+        data["confidence"] = self.confidence
         data["severity"] = self.severity
         data["auto_generated"] = self.auto_generated
         return data

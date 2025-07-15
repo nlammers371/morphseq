@@ -55,12 +55,20 @@ class PermittedValuesManager:
                 "DEAD": {"description": "Embryo death", "exclusive": True, "terminal": True}
             },
             "genotypes": {
-                "TBD": {"description": "To be determined", "is_default": True}
+                "TBD": {"description": "To be determined", "is_default": True},
+                "WT": {"description": "Wild-type, no genetic modifications", "is_default": False},
+                "lmx1b": {"description": "LIM homeobox transcription factor 1-beta gene mutation", "is_default": False}
             },
             "treatments": {
-                "NONE": {"description": "No treatment", "is_default": True}
+                "NONE": {"description": "No treatment", "is_default": True},
+                "shh-i": {"description": "Sonic hedgehog inhibition using cyclopamine", "type": "chemical", "is_default": False, "concentration_unit": "μM"}
             },
-            "flags": {}
+            "flags": {},
+            "severity_levels": ["low", "medium", "high", "critical"],
+            "zygosity_types": ["homozygous", "heterozygous", "compound_heterozygous", "hemizygous"],
+            "priority_levels": ["low", "medium", "high", "critical"],
+            "flag_types": ["quality", "analysis", "morphology", "tracking", "manual"],
+            "treatment_types": ["chemical", "temperature", "mechanical", "genetic", "environmental"]
         }
     
     # -------------------------------------------------------------------------
@@ -166,9 +174,36 @@ class PermittedValuesManager:
                 return name
         return None
     
+    def get_values(self, category: str) -> List:
+        """Get list of values for a category."""
+        schema_values = self.schema.get(category, [])
+        if isinstance(schema_values, list):
+            return schema_values
+        elif isinstance(schema_values, dict):
+            return list(schema_values.keys())
+        return []
+
     # -------------------------------------------------------------------------
     # Validation
     # -------------------------------------------------------------------------
+    
+    def validate_value(self, category: str, value: str) -> bool:
+        """
+        General validation method for any schema category.
+        
+        Args:
+            category: Schema category (e.g., 'severity_levels', 'zygosity_types')
+            value: Value to validate
+            
+        Returns:
+            bool: True if value is valid for category
+        """
+        schema_values = self.schema.get(category, [])
+        if isinstance(schema_values, list):
+            return value in schema_values
+        elif isinstance(schema_values, dict):
+            return value in schema_values
+        return False
     
     def is_valid_phenotype(self, phenotype: str) -> bool:
         """Check if phenotype is valid."""

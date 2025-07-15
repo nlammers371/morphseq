@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "last_updated": "2025-07-15T08:54:11.542099",
+  "last_updated": "2025-07-15T10:29:57.800742",
   "phenotypes": {
     "NONE": {
       "description": "No phenotype observed",
@@ -20,19 +20,98 @@
       "is_default": false,
       "exclusive": false,
       "terminal": false
+    },
+    "NORMAL": {
+      "description": "Normal development, no abnormalities observed",
+      "is_default": false,
+      "exclusive": false,
+      "terminal": false
     }
   },
   "genotypes": {
     "TBD": {
       "description": "To be determined",
       "is_default": true
+    },
+    "lmx1b": {
+      "description": "LIM homeobox transcription factor 1 beta knockout",
+      "is_default": false
+    },
+    "shh": {
+      "description": "Sonic hedgehog knockout",
+      "is_default": false
+    },
+    "shh-i": {
+      "description": "Sonic hedgehog inhibition using cyclopamine",
+      "is_default": false,
+      "aliases": [
+        "cyclopamine",
+        "shh_inhibition"
+      ]
+    },
+    "WT": {
+      "description": "Wild-type, no genetic modifications",
+      "is_default": false
     }
   },
   "treatments": {
     "NONE": {
       "description": "No treatment",
       "is_default": true
+    },
+    "cyclopamine": {
+      "description": "Sonic hedgehog pathway inhibitor",
+      "type": "chemical",
+      "is_default": false,
+      "concentration_unit": "\u00b5M"
+    },
+    "BMP4-i": {
+      "description": "BMP4 inhibition using chemical inhibitor",
+      "type": "chemical",
+      "is_default": false
+    },
+    "heat_shock": {
+      "description": "Heat shock treatment for stress response",
+      "type": "chemical",
+      "is_default": false
+    },
+    "shh-i": {
+      "description": "Sonic hedgehog inhibition using cyclopamine",
+      "type": "chemical",
+      "is_default": false
     }
   },
-  "flags": {}
+  "flags": {},
+  "severity_levels": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "zygosity_types": [
+    "homozygous",
+    "heterozygous",
+    "compound_heterozygous",
+    "hemizygous"
+  ],
+  "priority_levels": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "flag_types": [
+    "quality",
+    "analysis",
+    "morphology",
+    "tracking",
+    "manual"
+  ],
+  "treatment_types": [
+    "chemical",
+    "temperature",
+    "mechanical",
+    "genetic",
+    "environmental"
+  ]
 }
