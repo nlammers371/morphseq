@@ -68,7 +68,6 @@ python scripts/04_sam2_video_processing.py \
     --target-prompt "individual embryo" \
     --segmentation-format rle \
     --verbose \
-    --max-videos 5 \
     --save-interval 10
 
 # Check if processing was successful
@@ -159,7 +158,6 @@ python scripts/04_sam2_video_processing.py \
     --target-prompt "individual embryo" \
     --segmentation-format rle \
     --verbose \
-    --max-videos 5 \
     --save-interval 10
 
 # Check if processing was successful

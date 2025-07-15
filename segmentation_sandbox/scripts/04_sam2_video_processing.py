@@ -41,17 +41,21 @@ warnings.filterwarnings("ignore")
 # Add project root to path
 SCRIPT_DIR = Path(__file__).parent
 SANDBOX_ROOT = SCRIPT_DIR.parent
+sys.path.append(str(SANDBOX_ROOT / "scripts/utils"))
 sys.path.append(str(SANDBOX_ROOT))
 
 # Import utilities
-from scripts.utils.sam2_utils import GroundedSamAnnotations, load_config
+print(sys.path)
+from scripts.utils.sam2_utils import load_config
+from scripts.utils.sam2_utils import GroundedSamAnnotations
 
 
 def main():
     parser = argparse.ArgumentParser(description="SAM2 video processing for embryo segmentation")
     parser.add_argument("--config", required=True, help="Path to pipeline config YAML")
-    parser.add_argument("--annotations", required=True, help="Path to gdino_high_quality_annotations.json (seed annotations)")
-    parser.add_argument("--output", required=True, help="Path to output grounded_sam_annotations.json")
+    parser.add_argument("--annotations", required=True, help="Path to gdino_high_quality_annotations.json (seed annotations) for prompting sam2")
+    parser.add_argument("--metadata", required=True, help="Path to experiment_metadata.json file")
+    parser.add_argument("--output", required=True, help="Path to existing sam annotations json OR output grounded_sam_annotations.json")
     
     # SAM2 model configuration
     parser.add_argument("--sam2-config", help="Path to SAM2 config file (overrides config file)")
@@ -80,6 +84,7 @@ def main():
     print("🎬 SAM2 Video Processing for Embryo Segmentation")
     print("=" * 50)
     print(f"Config: {args.config}")
+    print(f"Metadata: {args.metadata}")
     print(f"Seed annotations: {args.annotations}")
     print(f"Output: {args.output}")
     print(f"Target prompt: '{args.target_prompt}'")
@@ -124,6 +129,7 @@ def main():
     grounded_sam = GroundedSamAnnotations(
         filepath=args.output,
         seed_annotations_path=args.annotations,
+        experiment_metadata_path=args.metadata,  # FIXED: Added required metadata path
         sam2_config=sam2_config_path,
         sam2_checkpoint=sam2_checkpoint_path,
         device=device,
@@ -146,6 +152,33 @@ def main():
         video_ids=args.video_ids,
         experiment_ids=experiment_ids
     )
+    
+    # Debugging: Print contents of the annotation file
+    print("\n🔍 Debugging: Loading annotation file...")
+    try:
+        with open(args.annotations, 'r') as f:
+            import json
+            annotations_data = json.load(f)
+            print(f"Annotation file structure keys: {list(annotations_data.keys())}")
+            
+            # Check for high quality annotations
+            hq_annotations = annotations_data.get("high_quality_annotations", {})
+            if hq_annotations:
+                print(f"High quality annotations found for {len(hq_annotations)} experiments")
+                for exp_id, exp_data in list(hq_annotations.items())[:3]:  # Show first 3
+                    prompt = exp_data.get("prompt", "unknown")
+                    filtered_count = len(exp_data.get("filtered", {}))
+                    print(f"  {exp_id}: prompt='{prompt}', filtered={filtered_count} images")
+            else:
+                print("No high_quality_annotations section found")
+                
+    except Exception as e:
+        print(f"Error reading annotation file: {e}")
+        return
+
+    # Debugging: Print output of get_missing_videos
+    print("\n🔍 Debugging: Output of get_missing_videos...")
+    print(f"Missing videos: {missing_videos}")
     
     if args.max_videos:
         missing_videos = missing_videos[:args.max_videos]
@@ -208,17 +241,17 @@ if __name__ == "__main__":
 # Example usage:
 # python scripts/04_sam2_video_processing.py \
 #   --config /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/configs/pipeline_config.yaml \
-#   --annotations /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_high_quality_annotations.json \
-#   --output /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/sam2_results/grounded_sam_annotations.json \
+#   --metadata /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/experiment_metadata.json \
+#   --annotations /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations.json \
+#   --output /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/sam2_annotations/grounded_sam_annotations.json \
 #   --target-prompt "individual embryo" \
 #   --segmentation-format rle \
 #   --verbose
 
-# /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations.json
 # For testing with limited videos:
-
 # python scripts/04_sam2_video_processing.py \
 #   --config /path/to/config.yaml \
+#   --metadata /path/to/experiment_metadata.json \
 #   --annotations /path/to/annotations.json \
 #   --output /path/to/output.json \
 #   --max-videos 5 \
@@ -227,6 +260,7 @@ if __name__ == "__main__":
 # For specific videos:
 # python scripts/04_sam2_video_processing.py \
 #   --config /path/to/config.yaml \
+#   --metadata /path/to/experiment_metadata.json \
 #   --annotations /path/to/annotations.json \
 #   --output /path/to/output.json \
 #   --video-ids 20240411_A01 20240411_A02 \
@@ -235,6 +269,7 @@ if __name__ == "__main__":
 # Process missing videos only (recommended):
 # python scripts/04_sam2_video_processing.py \
 #   --config /path/to/config.yaml \
+#   --metadata /path/to/experiment_metadata.json \
 #   --annotations /path/to/high_quality_annotations.json \
 #   --output /path/to/output.json \
 #   --save-interval 3 \

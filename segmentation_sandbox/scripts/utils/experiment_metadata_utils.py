@@ -40,8 +40,6 @@ image files based on their image_ids.
 # }
 
 
-
-
 import json
 from pathlib import Path
 from typing import Optional, Union, Dict, List, Tuple
