@@ -156,3 +156,30 @@ class EmbryoFlagManager:
                         high_priority_flags[embryo_id] = {}
                     high_priority_flags[embryo_id][flag_type] = flag_data
         return high_priority_flags
+    
+    def get_flag(self, entity_id: str, flag_type: str) -> Optional[Dict]:
+        """
+        Get a specific flag for an entity.
+        
+        Args:
+            entity_id: Entity identifier
+            flag_type: Type of flag to retrieve
+            
+        Returns:
+            Flag data or None if not found
+        """
+        # Check snip-level flags first
+        for embryo_data in self.data["embryos"].values():
+            if entity_id in embryo_data.get("snips", {}):
+                snip_flags = embryo_data["snips"][entity_id].get("flags", [])
+                for flag in snip_flags:
+                    if flag.get("flag") == flag_type:
+                        return flag
+        
+        # Check embryo-level flags
+        if entity_id in self.data["embryos"]:
+            embryo_flags = self.data["embryos"][entity_id].get("flags", {})
+            if flag_type in embryo_flags:
+                return embryo_flags[flag_type]
+        
+        return None

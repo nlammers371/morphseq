@@ -341,3 +341,24 @@ class EmbryoGenotypeManager:
                 })
         
         return compliance
+    
+    def get_genotype(self, embryo_id: str) -> Optional[Dict]:
+        """
+        Get genotype data for an embryo.
+        
+        Args:
+            embryo_id: Embryo identifier
+            
+        Returns:
+            Genotype data or None if not found
+        """
+        if embryo_id not in self.data["embryos"]:
+            return None
+        
+        genotypes = self.data["embryos"][embryo_id].get("genotypes", {})
+        if not genotypes:
+            return None
+        
+        # Return the first genotype (since we enforce single genotype)
+        first_gene = next(iter(genotypes.keys()))
+        return genotypes[first_gene]

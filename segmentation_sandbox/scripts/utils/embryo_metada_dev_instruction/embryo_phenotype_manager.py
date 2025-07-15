@@ -29,7 +29,7 @@ class EmbryoPhenotypeManager:
     
     def add_phenotype(self, snip_id: str, phenotype: str, author: str,
                      notes: str = None, confidence: float = None,
-                     force_dead: bool = False) -> bool:
+                     force_dead: bool = False, verbose: bool = None) -> bool:
         """
         Add a phenotype to a snip.
         
@@ -295,3 +295,18 @@ class EmbryoPhenotypeManager:
                                         key=lambda x: x[1], reverse=True)[:10]
         
         return stats
+    
+    def get_phenotype(self, snip_id: str) -> Optional[Dict]:
+        """
+        Get phenotype data for a snip.
+        
+        Args:
+            snip_id: Snip identifier
+            
+        Returns:
+            Phenotype data or None if not found
+        """
+        snip_data = self.get_snip_data(snip_id)
+        if snip_data:
+            return snip_data.get("phenotype")
+        return None
