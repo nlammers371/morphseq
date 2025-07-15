@@ -26,6 +26,24 @@
       "is_default": false,
       "exclusive": false,
       "terminal": false
+    },
+    "EDEMA": {
+      "description": "Fluid accumulation causing swelling",
+      "is_default": false,
+      "exclusive": false,
+      "terminal": false
+    },
+    "CONVERGENCE_EXTENSION": {
+      "description": "Cell movement during gastrulation",
+      "is_default": false,
+      "exclusive": false,
+      "terminal": false
+    },
+    "EPIBOLY": {
+      "description": "Cell spreading movements",
+      "is_default": false,
+      "exclusive": false,
+      "terminal": false
     }
   },
   "genotypes": {

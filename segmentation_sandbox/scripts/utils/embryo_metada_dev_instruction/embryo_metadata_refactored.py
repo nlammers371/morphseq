@@ -28,6 +28,12 @@ from embryo_genotype_manager import EmbryoGenotypeManager
 from embryo_flag_manager import EmbryoFlagManager
 from embryo_treatment_manager import EmbryoTreatmentManager
 
+# Import batch processing capabilities
+from embryo_metadata_batch import (
+    RangeParser, TemporalRangeParser, BatchProcessor, BatchOperations,
+    create_progress_callback, estimate_batch_time
+)
+
 
 class EmbryoMetadata(BaseAnnotationParser, 
                     EmbryoPhenotypeManager, 
@@ -364,3 +370,267 @@ class EmbryoMetadata(BaseAnnotationParser,
         snip_count = sum(len(e.get("snips", {})) for e in self.data["embryos"].values())
         status = 'unsaved' if self.has_unsaved_changes else 'saved'
         return f"EmbryoMetadata({embryo_count} embryos, {snip_count} snips, {status})"
+    
+    @property
+    def snip_ids(self) -> List[str]:
+        """Get all snip IDs across all embryos."""
+        return self.get_snip_ids()
+    
+    # ========================
+    # BATCH PROCESSING METHODS
+    # ========================
+    
+    def batch_add_phenotypes(self, assignments: List[Dict], author: str,
+                           validate_ranges: bool = True, 
+                           parallel: bool = False,
+                           auto_save_interval: Optional[int] = None) -> Dict:
+        """
+        Batch assign phenotypes using advanced range syntax.
+        
+        Args:
+            assignments: List of assignment dictionaries with format:
+                {
+                    "embryo_id": "20240411_A01_e01",
+                    "phenotype": "EDEMA", 
+                    "frames": "[10:20]",  # or "all", "death:", etc.
+                    "confidence": 0.95,   # optional
+                    "notes": "Manual annotation"  # optional
+                }
+            author: Author of annotations
+            validate_ranges: Validate frame ranges exist
+            parallel: Use parallel processing
+            auto_save_interval: Auto-save after N operations
+            
+        Returns:
+            Processing results dictionary
+        """
+        if self.verbose:
+            print(f"🔄 Starting batch phenotype assignment: {len(assignments)} assignments")
+            if parallel:
+                print("⚡ Using parallel processing")
+        
+        results = BatchOperations.batch_phenotype_assignment(
+            self, assignments, author, validate_ranges, parallel
+        )
+        
+        if auto_save_interval and results["assigned"] > 0:
+            self.save()
+            if self.verbose:
+                print("💾 Auto-saved after batch operation")
+        
+        if self.verbose:
+            print(f"✅ Batch complete: {results['assigned']} phenotypes assigned")
+            if results["failed"]:
+                print(f"❌ {len(results['failed'])} assignments failed")
+        
+        return results
+    
+    def batch_add_genotypes(self, assignments: List[Dict], author: str,
+                          overwrite: bool = False,
+                          parallel: bool = False,
+                          auto_save_interval: Optional[int] = None) -> Dict:
+        """
+        Batch assign genotypes to embryos.
+        
+        Args:
+            assignments: List of assignment dictionaries with format:
+                {
+                    "embryo_id": "20240411_A01_e01",
+                    "genotype": "WT",
+                    "gene": "lmx1b",  # optional
+                    "notes": "PCR confirmed"  # optional
+                }
+            author: Author of annotations
+            overwrite: Allow overwriting existing genotypes
+            parallel: Use parallel processing  
+            auto_save_interval: Auto-save after N operations
+            
+        Returns:
+            Processing results dictionary
+        """
+        if self.verbose:
+            print(f"🔄 Starting batch genotype assignment: {len(assignments)} assignments")
+        
+        results = BatchOperations.batch_genotype_assignment(
+            self, assignments, author, overwrite, parallel
+        )
+        
+        if auto_save_interval and results["assigned"] > 0:
+            self.save()
+            if self.verbose:
+                print("💾 Auto-saved after batch operation")
+        
+        if self.verbose:
+            print(f"✅ Batch complete: {results['assigned']} genotypes assigned")
+        
+        return results
+    
+    def batch_detect_flags(self, detectors: List[Dict],
+                          entities: Optional[List[str]] = None,
+                          parallel: bool = True,
+                          auto_save_interval: Optional[int] = None) -> Dict:
+        """
+        Run batch flag detection with custom detectors.
+        
+        Args:
+            detectors: List of detector configurations with format:
+                {
+                    "name": "motion_blur_detector",
+                    "level": "snip",
+                    "function": detect_function,
+                    "params": {"threshold": 0.1},
+                    "severity": "warning"
+                }
+            entities: Specific entities to check (None = all)
+            parallel: Use parallel processing
+            auto_save_interval: Auto-save after N operations
+            
+        Returns:
+            Detection results dictionary
+        """
+        if self.verbose:
+            print(f"🔍 Starting batch flag detection: {len(detectors)} detectors")
+        
+        results = BatchOperations.batch_flag_detection(
+            self, detectors, entities, parallel
+        )
+        
+        if auto_save_interval:
+            self.save()
+            if self.verbose:
+                print("💾 Auto-saved after batch detection")
+        
+        if self.verbose:
+            total_flags = sum(r["flags_added"] for r in results.values())
+            print(f"🚩 Batch detection complete: {total_flags} flags added")
+        
+        return results
+    
+    def parse_range(self, range_spec: Union[str, List], 
+                   embryo_id: Optional[str] = None) -> List[str]:
+        """
+        Parse range specification into list of IDs.
+        
+        Args:
+            range_spec: Range specification (e.g., "[10:20]", "all", ["id1", "id2"])
+            embryo_id: Embryo ID for temporal ranges (required for temporal syntax)
+            
+        Returns:
+            List of resolved IDs
+        """
+        if embryo_id and isinstance(range_spec, str):
+            # Use temporal parser for embryo-specific ranges
+            return TemporalRangeParser.parse_frame_range(embryo_id, range_spec, self)
+        else:
+            # Use general range parser
+            if embryo_id:
+                # Get all snips for embryo
+                embryo_data = self.data["embryos"].get(embryo_id, {})
+                available_items = sorted(embryo_data.get("snips", {}).keys())
+            else:
+                # Use all snip IDs
+                available_items = self.snip_ids
+            
+            return RangeParser.parse_range(range_spec, available_items)
+    
+    def estimate_processing_time(self, operation_count: int,
+                               operation_type: str = "annotation") -> str:
+        """
+        Estimate time for batch operations.
+        
+        Args:
+            operation_count: Number of operations
+            operation_type: Type of operation (affects speed estimate)
+            
+        Returns:
+            Human-readable time estimate
+        """
+        # Speed estimates based on operation type
+        speeds = {
+            "annotation": 50.0,    # annotations per second
+            "phenotype": 100.0,    # phenotype additions per second  
+            "genotype": 200.0,     # genotype additions per second
+            "flag": 300.0,         # flag operations per second
+            "validation": 500.0    # validations per second
+        }
+        
+        speed = speeds.get(operation_type, 50.0)
+        return estimate_batch_time(operation_count, speed)
+    
+    def create_batch_processor(self, parallel: bool = False, 
+                             num_workers: int = 4,
+                             progress_callback: Optional[callable] = None) -> BatchProcessor:
+        """
+        Create a batch processor instance for custom operations.
+        
+        Args:
+            parallel: Enable parallel processing
+            num_workers: Number of parallel workers
+            progress_callback: Custom progress callback
+            
+        Returns:
+            Configured BatchProcessor instance
+        """
+        if progress_callback is None and self.verbose:
+            progress_callback = create_progress_callback(verbose=True)
+        
+        return BatchProcessor(
+            self, 
+            parallel=parallel,
+            num_workers=num_workers, 
+            progress_callback=progress_callback,
+            verbose=self.verbose
+        )
+    
+    # ========================
+    # HELPER METHODS FOR BATCH PROCESSING
+    # ========================
+    
+    def _get_all_entities_at_level(self, level: str) -> List[str]:
+        """Get all entity IDs at specified level."""
+        if level == "experiment":
+            return list(self.data.get("experiments", {}).keys())
+        elif level == "video":
+            videos = []
+            for exp_data in self.data.get("experiments", {}).values():
+                videos.extend(exp_data.get("videos", {}).keys())
+            return videos
+        elif level == "image":
+            images = []
+            for exp_data in self.data.get("experiments", {}).values():
+                for video_data in exp_data.get("videos", {}).values():
+                    images.extend(video_data.get("images", {}).keys())
+            return images
+        elif level == "embryo":
+            return list(self.data.get("embryos", {}).keys())
+        elif level == "snip":
+            return self.snip_ids
+        else:
+            raise ValueError(f"Unknown entity level: {level}")
+    
+    def _get_entity_data(self, entity_id: str, level: str) -> Optional[Dict]:
+        """Get data for entity at specified level."""
+        try:
+            if level == "snip":
+                # Find snip in embryo data
+                for embryo_data in self.data["embryos"].values():
+                    if entity_id in embryo_data.get("snips", {}):
+                        return embryo_data["snips"][entity_id]
+                return None
+            
+            elif level == "embryo":
+                return self.data["embryos"].get(entity_id)
+            
+            elif level == "image":
+                # Parse image ID to find in hierarchy
+                exp_id = self.get_experiment_id_from_entity(entity_id)
+                video_id = self.get_video_id_from_entity(entity_id)
+                exp_data = self.data.get("experiments", {}).get(exp_id, {})
+                video_data = exp_data.get("videos", {}).get(video_id, {})
+                return video_data.get("images", {}).get(entity_id)
+            
+            # Add other levels as needed
+            return None
+            
+        except Exception:
+            return None
