@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-07-15T08:54:11.542099",
+  "phenotypes": {
+    "NONE": {
+      "description": "No phenotype observed",
+      "is_default": true
+    },
+    "TBD": {
+      "description": "To be determined",
+      "is_default": false
+    },
+    "DEAD": {
+      "description": "Embryo death",
+      "exclusive": true,
+      "terminal": true
+    },
+    "HEART_DEFECT": {
+      "description": "Heart development defect",
+      "is_default": false,
+      "exclusive": false,
+      "terminal": false
+    }
+  },
+  "genotypes": {
+    "TBD": {
+      "description": "To be determined",
+      "is_default": true
+    }
+  },
+  "treatments": {
+    "NONE": {
+      "description": "No treatment",
+      "is_default": true
+    }
+  },
+  "flags": {}
+}

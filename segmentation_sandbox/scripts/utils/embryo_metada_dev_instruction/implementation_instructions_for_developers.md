@@ -3,6 +3,9 @@
 ## Overview
 This document provides step-by-step instructions for implementing the EmbryoMetadata class system. Follow these steps in order to ensure a smooth implementation.
 
+note to store all tasks completed in the implementation log 
+at /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/scripts/utils/embryo_metada_dev_instruction/implementation_log.md
+
 ## Phase 1: Setup and Core Infrastructure
 
 ### Step 1.1: Create Project Structure
