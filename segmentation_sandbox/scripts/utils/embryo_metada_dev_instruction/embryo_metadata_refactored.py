@@ -634,3 +634,37 @@ class EmbryoMetadata(BaseAnnotationParser,
             
         except Exception:
             return None
+    
+    # Integration Layer Methods (Module 7)
+    
+    def link_to_sam_annotation(self, sam_path: Union[str, Path]) -> int:
+        """
+        Link this metadata to a SAM annotation file.
+        
+        Args:
+            sam_path: Path to SAM annotation file
+            
+        Returns:
+            GSAM ID used for linking
+        """
+        from embryo_metadata_integration import GsamIdManager
+        return GsamIdManager.link_embryo_metadata_to_sam(self, Path(sam_path))
+    
+    def get_sam_features_for_snip(self, snip_id: str) -> Optional[Dict]:
+        """Get SAM annotation features for a snip."""
+        from embryo_metadata_integration import _get_sam_features_for_snip
+        return _get_sam_features_for_snip(self, snip_id)
+    
+    def inherit_sam_configs(self) -> None:
+        """Inherit model configurations from linked SAM annotation."""
+        from embryo_metadata_integration import SamAnnotationIntegration, ConfigurationManager
+        
+        sam_path = self.data.get("file_info", {}).get("linked_sam_annotation")
+        if sam_path and Path(sam_path).exists():
+            sam_data = SamAnnotationIntegration.load_sam_annotations(Path(sam_path))
+            ConfigurationManager.inherit_model_configs(self, sam_data)
+            if self.verbose:
+                print("🔧 Inherited model configurations from SAM annotation")
+        else:
+            if self.verbose:
+                print("⚠️ No linked SAM annotation found")

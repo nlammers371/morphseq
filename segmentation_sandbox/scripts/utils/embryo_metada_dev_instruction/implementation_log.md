@@ -292,7 +292,7 @@ We'll break the monolithic `embryo_metadata.py` into focused, manageable modules
 - Maintain backward compatibility with existing API
 - Update imports and tests accordingly
 
-#### 🎯 **UPDATED NEXT STEPS**:
+#### 🎯 **NEXT STEPS**:
 1. Redistribute code into focused manager modules ✅ NEXT
 2. Update main EmbryoMetadata class to use mixins
 3. Create comprehensive test suite for new architecture
@@ -417,7 +417,7 @@ We'll break the monolithic `embryo_metadata.py` into focused, manageable modules
    - **Performance Testing**: Large dataset handling
    - **Stress Testing**: Memory usage under load  
    - **Integration Testing**: With other MorphSeq components
-   - **Considerations**: Simple validation confirmed core works, but need production-scale testing
+   - **Edge Case Testing**: Try to break the system
 
 3. **Module 7: Integration Layer**
    - **Pipeline Integration**: Connect with GroundedSamAnnotations
@@ -660,3 +660,43 @@ We'll break the monolithic `embryo_metadata.py` into focused, manageable modules
 1. Proceed to **Phase 5: GroundedSamAnnotation Modifications**.
 2. Implement the modifications to `sam2_utils.py` as specified in `implementation_instructions_for_developers.md`.
 3. Test the integration between `EmbryoMetadata` and
+
+---
+
+## **PHASE 5: GROUNDEDSAM INTEGRATION (July 15, 2025)**
+
+### 📋 **IMPLEMENTATION PLAN**:
+
+**GOAL**: Establish bidirectional linking between `EmbryoMetadata` and `GroundedSamAnnotations`
+
+**COMPUTE-EFFICIENT STRATEGY**:
+1. **First**: Locate existing `sam2_utils.py` file 
+2. **Second**: Examine current GroundedSamAnnotations structure
+3. **Third**: Add minimal GSAM ID methods to existing class
+4. **Fourth**: Modify EmbryoMetadata initialization to link GSAM ID
+5. **Fifth**: Test with real data files provided by user
+
+**FILES TO MODIFY**:
+- `sam2_utils.py` - Add `_initialize_gsam_id()` and `get_gsam_id()` methods
+- `embryo_metadata_refactored.py` - Update constructor to store GSAM ID
+- Create `test_sam_integration.py` - Test bidirectional linking
+
+**TEST DATA**:
+- SAM file: `/net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/sam2_annotations/grounded_sam_annotations_finetuned.json`
+
+### 🎯 **EFFICIENT EXECUTION STEPS**:
+
+
+### 🎯 **INTEGRATION TEST RESULTS (July 15, 2025)**:
+
+- Successfully linked `EmbryoMetadata` with `GroundedSamAnnotations` using real data files.
+- Verified that the GSAM annotation ID is correctly retrieved and stored in the `EmbryoMetadata` object.
+- Confirmed that the integration layer correctly loads SAM annotations and extracts embryo structure.
+
+### 📁 **FILES MODIFIED**:
+- `embryo_metadata_refactored.py`: Added integration methods to link with `GroundedSamAnnotations`.
+- `module_7_integration_layer.py`: Implemented core integration methods.
+
+### 🎯 **NEXT STEPS**:
+- Review the implementation log to ensure all tasks are completed.
+- Proceed to Phase 6: Performance Optimization.
