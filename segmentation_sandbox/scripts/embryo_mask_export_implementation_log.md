@@ -38,6 +38,7 @@ Following the instructions in `embryo_mask_export_instructions.md` to implement:
   - [ ] Test single image export
   - [ ] Test batch export functionality
   - [ ] Verify output format consistency
+  - [ ] Do a full run of the export for jpgs crucial to get these files made 
 
 ### Phase 2: GSAM QC Class Module (Priority 2)
 
