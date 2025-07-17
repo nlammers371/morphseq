@@ -42,6 +42,14 @@ Following the instructions in `embryo_mask_export_instructions.md` to implement:
 
 ### Phase 2: GSAM QC Class Module (Priority 2)
 
+#### ✅ COMPLETED TASKS:
+- [x] Created `scripts/gsam_qc_class.py` scaffold
+- [x] Defined `GSAMQualityControl` class with methods for:
+  - Segmentation variability check
+  - Mask edge proximity check
+  - Detection failure check
+  - Flag saving
+
 #### 📋 TODO - Phase 2:
 - [ ] Module 2.1: Create `gsam_qc_class.py`
   - [ ] Implement `GSAMQualityControl` class inheriting from `BaseAnnotationParser`
@@ -123,3 +131,13 @@ None identified at this time.
 ---
 
 *Last Updated: July 16, 2025 - Initial planning and setup complete*
+
+## Progress Update: July 16, 2025
+
+### Stage 2: GSAM QC Class Implementation
+- [x] Implemented segmentation variability check (HIGHLY_VAR_MASK)
+- [x] Implemented mask edge proximity check (MASK_ON_EDGE)
+- [x] Implemented detection failure check (DETECTION_FAILURE)
+- [x] Integrated QC flagging logic with permitted values schema and EmbryoMetadata flag system via `push_flags_to_metadata` method. All QC flags validated against schema before registration in metadata.
+- [x] Updated permitted values schema to include all QC flags (HIGHLY_VAR_MASK, MASK_ON_EDGE, MISSING_EMBRYO, NO_EMBRYO) with clarified descriptions.
+- [x] Enhanced MISSING_EMBRYO logic to robustly track snip_id instances for multi-embryo images; now supports accurate flagging for each embryo instance.

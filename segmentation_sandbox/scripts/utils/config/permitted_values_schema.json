@@ -83,7 +83,7 @@
         "severity": "warning"
       },
       "HIGHLY_VAR_MASK": {
-        "description": "Mask area variance >10% between frames",
+        "description": "Mask area outlier (>10% difference from previous/next 2 frames)",
         "severity": "warning"
       },
       "MASK_ON_EDGE": {
@@ -95,6 +95,10 @@
       "DETECTION_FAILURE": {
         "description": "Embryo detection failed",
         "severity": "error"
+      },
+      "MISSING_EMBRYO": {
+        "description": "Embryo present in previous frame but missing in this frame",
+        "severity": "warning"
       }
     },
     "video_level": {
@@ -103,7 +107,7 @@
         "severity": "info"
       },
       "NO_EMBRYO": {
-        "description": "No embryo detected in entire video",
+        "description": "No embryos detected in any frame of video",
         "severity": "error"
       }
     },

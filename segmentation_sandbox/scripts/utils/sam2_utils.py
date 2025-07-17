@@ -892,12 +892,20 @@ class GroundedSamAnnotations:
             
             for image_id, embryo_data in sam2_results.items():
                 frame_idx = final_image_id_to_frame_idx.get(image_id, sam2_image_ids.index(image_id))
-                
+                # Add mask_path to each embryo instance if available
+                embryos_with_mask_path = {}
+                for embryo_id, embryo_info in embryo_data.items():
+                    mask_path = embryo_info.get("mask_path")
+                    if not mask_path:
+                        # Construct mask path if not present (example: data/embryo_masks/{experiment_id}/masks/{image_id}_emnum_{embryo_id}.png)
+                        mask_path = f"data/embryo_masks/{experiment_id}/masks/{image_id}_emnum_{embryo_id}.png"
+                        embryo_info["mask_path"] = mask_path
+                    embryos_with_mask_path[embryo_id] = embryo_info
                 video_result["images"][image_id] = {
                     "image_id": image_id,
                     "frame_index": frame_idx,
                     "is_seed_frame": image_id == seed_frame_id,
-                    "embryos": embryo_data
+                    "embryos": embryos_with_mask_path
                 }
             
             # Store video result
