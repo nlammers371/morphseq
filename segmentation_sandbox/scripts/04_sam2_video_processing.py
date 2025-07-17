@@ -34,6 +34,7 @@ import argparse
 import warnings
 from pathlib import Path
 import torch
+from datetime import datetime
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -228,10 +229,41 @@ def main():
         print(f"Videos with non-first seed: {videos_with_non_first_seed}")
     
     print(f"\n📁 Results saved to: {args.output}")
-    
+
+    # QC flagging step - attach flags to GSAM ID in SAM annotations
+    try:
+        from scripts.gsam_qc_class import GSAMQualityControl
+        qc = GSAMQualityControl(str(args.output), str(args.metadata), verbose=True)
+        author = "auto_sam2_qc"
+        qc.check_segmentation_variability(author)
+        qc.check_mask_on_edge(author)
+        qc.check_detection_failure(author)
+        # Additional QC checks
+        if hasattr(qc, "check_overlapping_masks"):
+            qc.check_overlapping_masks(author)
+        if hasattr(qc, "check_non_continuous_masks"):
+            qc.check_non_continuous_masks(author)
+        if hasattr(qc, "check_large_masks"):
+            qc.check_large_masks(author)
+        if hasattr(qc, "check_no_embryos_detected"):
+            qc.check_no_embryos_detected(author)
+
+        # Attach QC flags to SAM annotations with GSAM ID
+        qc_flags_with_gsam_id = {
+            "gsam_annotation_id": grounded_sam.results.get("gsam_annotation_id"),
+            "qc_timestamp": datetime.now().isoformat(),
+            "qc_flags": dict(qc.flags)
+        }
+        grounded_sam.results["qc_analysis"] = qc_flags_with_gsam_id
+        grounded_sam.save()  # Save updated SAM annotations with QC flags
+
+        print(f"QC flags attached to SAM annotations with GSAM ID: {qc_flags_with_gsam_id['gsam_annotation_id']}")
+    except Exception as e:
+        print(f"QC flagging failed: {e}")
+
     # Print final structure summary
     grounded_sam.print_summary()
-    
+
     print("\n🎉 Ready for downstream processing!")
 
 

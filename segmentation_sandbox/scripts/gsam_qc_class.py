@@ -152,17 +152,3 @@ class GSAMQualityControl(BaseAnnotationParser):
             json.dump(self.flags, f, indent=2)
         if self.verbose:
             print(f"QC flags saved to {output_path}")
-
-    def push_flags_to_metadata(self):
-        """
-        Push all QC flags into EmbryoMetadata, validating against permitted values schema.
-        """
-        permitted_flags = set(self.embryo_metadata.get_permitted_flag_values())
-        for entity_id, flag_list in self.flags.items():
-            for flag_dict in flag_list:
-                flag = flag_dict.get("flag")
-                if flag in permitted_flags:
-                    self.embryo_metadata.add_flag(entity_id, flag, flag_dict.get("details", ""), flag_dict.get("author", "QC"))
-                else:
-                    if self.verbose:
-                        print(f"Warning: Flag '{flag}' not in permitted values schema, skipping for {entity_id}.")

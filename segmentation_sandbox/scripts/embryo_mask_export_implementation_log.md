@@ -132,7 +132,16 @@ None identified at this time.
 
 *Last Updated: July 16, 2025 - Initial planning and setup complete*
 
-## Progress Update: July 16, 2025
+## Progress Update: July 17, 2025
+- [x] **Fixed `05_export_embryo_masks.py`**: Reconciled multiple main functions and corrupted code. File now has single clean main function with proper mask export and QC flag transfer via GSAM ID.
+- [x] **GSAM ID Integration Complete**: QC flags now attached to SAM annotations with GSAM ID in `04_sam2_video_processing.py`. In `05_export_embryo_masks.py`, QC flags are transferred to EmbryoMetadata via GSAM ID matching, ensuring unified tracking across the pipeline.
+- [x] QC flagging for SAM2 results now performed in `04_sam2_video_processing.py` after video processing; flags attached to SAM annotations with GSAM ID for downstream retrieval.
+- [x] QC flag transfer implemented in `05_export_embryo_masks.py`: loads QC flags from SAM annotations using GSAM ID matching and pushes them to EmbryoMetadata for unified tracking.
+- [x] Complete pipeline script (`06_complete_pipeline.py`) created: integrates mask export, QC, metadata, and manifest generation for end-to-end workflow automation.
+- [x] Ready for full workflow testing and deployment.
+- [x] Mask path tracking implemented: every embryo instance now records its mask file path in metadata, supporting downstream analysis and QC.
+- [x] Permitted values schema and metadata integration complete; all flags and mask paths are schema-compliant.
+- [x] Ready for pipeline script integration and end-to-end workflow testing.
 
 ### Stage 2: GSAM QC Class Implementation
 - [x] Implemented segmentation variability check (HIGHLY_VAR_MASK)
