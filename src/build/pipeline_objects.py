@@ -361,6 +361,19 @@ class ExperimentManager:
                 exp.export_metadata()
             except:
                 log.exception("Metadata build failed for %s", exp.date)
+
+    def export_experiment_metadata(self, experiments=None):
+        
+        if experiments is None:
+            experiments_list =  exp in self.experiments.values()
+        else:
+            experiments_list = [exp for exp in self.experiments.values() if exp.date in experiments]
+
+        for exp in experiments_list:
+            try:
+                exp.export_metadata()
+            except:
+                log.exception("Metadata build failed for %s", exp.date)
             
     def stitch_all(self):
         for exp in self.experiments.values():
@@ -432,6 +445,14 @@ class ExperimentManager:
     # ──────────────────────────────────────────────────────────────────────────
     # thin façade methods
     def export_experiments(self, **kwargs):
+        self._run_step(
+            "export_images", "needs_export",
+            friendly_name="export",
+            **kwargs
+        )
+
+    # thin façade methods
+    def export_experiment_metadata(self, **kwargs):
         self._run_step(
             "export_images", "needs_export",
             friendly_name="export",

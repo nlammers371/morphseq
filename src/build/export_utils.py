@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from typing import List, Sequence, Optional, Iterable
+from typing import List, Sequence, Optional, Iterable, Union
 from stitch2d.tile import OpenCVTile
 from skimage import feature, color
 from skimage import exposure, util
@@ -14,7 +14,7 @@ import itertools
 import pandas as pd
 
 
-def build_experiment_metadata(repo_root: str | Path, exp_name: str, meta_df: pd.DataFrame): #, microscope: str):
+def build_experiment_metadata(repo_root: Union[str, Path], exp_name: str, meta_df: pd.DataFrame): #, microscope: str):
 
     # print("Compiling metadata...")
 
