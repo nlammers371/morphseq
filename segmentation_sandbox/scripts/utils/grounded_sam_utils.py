@@ -527,7 +527,26 @@ class GroundedDinoAnnotations:
                 if image_name not in all_results:
                     all_results[image_name] = {}
                 all_results[image_name].update(image_results)
-        
+
+        # === Record no-detection annotations for missing images ===
+        from datetime import datetime
+        for prompt in prompts:
+            for img_id in missing_by_prompt[prompt]:
+                if img_id not in all_results:
+                    # Ensure image entry exists
+                    self.annotations["images"].setdefault(img_id, {"annotations": []})
+                    # Append empty annotation for this prompt
+                    self.annotations["images"][img_id]["annotations"].append({
+                        "annotation_id": f"ann_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                        "prompt": prompt,
+                        "model_metadata": model_metadata,
+                        "inference_params": inference_params or {},
+                        "timestamp": datetime.now().isoformat(),
+                        "num_detections": 0,
+                        "detections": []
+                    })
+                    self._unsaved_changes = True
+
         return all_results
 
     def _get_image_to_experiment_map(self) -> Dict[str, str]:

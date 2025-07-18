@@ -4,6 +4,11 @@ Handles all phenotype-related operations for EmbryoMetadata.
 Designed as a mixin class to keep embryo_metadata.py manageable.
 """
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent))
+
+
 from typing import Dict, List, Optional
 from embryo_metadata_models import Phenotype, Validator, ValidationError
 

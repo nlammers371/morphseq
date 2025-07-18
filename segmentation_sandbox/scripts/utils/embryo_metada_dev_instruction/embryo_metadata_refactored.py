@@ -6,6 +6,10 @@ This version uses mixin classes to keep the main class focused and manageable.
 The original 1604-line file has been redistributed into focused modules.
 """
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent))
+
 import json
 import random
 from pathlib import Path
@@ -14,19 +18,19 @@ from typing import Dict, List, Optional, Union, Any
 
 # Import our foundation modules
 from base_annotation_parser import BaseAnnotationParser
-from embryo_metadata_models import ValidationError
+from data_managers.embryo_metadata_models import ValidationError
 from embryo_metadata_utils import (
     validate_path, load_json, save_json, 
     validate_embryo_metadata_structure,
     DEFAULT_EMBRYO_METADATA_CONFIG
 )
-from permitted_values_manager import PermittedValuesManager
+from data_managers.permitted_values_manager import PermittedValuesManager
 
 # Import our manager mixins
-from embryo_phenotype_manager import EmbryoPhenotypeManager
-from embryo_genotype_manager import EmbryoGenotypeManager
-from embryo_flag_manager import EmbryoFlagManager
-from embryo_treatment_manager import EmbryoTreatmentManager
+from data_managers.embryo_phenotype_manager import EmbryoPhenotypeManager
+from data_managers.embryo_genotype_manager import EmbryoGenotypeManager
+from data_managers.embryo_flag_manager import EmbryoFlagManager
+from data_managers.embryo_treatment_manager import EmbryoTreatmentManager
 
 # Import batch processing capabilities
 from embryo_metadata_batch import (

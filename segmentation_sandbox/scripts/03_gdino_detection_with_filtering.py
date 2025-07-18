@@ -119,7 +119,7 @@ def main():
             store_image_source=False,
             show_anno=False,
             overwrite=False,
-            consider_different_if_different_weights=True
+            consider_different_if_different_weights=True,
         )
         ft_annotations.save()
 
