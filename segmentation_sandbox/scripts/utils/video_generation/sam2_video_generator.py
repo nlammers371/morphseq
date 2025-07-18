@@ -1,3 +1,52 @@
+from typing import List
+from pathlib import Path
+def create_side_by_side_video(
+    video_id: str,
+    base_dir: Path,
+    ft_dir: Path,
+    output_path: str,
+    frame_ids: List[str],
+    fps: int = 10
+) -> bool:
+    """
+    Reads each frame from `base_dir` and `ft_dir` (same filenames),
+    concatenates them horizontally, and writes to output_path.
+    Returns True if successful.
+    """
+    import cv2
+    from tqdm import tqdm
+
+    writer = None
+
+    for frame_id in tqdm(frame_ids, desc=f"Building SxS {video_id}"):
+        base_frame = base_dir / f"{frame_id}.jpg"
+        ft_frame   = ft_dir   / f"{frame_id}.jpg"
+
+        img1 = cv2.imread(str(base_frame))
+        img2 = cv2.imread(str(ft_frame))
+        if img1 is None or img2 is None:
+            print(f"   ❌ Missing frame: {frame_id}")
+            return False
+
+        # Resize to match dimensions
+        if img1.shape != img2.shape:
+            img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+
+        combined = cv2.hconcat([img1, img2])
+
+        if writer is None:
+            h, w = combined.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+            if not writer.isOpened():
+                print("   ❌ Cannot open video writer")
+                return False
+
+        writer.write(combined)
+
+    writer.release()
+    print(f"   ✅ Side-by-side saved: {output_path}")
+    return True
 #!/usr/bin/env python3
 """
 SAM2 Video Generator - Simple & Streamlined
@@ -21,7 +70,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 # Add utils to path for experiment metadata utilities
-SANDBOX_ROOT = Path(__file__).parent.parent.parent
+# Define project root as three levels up (segmentation_sandbox)
+SANDBOX_ROOT = Path("/net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/")
+sys.path.append(str(SANDBOX_ROOT / "scripts/utils"))
 if str(SANDBOX_ROOT) not in sys.path:
     sys.path.append(str(SANDBOX_ROOT))
 
@@ -55,7 +106,9 @@ def get_embryo_colors(num_embryos: int) -> List[Tuple[int, int, int]]:
     colors = []
     for i in range(num_embryos):
         rgb = cmap(i / max(num_embryos - 1, 1))[:3]
-        bgr = (int(rgb[2] * 255), int(rgb[1] * 255), int(rgb[0] * 255))
+        # Ensure colors are bright by mixing with white
+        bright_rgb = tuple(0.7 * c + 0.3 * 1.0 for c in rgb)
+        bgr = (int(bright_rgb[2] * 255), int(bright_rgb[1] * 255), int(bright_rgb[0] * 255))
         colors.append(bgr)
     return colors
 
@@ -64,30 +117,36 @@ def overlay_embryos(image: np.ndarray, embryos: Dict, colors: Dict, alpha: float
     """Overlay embryo masks and bboxes on image. Expects box_xyxy format."""
     result = image.copy()
     h, w = image.shape[:2]
-    
+    # Use a lower alpha for less dark overlay
+    mask_alpha = 0.2
     for embryo_id, data in embryos.items():
         if embryo_id not in colors:
             continue
         color = colors[embryo_id]
-        
+
         # Draw mask
         if 'segmentation' in data:
             mask = decode_rle_mask(data['segmentation'])
             if mask is not None:
+                # Ensure mask matches image dimensions
+                h_img, w_img = image.shape[:2]
+                h_mask, w_mask = mask.shape[:2]
+                if (h_mask, w_mask) != (h_img, w_img):
+                    # Resize mask to image size using nearest-neighbor
+                    mask = cv2.resize(mask.astype('uint8'), (w_img, h_img), interpolation=cv2.INTER_NEAREST)
                 colored_mask = np.zeros_like(image)
                 colored_mask[mask > 0] = color
-                result = cv2.addWeighted(result, 1-alpha, colored_mask, alpha, 0)
-        
+                result = cv2.addWeighted(result, 1-mask_alpha, colored_mask, mask_alpha, 0)
+
         # Draw bbox (box_xyxy format - normalized coordinates)
         if 'bbox' in data:
             x1, y1, x2, y2 = data['bbox']
             x1, y1, x2, y2 = int(x1*w), int(y1*h), int(x2*w), int(y2*h)
             cv2.rectangle(result, (x1, y1), (x2, y2), color, 2)
-            
+
             # Add label
             label = embryo_id.split('_')[-1]  # "e1", "e2", etc.
             cv2.putText(result, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-    
     return result
 
 
@@ -172,15 +231,26 @@ def create_video(video_id: str, video_data: Dict, output_path: str, fps: int = 1
     if first_img is None:
         print(f"   ❌ Cannot load first image: {first_img_path}")
         return False
-    # Create video writer
+    # Ensure width and height are even for codec compatibility
     h, w = first_img.shape[:2]
+    new_h = h if h % 2 == 0 else h - 1
+    new_w = w if w % 2 == 0 else w - 1
+    if new_h != h or new_w != w:
+        first_img = first_img[:new_h, :new_w]
+        h, w = new_h, new_w
+    # Make sure the output directory exists
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
-    
+
     if not out.isOpened():
         print(f"   ❌ Failed to create video writer")
         return False
-    
+
+    # Export frames to directory
+    frame_dir = Path(output_path).with_suffix('') / "frames"
+    frame_dir.mkdir(parents=True, exist_ok=True)
+
     try:
         # Process frames
         frames_processed = 0
@@ -189,31 +259,40 @@ def create_video(video_id: str, video_data: Dict, output_path: str, fps: int = 1
             if not img_path.exists():
                 print(f"   ❓ Image not found, skipping: {img_path}")
                 continue
-                
+
             img = cv2.imread(str(img_path))
             if img is None:
                 print(f"   ❓ Failed to read image, skipping: {img_path}")
                 continue
-            
+
+            # Ensure width and height are even for codec compatibility
+            h_, w_ = img.shape[:2]
+            new_h = h_ if h_ % 2 == 0 else h_ - 1
+            new_w = w_ if w_ % 2 == 0 else w_ - 1
+            if new_h != h_ or new_w != w_:
+                img = img[:new_h, :new_w]
+
             # Overlay embryos (using box_xyxy format)
             embryos = image_info.get('embryos', {})
             if embryos:
                 img = overlay_embryos(img, embryos, embryo_colors)
-            
+
             # Add frame info
             frame_idx = image_info.get('frame_index', -1)
             is_seed = image_info.get('is_seed_frame', False)
             info = f"Frame {frame_idx}" + (" (SEED)" if is_seed else "")
             cv2.putText(img, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-            
+
             out.write(img)
+            # Save frame as JPEG
+            cv2.imwrite(str(frame_dir / f"{image_id}.jpg"), img)
             frames_processed += 1
-        
+
         print(f"   📹 Processed {frames_processed} frames")
-        
+
     finally:
         out.release()
-    
+
     print(f"   ✅ Saved: {output_path}")
     return True
 

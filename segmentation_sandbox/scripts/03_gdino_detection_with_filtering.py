@@ -49,82 +49,44 @@ from scripts.utils.experiment_metadata_utils import load_experiment_metadata, ge
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate dual GroundedDINO detections with quality filtering")
+
+    parser = argparse.ArgumentParser(description="Generate GroundedDINO detections with quality filtering (finetuned model by default)")
     parser.add_argument("--config", required=True, help="Path to pipeline config YAML")
     parser.add_argument("--metadata", required=True, help="Path to experiment_metadata.json")
-    parser.add_argument("--base-annotations", required=True, help="Path to base model annotations JSON")
     parser.add_argument("--finetuned-annotations", required=True, help="Path to finetuned model annotations JSON")
-    
     # Quality filtering arguments
-    parser.add_argument("--confidence-threshold", type=float, default=0.5,
-                       help="Confidence threshold for filtering (default: 0.5)")
+    parser.add_argument("--confidence-threshold", type=float, default=0.45,
+                       help="Confidence threshold for filtering (default: 0.45)")
     parser.add_argument("--iou-threshold", type=float, default=0.5,
                        help="IoU threshold for duplicate removal (default: 0.5)")
     parser.add_argument("--skip-filtering", action="store_true",
                        help="Skip quality filtering step")
-    
     # Model configuration
-    parser.add_argument("--finetuned-weights", default=None,
-                       help="Path to finetuned model weights (overrides config)")
-    
+    parser.add_argument("--weights", default=None,
+                       help="Path to model weights (default: finetuned weights)")
     args = parser.parse_args()
 
-    # Set default finetuned weights if not provided
-    if args.finetuned_weights is None:
-        args.finetuned_weights = (
+    # Use finetuned weights as default if not specified
+    if not args.weights:
+        args.weights = (
             "/net/trapnell/vol1/home/mdcolon/proj/"
             "image_segmentation/Open-GroundingDino/"
             "finetune_output/finetune_output_run_nick_masks_20250308/"
             "checkpoint_best_regular.pth"
         )
 
-    print("🚀 Starting Dual GroundedDINO Detection with Quality Filtering")
+    print("🚀 Starting GroundedDINO Detection with Quality Filtering (Finetuned Model)")
     print("=" * 70)
-    
+
     # Load config and setup device
     config = load_config(args.config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"📱 Using device: {device}")
-    
+
     # Load experiment metadata
     metadata = load_experiment_metadata(args.metadata)
     image_ids = metadata.get("image_ids", [])
     print(f"📊 Total images in metadata: {len(image_ids)}")
-
-    # =================================================================================
-    # PHASE 0: Base Model Detection (Individual Embryo)
-    # =================================================================================
-    print("\n" + "="*60)
-    print("🔍 PHASE 0: Base Model Detection (Individual Embryo)")
-    print("="*60)
-    
-    # Initialize base model annotations manager
-    base_annotations = GroundedDinoAnnotations(args.base_annotations, verbose=True)
-    base_annotations.set_metadata_path(args.metadata)
-    
-    print(f"💾 Base annotations will be saved to: {args.base_annotations}")
-    
-    try:
-        # Load base model
-        base_model = load_groundingdino_model(config, device=device)
-        print("✅ Base model loaded successfully")
-        
-        # Process individual embryo detection
-        base_annotations.process_missing_annotations(
-            model=base_model,
-            prompts="individual embryo",
-            auto_save_interval=100,
-            store_image_source=False,
-            show_anno=False,
-            overwrite=False
-        )
-        base_annotations.save()
-        
-        print("✅ Phase 0 complete: Base model detection finished")
-        
-    except Exception as e:
-        print(f"❌ Error in Phase 0 (base model): {e}")
-        return
 
     # =================================================================================
     # PHASE 1: Finetuned Model Detection (Individual Embryo)
@@ -132,23 +94,23 @@ def main():
     print("\n" + "="*60)
     print("🔍 PHASE 1: Finetuned Model Detection (Individual Embryo)")
     print("="*60)
-    
+
     # Initialize finetuned model annotations manager
     ft_annotations = GroundedDinoAnnotations(args.finetuned_annotations, verbose=True)
     ft_annotations.set_metadata_path(args.metadata)
-    
+
     print(f"💾 Finetuned annotations will be saved to: {args.finetuned_annotations}")
-    
+
     try:
         # Update config to use finetuned weights
         original_weights = config["models"]["groundingdino"]["weights"]
-        config["models"]["groundingdino"]["weights"] = args.finetuned_weights
-        print(f"🔄 Switching to finetuned weights: {Path(args.finetuned_weights).name}")
-        
-        # Load finetuned model
+        config["models"]["groundingdino"]["weights"] = args.weights
+        print(f"🔄 Using weights: {Path(args.weights).name}")
+
+        # Load model
         ft_model = load_groundingdino_model(config, device=device)
-        print("✅ Finetuned model loaded successfully")
-        
+        print("✅ Model loaded successfully")
+
         # Process individual embryo detection with finetuned model
         ft_annotations.process_missing_annotations(
             model=ft_model,
@@ -157,15 +119,15 @@ def main():
             store_image_source=False,
             show_anno=False,
             overwrite=False,
-            consider_different_if_different_weights=True
+            consider_different_if_different_weights=True,
         )
         ft_annotations.save()
-        
+
         print("✅ Phase 1 complete: Finetuned model detection finished")
-        
+
         # Restore original weights in config
         config["models"]["groundingdino"]["weights"] = original_weights
-        
+
     except Exception as e:
         print(f"❌ Error in Phase 1 (finetuned model): {e}")
         return
@@ -352,13 +314,13 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Example usage:
+## Example usage:
 # python3 03_gdino_detection_with_filtering.py \
 #   --config /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/configs/pipeline_config.yaml \
 #   --metadata /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/experiment_metadata.json \
-#   --base-annotations /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations.json \
 #   --finetuned-annotations /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations_finetuned.json \
-#   --confidence-threshold 0.5 \
+#   --confidence-threshold 0.45 \
 #   --iou-threshold 0.5
+# (Finetuned weights will be used by default unless --weights is specified)
 
 # Both models will predict "individual embryo" for comparison purposes

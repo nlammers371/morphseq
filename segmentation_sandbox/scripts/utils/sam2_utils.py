@@ -162,6 +162,17 @@ class GroundedSamAnnotations:
         self.verbose = verbose
         self.device = device
         self._unsaved_changes = False
+        # Explicit validation for seed annotations path
+        if self.seed_annotations_path is None:
+            raise ValueError(
+                "Missing required argument: seed_annotations_path. "
+                "Please provide the path to your GroundedDINO annotations JSON as seed_annotations_path."
+            )
+        if not self.seed_annotations_path.exists():
+            raise FileNotFoundError(
+                f"GroundedDINO annotations JSON not found at: {self.seed_annotations_path}. "
+                "Please ensure the file exists and the path is correct."
+            )
         
         if self.verbose:
             print(f"🎬 Initializing GroundedSamAnnotations...")
@@ -180,7 +191,10 @@ class GroundedSamAnnotations:
         
         # Check experiment metadata path
         if not self.experiment_metadata_path:
-            validation_errors.append("No experiment metadata path provided")
+            validation_errors.append(
+                "Missing experiment metadata path. "
+                "Please provide the path to your experiment_metadata.json as experiment_metadata_path."
+            )
         elif not self.experiment_metadata_path.exists():
             validation_errors.append(f"Experiment metadata file not found: {self.experiment_metadata_path}")
         
@@ -204,16 +218,26 @@ class GroundedSamAnnotations:
         self.experiment_metadata = self._load_experiment_metadata()
         if not self.experiment_metadata:
             raise ValueError("Failed to load experiment metadata")
+        # Validate experiment metadata structure
+        if not isinstance(self.experiment_metadata, dict) or 'experiments' not in self.experiment_metadata:
+            raise ValueError(f"Invalid experiment metadata format: missing 'experiments' in {self.experiment_metadata_path}")
         
         # Load seed annotations with validation
         self.seed_annotations = self._load_seed_annotations()
         if not self.seed_annotations:
             raise ValueError("Failed to load seed annotations")
+        # Validate seed annotations structure
+        if not isinstance(self.seed_annotations, dict) or 'high_quality_annotations' not in self.seed_annotations:
+            raise ValueError(f"Invalid seed annotations format: missing 'high_quality_annotations' in {self.seed_annotations_path}")
         
         # Group video annotations only if we have valid seed annotations
         self.video_annotations = self._group_video_annotations()
         if not self.video_annotations:
-            raise ValueError(f"No video annotations found for prompt '{self.target_prompt}'")
+            raise ValueError(
+                f"No video annotations found for prompt '{self.target_prompt}'. "
+                f"Please verify that {self.seed_annotations_path} contains valid annotations "
+                "and that the prompt matches your data."
+            )
         
         # Initialize SAM2 model (lazy loading)
         self.sam2_predictor = None
@@ -868,12 +892,20 @@ class GroundedSamAnnotations:
             
             for image_id, embryo_data in sam2_results.items():
                 frame_idx = final_image_id_to_frame_idx.get(image_id, sam2_image_ids.index(image_id))
-                
+                # Add mask_path to each embryo instance if available
+                embryos_with_mask_path = {}
+                for embryo_id, embryo_info in embryo_data.items():
+                    mask_path = embryo_info.get("mask_path")
+                    if not mask_path:
+                        # Construct mask path if not present (example: data/embryo_masks/{experiment_id}/masks/{image_id}_emnum_{embryo_id}.png)
+                        mask_path = f"data/embryo_masks/{experiment_id}/masks/{image_id}_emnum_{embryo_id}.png"
+                        embryo_info["mask_path"] = mask_path
+                    embryos_with_mask_path[embryo_id] = embryo_info
                 video_result["images"][image_id] = {
                     "image_id": image_id,
                     "frame_index": frame_idx,
                     "is_seed_frame": image_id == seed_frame_id,
-                    "embryos": embryo_data
+                    "embryos": embryos_with_mask_path
                 }
             
             # Store video result
