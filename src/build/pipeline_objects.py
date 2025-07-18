@@ -27,6 +27,7 @@ import logging
 import itertools
 from src.build.export_utils import PATTERNS, _match_files, has_output, newest_mtime, _mod_time
 from src.build.build03A_process_images import segment_wells, compile_embryo_stats, extract_embryo_snips
+from src.build.build02B_segment_bf_main import apply_unet
 
 
 log = logging.getLogger(__name__)
@@ -296,6 +297,23 @@ class Experiment:
         else:
             pass
 
+    @record("segment")
+    def segment_images(self, force_update: bool=False):
+        # We need to pull the current models
+        model_name_vec = ["mask_v0_0100", "via_v1_0100", "yolk_v1_0050", "focus_v0_0100", "bubble_v0_0100"] 
+        # apply unet for each model
+        for model_name in model_name_vec:
+            apply_unet(
+                root=self.data_root,
+                model_name=model_name,
+                n_classes=1,
+                checkpoint_path=None,  # use the latest checkpoint
+                n_workers=self.num_cpu_workers,
+                overwrite_flag=force_update,
+                make_sample_figures=True,
+                n_sample_figures=100
+            )
+
     # @record()
     def process_image_masks(self, force_update: bool=False):
         tracked_df = segment_wells(root=self.data_root, exp_name=self.date)
@@ -363,7 +381,7 @@ class ExperimentManager:
                 log.exception("Metadata build failed for %s", exp.date)
 
     def export_experiment_metadata(self, experiments=None):
-        
+
         if experiments is None:
             experiments_list =  exp in self.experiments.values()
         else:
@@ -472,6 +490,14 @@ class ExperimentManager:
             "stitch_z_images", "needs_stitch_z",
             extra_filter=lambda e: e.microscope == "Keyence",
             friendly_name="stitch_z",
+            **kwargs
+        )
+
+    def segment_experiments(self, **kwargs):
+        self._run_step(
+            "segment_images", "needs_segment",
+            # extra_filter=lambda e: e.microscope == "Keyence",
+            friendly_name="segment",
             **kwargs
         )
 

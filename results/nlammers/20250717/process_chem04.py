@@ -13,7 +13,7 @@ if __name__ == "__main__":
     
     # export everything dated later than XX
     # later_than = 20250501
-    experiments = ["20250716_chem4_35C_T00_1045"] #["20250716_chem4_28C_T00_1158", "20250716_chem4_28C_T01_1400",
+    experiments = ["20250716_chem4_34C_T00_1014"] #["20250716_chem4_28C_T00_1158", "20250716_chem4_28C_T01_1400",
                 #    "20250716_chem4_34C_T00_1024", "20250716_chem4_35C_T00_1045"]
     # experiments = ["20250215"]
 
@@ -28,5 +28,6 @@ if __name__ == "__main__":
     manager.export_experiments(experiments=experiments, force_update=True)
     # manager.export_experiment_metadata(experiments=experiments)
     manager.stitch_experiments(experiments=experiments, force_update=True)
+    manager.segment_experiments(experiments=experiments, force_update=True)
     # manager.stitch_z_experiments(later_than=later_than, force_update=False)
     manager.get_embryo_stats(experiments=experiments, force_update=True)
