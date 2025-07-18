@@ -3,3 +3,9 @@
 
 data/raw_data_organized/*
 !data/raw_data_organized/.gitkeep
+
+data/*
+
+
+/models/*
+!/models/.gitkeep

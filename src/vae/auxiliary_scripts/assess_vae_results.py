@@ -21,6 +21,8 @@ from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
 import json
 from typing import Any, Dict, List, Optional, Union
 import ntpath
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 
 def assess_vae_results(root, train_name, architecture_name, n_image_figures=100, overwrite_flag=False,
@@ -81,9 +83,11 @@ def assess_vae_results(root, train_name, architecture_name, n_image_figures=100,
                                                  data_sampler_vec=data_sampler_vec, n_image_figures=n_image_figures,
                                                  device=device, skip_figures=skip_figures_flag)
 
-
+        
         # Calculate UMAPs
         embryo_df = calculate_UMAPs(embryo_df)
+        # Calculate PCA
+        embryo_df = calculate_PCA(embryo_df)
         print(f"Saving data...")
         #save latent arrays and UMAP
         embryo_df = embryo_df.iloc[:, 1:]
@@ -494,6 +498,57 @@ def calculate_UMAPs(embryo_df):
 
     return embryo_df
 
+
+def calculate_PCA(embryo_df):
+    """
+    Calculate PCA embeddings for the given DataFrame.
+    Parameters:
+    embryo_df (DataFrame): The input DataFrame containing features to calculate PCA.
+    Returns:
+    DataFrame: The input DataFrame with PCA embeddings added as new columns.
+    """
+    print("Calculating PCA embeddings...")
+
+    # Identify indices for z_mu columns
+    zmb_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_b" in embryo_df.columns[i]]
+    zmn_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_n" in embryo_df.columns[i]]
+    mu_indices = [i for i in range(len(embryo_df.columns)) if "z_mu_" in embryo_df.columns[i]]
+
+    MetricFlag = len(zmb_indices) > 0
+
+    # Extract the relevant arrays
+    z_mu_array = embryo_df.iloc[:, mu_indices].to_numpy()
+    if MetricFlag:
+        z_mu_array_b = embryo_df.iloc[:, zmb_indices].to_numpy()
+        z_mu_array_n = embryo_df.iloc[:, zmn_indices].to_numpy()
+
+    # Standardize data and calculate PCA (3D)
+    pca = PCA(n_components=3)
+    scaled_z_mu = StandardScaler().fit_transform(z_mu_array)
+    pca_embedding = pca.fit_transform(scaled_z_mu)
+
+    # Add PCA embeddings to DataFrame
+    for n in range(3):
+        embryo_df[f"PCA_{n:02}_3"] = pca_embedding[:, n]
+
+    if MetricFlag:
+        # Calculate PCA for biological and non-biological subsets
+        pca_bio = PCA(n_components=3)
+        scaled_z_mu_bio = StandardScaler().fit_transform(z_mu_array_b)
+        pca_embedding_bio = pca_bio.fit_transform(scaled_z_mu_bio)
+
+        for n in range(3):
+            embryo_df[f"PCA_{n:02}_bio_3"] = pca_embedding_bio[:, n]
+
+        pca_n = PCA(n_components=3)
+        scaled_z_mu_n = StandardScaler().fit_transform(z_mu_array_n)
+        pca_embedding_n = pca_n.fit_transform(scaled_z_mu_n)
+
+        for n in range(3):
+            embryo_df[f"PCA_{n:02}_n_3"] = pca_embedding_n[:, n]
+
+    return embryo_df
+
 def bio_prediction_wrapper(embryo_df, meta_df):
 
     print("Training basic classifiers to test latent space information content...")
@@ -579,36 +634,36 @@ def initialize_assessment(train_dir, output_dir, batch_size, mode_vec=None):
     #                 )
     #     data_sampler_vec.append(temp_loader)
 
-    try:
-        trained_model = AutoModel.load_from_folder(os.path.join(output_dir, 'final_model'))
+    # try:
+    trained_model = AutoModel.load_from_folder(os.path.join(output_dir, 'final_model'))
 
-        train_config_file = open(os.path.join(output_dir, 'final_model', 'training_config.json'))
+    train_config_file = open(os.path.join(output_dir, 'final_model', 'training_config.json'))
+    train_config = json.load(train_config_file)
+
+    model_config_file = open(os.path.join(output_dir, 'final_model', 'model_config.json'))
+    model_config = json.load(model_config_file)
+
+
+    try:
+        trained_model_list = glob.glob(os.path.join(output_dir, "*epoch*"))
+        underscore_list = [s.rfind("_") for s in trained_model_list]
+        epoch_num_list = [int(trained_model_list[s][underscore_list[s] + 1:]) for s in range(len(underscore_list))]
+        last_ind = np.argmax(epoch_num_list)
+
+        # last_training = path_leaf(trained_model_list[last_ind])
+        trained_model = AutoModel.load_from_folder(trained_model_list[last_ind])
+
+        train_config_file = open(os.path.join(trained_model_list[last_ind], 'training_config.json'))
         train_config = json.load(train_config_file)
 
-        model_config_file = open(os.path.join(output_dir, 'final_model', 'model_config.json'))
+        model_config_file = open(os.path.join(trained_model_list[last_ind], 'model_config.json'))
         model_config = json.load(model_config_file)
 
+        print("No final model found for " + output_dir + ". Using most recent saved training instance.")
     except:
-        try:
-            trained_model_list = glob.glob(os.path.join(output_dir, "*epoch*"))
-            underscore_list = [s.rfind("_") for s in trained_model_list]
-            epoch_num_list = [int(trained_model_list[s][underscore_list[s] + 1:]) for s in range(len(underscore_list))]
-            last_ind = np.argmax(epoch_num_list)
-
-            # last_training = path_leaf(trained_model_list[last_ind])
-            trained_model = AutoModel.load_from_folder(trained_model_list[last_ind])
-
-            train_config_file = open(os.path.join(trained_model_list[last_ind], 'training_config.json'))
-            train_config = json.load(train_config_file)
-
-            model_config_file = open(os.path.join(trained_model_list[last_ind], 'model_config.json'))
-            model_config = json.load(model_config_file)
-
-            print("No final model found for " + output_dir + ". Using most recent saved training instance.")
-        except:
-            print("No final model loaded for " + output_dir + ". \nEither there are no saved model directories, or an error occurred during loading")
-            continue_flag = True
-            trained_model = []
+        print("No final model loaded for " + output_dir + ". \nEither there are no saved model directories, or an error occurred during loading")
+        continue_flag = True
+        trained_model = []
 
     # get list of data loaders
     data_transform = make_dynamic_rs_transform()  # use standard dataloader

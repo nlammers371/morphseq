@@ -1,0 +1,31 @@
+[33m7ca798e3[m[33m ([m[1;36mHEAD -> [m[1;32mdiffusion-dev[m[33m, [m[1;31morigin/diffusion-dev[m[33m)[m HEAD@{0}: reset: moving to HEAD
+[33m7ca798e3[m[33m ([m[1;36mHEAD -> [m[1;32mdiffusion-dev[m[33m, [m[1;31morigin/diffusion-dev[m[33m)[m HEAD@{1}: pull --rebase origin diffusion-dev (finish): returning to refs/heads/diffusion-dev
+[33m7ca798e3[m[33m ([m[1;36mHEAD -> [m[1;32mdiffusion-dev[m[33m, [m[1;31morigin/diffusion-dev[m[33m)[m HEAD@{2}: pull --rebase origin diffusion-dev (start): checkout 7ca798e3d3ee3dab74a17d2947d69c301c26995b
+[33m6567df7a[m HEAD@{3}: rebase (abort): updating HEAD
+[33m6567df7a[m HEAD@{4}: rebase (abort): updating HEAD
+[33m2801be59[m HEAD@{5}: commit: Untrack models folder and add .gitkeep
+[33m01660fca[m HEAD@{6}: commit: Stop tracking files in segmentation_sandbox/models
+[33m4ba86a42[m HEAD@{7}: checkout: moving from main to diffusion-dev
+[33m82678afe[m[33m ([m[1;32mmain[m[33m)[m HEAD@{8}: reset: moving to HEAD
+[33m82678afe[m[33m ([m[1;32mmain[m[33m)[m HEAD@{9}: commit: Ignore raw_data_organized under segmentation_sandbox/data
+[33m1b5c6978[m HEAD@{10}: checkout: moving from diffusion-dev to main
+[33m4ba86a42[m HEAD@{11}: commit: did live-dead detections with gdino finetuned, now implementing sam2 to generate refined masks
+[33m7ba32e1c[m HEAD@{12}: commit: made update to gdino annotations calss to save automatically,c create a backup, going to try to create a class for embrvyo meteadata as well after this commit
+[33m3774b337[m HEAD@{13}: commit: generated a experiment qc object class to streamline the qc flagging and additionally created demo in utils/data folder
+[33m46e2a2d4[m HEAD@{14}: commit: refactored to consoldiate qc jsons into one file and to maintain this
+[33mcb1dbc7f[m HEAD@{15}: commit: image_quality_qc implementation, after this will refactor to use new json format to store all qc flags
+[33mb3b1852d[m HEAD@{16}: commit: Update overlay: use full image_id with larger font and 10% down positioning in main and test scripts
+[33m991f266e[m HEAD@{17}: commit: Fix incremental skipping logic, add .gitkeep in raw_data_organized,
+[33mf01b0a84[m HEAD@{18}: checkout: moving from diffusion-dev to diffusion-dev
+[33mf01b0a84[m HEAD@{19}: branch: Reset to origin/diffusion-dev
+[33m6567df7a[m HEAD@{20}: checkout: moving from mcolon_legacy_main to diffusion-dev
+[33m16fc68d8[m[33m ([m[1;32mmcolon_legacy_main[m[33m)[m HEAD@{21}: commit: Add results/mcolon directory and its contents
+[33m8fd4ca83[m[33m ([m[1;31morigin/mcolon_legacy_main[m[33m)[m HEAD@{22}: checkout: moving from diffusion-dev to mcolon_legacy_main
+[33m6567df7a[m HEAD@{23}: checkout: moving from mcolon_legacy_main to diffusion-dev
+[33m8fd4ca83[m[33m ([m[1;31morigin/mcolon_legacy_main[m[33m)[m HEAD@{24}: checkout: moving from diffusion-dev to mcolon_legacy_main
+[33m6567df7a[m HEAD@{25}: checkout: moving from mcolon_legacy_main to diffusion-dev
+[33m8fd4ca83[m[33m ([m[1;31morigin/mcolon_legacy_main[m[33m)[m HEAD@{26}: checkout: moving from diffusion-dev to mcolon_legacy_main
+[33m6567df7a[m HEAD@{27}: checkout: moving from main to diffusion-dev
+[33m1b5c6978[m HEAD@{28}: checkout: moving from mcolon_legacy_main to main
+[33m8fd4ca83[m[33m ([m[1;31morigin/mcolon_legacy_main[m[33m)[m HEAD@{29}: checkout: moving from main to mcolon_legacy_main
+[33m1b5c6978[m HEAD@{30}: checkout: moving from main to main
