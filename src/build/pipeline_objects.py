@@ -460,6 +460,7 @@ class ExperimentManager:
             friendly_name="mask_stats",
             **kwargs
         )
+
     # def build_metadata_all(self):
     #     for exp in self.experiments.values():
     #         if exp.needs_build_metadata():
