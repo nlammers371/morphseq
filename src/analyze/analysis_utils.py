@@ -108,19 +108,20 @@ class CPU_Unpickler(pickle.Unpickler):
 
 def calculate_morph_embeddings(data_root: Union[str, Path],
                   model_name: str,
+                  model_class: Literal["legacy"],
                   experiments: List[str],
                   cfg: Optional[Any] = None,
                   batch_size: int = 64,
                   ):
 
 
-    legacy = cfg is None
+    legacy = model_class == "legacy"
     data_root = Path(data_root)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     if legacy:
         # ---- load the old encoder (and decoder if you need it) ----
-        model_dir = data_root / "training_data" / "models" / "active_models" / model_name 
+        model_dir = data_root / "models" / model_class / model_name 
         # model_dir = Path(model_name) if Path(model_name).is_dir() else Path(model_name).parent
         # enc_path = model_dir / "encoder.pkl"
         # dec_path = model_dir / "decoder.pkl"  # optional
@@ -198,22 +199,22 @@ def calculate_morph_embeddings(data_root: Union[str, Path],
                                   device=device)
         
     print("Saving embeddings...")
-    save_root = data_root / "analysis" / "latent_embeddings" 
+    save_root = data_root / "analysis" / "latent_embeddings" / model_class / model_name 
     
     for exp in experiments:
         exp_df = latent_df.loc[latent_df["experiment_date"]==exp]
-        out_path = save_root / exp 
-        os.makedirs(out_path, exist_ok=True)
-        exp_df.to_csv(out_path / f"morph_latends_{model_name}.csv", index=False)
+        # out_path = save_root / exp 
+        os.makedirs(save_root, exist_ok=True)
+        exp_df.to_csv(save_root / f"morph_latents_{exp}.csv", index=False)
     
     return {}
 
 
 def extract_embeddings_legacy(
-    lit_model:  Any,
-    dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
-    device:      Union[str, torch.device] = "cuda",
-    ):
+                        lit_model:  Any,
+                        dataloader: torch.utils.data.DataLoader,   # {"train":…, "eval":…, "test":…}
+                        device:      Union[str, torch.device] = "cuda",
+                        ):
 
     lit_model.to(device).eval()
 
@@ -244,8 +245,8 @@ def extract_embeddings_legacy(
         x = inputs["data"].to(device)
 
         labels = list(inputs["label"][0])
-        snip_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-1]) for lb in labels])
-        emb_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-2]) for lb in labels])
+        snip_id_vec = np.asarray([os.path.basename(lb)[:-4] for lb in labels])
+        emb_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-1]) for lb in labels])
         exp_id_vec = np.asarray(["_".join(os.path.basename(lb).split("_")[:-3]) for lb in labels])
 
         encoder_output = lit_model.encoder(x)

@@ -241,7 +241,7 @@ def export_embryo_snips(r: int,
     im_cropped_gauss = np.multiply(im_cropped.astype(float), mask_cropped_gauss) + np.multiply(noise_array, 1-mask_cropped_gauss)
 
     # check whether we cropped out part of the embryo
-    out_of_frame_flag = np.sum(emb_mask_cropped == 1) / np.sum(emb_mask_rotated == 1) < 0.99
+    out_of_frame_flag = (np.sum(emb_mask_cropped == 1) / np.sum(emb_mask_rotated == 1)) < 0.98
 
     # write to file
     # im_name = row["snip_id"]
@@ -636,7 +636,7 @@ def get_embryo_stats(index: int,
     if row["experiment_date"] in ["20231207", "20231208"]: # handle two samll but problematic datasets
         ff_shape = tuple([3420, 1890])
 
-    rs_factor = np.max([np.max(ff_shape) / 600, 1])
+    rs_factor = np.max([np.max(ff_shape) / 600, 1]) # !!! what is this?
     ff_shape = (ff_shape/rs_factor).astype(int)
     
     im_mask_lb = np.round(resize(im_mask_lb.astype(float), ff_shape, order=0, preserve_range=True)).astype(int)
@@ -682,7 +682,7 @@ def get_embryo_stats(index: int,
 
     # is a part of the embryo mask at or near the image boundary?
     im_trunc = im_mask_lb[qc_scale_px:-qc_scale_px, qc_scale_px:-qc_scale_px]
-    row.loc["frame_flag"] = np.sum(im_mask_lb) != np.sum(im_trunc)
+    row.loc["frame_flag"] = np.sum(im_trunc) <= 0.98*np.sum(im_mask_lb) 
 
     # is there an out-of-focus region in the vicinity of the mask?
     if np.any(im_focus) or np.any(im_bubble):
