@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 rm(list = ls())
 
 library(msigdbr)
@@ -53,4 +54,6 @@ contrast_tbl = compare_abundances(ccm, branched, normal)
 contrast_tbl <- contrast_tbl %>% select(cell_group, delta_log_abund, delta_log_abund_se, delta_q_value)
 
 
+write_csv(contrast_tbl, "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/analyses/crossmodal/hotfish/hotfish_morph_ccs_contrast.csv")
+write_csv(contrast_tbl, "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/analyses/crossmodal/hotfish/hotfish_morph_ccs_contrast.csv")
 write_csv(contrast_tbl, "/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/analyses/crossmodal/hotfish/hotfish_morph_ccs_contrast.csv")
