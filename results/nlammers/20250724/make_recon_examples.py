@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     root = Path("/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/models/")
     # root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/training_data/20241107_ds/"
-    sweep_list = ["sweep10"]#["sweep05", "sweep04", "sweep03", "sweep02"] # ,
+    sweep_list = ["sweep11"]#["sweep05", "sweep04", "sweep03", "sweep02"] # ,
     tr_root = root / "training_outputs" 
     for sweep in sweep_list:
         dir_list = sorted(tr_root.glob(f"{sweep}_*"))

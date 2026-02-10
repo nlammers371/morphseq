@@ -33,7 +33,7 @@ class MLPPotentialField(nn.Module):
             layers.append(nn.Linear(last, h))
             layers.append(activation())
             last = h
-        layers.append(nn.Linear(last, dim))
+        layers.append(nn.Linear(last, 1))
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

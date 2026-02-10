@@ -31,7 +31,7 @@ def train_vector_nn(
         infer_embryo_clock: bool = True,
         mlp_structure: list = [256, 128, 128],
         batch_size: int = 8192,
-        max_epochs: int = 150,
+        max_epochs: int = 250,
         use_pca: bool = True,  # whether to use PCA for dimensionality reduction
         n_pc: int = 10,          # number of PCA components to keep
         wandb_project: str = None,         # fill with your project
@@ -133,5 +133,5 @@ if __name__ == "__main__":
 
     train_vector_nn(
         root=root,
-        run_name= "potential_test",
+        run_name= "potential_test2",
         use_pca=True,) 

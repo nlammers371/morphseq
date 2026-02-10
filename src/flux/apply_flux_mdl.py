@@ -79,6 +79,31 @@ def load_and_apply_flux_model(
     model.freeze()
 
     # ----------------------------
+    # Extract learned rate shifts
+    # ----------------------------
+    rate_shifts = {}
+
+    if hasattr(model, "log_temp_coeff"):
+        rate_shifts["temperature"] = model.log_temp_coeff.detach().cpu().numpy()
+
+    if hasattr(model, "log_s"):
+        rate_shifts["experiment"] = model.log_s.detach().cpu().numpy()
+
+    if hasattr(model, "delta"):
+        rate_shifts["embryo"] = model.delta.detach().cpu().numpy()
+
+    # Optionally save to CSV
+    rate_out_path = root / "models" / model_class / model_name / "flux" / run_name / "rate_shifts"
+    rate_out_path.mkdir(parents=True, exist_ok=True)
+
+    for key, values in rate_shifts.items():
+        out_file = rate_out_path / f"{key}_rate_shifts.csv"
+        with open(out_file, "w") as f:
+            f.write("index,rate_shift\n")
+            for i, val in enumerate(values):
+                f.write(f"{i},{val}\n")
+
+    # ----------------------------
     # Inference
     # ----------------------------
     phi_preds = []
@@ -97,7 +122,7 @@ def load_and_apply_flux_model(
 
     phi_stack = torch.cat(phi_preds, dim=0)
     vel_stack = torch.cat(vel_preds, dim=0)
-    phi_cols = [f"phi_{i:03}" for i in range(vel_stack.shape[1])]
+    phi_cols = [f"phi_{i:03}" for i in range(phi_stack.shape[1])]
     vel_cols = [f"vel_{i:03}" for i in range(vel_stack.shape[1])]
 
     df.loc[:, phi_cols] = phi_stack.detach().cpu().numpy()
@@ -113,5 +138,5 @@ if __name__ == "__main__":
 
     results = load_and_apply_flux_model(
         root=root,
-        run_name="potential_test"
+        run_name="test_scalar_potential",
     )

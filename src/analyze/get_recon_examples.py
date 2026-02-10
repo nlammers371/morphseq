@@ -145,7 +145,7 @@ def recon_wrapper(
             shuffle=False,
         )
 
-        out_stub = Path(cfg).name if model_class == "legacy" else Path(run_path).name
+        out_stub = Path(cfg).name if model_class == "legacy" else Path(os.path.dirname(run_path)).name + "_" + Path(run_path).name
         mdl_folder = os.path.join(out_path, out_stub)
         os.makedirs(mdl_folder, exist_ok=True)
 

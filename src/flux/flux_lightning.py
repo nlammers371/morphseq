@@ -141,7 +141,7 @@ class ClockNPF(pl.LightningModule):
             curve_loss = scale_factor * self._curvature_loss(batch)
 
         # get total
-        loss = loss_mse + self.lambda_curv * curve_loss # + self.lambda_ang*loss_ang +  self.lambda_emb * loss_emb 
+        loss = loss_mse + self.lambda_curv * curve_loss + self.lambda_emb * loss_emb 
 
         # calculate other metrics
         logs = {
