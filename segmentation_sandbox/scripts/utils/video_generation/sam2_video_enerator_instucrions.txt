@@ -1,0 +1,71 @@
+SAM2 QC Evaluation Video Guide
+==============================
+
+This guide explains how to create a quality-control (QC) video for SAM2 segmentation results
+produced by `sam2_utils.py`. The QC video overlays each embryo's mask and bounding box along
+with simple quality metrics like fill ratio and mask confidence.
+
+---
+
+1. Overview
+-----------
+
+The QC video will:
+
+- Draw the segmentation mask (RLE or polygon) in semi-transparent color.
+- Draw the bounding box.
+- Show the embryo ID, mask confidence, and fill ratio (mask area / bbox area).
+- Highlight labels in yellow if the mask is too small, too large relative to the bbox, or below
+  a minimum area threshold.
+
+This is useful for visually inspecting the quality of SAM2 segmentation outputs.
+
+---
+
+2. Code Integration
+-------------------
+
+Two changes are needed in the codebase:
+
+A. **OverlayManager** (`overlay_manager.py`)
+
+- Add a new method `add_sam2_embryos_overlay()` that:
+  1. Decodes segmentation (RLE/polygon) into a binary mask.
+  2. Blends the mask onto the frame.
+  3. Draws the bbox.
+  4. Computes mask area, bbox area, and fill ratio.
+  5. Applies QC thresholds (min_fill_ratio, max_fill_ratio, min_area_px).
+  6. Draws a label with embryo short ID, confidence, and fill ratio.
+
+B. **VideoGenerator** (`video_generator.py`)
+
+- Add a new method `create_sam2_eval_video_from_results()` that:
+  1. Reads the SAM2 results JSON from `sam2_utils.py`.
+  2. Finds the video directory using `experiment_metadata_path`.
+  3. Iterates through frames in order.
+  4. Calls `add_sam2_embryos_overlay()` for each frame.
+  5. Saves the result to an MP4 file via OpenCV `VideoWriter`.
+
+---
+
+3. Example Usage
+----------------
+
+```python
+from pathlib import Path
+from scripts.utils.video_generation.video_generator import VideoGenerator
+
+vg = VideoGenerator()
+
+ok = vg.create_sam2_eval_video_from_results(
+    results_json_path=Path("/path/to/GroundedSam2Annotations.json"),
+    experiment_id="20240411",
+    video_id="20240411_A01",
+    output_video_path=Path("results/20240411_A01_sam2_eval.mp4"),
+    show_bbox=True,
+    show_mask=True,
+    show_metrics=True,
+    verbose=True
+)
+
+print("Video saved:", ok)

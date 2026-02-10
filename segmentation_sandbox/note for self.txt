@@ -1,0 +1,37 @@
+so i have the flags largely working, i see theres some dscontinuous masks
+
+next step is to visualize these masks and see if the qc tests are actually detecint them correctly 
+🏁 QC Summary
+========================================
+Total flags: 61
+
+Flags by category:
+  LARGE_MASK: 14
+  DISCONTINUOUS_MASK: 47
+
+Entities with flags:
+  experiments: 0
+  videos: 0
+  images: 47
+  snips: 47
+
+🕒 Last Run: 2025-08-13T14:24:00.738926 by pipeline_qc
+========================================
+
+🚫 Dry run complete. No changes were saved.
+(segmentation_grounded_sam) mdcolon@t005:~/proj/morphseq/segmentation_sandbox$ 
+[gpu-0] 0:qlogin*                                                     "t002.grid.gs.washi
+
+
+COMMAND:
+python3 scripts/pipelines/05_sam2_qc_analysis.py --input data/segmentation/grounded_sam_segmentations.json --dry-run
+
+
+oh maybe i can see if the video will work . 
+
+so they video generator DID work now, problme being though that the mask from the sam2 model isnt correct
+
+i need to see if the mask form the other branch worked differen or if its somehting wrong woth the model i general 
+
+
+so i pulled up osme of the aarchive data and the problem is im getting worse segmentatio rsults on my data, im not sure why../ 

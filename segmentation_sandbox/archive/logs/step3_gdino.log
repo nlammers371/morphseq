@@ -1,0 +1,154 @@
+🚀 Starting GroundedDINO Detection with Quality Filtering (Finetuned Model)
+======================================================================
+📱 Using device: cuda
+📊 Total images in metadata: 153154
+
+============================================================
+🔍 PHASE 1: Finetuned Model Detection (Individual Embryo)
+============================================================
+📁 Loading existing annotations from: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations_finetuned.json
+✅ Loaded 153154 images successfully
+📂 Updated metadata: 153154 total images
+💾 Finetuned annotations will be saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations_finetuned.json
+🔄 Using weights: checkpoint_best_regular.pth
+final text_encoder_type: bert-base-uncased
+GroundedDINO model loaded successfully on cuda.
+✅ Model loaded successfully
+🔧 Model-specific mode: Only considering annotations from checkpoint_best_regular.pth
+📊 Prompt 'individual embryo' (for checkpoint_best_regular.pth): 0 missing, 153154 annotated
+✅ No missing annotations found!
+💾 Saved annotations to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations_finetuned.json
+✅ Phase 1 complete: Finetuned model detection finished
+
+============================================================
+🎯 PHASE 2: High-Quality Filtering for Finetuned Model Annotations
+============================================================
+Found 153154 images with 'individual embryo' annotations from finetuned model
+🎯 Generating high-quality annotations for finetuned model...
+   Confidence threshold: 0.45
+   IoU threshold: 0.5
+🎯 Generating high-quality annotations for 153154 images
+   Prompt: 'individual embryo', Confidence: 0.45, IoU: 0.5
+   Found 154457 raw detections
+   📈 Confidence Statistics (before filtering):
+      Total detections: 154457
+      Mean: 0.565
+      Median: 0.555
+      Min: 0.350
+      Max: 0.904
+      Q90: 0.654
+      Q95: 0.754
+   After confidence filter: 148092 (6365 removed)
+   After IoU filter: 148091 (1 removed)
+   Saved experiment 20230525: 4379 images, 4382 detections
+   Saved experiment 20230531: 4900 images, 4941 detections
+   Saved experiment 20230602: 6510 images, 6658 detections
+   Saved experiment 20230613: 4783 images, 4794 detections
+   Saved experiment 20230615: 3548 images, 3561 detections
+   Saved experiment 20230620: 3805 images, 3884 detections
+   Saved experiment 20230622: 2971 images, 3075 detections
+   Saved experiment 20230627: 3304 images, 3309 detections
+   Saved experiment 20230629: 3105 images, 3336 detections
+   Saved experiment 20230830: 29 images, 29 detections
+   Saved experiment 20231110: 3775 images, 3775 detections
+   Saved experiment 20231206: 5008 images, 5008 detections
+   Saved experiment 20231207: 26 images, 26 detections
+   Saved experiment 20231208: 84 images, 84 detections
+   Saved experiment 20231218: 2942 images, 2942 detections
+   Saved experiment 20240306: 9031 images, 9103 detections
+   Saved experiment 20240307: 2868 images, 2868 detections
+   Saved experiment 20240314: 1729 images, 1729 detections
+   Saved experiment 20240404: 2690 images, 2804 detections
+   Saved experiment 20240411: 4351 images, 4351 detections
+   Saved experiment 20240418: 3671 images, 6182 detections
+   Saved experiment 20240507: 32 images, 32 detections
+   Saved experiment 20240509: 3758 images, 3758 detections
+   Saved experiment 20240509_18ss: 24 images, 24 detections
+   Saved experiment 20240509_24hpf: 31 images, 31 detections
+   Saved experiment 20240510: 56 images, 56 detections
+   Saved experiment 20240522: 8294 images, 8294 detections
+   Saved experiment 20240530: 7516 images, 7516 detections
+   Saved experiment 20240626: 10679 images, 10679 detections
+   Saved experiment 20240718: 77 images, 77 detections
+   Saved experiment 20240724: 56 images, 56 detections
+   Saved experiment 20240725: 55 images, 55 detections
+   Saved experiment 20240812: 7194 images, 7194 detections
+   Saved experiment 20240813_24hpf: 48 images, 48 detections
+   Saved experiment 20240813_30hpf: 48 images, 48 detections
+   Saved experiment 20240813_36hpf: 48 images, 48 detections
+   Saved experiment 20240813_extras: 86 images, 86 detections
+   Saved experiment 20241022: 3470 images, 3470 detections
+   Saved experiment 20241023: 4039 images, 4039 detections
+   Saved experiment 20250126: 6403 images, 6403 detections
+   Saved experiment 20250215: 7205 images, 7213 detections
+   Saved experiment 20250305: 8953 images, 8953 detections
+   Saved experiment 20250529_24hpf_ctrl_atf6: 95 images, 95 detections
+   Saved experiment 20250529_24hpf_wfs1_ctcf: 95 images, 95 detections
+   Saved experiment 20250529_30hpf_ctrl_atf6: 93 images, 93 detections
+   Saved experiment 20250529_30hpf_wfs1_ctcf: 94 images, 94 detections
+   Saved experiment 20250529_36hpf_ctrl_atf6: 69 images, 69 detections
+   Saved experiment 20250529_36hpf_ctrl_atf6_extras: 95 images, 95 detections
+   Saved experiment 20250529_36hpf_wfs1_ctcf: 96 images, 96 detections
+   Saved experiment 20250529_36hpf_wfs1_ctcf_extras: 32 images, 32 detections
+   Saved experiment 20250612_24hpf_ctrl_atf6: 94 images, 94 detections
+   Saved experiment 20250612_24hpf_wfs1_ctcf: 92 images, 92 detections
+   Saved experiment 20250612_30hpf_ctrl_atf6: 92 images, 92 detections
+   Saved experiment 20250612_30hpf_wfs1_ctcf: 95 images, 95 detections
+   Saved experiment 20250612_36hpf_ctrl_atf6: 94 images, 94 detections
+   Saved experiment 20250612_36hpf_wfs1_ctcf: 96 images, 96 detections
+   Saved experiment 20250622_chem_28C_T00_1425: 80 images, 80 detections
+   Saved experiment 20250622_chem_28C_T01_1658: 78 images, 78 detections
+   Saved experiment 20250622_chem_34C_T00_1256: 77 images, 77 detections
+   Saved experiment 20250622_chem_34C_T01_1632: 77 images, 77 detections
+   Saved experiment 20250622_chem_35C_T00_1223_check: 72 images, 72 detections
+   Saved experiment 20250622_chem_35C_T01_1605: 69 images, 69 detections
+   Saved experiment 20250623_chem_28C_T02_1259: 80 images, 81 detections
+   Saved experiment 20250623_chem_34C_T02_1231: 75 images, 75 detections
+   Saved experiment 20250623_chem_35C_T02_1204: 71 images, 71 detections
+   Saved experiment 20250624_chem02_28C_T00_1356: 82 images, 83 detections
+   Saved experiment 20250624_chem02_28C_T01_1808: 81 images, 81 detections
+   Saved experiment 20250624_chem02_34C_T00_1243: 70 images, 70 detections
+   Saved experiment 20250624_chem02_34C_T01_1739: 69 images, 69 detections
+   Saved experiment 20250624_chem02_35C_T00_1216: 67 images, 67 detections
+   Saved experiment 20250624_chem02_35C_T01_1711: 67 images, 67 detections
+   Saved experiment 20250625_chem02_28C_T02_1332: 78 images, 78 detections
+   Saved experiment 20250625_chem02_34C_T02_1301: 70 images, 70 detections
+   Saved experiment 20250625_chem02_35C_T02_1228: 69 images, 69 detections
+   Saved experiment 20250703_chem3_28C_T00_1325: 56 images, 56 detections
+   Saved experiment 20250703_chem3_34C_T00_1131: 56 images, 56 detections
+   Saved experiment 20250703_chem3_34C_T01_1457: 56 images, 56 detections
+   Saved experiment 20250703_chem3_35C_T00_1101: 56 images, 56 detections
+   Saved experiment 20250703_chem3_35C_T01_1437: 56 images, 56 detections
+   Saved experiment 20250716_chem4_28C_T00_1158: 80 images, 80 detections
+   Saved experiment 20250716_chem4_28C_T01_1400: 80 images, 80 detections
+   Saved experiment 20250716_chem4_34C_T00_1014: 84 images, 85 detections
+   Saved experiment 20250716_chem4_35C_T00_1045: 79 images, 79 detections
+   📊 Final summary:
+      Original: 154457 detections
+      Final: 148091 detections
+      Retention: 95.9%
+      Experiments: 83
+📊 Finetuned Model Filtering Summary:
+   Original detections: 154457
+   Confidence removed: 6365
+   IoU removed: 1
+   Final detections: 148091
+   Retention rate: 95.9%
+   Final images: 144748
+💾 Saved annotations to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations_finetuned.json
+✅ Phase 3 complete: Finetuned model quality filtering finished
+
+============================================================
+📊 FINAL PIPELINE SUMMARY
+============================================================
+
+📁 FINETUNED MODEL ANNOTATIONS:
+   File: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/gdino_annotations/gdino_annotations_finetuned.json
+   📊 Finetuned Model Stats:
+      • Images with detections: 153154
+      • Total detections: 154457
+      • High-quality detections: 0
+      • High-quality retention rate: 0.0%
+
+🔍 MODEL COMPARISON SUMMARY:
+   📈 Detection Counts:

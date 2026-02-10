@@ -1,0 +1,20 @@
+🚀 Starting GroundingDINO Detection with Quality Filtering (Module 2)
+======================================================================
+📱 Using device: cpu
+📊 Loaded metadata: ExperimentMetadata(3 experiments, 268 videos, 9165 images)
+🎯 Processing entities: ['20231206', '20240418', '20250612_30hpf_ctrl_atf6']
+   📁 Experiment 20231206: 5251 images
+   📁 Experiment 20240418: 3818 images
+   📁 Experiment 20250612_30hpf_ctrl_atf6: 96 images
+📊 Found: 3 experiments, 0 videos, 0 images
+
+============================================================
+🔍 PHASE 1: GroundingDINO Detection ('individual embryo')
+============================================================
+📂 Loaded experiment metadata: 9165 total images
+💾 Annotations will be saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/detections/gdino_detections.json
+final text_encoder_type: bert-base-uncased
+GroundedDINO model loaded successfully on cpu.
+✅ Model loaded successfully
+🔄 Processing annotations for prompt: 'individual embryo'
+❌ Error in Phase 1 (detection): 'Namespace' object has no attribute 'experiment_ids'

@@ -93,10 +93,16 @@ def format_2d_plotly(fig, axis_labels=None, font_size=14, marker_size=6,
     )
 
     try:
-        fig.update_traces(
-            error_x=dict(color="white", width=0),
-            error_y=dict(color="white", width=0)
-        )
+        if theme == "light":
+            fig.update_traces(
+                error_x=dict(color="black", width=0),
+                error_y=dict(color="black", width=0)
+            )
+        else:
+            fig.update_traces(
+                error_x=dict(color="white", width=0),
+                error_y=dict(color="white", width=0)
+            )
     except:
         pass
 

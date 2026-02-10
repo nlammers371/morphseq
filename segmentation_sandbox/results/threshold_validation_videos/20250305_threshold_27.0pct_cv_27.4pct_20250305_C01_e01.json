@@ -1,0 +1,21 @@
+{
+  "threshold_level": "27.0%",
+  "experiment_id": "20250305",
+  "embryo_id": "20250305_C01_e01",
+  "actual_cv": "27.4%",
+  "video_id": "20250305_C01",
+  "embryo_stats": {
+    "mean_area": 40586.93823529412,
+    "std_area": 11135.320548980082,
+    "frame_count": 340,
+    "area_range": [
+      24460.0,
+      75629.0
+    ]
+  },
+  "threshold_interpretation": {
+    "would_be_flagged_27pct": true,
+    "would_be_flagged_32pct": false,
+    "flagging_level": "moderate_priority"
+  }
+}

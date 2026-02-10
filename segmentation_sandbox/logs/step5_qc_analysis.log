@@ -1,0 +1,52 @@
+🔍 Starting QC analysis on: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+🔄 Initializing entity tracking...
+✅ Entity tracking initialized in 0.00s
+   New entities: 1 experiments, 92 videos, 92 images, 92 snips
+🔍 Loaded GSAM annotations from /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+📊 Found 0 already processed snips
+
+🔍 Starting QC analysis with author='pipeline_qc'
+📊 Entities to process: 1 experiments, 92 videos, 92 images, 92 snips
+🚀 Running quality checks...
+🔍 Checking segmentation variability...
+   ✓ Segmentation variability check completed in 0.00s
+🔍 Checking masks on image edges...
+   ✓ Edge detection check completed in 0.00s (0 masks flagged)
+🔍 Checking for overlapping masks...
+   ✓ Overlapping masks check completed in 0.00s (0 images flagged)
+🔍 Checking for unusually large masks...
+   ✓ Large mask check completed in 0.00s (0 masks flagged)
+🔍 Checking for unusually small masks...
+   ✓ Small mask check completed in 0.00s (0 masks flagged)
+🔍 Checking for detection failures...
+   ✓ Detection failure check completed in 0.00s (0 images flagged)
+   DEBUG STATS: Checked 92 images, found 92 total embryos
+   Average embryos per image: 1.0
+   Current threshold: 1 embryos minimum per image
+🔍 Checking for discontinuous masks...
+   ✓ Discontinuous mask check completed in 0.00s (0 masks flagged)
+✅ All QC checks completed in 0.00s
+📋 Generating overview section...
+📊 Generated overview - no flags found in the system
+💾 QC results updated in memory (not saved to disk)
+📦 Created backup: grounded_sam_segmentations.backup.20250819_053925.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250819_053920.json
+💾 Results saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+
+🏁 QC Summary
+========================================
+Total flags: 0
+
+Flags by category:
+
+Entities with flags:
+  experiments: 0
+  videos: 0
+  images: 0
+  snips: 0
+
+✅ No quality issues detected!
+
+🕒 Last Run: 2025-08-19T05:39:25.667335 by pipeline_qc
+========================================
+✅ QC analysis completed successfully!

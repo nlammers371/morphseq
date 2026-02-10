@@ -9,3 +9,5 @@ data/*
 
 /models/*
 !/models/.gitkeep
+
+*.mp4

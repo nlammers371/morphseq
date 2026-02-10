@@ -1,0 +1,42 @@
+{
+  "phenotypes": [
+    "NORMAL",
+    "EDEMA", 
+    "DEAD",
+    "CONVERGENCE_EXTENSION",
+    "BLUR",
+    "CORRUPT"
+  ],
+  "genes": [
+    "WT",
+    "tmem67",
+    "lmx1b",
+    "sox9a",
+    "cep290",
+    "b9d2",
+    "rpgrip1l"
+  ],
+  "zygosity": [
+    "homozygous",
+    "heterozygous", 
+    "compound_heterozygous",
+    "crispant",
+    "morpholino"
+  ],
+  "treatments": [
+    "control",
+    "DMSO",
+    "PTU",
+    "BIO",
+    "SB431542",
+    "DAPT",
+    "heat_shock",
+    "cold_shock"
+  ],
+  "flags": [
+    "MOTION_BLUR",
+    "OUT_OF_FOCUS",
+    "DARK",
+    "CORRUPT"
+  ]
+}

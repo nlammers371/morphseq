@@ -1,0 +1,20 @@
+{
+  "category": "extreme",
+  "cv_value": 0.3999799869082682,
+  "cv_percentage": "40.0%",
+  "experiment_id": "20250305",
+  "video_id": "20250305_D03",
+  "embryo_id": "20250305_D03_e01",
+  "mean_area": 28684.923529411764,
+  "frame_count": 340,
+  "area_range": [
+    21236.0,
+    63902.0
+  ],
+  "video_path": "results/threshold_comparison_videos/extreme_cv_40.0pct/20250305_D03_20250305_D03_e01_cv_40.0pct.mp4",
+  "threshold_analysis": {
+    "current_15pct": "flagged",
+    "recommended_27pct": "flagged",
+    "strict_32pct": "flagged"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "script_version": "sam2_utils.py (refactored)",
+  "creation_time": "2025-08-04T12:14:15.681736",
+  "last_updated": "2025-08-04T12:14:15.688987",
+  "gsam_id": "gsam_3961",
+  "seed_annotations_path": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/test_detections.json",
+  "experiment_metadata_path": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/scripts/pipelines/data/raw_data_organized/experiment_metadata.json",
+  "target_prompt": "individual embryo",
+  "segmentation_format": "rle",
+  "device": "cuda",
+  "snip_ids": [
+    "test_embryo_s0000"
+  ],
+  "experiments": {},
+  "entity_tracker": {
+    "creation_time": "2025-08-04T12:14:15.688829",
+    "last_updated": "2025-08-04T12:14:15.688839",
+    "pipeline_step": "module_2_segmentation",
+    "entities": {
+      "experiments": [],
+      "videos": [],
+      "images": [],
+      "embryos": [],
+      "snips": []
+    }
+  }
+}

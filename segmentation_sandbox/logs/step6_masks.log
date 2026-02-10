@@ -1,0 +1,16 @@
+📋 Processing specific experiments: ['20250612_30hpf_ctrl_atf6']
+🚀 Initializing SimpleMaskExporter...
+   📁 SAM2 annotations: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+   📁 Output directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/exported_masks
+   🎨 Export format: png
+📊 Export status:
+   Total images: 92
+   Already exported: 0
+   Missing/new: 92
+   Available experiments: ['20250612_30hpf_ctrl_atf6']
+✅ Processing 1 experiments: ['20250612_30hpf_ctrl_atf6']
+🔄 Starting export (exporting missing masks)...
+✅ Export completed successfully!
+   📊 92 images exported
+   📁 20250612_30hpf_ctrl_atf6: 92 images
+   📈 Total exported: 92/92 images

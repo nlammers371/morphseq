@@ -1,0 +1,1 @@
+the scripts/pipelines/run_pipeline.sh dont all have force-reprocess CLI argument/capabiliry  this should be impmented at some future dae. 
