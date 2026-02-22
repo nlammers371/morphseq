@@ -3,9 +3,11 @@
 Re-generate QC and viz plots from a cached phase0 feature_dataset.
 
 Usage:
-    python scripts/reviz_run003.py
+    python scripts/reviz_run003.py [run_name]
 
-Loads feature_dataset from phase0_run_003 and re-runs Step 2 (QC) and
+    run_name: e.g. phase0_run_003 (default) or phase0_run_004
+
+Loads feature_dataset from the specified run and re-runs Step 2 (QC) and
 Step 3 (visualization) with the fixed origin= contract.
 """
 
@@ -28,8 +30,10 @@ import zarr
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-RUN_DIR = Path(__file__).resolve().parent / "output" / "phase0_run_003"
+run_name = sys.argv[1] if len(sys.argv) > 1 else "phase0_run_003"
+RUN_DIR = Path(__file__).resolve().parent / "output" / run_name
 DATASET_DIR = RUN_DIR / "feature_dataset"
+logger.info("Run: %s", run_name)
 
 # ── load cached data ─────────────────────────────────────────────────────────
 logger.info("Loading feature dataset from %s", DATASET_DIR)
