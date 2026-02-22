@@ -135,7 +135,7 @@ def run_phase0(
     logger.info("PHASE 0 STEP 2: QC + Filtering")
     logger.info("=" * 60)
 
-    from p0_qc import run_qc_suite
+    from viz import run_qc_suite
     qc_dir = out_dir / "qc"
     outlier_flag, qc_stats = run_qc_suite(
         X, y, total_cost_C, mask_ref_canonical, metadata_df, sample_ids,
@@ -154,7 +154,7 @@ def run_phase0(
     logger.info("PHASE 0 STEP 3: Visualizations")
     logger.info("=" * 60)
 
-    from p0_viz import plot_cost_density_suite, plot_displacement_suite
+    from viz import plot_cost_density_suite, plot_displacement_suite
     viz_dir = out_dir / "viz"
 
     plot_cost_density_suite(
@@ -178,7 +178,7 @@ def run_phase0(
     logger.info("=" * 60)
 
     from p0_s_coordinate import build_s_coordinate
-    from p0_viz import plot_s_map
+    from viz import plot_s_map
 
     S_map_ref, tangent_ref, normal_ref, s_info = build_s_coordinate(
         mask_ref_canonical, config=config.s_coord,
@@ -230,7 +230,7 @@ def run_phase0(
     logger.info("=" * 60)
 
     from p0_classification import run_phase0_classification, compute_auroc_per_bin
-    from p0_viz import plot_auroc_vs_sbin, plot_coefficient_profile
+    from viz import plot_auroc_vs_sbin, plot_coefficient_profile
 
     class_results = run_phase0_classification(sbin_df, n_folds=config.classification.n_cv_folds)
     results["classification"] = {
@@ -263,7 +263,7 @@ def run_phase0(
     logger.info("=" * 60)
 
     from p0_interval_search import search_all_intervals, select_best_interval, run_sanity_checks
-    from p0_viz import plot_interval_results
+    from viz import plot_interval_results
 
     interval_df = search_all_intervals(
         sbin_df, feature_cols=["cost_mean"], K=K,
@@ -291,7 +291,7 @@ def run_phase0(
     logger.info("=" * 60)
 
     from p0_nulls import run_permutation_null_auroc_max, run_permutation_null_interval, run_bootstrap_stability
-    from p0_viz import plot_permutation_null, plot_bootstrap_interval_stability
+    from viz import plot_permutation_null, plot_bootstrap_interval_stability
 
     # Observed max AUROC
     auroc_cost_df = compute_auroc_per_bin(sbin_df, "cost_mean", exclude_outliers=True)

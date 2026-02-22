@@ -278,6 +278,9 @@ def main():
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT, help="Root for Build02 yolk masks")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--dry-run", action="store_true", help="Load data and print summary without running OT")
+    parser.add_argument("--fast", action="store_true",
+                        help="Use epsilon=1e-2 (instead of 1e-4) for faster smoke-test runs. "
+                             "Not for production — results are less precise.")
     args = parser.parse_args()
     
     # Parse stage window
@@ -348,9 +351,27 @@ def main():
     # 4. Run Phase 0 pipeline
     logger.info("\n[4/5] Running Phase 0 pipeline...")
     logger.info("This may take 10-30 minutes depending on OT computation time.")
-    
+
     config = Phase0RunConfig()
-    
+
+    uot_config = None
+    fast_backend = None
+    if args.fast:
+        from analyze.utils.optimal_transport.config import UOTConfig
+        from analyze.utils.optimal_transport.backends.pot_backend import POTBackend
+        _CANONICAL_MAX_DIM = 576  # max(256, 576) — matches p0_ot_maps default
+        uot_config = UOTConfig(
+            epsilon=1e-2,
+            marginal_relaxation=10.0,
+            max_support_points=3000,
+            store_coupling=True,
+            random_seed=42,
+            metric="sqeuclidean",
+            coord_scale=1.0 / _CANONICAL_MAX_DIM,
+        )
+        fast_backend = POTBackend()
+        logger.warning("--fast mode: epsilon=1e-2 + POTBackend (smoke test only, not production quality)")
+
     try:
         results = run_phase0(
             mask_ref=mask_ref_raw,
@@ -363,6 +384,8 @@ def main():
             yolk_ref=yolk_ref_raw,
             yolk_targets=yolk_masks_raw,
             source_id=f"{args.reference_embryo_id}|frame_{int(args.reference_frame_index)}",
+            uot_config=uot_config,
+            backend=fast_backend,
             out_dir=args.output_dir,
         )
         

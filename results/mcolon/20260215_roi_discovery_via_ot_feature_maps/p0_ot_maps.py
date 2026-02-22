@@ -137,7 +137,7 @@ def run_single_ot(
     # Solver stage: UOT is a pure consumer of canonical masks
     # ------------------------------------------------------------------
     working_cfg = WorkingGridConfig(
-        downsample_factor=1,
+        downsample_factor=4,
         padding_px=16,
         mass_mode=MassMode.UNIFORM,
     )

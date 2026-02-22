@@ -7,8 +7,8 @@ Usage:
 
     run_name: e.g. phase0_run_003 (default) or phase0_run_004
 
-Loads feature_dataset from the specified run and re-runs Step 2 (QC) and
-Step 3 (visualization) with the fixed origin= contract.
+Loads feature_dataset via Phase0Loader and re-runs Step 2 (QC) and
+Step 3 (visualization) with the enforced coordinate contract.
 """
 
 from __future__ import annotations
@@ -23,52 +23,49 @@ sys.path.insert(0, str(ROI_DIR))
 
 import json
 import logging
-import numpy as np
-import pandas as pd
-import zarr
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 run_name = sys.argv[1] if len(sys.argv) > 1 else "phase0_run_003"
 RUN_DIR = Path(__file__).resolve().parent / "output" / run_name
-DATASET_DIR = RUN_DIR / "feature_dataset"
 logger.info("Run: %s", run_name)
 
-# ── load cached data ─────────────────────────────────────────────────────────
-logger.info("Loading feature dataset from %s", DATASET_DIR)
+# ── load cached data via Phase0Loader ────────────────────────────────────────
+from io.phase0 import Phase0Loader
 
-z = zarr.open(str(DATASET_DIR / "features.zarr"), "r")
+loader = Phase0Loader(RUN_DIR)
+logger.info("%s", loader)
 
-X = z["X"][:]                                    # (N, H, W, C)
-total_cost_C = z["qc/total_cost_C"][:]           # (N,)
-mask_ref_canonical = z["mask_ref"][:]            # (H, W)
-S_map_cached = z["optional/S_map_ref"][:]        # (H, W)
+X = loader.get_X()
+y = loader.get_y()
+total_cost_C = loader.get_total_cost_C()
+mask_ref_canonical = loader.get_mask_ref()
+sample_ids = loader.sample_ids
+metadata_df = loader.metadata_df
 
-if "optional/target_masks_canonical" in z:
-    aligned_target_masks = z["optional/target_masks_canonical"][:]  # (N, H, W)
-else:
-    aligned_target_masks = None
+S_map_cached = loader.S_map
+if S_map_cached is None:
+    logger.warning("S_map not in dataset — s_map_ref.png will be skipped")
+
+aligned_target_masks = loader.target_masks
+if aligned_target_masks is None:
     logger.warning("target_masks_canonical not in zarr — QC-2 overlays will be skipped")
 
-metadata_df = pd.read_parquet(DATASET_DIR / "metadata.parquet")
-y = z["y"][:]  # (N,) int — labels from zarr
-sample_ids = metadata_df["sample_id"].tolist()
-
-alignment_debug_df = None
-debug_path = DATASET_DIR / "alignment_debug.parquet"
-if debug_path.exists():
-    alignment_debug_df = pd.read_parquet(debug_path)
+alignment_debug_df = loader.alignment_debug
+if alignment_debug_df is not None:
     logger.info("Loaded alignment debug: %d rows", len(alignment_debug_df))
 
-with open(DATASET_DIR / "manifest.json") as f:
-    manifest = json.load(f)
-logger.info("Manifest: %s", {k: v for k, v in manifest.items() if k != "sample_ids"})
+manifest_path = RUN_DIR / "feature_dataset" / "manifest.json"
+if manifest_path.exists():
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    logger.info("Manifest: %s", {k: v for k, v in manifest.items() if k != "sample_ids"})
 
 logger.info("X shape: %s, mask_ref: %s, N=%d", X.shape, mask_ref_canonical.shape, len(y))
 
 # ── re-run QC (step 2) ────────────────────────────────────────────────────────
-from p0_qc import run_qc_suite
+from viz import run_qc_suite
 
 qc_dir = RUN_DIR / "qc"
 logger.info("Re-running QC suite → %s", qc_dir)
@@ -83,15 +80,15 @@ outlier_flag, qc_stats = run_qc_suite(
 logger.info("QC done: %d outliers flagged", qc_stats["n_outliers"])
 
 # ── re-run viz (step 3) ───────────────────────────────────────────────────────
-from p0_viz import plot_cost_density_suite, plot_s_map
+from viz import plot_cost_density_suite, plot_s_map
 
 viz_dir = RUN_DIR / "viz"
 viz_dir.mkdir(parents=True, exist_ok=True)
 logger.info("Re-running viz suite → %s", viz_dir)
 
-# Use cached S_map (avoid re-running centerline computation)
-plot_s_map(S_map_cached, mask_ref_canonical, save_path=viz_dir / "s_map_ref.png")
-logger.info("Saved s_map_ref.png")
+if S_map_cached is not None:
+    plot_s_map(S_map_cached, mask_ref_canonical, save_path=viz_dir / "s_map_ref.png")
+    logger.info("Saved s_map_ref.png")
 
 plot_cost_density_suite(
     X, y, mask_ref_canonical, outlier_flag,
