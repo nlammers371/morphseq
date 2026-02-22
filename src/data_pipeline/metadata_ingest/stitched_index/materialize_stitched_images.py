@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Iterable
 import re
@@ -9,7 +10,15 @@ import re
 import nd2
 import numpy as np
 import pandas as pd
+from skimage import exposure
 import skimage.io as skio
+import skimage.util as skutil
+import torch
+
+from data_pipeline.image_building.shared.log_focus import LoG_focus_stacker
+from data_pipeline.image_building.shared.log_focus import im_rescale
+
+log = logging.getLogger(__name__)
 
 
 def _parse_selected_wells(selected_wells: Iterable[str] | None) -> set[str]:
@@ -107,6 +116,7 @@ def _materialize_yx1_image(
     time_int: int,
     series_index: int,
     channel_index: int,
+    device: str,
 ) -> np.ndarray:
     if dask_arr.ndim == 6:
         stack = dask_arr[time_int, series_index, :, channel_index, :, :].compute()
@@ -115,45 +125,262 @@ def _materialize_yx1_image(
     else:
         raise ValueError(f"Unexpected ND2 dimensions: {dask_arr.ndim}")
 
-    projected = np.max(stack, axis=0)
-    if projected.dtype != np.uint16:
-        projected = projected.astype(np.uint16)
-    return projected
+    # Match legacy YX1 processing: percentile-rescale stack then LoG focus stack.
+    norm, _, _ = im_rescale(stack)
+    ff, _ = LoG_focus_stacker(norm.astype(np.float32), filter_size=3, device=device)
+    ff_np = ff.detach().cpu().numpy() if torch.is_tensor(ff) else np.asarray(ff)
+    ff_u16 = np.clip(ff_np, 0, 65535).astype(np.uint16)
+    return skutil.img_as_ubyte(ff_u16)
 
 
-def _infer_keyence_stack_lookup(raw_images_dir: Path) -> dict[tuple[str, int], list[Path]]:
-    lookup: dict[tuple[str, int], list[Path]] = {}
+def _well_from_w_index(raw: int) -> str:
+    row = (raw - 1) // 12
+    col = (raw - 1) % 12 + 1
+    return f"{chr(65 + row)}{col:02d}"
+
+
+def _extract_keyence_well_and_tile(path: Path) -> tuple[str | None, int]:
+    tile_id: int | None = None
+
+    for part in path.parts:
+        p_match = re.fullmatch(r"P(\d+)", part, flags=re.IGNORECASE)
+        if p_match:
+            tile_id = int(p_match.group(1))
+            break
+
+    for part in path.parts:
+        xy_match = re.fullmatch(r"XY(\d+)([A-Za-z]?)", part, flags=re.IGNORECASE)
+        if xy_match:
+            xy_raw = int(xy_match.group(1))
+            suffix = xy_match.group(2)
+            if suffix:
+                well_index = f"{suffix.upper()}{xy_raw:02d}"
+                if tile_id is None:
+                    tile_id = max(ord(suffix.lower()) - 96, 1)
+            else:
+                well_index = _well_from_w_index(xy_raw)
+            return well_index, tile_id or 1
+
+    for part in path.parts:
+        w_match = re.fullmatch(r"W0?(\d+)", part, flags=re.IGNORECASE)
+        if w_match:
+            return _well_from_w_index(int(w_match.group(1))), tile_id or 1
+
+    name_match = re.search(r"([A-H](?:0[1-9]|1[0-2]))", path.name)
+    if name_match:
+        return name_match.group(1), tile_id or 1
+
+    return None, tile_id or 1
+
+
+def _parse_keyence_time_and_z(path: Path) -> tuple[int, int] | None:
+    match = re.search(r"(?:_T|_)(\d+)_Z(\d+)_CH\d+", path.name, flags=re.IGNORECASE)
+    if not match:
+        return None
+    time_raw = int(match.group(1))
+    time_int = max(time_raw - 1, 0)
+    z_index = int(match.group(2))
+    return time_int, z_index
+
+
+def _infer_keyence_stack_lookup(raw_images_dir: Path) -> dict[tuple[str, int], dict[int, list[Path]]]:
+    lookup: dict[tuple[str, int], dict[int, list[tuple[int, Path]]]] = {}
     for path in raw_images_dir.rglob("*CH*.tif"):
-        well_index = None
-        for part in path.parts:
-            if part.startswith("XY") and part[2:].isdigit():
-                row = (int(part[2:]) - 1) // 12
-                col = (int(part[2:]) - 1) % 12 + 1
-                well_index = f"{chr(65 + row)}{col:02d}"
-                break
+        well_index, tile_id = _extract_keyence_well_and_tile(path)
         if well_index is None:
             continue
 
-        match = re.search(r"_(\d+)_Z\d+_CH\d+", path.name)
-        if not match:
+        parsed = _parse_keyence_time_and_z(path)
+        if parsed is None:
             continue
-        time_raw = int(match.group(1))
-        time_int = max(time_raw - 1, 0)
+        time_int, z_index = parsed
+        key = (well_index, time_int)
+        lookup.setdefault(key, {}).setdefault(tile_id, []).append((z_index, path))
 
-        lookup.setdefault((well_index, time_int), []).append(path)
+    out: dict[tuple[str, int], dict[int, list[Path]]] = {}
+    for key, tile_dict in lookup.items():
+        out[key] = {}
+        for tile_id, z_pairs in tile_dict.items():
+            out[key][tile_id] = [path for _, path in sorted(z_pairs, key=lambda pair: pair[0])]
+    return out
 
-    for key, values in lookup.items():
-        values.sort()
-    return lookup
 
-
-def _materialize_keyence_image(stack_paths: list[Path]) -> np.ndarray:
+def _materialize_keyence_tile_projection(stack_paths: list[Path]) -> np.ndarray:
     frames = [skio.imread(path) for path in stack_paths]
     stack = np.stack(frames, axis=0)
     projected = np.max(stack, axis=0)
     if projected.dtype != np.uint16:
         projected = projected.astype(np.uint16)
     return projected
+
+
+def _resolve_device(device_preference: str | None) -> str:
+    pref = str(device_preference or "cuda").strip().lower()
+    if pref.startswith("cuda") and torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+def _compute_joint_percentile_bounds(stacks: list[np.ndarray]) -> tuple[float, float]:
+    if not stacks:
+        return 0.0, 1.0
+
+    max_samples = 1_000_000
+    frac = 0.01
+    total_vox = int(sum(stack.size for stack in stacks))
+    n_want = int(min(max_samples, max(1, int(total_vox * frac))))
+    per_stack = int(max(1, n_want // len(stacks)))
+
+    rng = np.random.default_rng(42)
+    samples = []
+    for stack in stacks:
+        n = int(stack.size)
+        k = min(n, per_stack)
+        if k >= n:
+            samples.append(stack.reshape(-1))
+        else:
+            idx = rng.choice(n, k, replace=False)
+            samples.append(stack.reshape(-1)[idx])
+
+    all_samp = np.concatenate(samples)
+    lo, hi = np.percentile(all_samp, [0.1, 99.9])
+    if float(hi) <= float(lo):
+        hi = lo + 1.0
+    return float(lo), float(hi)
+
+
+def _keyence_filter_size(micrometers_per_pixel: float, ff_filter_res_um: float) -> int:
+    pixel_size = float(micrometers_per_pixel) if micrometers_per_pixel and micrometers_per_pixel > 0 else np.nan
+    if not np.isfinite(pixel_size) or pixel_size <= 0:
+        return 3
+    filter_rad = max(1, int(round(float(ff_filter_res_um) / pixel_size)))
+    return int(2 * filter_rad + 1)
+
+
+def _materialize_keyence_ff_tiles_with_log(
+    tile_stacks: dict[int, list[Path]],
+    device: str,
+    filter_size: int,
+) -> list[np.ndarray]:
+    tile_ids = sorted(tile_stacks.keys())
+    stacks = []
+    for tile_id in tile_ids:
+        frames = [skio.imread(path) for path in tile_stacks[tile_id]]
+        stacks.append(np.stack(frames, axis=0))
+
+    lo, hi = _compute_joint_percentile_bounds(stacks)
+    ff_tiles: list[np.ndarray] = []
+    for stack in stacks:
+        norm = exposure.rescale_intensity(stack, in_range=(lo, hi), out_range=(0, 1)).astype(np.float32)
+        ff, _ = LoG_focus_stacker(norm, filter_size=filter_size, device=device)
+        ff_np = ff.detach().cpu().numpy() if torch.is_tensor(ff) else np.asarray(ff)
+        ff_tiles.append(skutil.img_as_ubyte(np.clip(ff_np, 0.0, 1.0)))
+    return ff_tiles
+
+
+def _keyence_orientation(experiment: str) -> str:
+    year_match = re.match(r"(\d{4})", experiment)
+    if year_match and int(year_match.group(1)) < 2024:
+        return "vertical"
+    return "horizontal"
+
+
+def _keyence_master_params_path(raw_images_dir: Path, experiment: str) -> Path | None:
+    for parent in raw_images_dir.parents:
+        if parent.name == "raw_image_data":
+            candidate = parent.parent / "built_image_data" / "Keyence" / "FF_images" / experiment / "master_params.json"
+            return candidate if candidate.exists() else None
+    return None
+
+
+def _trim_to_shape(image: np.ndarray, target: tuple[int, int]) -> np.ndarray:
+    target_y, target_x = target
+    image_y, image_x = image.shape[:2]
+
+    pad_y = max(0, target_y - image_y)
+    pad_x = max(0, target_x - image_x)
+    if pad_y or pad_x:
+        image = np.pad(
+            image,
+            (
+                (pad_y // 2, pad_y - pad_y // 2),
+                (pad_x // 2, pad_x - pad_x // 2),
+            ),
+            mode="constant",
+        )
+
+    start_y = (image.shape[0] - target_y) // 2
+    start_x = (image.shape[1] - target_x) // 2
+    return image[start_y : start_y + target_y, start_x : start_x + target_x]
+
+
+def _keyence_canvas_shape(n_tiles: int, orientation: str) -> tuple[int, int]:
+    shape_map = {
+        1: np.array([480, 640]),
+        2: np.array([800, 630]),
+        3: np.array([1140, 630]) if orientation == "vertical" else np.array([1140, 480]),
+    }
+    if n_tiles in shape_map:
+        return tuple(shape_map[n_tiles].astype(int))
+    # Fallback for non-standard tile counts: preserve tile geometry by concatenation.
+    return (0, 0)
+
+
+def _stitch_keyence_tile_projections(
+    tile_projections: list[np.ndarray],
+    orientation: str,
+    master_params_path: Path | None,
+) -> np.ndarray:
+    tile_images = [
+        img if img.dtype == np.uint8 else skutil.img_as_ubyte(img)
+        for img in tile_projections
+    ]
+
+    n_tiles = len(tile_images)
+    if n_tiles == 1:
+        stitched = tile_images[0]
+    else:
+        try:
+            from stitch2d import StructuredMosaic
+            from stitch2d.tile import OpenCVTile, Tile
+
+            if master_params_path is not None and master_params_path.exists():
+                mosaic = StructuredMosaic(
+                    [Tile(img) for img in tile_images],
+                    dim=len(tile_images),
+                    origin="upper left",
+                    direction=orientation,
+                    pattern="raster",
+                )
+                mosaic.load_params(str(master_params_path))
+            else:
+                mosaic = StructuredMosaic(
+                    [OpenCVTile(img) for img in tile_images],
+                    dim=len(tile_images),
+                    origin="upper left",
+                    direction=orientation,
+                    pattern="raster",
+                )
+                mosaic.align()
+                if len(mosaic.params.get("coords", {})) != len(tile_images):
+                    raise RuntimeError("incomplete keyence tile alignment")
+            mosaic.reset_tiles()
+            mosaic.smooth_seams()
+            stitched = mosaic.stitch()
+        except Exception as exc:  # pragma: no cover - exercised in integration with stitch2d
+            log.warning("Falling back to deterministic Keyence tile concatenation: %s", exc)
+            concat_axis = 0 if orientation == "vertical" else 1
+            stitched = np.concatenate(tile_images, axis=concat_axis)
+
+    if n_tiles > 1 and orientation == "horizontal":
+        stitched = stitched.T
+
+    target = _keyence_canvas_shape(n_tiles, orientation)
+    if target != (0, 0):
+        stitched = _trim_to_shape(stitched, target)
+
+    # Legacy Keyence stitched_FF_images convention is intensity inversion.
+    return np.iinfo(stitched.dtype).max - stitched
 
 
 def materialize_stitched_images(
@@ -167,6 +394,9 @@ def materialize_stitched_images(
     selected_wells: Iterable[str] | None,
     overwrite: bool,
     output_image_extension: str = "jpg",
+    device_preference: str = "cuda",
+    keyence_projection_method: str = "log",
+    keyence_ff_filter_res_um: float = 3.0,
     done_flag: Path | None = None,
 ) -> pd.DataFrame:
     """Materialize stitched images for selected wells and emit stitched-image index."""
@@ -193,8 +423,13 @@ def materialize_stitched_images(
     yx1_nd2_files = sorted(raw_images_dir.glob("*.nd2")) if microscope == "YX1" else []
     yx1_source = yx1_nd2_files[0] if yx1_nd2_files else raw_images_dir
     keyence_lookup = _infer_keyence_stack_lookup(raw_images_dir) if microscope == "Keyence" else {}
+    keyence_orientation = _keyence_orientation(experiment)
+    keyence_master_params = _keyence_master_params_path(raw_images_dir, experiment) if microscope == "Keyence" else None
+    keyence_device = _resolve_device(device_preference)
+    yx1_device = _resolve_device(device_preference)
     yx1_series_map = _build_yx1_well_to_series_map(mapping_csv) if microscope == "YX1" else {}
     image_extension = _normalize_extension(output_image_extension)
+    keyence_method = str(keyence_projection_method or "log").strip().lower()
 
     nd = None
     dask_arr = None
@@ -222,6 +457,8 @@ def materialize_stitched_images(
             output_path = stitched_root / well_index / channel_id / f"{image_id}.{image_extension}"
             width = int(float(row.get("image_width_px", 512)))
             height = int(float(row.get("image_height_px", 512)))
+            materialized_width = width
+            materialized_height = height
 
             status = "placeholder"
             source_artifact: Path
@@ -236,7 +473,9 @@ def materialize_stitched_images(
                         time_int=time_int,
                         series_index=series_index,
                         channel_index=channel_index,
+                        device=yx1_device,
                     )
+                    materialized_height, materialized_width = image.shape[:2]
                     status = _write_image(output_path, image, overwrite=overwrite, image_extension=image_extension)
                 else:
                     status = _write_placeholder_image(
@@ -250,11 +489,37 @@ def materialize_stitched_images(
                 source_artifact = yx1_source
                 source_kind = "yx1_nd2_zstack"
             elif microscope == "Keyence":
-                stack_paths = keyence_lookup.get((well_index, time_int), [])
-                if stack_paths:
-                    image = _materialize_keyence_image(stack_paths)
+                tile_stacks = keyence_lookup.get((well_index, time_int), {})
+                if tile_stacks:
+                    if keyence_method == "log":
+                        mpp = float(row.get("micrometers_per_pixel", np.nan))
+                        filter_size = _keyence_filter_size(
+                            micrometers_per_pixel=mpp,
+                            ff_filter_res_um=float(keyence_ff_filter_res_um),
+                        )
+                        tile_projections = _materialize_keyence_ff_tiles_with_log(
+                            tile_stacks=tile_stacks,
+                            device=keyence_device,
+                            filter_size=filter_size,
+                        )
+                    else:
+                        tile_projections = [
+                            _materialize_keyence_tile_projection(tile_stacks[tile_id])
+                            for tile_id in sorted(tile_stacks.keys())
+                        ]
+                    image = _stitch_keyence_tile_projections(
+                        tile_projections=tile_projections,
+                        orientation=keyence_orientation,
+                        master_params_path=keyence_master_params,
+                    )
+                    materialized_height, materialized_width = image.shape[:2]
                     status = _write_image(output_path, image, overwrite=overwrite, image_extension=image_extension)
-                    source_artifact = stack_paths[0]
+                    source_artifact = tile_stacks[sorted(tile_stacks.keys())[0]][0]
+                    source_kind = (
+                        "keyence_tiff_stitched_tiles_log"
+                        if len(tile_stacks) > 1
+                        else "keyence_tiff_single_tile_log"
+                    )
                 else:
                     status = _write_placeholder_image(
                         output_path,
@@ -265,7 +530,7 @@ def materialize_stitched_images(
                         image_extension=image_extension,
                     )
                     source_artifact = raw_images_dir / _well_to_xy_dir_name(well_index)
-                source_kind = "keyence_tiff_zstack"
+                    source_kind = "keyence_tiff_zstack"
             else:
                 status = _write_placeholder_image(
                     output_path,
@@ -293,8 +558,8 @@ def materialize_stitched_images(
                     "materialization_status": status,
                     "source_artifact_path": str(source_artifact),
                     "source_artifact_kind": source_kind,
-                    "image_width_px": width,
-                    "image_height_px": height,
+                    "image_width_px": materialized_width,
+                    "image_height_px": materialized_height,
                 }
             )
     finally:

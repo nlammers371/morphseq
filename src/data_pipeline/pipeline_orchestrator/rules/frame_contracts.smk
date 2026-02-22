@@ -1,6 +1,23 @@
 """Frame-contract rules: stitched image materialization and validation."""
 
 
+def _as_bool(value) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _materialize_overwrite_enabled() -> bool:
+    if _as_bool(config.get("overwrite_all", False)):
+        return True
+    if config.get("overwrite_materialize_stitched_images") is not None:
+        return _as_bool(config.get("overwrite_materialize_stitched_images"))
+    step_val = config.get("overwrite_steps", {}).get("materialize_stitched_images")
+    if step_val is not None:
+        return _as_bool(step_val)
+    if config.get("frame_contracts", {}).get("overwrite") is not None:
+        return _as_bool(config.get("frame_contracts", {}).get("overwrite"))
+    return _as_bool(config.get("phase2", {}).get("overwrite", False))
+
+
 def _selected_wells_csv(experiment: str) -> str:
     wells = selected_wells_for_experiment(experiment)
     return ",".join(wells)
@@ -30,14 +47,19 @@ rule materialize_stitched_images:
             or config.get("phase2", {}).get("output_image_extension", "jpg")
         ),
         device_preference=lambda wc: (
-            config.get("frame_contracts", {}).get("yx1", {}).get("device_preference")
-            or config.get("phase2", {}).get("yx1", {}).get("device_preference", "cuda")
+            config.get("frame_contracts", {}).get(_microscope(wc.experiment).lower(), {}).get("device_preference")
+            or config.get("frame_contracts", {}).get("yx1", {}).get("device_preference")
+            or config.get("phase2", {}).get(_microscope(wc.experiment).lower(), {}).get("device_preference", "cuda")
         ),
-        overwrite=lambda wc: str(
-            config.get("frame_contracts", {}).get("overwrite")
-            if config.get("frame_contracts", {}).get("overwrite") is not None
-            else config.get("phase2", {}).get("overwrite", False)
-        ).lower()
+        keyence_projection_method=lambda wc: (
+            config.get("frame_contracts", {}).get("keyence", {}).get("projection_method")
+            or "log"
+        ),
+        keyence_ff_filter_res_um=lambda wc: (
+            config.get("frame_contracts", {}).get("keyence", {}).get("ff_filter_res_um")
+            or 3.0
+        ),
+        overwrite=lambda wc: str(_materialize_overwrite_enabled()).lower()
     shell:
         (
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.pipeline_orchestrator.tasks '
@@ -46,7 +68,10 @@ rule materialize_stitched_images:
             '--mapping-csv "{input.mapping_csv}" --output-root "{params.output_root}" '
             '--output-stitched-index-csv "{output.stitched_index_csv}" --selected-wells "{params.selected_wells}" '
             '--output-image-extension "{params.output_image_extension}" '
-            '--device-preference "{params.device_preference}" --overwrite "{params.overwrite}" '
+            '--device-preference "{params.device_preference}" '
+            '--keyence-projection-method "{params.keyence_projection_method}" '
+            '--keyence-ff-filter-res-um "{params.keyence_ff_filter_res_um}" '
+            '--overwrite "{params.overwrite}" '
             '--done-flag "{output.done_flag}"'
         )
 

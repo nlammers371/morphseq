@@ -56,6 +56,17 @@ Stitched images are written to:
 
 Default `ext` is `jpg` (configured in `frame_contracts.output_image_extension`).
 
+Keyence materialization defaults to LoG focus-fused tile generation before stitching
+(`frame_contracts.keyence.projection_method: "log"`), with filter scale
+`frame_contracts.keyence.ff_filter_res_um` and device preference
+`frame_contracts.keyence.device_preference`.
+
+Overwrite behavior for stitched-image materialization:
+- Default: `overwrite_all: false` and `overwrite_steps.materialize_stitched_images: false` (reuse existing image files).
+- Per-step overwrite: set `overwrite_steps.materialize_stitched_images: true`.
+- CLI-friendly per-step override: `--config overwrite_materialize_stitched_images=true`.
+- Global overwrite: set `overwrite_all: true`.
+
 ## Smoke checks
 ```bash
 PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python

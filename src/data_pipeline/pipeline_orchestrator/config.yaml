@@ -41,10 +41,20 @@ frame_contracts:
     device_preference: "cuda"
     z_buffer: false
   keyence:
-    projection_method: "max"
+    projection_method: "log"
+    ff_filter_res_um: 3.0
+    device_preference: "cuda"
 
 # Snakemake resources
 threads: 4
 resources:
   mem_mb: 12000
   gpu: 1
+
+# Overwrite control:
+# - overwrite_all=true: rewrite all internal artifacts for steps that support overwrite.
+# - overwrite_steps.<step>=true: step-specific overwrite toggle (overrides defaults).
+overwrite_all: false
+overwrite_materialize_stitched_images: null
+overwrite_steps:
+  materialize_stitched_images: false

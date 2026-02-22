@@ -24,8 +24,8 @@ import nd2
 import skimage
 import skimage.io as skio
 
-# Import shared utilities from existing codebase
-from src.build.export_utils import LoG_focus_stacker, im_rescale
+# Import shared LoG utilities used across pipeline image builders.
+from data_pipeline.image_building.shared.log_focus import LoG_focus_stacker, im_rescale
 
 logging.basicConfig(
     level=logging.INFO,

@@ -108,6 +108,9 @@ def cmd_materialize_stitched(args: argparse.Namespace) -> None:
         selected_wells=_parse_selected_wells(args.selected_wells),
         overwrite=_parse_bool(args.overwrite),
         output_image_extension=args.output_image_extension,
+        device_preference=args.device_preference,
+        keyence_projection_method=args.keyence_projection_method,
+        keyence_ff_filter_res_um=args.keyence_ff_filter_res_um,
         done_flag=args.done_flag,
     )
 
@@ -166,6 +169,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_mat.add_argument("--selected-wells", default="")
     p_mat.add_argument("--output-image-extension", default="jpg")
     p_mat.add_argument("--device-preference", default="cuda")
+    p_mat.add_argument("--keyence-projection-method", default="log")
+    p_mat.add_argument("--keyence-ff-filter-res-um", type=float, default=3.0)
     p_mat.add_argument("--overwrite", default="false")
     p_mat.add_argument("--done-flag", type=Path, required=False)
     p_mat.set_defaults(func=cmd_materialize_stitched)
