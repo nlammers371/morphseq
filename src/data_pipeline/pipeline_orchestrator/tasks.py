@@ -102,10 +102,12 @@ def cmd_materialize_stitched(args: argparse.Namespace) -> None:
         microscope=args.microscope,
         raw_images_dir=args.raw_images_dir,
         scope_csv=args.scope_csv,
+        mapping_csv=args.mapping_csv,
         output_root=args.output_root,
         output_stitched_index_csv=args.output_stitched_index_csv,
         selected_wells=_parse_selected_wells(args.selected_wells),
         overwrite=_parse_bool(args.overwrite),
+        output_image_extension=args.output_image_extension,
         done_flag=args.done_flag,
     )
 
@@ -162,6 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_mat.add_argument("--output-root", type=Path, required=True)
     p_mat.add_argument("--output-stitched-index-csv", type=Path, required=True)
     p_mat.add_argument("--selected-wells", default="")
+    p_mat.add_argument("--output-image-extension", default="jpg")
     p_mat.add_argument("--device-preference", default="cuda")
     p_mat.add_argument("--overwrite", default="false")
     p_mat.add_argument("--done-flag", type=Path, required=False)

@@ -52,7 +52,9 @@ Per experiment under `data_pipeline_output/experiment_metadata/{experiment}/`:
 
 Stitched images are written to:
 
-- `data_pipeline_output/built_image_data/{experiment}/stitched_ff_images/{well}/{channel}/{image_id}.tif`
+- `data_pipeline_output/built_image_data/{experiment}/stitched_ff_images/{well}/{channel}/{image_id}.{ext}`
+
+Default `ext` is `jpg` (configured in `frame_contracts.output_image_extension`).
 
 ## Smoke checks
 ```bash

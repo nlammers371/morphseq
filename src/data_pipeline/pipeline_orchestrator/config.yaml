@@ -36,6 +36,7 @@ metadata_alignment:
 # Frame-contract settings
 frame_contracts:
   overwrite: false
+  output_image_extension: "jpg"
   yx1:
     device_preference: "cuda"
     z_buffer: false

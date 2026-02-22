@@ -25,6 +25,10 @@ rule materialize_stitched_images:
         microscope=lambda wc: _microscope(wc.experiment),
         selected_wells=lambda wc: _selected_wells_csv(wc.experiment),
         output_root=BUILT_IMAGE_DATA_DIR,
+        output_image_extension=lambda wc: (
+            config.get("frame_contracts", {}).get("output_image_extension")
+            or config.get("phase2", {}).get("output_image_extension", "jpg")
+        ),
         device_preference=lambda wc: (
             config.get("frame_contracts", {}).get("yx1", {}).get("device_preference")
             or config.get("phase2", {}).get("yx1", {}).get("device_preference", "cuda")
@@ -41,6 +45,7 @@ rule materialize_stitched_images:
             '--raw-images-dir "{input.raw_images_dir}" --scope-csv "{input.scope_csv}" '
             '--mapping-csv "{input.mapping_csv}" --output-root "{params.output_root}" '
             '--output-stitched-index-csv "{output.stitched_index_csv}" --selected-wells "{params.selected_wells}" '
+            '--output-image-extension "{params.output_image_extension}" '
             '--device-preference "{params.device_preference}" --overwrite "{params.overwrite}" '
             '--done-flag "{output.done_flag}"'
         )
