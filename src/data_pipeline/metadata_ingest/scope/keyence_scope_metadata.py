@@ -9,12 +9,32 @@ import numpy as np
 from pathlib import Path
 from typing import Union, List, Dict, Any
 import logging
+import re
 
 from data_pipeline.schemas.scope_metadata import REQUIRED_COLUMNS_SCOPE_METADATA
 from data_pipeline.schemas.channel_normalization import CHANNEL_NORMALIZATION_MAP
 from data_pipeline.io.validators import validate_dataframe_schema
 
 log = logging.getLogger(__name__)
+
+
+def _extract_time_int_from_path(file_path: Path) -> int:
+    """
+    Infer Keyence time index with legacy-compatible semantics.
+
+    Preferred source is directory token `T####`; if absent, use filename token
+    `_T####_Z...`. Layouts without explicit T are treated as single-timepoint.
+    """
+    for part in file_path.parts:
+        t_match = re.fullmatch(r'T(\d+)', part, flags=re.IGNORECASE)
+        if t_match:
+            return max(int(t_match.group(1)) - 1, 0)
+
+    name_match = re.search(r'_T(\d+)_Z\d+_CH\d+', file_path.name, flags=re.IGNORECASE)
+    if name_match:
+        return max(int(name_match.group(1)) - 1, 0)
+
+    return 0
 
 
 def _scrape_keyence_metadata(tiff_path: Path) -> Dict[str, Any]:
@@ -254,16 +274,10 @@ def extract_keyence_scope_metadata(
             width_px = meta.get('Width (px)', 1)
             micrometers_per_pixel = width_um / width_px if width_px > 0 else 0
 
-            # Extract timepoint index from filename.
-            # Common Keyence format: *_00003_Z016_CH1.tif where 00003 is timepoint (1-based).
-            import re
-            time_match = re.search(r'_(\d+)_Z\d+_CH\d+', tiff_path.name)
-            if time_match:
-                time_raw = int(time_match.group(1))
-                time_int = max(time_raw - 1, 0)
-            else:
-                alt_time_match = re.search(r'[Tt](\d+)', tiff_path.name)
-                time_int = int(alt_time_match.group(1)) if alt_time_match else 0
+            # Legacy-compatible time parsing:
+            # - T#### directory or _T####_ token => true timepoint
+            # - otherwise single-timepoint acquisition (time_int=0)
+            time_int = _extract_time_int_from_path(tiff_path)
 
             # Build row
             row = {

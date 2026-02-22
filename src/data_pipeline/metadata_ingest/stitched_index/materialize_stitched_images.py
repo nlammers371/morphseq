@@ -15,6 +15,11 @@ import skimage.io as skio
 import skimage.util as skutil
 import torch
 
+from data_pipeline.image_building.utils.frame_tiler import FallbackParams
+from data_pipeline.image_building.utils.frame_tiler import FrameTilingConfig
+from data_pipeline.image_building.utils.frame_tiler import TileSpec
+from data_pipeline.image_building.utils.frame_tiler import legacy_canvas_shape
+from data_pipeline.image_building.utils.frame_tiler import stitch_frame_tiles
 from data_pipeline.image_building.shared.log_focus import LoG_focus_stacker
 from data_pipeline.image_building.shared.log_focus import im_rescale
 
@@ -159,6 +164,15 @@ def _extract_keyence_well_and_tile(path: Path) -> tuple[str | None, int]:
                     tile_id = max(ord(suffix.lower()) - 96, 1)
             else:
                 well_index = _well_from_w_index(xy_raw)
+                if tile_id is None:
+                    # Legacy XY layout without P*/T* encodes sub-position in filename,
+                    # e.g. embryo__XY16_00003_Z001_CH1.tif -> tile 3 at time 0.
+                    legacy_token = part[-4:]
+                    if legacy_token in path.name:
+                        suffix_str = path.name.split(legacy_token, 1)[1]
+                        tile_match = re.match(r"_(\d+)", suffix_str)
+                        if tile_match:
+                            tile_id = int(tile_match.group(1))
             return well_index, tile_id or 1
 
     for part in path.parts:
@@ -174,12 +188,25 @@ def _extract_keyence_well_and_tile(path: Path) -> tuple[str | None, int]:
 
 
 def _parse_keyence_time_and_z(path: Path) -> tuple[int, int] | None:
-    match = re.search(r"(?:_T|_)(\d+)_Z(\d+)_CH\d+", path.name, flags=re.IGNORECASE)
-    if not match:
+    z_match = re.search(r"_Z(\d+)_CH\d+", path.name, flags=re.IGNORECASE)
+    if not z_match:
         return None
-    time_raw = int(match.group(1))
-    time_int = max(time_raw - 1, 0)
-    z_index = int(match.group(2))
+
+    time_int = 0
+    # Prefer directory timepoint (legacy Keyence layout: .../T0034/...).
+    for part in path.parts:
+        t_match = re.fullmatch(r"T(\d+)", part, flags=re.IGNORECASE)
+        if t_match:
+            time_int = max(int(t_match.group(1)) - 1, 0)
+            break
+
+    # Fallback for layouts that encode explicit T in filename.
+    if time_int == 0:
+        t_name_match = re.search(r"_T(\d+)_Z\d+_CH\d+", path.name, flags=re.IGNORECASE)
+        if t_name_match:
+            time_int = max(int(t_name_match.group(1)) - 1, 0)
+
+    z_index = int(z_match.group(1))
     return time_int, z_index
 
 
@@ -314,16 +341,16 @@ def _trim_to_shape(image: np.ndarray, target: tuple[int, int]) -> np.ndarray:
     return image[start_y : start_y + target_y, start_x : start_x + target_x]
 
 
-def _keyence_canvas_shape(n_tiles: int, orientation: str) -> tuple[int, int]:
-    shape_map = {
-        1: np.array([480, 640]),
-        2: np.array([800, 630]),
-        3: np.array([1140, 630]) if orientation == "vertical" else np.array([1140, 480]),
-    }
-    if n_tiles in shape_map:
-        return tuple(shape_map[n_tiles].astype(int))
-    # Fallback for non-standard tile counts: preserve tile geometry by concatenation.
-    return (0, 0)
+def _keyence_canvas_shape(
+    n_tiles: int,
+    orientation: str,
+    tile_shape: tuple[int, int] | None = None,
+) -> tuple[int, int]:
+    return legacy_canvas_shape(
+        n_tiles=n_tiles,
+        orientation=orientation,
+        tile_shape=tile_shape,
+    )
 
 
 def _stitch_keyence_tile_projections(
@@ -331,56 +358,26 @@ def _stitch_keyence_tile_projections(
     orientation: str,
     master_params_path: Path | None,
 ) -> np.ndarray:
-    tile_images = [
-        img if img.dtype == np.uint8 else skutil.img_as_ubyte(img)
-        for img in tile_projections
+    specs = [
+        TileSpec(tile_id=f"tile_{idx:04d}", image=img)
+        for idx, img in enumerate(tile_projections)
     ]
-
-    n_tiles = len(tile_images)
-    if n_tiles == 1:
-        stitched = tile_images[0]
-    else:
-        try:
-            from stitch2d import StructuredMosaic
-            from stitch2d.tile import OpenCVTile, Tile
-
-            if master_params_path is not None and master_params_path.exists():
-                mosaic = StructuredMosaic(
-                    [Tile(img) for img in tile_images],
-                    dim=len(tile_images),
-                    origin="upper left",
-                    direction=orientation,
-                    pattern="raster",
-                )
-                mosaic.load_params(str(master_params_path))
-            else:
-                mosaic = StructuredMosaic(
-                    [OpenCVTile(img) for img in tile_images],
-                    dim=len(tile_images),
-                    origin="upper left",
-                    direction=orientation,
-                    pattern="raster",
-                )
-                mosaic.align()
-                if len(mosaic.params.get("coords", {})) != len(tile_images):
-                    raise RuntimeError("incomplete keyence tile alignment")
-            mosaic.reset_tiles()
-            mosaic.smooth_seams()
-            stitched = mosaic.stitch()
-        except Exception as exc:  # pragma: no cover - exercised in integration with stitch2d
-            log.warning("Falling back to deterministic Keyence tile concatenation: %s", exc)
-            concat_axis = 0 if orientation == "vertical" else 1
-            stitched = np.concatenate(tile_images, axis=concat_axis)
-
-    if n_tiles > 1 and orientation == "horizontal":
-        stitched = stitched.T
-
-    target = _keyence_canvas_shape(n_tiles, orientation)
-    if target != (0, 0):
-        stitched = _trim_to_shape(stitched, target)
-
-    # Legacy Keyence stitched_FF_images convention is intensity inversion.
-    return np.iinfo(stitched.dtype).max - stitched
+    result = stitch_frame_tiles(
+        tile_specs=specs,
+        config=FrameTilingConfig(
+            orientation=orientation,
+            mode="auto",
+            fallback_policy=("per_frame", "master", "concat"),
+            max_abs_shift_px=500.0,
+            enable_alignment=True,
+            transpose_after_stitch=True,
+            use_legacy_canvas=True,
+            compat_postprocess=True,
+            invert_intensity=True,
+        ),
+        fallback=FallbackParams(master_params_path=master_params_path),
+    )
+    return result.stitched
 
 
 def materialize_stitched_images(
@@ -441,6 +438,8 @@ def materialize_stitched_images(
         channel_index = _select_yx1_channel_index(channel_names)
 
     rows = []
+    expected_output_paths: set[Path] = set()
+    target_output_dirs: set[Path] = set()
     try:
         for _, row in scope_df.iterrows():
             well_index = str(row["well_index"])
@@ -455,6 +454,8 @@ def materialize_stitched_images(
             image_id = str(image_id)
 
             output_path = stitched_root / well_index / channel_id / f"{image_id}.{image_extension}"
+            expected_output_paths.add(output_path)
+            target_output_dirs.add(output_path.parent)
             width = int(float(row.get("image_width_px", 512)))
             height = int(float(row.get("image_height_px", 512)))
             materialized_width = width
@@ -565,6 +566,14 @@ def materialize_stitched_images(
     finally:
         if nd is not None:
             nd.close()
+
+    if overwrite:
+        for out_dir in target_output_dirs:
+            if not out_dir.exists():
+                continue
+            for candidate in out_dir.glob(f"*.{image_extension}"):
+                if candidate not in expected_output_paths:
+                    candidate.unlink(missing_ok=True)
 
     stitched_index_df = pd.DataFrame(rows)
     output_stitched_index_csv.parent.mkdir(parents=True, exist_ok=True)
