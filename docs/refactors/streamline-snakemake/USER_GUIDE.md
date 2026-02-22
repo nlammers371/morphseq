@@ -39,11 +39,16 @@ snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
 
 ## Keyence-Specific Notes
 - Tile/time semantics:
-  - `T####` directory (or `_T####_` in filename) defines `time_int`.
-  - XY layouts without `T*` are treated as single-timepoint (`time_int=0`); filename position token is used as tile ID.
+  - `T####` directory (or `_T####_` in filename) defines frame order (`frame_index`) and legacy alias `time_int`.
+  - XY layouts without `T*` are treated as single-timepoint (`frame_index=0`, `time_int=0`); filename position token is used as tile ID.
 - Stitched framing:
   - Uses shared tiler utility: `src/data_pipeline/image_building/utils/frame_tiler.py`
   - Legacy-compatible canvas scaling is applied from native tile width.
+
+## Frame Index Migration
+- Canonical frame key is now `frame_index`.
+- `time_int` remains a compatibility alias during migration.
+- When both columns exist, validators enforce `frame_index == time_int`.
 
 ## New Stitched Index Diagnostics
 `stitched_image_index.csv` now includes per-frame tiler diagnostics:
@@ -72,7 +77,7 @@ PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_gro
 import pandas as pd
 df = pd.read_csv("data_pipeline_output/experiment_metadata/20240509_24hpf/stitched_image_index.csv")
 print(df[(df.well_index=="B04") & (df.channel_id=="BF")][[
-    "image_id", "time_int", "image_height_px", "image_width_px",
+    "image_id", "frame_index", "time_int", "image_height_px", "image_width_px",
     "tiler_fallback_used", "tiler_qc_passed", "tiler_qc_reasons"
 ]].to_string(index=False))
 PY

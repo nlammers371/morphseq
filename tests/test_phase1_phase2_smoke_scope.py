@@ -56,10 +56,15 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         "well_index",
         "channel_id",
         "stitched_image_path",
-        "time_int",
+        "frame_index",
     ]
     for col in base_cols:
         assert col in stitched_df.columns
+
+    if "time_int" in stitched_df.columns:
+        frame_vals = pd.to_numeric(stitched_df["frame_index"], errors="coerce")
+        time_vals = pd.to_numeric(stitched_df["time_int"], errors="coerce")
+        assert (frame_vals == time_vals).all()
 
     # Keyence rows include tiler diagnostics emitted at materialization.
     if experiment == "20240509_24hpf":
@@ -74,5 +79,10 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         ]:
             assert col in stitched_df.columns
 
-    for col in ["well_id", "well_index", "channel_id", "channel_name_raw", "stitched_image_path", "micrometers_per_pixel"]:
+    for col in ["well_id", "well_index", "channel_id", "channel_name_raw", "stitched_image_path", "micrometers_per_pixel", "frame_index"]:
         assert col in manifest_df.columns
+
+    if "time_int" in manifest_df.columns:
+        frame_vals = pd.to_numeric(manifest_df["frame_index"], errors="coerce")
+        time_vals = pd.to_numeric(manifest_df["time_int"], errors="coerce")
+        assert (frame_vals == time_vals).all()

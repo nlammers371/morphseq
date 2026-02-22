@@ -14,8 +14,37 @@ from data_pipeline.schemas.frame_manifest import (
 )
 
 
-def _canonicalize_scope_and_plate(df: pd.DataFrame) -> pd.DataFrame:
+def _with_frame_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    has_frame_index = "frame_index" in df.columns
+    has_time_int = "time_int" in df.columns
+
+    if not has_frame_index:
+        if "time_int" not in df.columns:
+            raise ValueError("Expected either frame_index or time_int in input table")
+        df["frame_index"] = pd.to_numeric(df["time_int"], errors="coerce")
+    if not has_time_int:
+        df["time_int"] = df["frame_index"]
+
+    frame_index = pd.to_numeric(df["frame_index"], errors="coerce")
+    time_int = pd.to_numeric(df["time_int"], errors="coerce")
+    if frame_index.isna().any():
+        raise ValueError("frame_index contains non-numeric values")
+    if time_int.isna().any():
+        raise ValueError("time_int contains non-numeric values")
+    if (frame_index % 1 != 0).any():
+        raise ValueError("frame_index must be integer-valued")
+    if (time_int % 1 != 0).any():
+        raise ValueError("time_int must be integer-valued")
+    if has_frame_index and has_time_int and (frame_index != time_int).any():
+        raise ValueError("Detected rows where frame_index != time_int in input table")
+    df["frame_index"] = frame_index.astype(int)
+    df["time_int"] = time_int.astype(int)
+    return df
+
+
+def _canonicalize_scope_and_plate(df: pd.DataFrame) -> pd.DataFrame:
+    df = _with_frame_columns(df)
 
     if "channel_id" not in df.columns:
         if "channel" in df.columns:
@@ -35,7 +64,7 @@ def _canonicalize_scope_and_plate(df: pd.DataFrame) -> pd.DataFrame:
     if "embryos_per_well" not in df.columns:
         df["embryos_per_well"] = 1
 
-    dedup_cols = ["experiment_id", "well_id", "well_index", "channel_id", "time_int"]
+    dedup_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
     existing_dedup_cols = [col for col in dedup_cols if col in df.columns]
     if len(existing_dedup_cols) == len(dedup_cols):
         df = (
@@ -53,10 +82,10 @@ def build_frame_manifest(
     output_csv: Path,
 ) -> pd.DataFrame:
     """Build and validate frame manifest table."""
-    stitched_df = pd.read_csv(stitched_index_csv)
+    stitched_df = _with_frame_columns(pd.read_csv(stitched_index_csv))
     scope_df = _canonicalize_scope_and_plate(pd.read_csv(scope_and_plate_csv))
 
-    join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "time_int"]
+    join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
 
     merged = stitched_df.merge(
         scope_df,
@@ -64,6 +93,15 @@ def build_frame_manifest(
         how="left",
         suffixes=("", "_scope"),
     )
+
+    if "time_int_scope" in merged.columns:
+        mismatch = merged["time_int"] != merged["time_int_scope"]
+        if mismatch.any():
+            preview = merged.loc[mismatch, join_cols + ["time_int", "time_int_scope"]]
+            raise ValueError(
+                "time_int mismatch between stitched index and scope+plate rows: "
+                f"{preview.head(10).to_dict(orient='records')}"
+            )
 
     missing_meta = merged["micrometers_per_pixel"].isna()
     if missing_meta.any():

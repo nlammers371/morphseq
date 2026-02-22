@@ -7,7 +7,6 @@ REQUIRED_COLUMNS_FRAME_MANIFEST = [
     "well_index",
     "channel_id",
     "channel_name_raw",
-    "time_int",
     "frame_index",
     "image_id",
     "stitched_image_path",
@@ -30,5 +29,5 @@ UNIQUE_KEY_FRAME_MANIFEST = [
     "experiment_id",
     "well_id",
     "channel_id",
-    "time_int",
+    "frame_index",
 ]
