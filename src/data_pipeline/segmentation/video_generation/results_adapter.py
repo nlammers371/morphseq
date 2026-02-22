@@ -34,17 +34,28 @@ def _derive_experiment_id_from_video(video_id: str) -> str:
 
 
 def _derive_video_id_from_image_stem(image_stem: str) -> str | None:
-    # Handles common ids like: 20260122_A01_ch00_t0001
-    m = re.match(r"^(.+_[A-H][0-9]{2})(?:_ch\d+)?_t\d+$", image_stem)
-    if m:
-        return m.group(1)
-    # Fallback for simpler forms like <video_id>_t0001
-    m2 = re.match(r"^(.+)_t\d+$", image_stem)
-    return m2.group(1) if m2 else None
+    # Parse from the right so experiment prefixes can contain arbitrary underscores.
+    m = re.search(r"_[ft](\d+)$", image_stem)
+    if not m:
+        return None
+
+    prefix = image_stem[: m.start()]  # strip frame suffix token
+
+    # Optional channel token conventions: *_ch00_f0001, *_BF_f0001, etc.
+    if re.search(r"_ch\d+$", prefix):
+        return prefix.rsplit("_", 1)[0]
+
+    channel_like = {"BF", "PHASE", "GFP", "RFP", "YFP", "DAPI", "CY3", "CY5"}
+    last_token = prefix.rsplit("_", 1)[-1]
+    if last_token.upper() in channel_like:
+        return prefix.rsplit("_", 1)[0]
+
+    # Legacy fallback: <video_id>_f0001 or <video_id>_t0001
+    return prefix
 
 
 def _extract_frame_index(image_id: str, fallback: int) -> int:
-    m = re.search(r"_t(\d+)$", image_id)
+    m = re.search(r"_[ft](\d+)$", image_id)
     if m:
         return int(m.group(1))
     return fallback

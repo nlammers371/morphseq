@@ -72,7 +72,7 @@ def apply_series_mapping(
         mapped_df["well_id"].astype(str)
         + "_"
         + mapped_df["channel_id"].astype(str)
-        + "_t"
+        + "_f"
         + mapped_df["frame_index"].astype(int).map(lambda val: f"{val:04d}")
     )
 

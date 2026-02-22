@@ -25,8 +25,8 @@ def _write_stitched_row(
         "well_index": "A01",
         "channel_id": "BF",
         "frame_index": frame_index,
-        "image_id": f"exp1_A01_BF_t{frame_index:04d}",
-        "stitched_image_path": "built_image_data/exp1/stitched_ff_images/A01/BF/exp1_A01_BF_t0000.jpg",
+        "image_id": f"exp1_A01_BF_f{frame_index:04d}",
+        "stitched_image_path": "built_image_data/exp1/stitched_ff_images/A01/BF/exp1_A01_BF_f0000.jpg",
         "materialization_status": "created",
         "source_artifact_path": "raw_image_data/Keyence/exp1/W001/P00001",
         "source_artifact_kind": "keyence_tiff_stitched_tiles_log",
@@ -47,7 +47,7 @@ def test_validate_stitched_index_accepts_frame_index_without_time_int(tmp_path: 
     data_root = tmp_path / "data_pipeline_output"
     exp_dir = data_root / "experiment_metadata" / "exp1"
     exp_dir.mkdir(parents=True)
-    image_path = data_root / "built_image_data" / "exp1" / "stitched_ff_images" / "A01" / "BF" / "exp1_A01_BF_t0000.jpg"
+    image_path = data_root / "built_image_data" / "exp1" / "stitched_ff_images" / "A01" / "BF" / "exp1_A01_BF_f0000.jpg"
     image_path.parent.mkdir(parents=True, exist_ok=True)
     image_path.write_bytes(b"test")
 
@@ -64,7 +64,7 @@ def test_validate_stitched_index_rejects_time_int_frame_index_mismatch(tmp_path:
     data_root = tmp_path / "data_pipeline_output"
     exp_dir = data_root / "experiment_metadata" / "exp1"
     exp_dir.mkdir(parents=True)
-    image_path = data_root / "built_image_data" / "exp1" / "stitched_ff_images" / "A01" / "BF" / "exp1_A01_BF_t0000.jpg"
+    image_path = data_root / "built_image_data" / "exp1" / "stitched_ff_images" / "A01" / "BF" / "exp1_A01_BF_f0000.jpg"
     image_path.parent.mkdir(parents=True, exist_ok=True)
     image_path.write_bytes(b"test")
 

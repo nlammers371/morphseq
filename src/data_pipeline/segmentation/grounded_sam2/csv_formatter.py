@@ -56,6 +56,7 @@ Notes:
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -116,28 +117,25 @@ def extract_time_int(image_id: str) -> int:
     """
     Extract time index from image identifier.
 
-    Typically image_id format is: "exp_well_tXXXX" where XXXX is time index.
+    Supports image_id formats ending with "_fXXXX" (current) or "_tXXXX" (legacy).
 
     Args:
-        image_id: Image identifier (e.g., "exp_A01_t0000")
+        image_id: Image identifier (e.g., "exp_A01_BF_f0000")
 
     Returns:
         Time index as integer, or 0 if not found
 
     Example:
-        >>> extract_time_int("exp_A01_t0000")
+        >>> extract_time_int("exp_A01_BF_f0000")
         0
-        >>> extract_time_int("exp_A01_t0042")
+        >>> extract_time_int("exp_A01_BF_f0042")
         42
     """
-    if '_t' not in image_id:
+    m = re.search(r"_[ft](\d+)$", image_id)
+    if not m:
         return 0
-
     try:
-        # Extract the part after 't'
-        time_part = image_id.split('_t')[-1]
-        # Convert to int (handle leading zeros)
-        return int(time_part)
+        return int(m.group(1))
     except (ValueError, IndexError):
         return 0
 

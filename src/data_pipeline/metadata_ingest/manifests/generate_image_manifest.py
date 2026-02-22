@@ -17,6 +17,7 @@ Schema: Uses schemas/image_manifest.py
 from __future__ import annotations
 import json
 import logging
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any
@@ -127,17 +128,16 @@ def scan_stitched_images(
                 continue
 
             # Scan frames
-            for frame_file in sorted(channel_dir.glob("*.tif")):
-                # Parse filename: {well}_{channel}_t{time_int:04d}.tif
+            for frame_file in sorted(channel_dir.glob("*.*")):
+                # Parse filename: {well}_{channel}_[ft]{frame_index:04d}.<ext>
                 stem = frame_file.stem
-                parts = stem.split("_t")
-
-                if len(parts) != 2:
+                m = re.search(r"_[ft](\d+)$", stem)
+                if not m:
                     log.warning("Unexpected frame filename: %s", frame_file.name)
                     continue
 
                 try:
-                    time_int = int(parts[1])
+                    time_int = int(m.group(1))
                 except ValueError:
                     log.warning("Could not parse time_int from: %s", frame_file.name)
                     continue
@@ -266,7 +266,7 @@ def generate_image_manifest(
                 "frame_index": frame_info["time_int"],
                 "time_int": frame_info["time_int"],
                 "experiment_time_s": experiment_time_s,
-                "image_id": f"{well_id}_{channel_name}_t{frame_info['time_int']:04d}",
+                "image_id": f"{well_id}_{channel_name}_f{frame_info['time_int']:04d}",
                 "file_path": frame_info["file_path"],
                 "image_width_px": image_width_px,
                 "image_height_px": image_height_px,

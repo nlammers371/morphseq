@@ -206,7 +206,7 @@ def extract_yx1_scope_metadata(
 
                     # Build IDs (temporary - will be refined by series mapper)
                     well_id = f"{experiment_id}_{well_index}"
-                    image_id = f"{well_id}_{channel}_t{t_idx:04d}"
+                    image_id = f"{well_id}_{channel}_f{t_idx:04d}"
 
                     row = {
                         'experiment_id': experiment_id,
