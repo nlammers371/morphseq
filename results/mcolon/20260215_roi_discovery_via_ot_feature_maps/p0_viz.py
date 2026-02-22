@@ -17,6 +17,20 @@ Preferred clean style:
   - filled contours (smoothed scalar field)
   - thin contour lines on top (same levels)
   - consistent color scale across WT/mutant/diff
+
+# ── VISUALIZATION CONTRACT (matplotlib 3.10) ─────────────────────────────────
+# All arrays are (row, col) = (y, x), row 0 at TOP (canonical grid convention).
+#
+# RULE: ax.imshow(..., origin="upper")   ← always explicit
+#       ax.contour(...)                  ← NO origin= kwarg
+#       ax.contourf(...)                 ← NO origin= kwarg
+#
+# WHY: In mpl 3.10, imshow(origin="upper") inverts the y-axis.
+# contour(origin="upper") then flips the data a SECOND time → mirror image.
+# contour() with no origin uses the axes' existing y direction → correct.
+#
+# NEVER add origin= to contour/contourf calls. Verified by origin_test2.png.
+# ─────────────────────────────────────────────────────────────────────────────
 """
 
 from __future__ import annotations
@@ -43,9 +57,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _embryo_outline(mask_ref: np.ndarray, ax: plt.Axes, color: str = "white", lw: float = 1.0):
-    """Draw embryo outline (mask_ref boundary) on axes."""
+    """Draw embryo outline (mask_ref boundary) on axes.
+    NO origin= on contour — see VISUALIZATION CONTRACT at top of file.
+    """
     ax.contour(mask_ref.astype(float), levels=[0.5], colors=[color],
-               linewidths=lw, linestyles="-", origin="upper")
+               linewidths=lw, linestyles="-")
 
 
 def _apply_mask_nan(field: np.ndarray, mask_ref: np.ndarray) -> np.ndarray:
@@ -131,8 +147,8 @@ def plot_cost_density_suite(
             smoothed = _apply_mask_nan(smoothed, mask_ref)
             levels = np.linspace(0, vmax_raw, 12)
 
-            ax.contourf(smoothed, levels=levels, cmap="hot", origin="upper")
-            ax.contour(smoothed, levels=levels, colors="k", linewidths=0.3, origin="upper")
+            ax.contourf(smoothed, levels=levels, cmap="hot")
+            ax.contour(smoothed, levels=levels, colors="k", linewidths=0.3)
             _embryo_outline(mask_ref, ax, color="white", lw=1.5)
             ax.set_title(f"{label_str} (σ={sigma})")
             ax.axis("off")
@@ -142,8 +158,8 @@ def plot_cost_density_suite(
         diff_smoothed = _apply_mask_nan(diff_smoothed, mask_ref)
         levels_diff = np.linspace(-vabs, vabs, 15)
 
-        axes_s[2].contourf(diff_smoothed, levels=levels_diff, cmap="RdBu_r", origin="upper")
-        axes_s[2].contour(diff_smoothed, levels=levels_diff, colors="k", linewidths=0.3, origin="upper")
+        axes_s[2].contourf(diff_smoothed, levels=levels_diff, cmap="RdBu_r")
+        axes_s[2].contour(diff_smoothed, levels=levels_diff, colors="k", linewidths=0.3)
         _embryo_outline(mask_ref, axes_s[2], color="black", lw=1.5)
         axes_s[2].set_title(f"Diff ({label_names[1]}−{label_names[0]}) σ={sigma}")
         axes_s[2].axis("off")
