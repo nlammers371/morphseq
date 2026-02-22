@@ -30,6 +30,13 @@ def _write_stitched_row(
         "materialization_status": "created",
         "source_artifact_path": "raw_image_data/Keyence/exp1/W001/P00001",
         "source_artifact_kind": "keyence_tiff_stitched_tiles_log",
+        "frame_interval_s": 600.0,
+        "frame_interval_min": 10.0,
+        "frame_interval_hr": 600.0 / 3600.0,
+        "experiment_time_s": float(frame_index * 600),
+        "elapsed_time_s": float(frame_index * 600),
+        "elapsed_time_min": float(frame_index * 10),
+        "elapsed_time_hr": float(frame_index * 600 / 3600),
     }
     if include_time_int:
         row["time_int"] = frame_index if time_int is None else time_int

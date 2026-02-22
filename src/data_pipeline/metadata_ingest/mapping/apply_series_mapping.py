@@ -7,6 +7,10 @@ from typing import Iterable
 
 import pandas as pd
 
+from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
+from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
+from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+
 
 def _build_series_lookup(mapping_df: pd.DataFrame) -> dict[int, str]:
     lookup: dict[int, str] = {}
@@ -41,7 +45,10 @@ def apply_series_mapping(
     selected_wells: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Map scope rows to plate wells and canonical IDs for downstream contracts."""
-    scope_df = pd.read_csv(scope_metadata_csv)
+    scope_df = ensure_frame_time_alias(
+        pd.read_csv(scope_metadata_csv),
+        stage_name="scope_metadata_mapped_input",
+    )
     mapping_df = pd.read_csv(mapping_csv)
 
     series_lookup = _build_series_lookup(mapping_df)
@@ -66,12 +73,38 @@ def apply_series_mapping(
         + "_"
         + mapped_df["channel_id"].astype(str)
         + "_t"
-        + mapped_df["time_int"].astype(int).map(lambda val: f"{val:04d}")
+        + mapped_df["frame_index"].astype(int).map(lambda val: f"{val:04d}")
     )
+
+    mapped_df = add_elapsed_time_columns(
+        mapped_df,
+        group_cols=["experiment_id", "well_id", "channel_id"],
+    )
+    mapped_df = add_frame_interval_unit_columns(mapped_df)
 
     selected_wells_set = {str(well) for well in (selected_wells or []) if str(well)}
     if selected_wells_set:
         mapped_df = mapped_df[mapped_df["well_index"].astype(str).isin(selected_wells_set)].copy()
+
+    front_cols = [
+        "experiment_id",
+        "well_id",
+        "well_index",
+        "frame_index",
+        "channel_id",
+        "image_id",
+        "time_int",
+        "experiment_time_s",
+        "frame_interval_s",
+        "frame_interval_min",
+        "frame_interval_hr",
+        "elapsed_time_s",
+        "elapsed_time_min",
+        "elapsed_time_hr",
+    ]
+    ordered = [col for col in front_cols if col in mapped_df.columns]
+    remainder = [col for col in mapped_df.columns if col not in ordered]
+    mapped_df = mapped_df.loc[:, ordered + remainder]
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     mapped_df.to_csv(output_csv, index=False)

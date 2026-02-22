@@ -49,6 +49,14 @@ snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
 - Canonical frame key is now `frame_index`.
 - `time_int` remains a compatibility alias during migration.
 - When both columns exist, validators enforce `frame_index == time_int`.
+- `scope_metadata_mapped.csv`, `stitched_image_index.csv`, and `frame_manifest.csv` all emit:
+  - `experiment_time_s`
+  - `frame_interval_s`
+  - `frame_interval_min`
+  - `frame_interval_hr`
+  - `elapsed_time_s`
+  - `elapsed_time_min`
+  - `elapsed_time_hr`
 
 ## New Stitched Index Diagnostics
 `stitched_image_index.csv` now includes per-frame tiler diagnostics:

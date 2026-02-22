@@ -5,9 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from data_pipeline.io.validators import validate_dataframe_schema
+from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
+from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
+from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
 from data_pipeline.schemas.frame_manifest import (
     REQUIRED_COLUMNS_FRAME_MANIFEST,
     UNIQUE_KEY_FRAME_MANIFEST,
@@ -15,32 +19,7 @@ from data_pipeline.schemas.frame_manifest import (
 
 
 def _with_frame_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    has_frame_index = "frame_index" in df.columns
-    has_time_int = "time_int" in df.columns
-
-    if not has_frame_index:
-        if "time_int" not in df.columns:
-            raise ValueError("Expected either frame_index or time_int in input table")
-        df["frame_index"] = pd.to_numeric(df["time_int"], errors="coerce")
-    if not has_time_int:
-        df["time_int"] = df["frame_index"]
-
-    frame_index = pd.to_numeric(df["frame_index"], errors="coerce")
-    time_int = pd.to_numeric(df["time_int"], errors="coerce")
-    if frame_index.isna().any():
-        raise ValueError("frame_index contains non-numeric values")
-    if time_int.isna().any():
-        raise ValueError("time_int contains non-numeric values")
-    if (frame_index % 1 != 0).any():
-        raise ValueError("frame_index must be integer-valued")
-    if (time_int % 1 != 0).any():
-        raise ValueError("time_int must be integer-valued")
-    if has_frame_index and has_time_int and (frame_index != time_int).any():
-        raise ValueError("Detected rows where frame_index != time_int in input table")
-    df["frame_index"] = frame_index.astype(int)
-    df["time_int"] = time_int.astype(int)
-    return df
+    return ensure_frame_time_alias(df, stage_name="frame_manifest_inputs")
 
 
 def _canonicalize_scope_and_plate(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,7 +61,11 @@ def build_frame_manifest(
     output_csv: Path,
 ) -> pd.DataFrame:
     """Build and validate frame manifest table."""
-    stitched_df = _with_frame_columns(pd.read_csv(stitched_index_csv))
+    stitched_df = add_elapsed_time_columns(
+        _with_frame_columns(pd.read_csv(stitched_index_csv)),
+        group_cols=["experiment_id", "well_id", "channel_id"],
+    )
+    stitched_df = add_frame_interval_unit_columns(stitched_df)
     scope_df = _canonicalize_scope_and_plate(pd.read_csv(scope_and_plate_csv))
 
     join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
@@ -108,22 +91,35 @@ def build_frame_manifest(
         preview = merged.loc[missing_meta, join_cols].head(10).to_dict(orient="records")
         raise ValueError(f"Missing scope/plate metadata for stitched rows: {preview}")
 
+    def _col(name: str) -> pd.Series:
+        if name in merged.columns:
+            return merged[name]
+        scoped = f"{name}_scope"
+        if scoped in merged.columns:
+            return merged[scoped]
+        return pd.Series(np.nan, index=merged.index)
+
     manifest = pd.DataFrame(
         {
             "experiment_id": merged["experiment_id"],
-            "microscope_id": merged["microscope_id"],
             "well_id": merged["well_id"],
             "well_index": merged["well_index"],
-            "channel_id": merged["channel_id"],
-            "channel_name_raw": merged["channel_name_raw"],
-            "time_int": merged["time_int"],
             "frame_index": merged["frame_index"],
+            "channel_id": merged["channel_id"],
             "image_id": merged["image_id"],
+            "time_int": merged["time_int"],
+            "microscope_id": merged["microscope_id"],
+            "channel_name_raw": merged["channel_name_raw"],
             "stitched_image_path": merged["stitched_image_path"],
             "micrometers_per_pixel": merged["micrometers_per_pixel"],
             "frame_interval_s": merged["frame_interval_s"],
+            "frame_interval_min": _col("frame_interval_min"),
+            "frame_interval_hr": _col("frame_interval_hr"),
             "absolute_start_time": merged["absolute_start_time"],
-            "experiment_time_s": merged["experiment_time_s"],
+            "experiment_time_s": _col("experiment_time_s"),
+            "elapsed_time_s": _col("elapsed_time_s"),
+            "elapsed_time_min": _col("elapsed_time_min"),
+            "elapsed_time_hr": _col("elapsed_time_hr"),
             "image_width_px": merged["image_width_px"],
             "image_height_px": merged["image_height_px"],
             "objective_magnification": merged["objective_magnification"],
@@ -135,6 +131,11 @@ def build_frame_manifest(
             "embryos_per_well": merged["embryos_per_well"],
         }
     )
+    manifest = add_elapsed_time_columns(
+        manifest,
+        group_cols=["experiment_id", "well_id", "channel_id"],
+    )
+    manifest = add_frame_interval_unit_columns(manifest)
 
     validate_dataframe_schema(manifest, REQUIRED_COLUMNS_FRAME_MANIFEST, "frame_manifest")
 

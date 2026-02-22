@@ -37,12 +37,14 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     metadata_dir = repo_root / "data_pipeline_output" / "experiment_metadata" / experiment
 
+    scope_mapped = metadata_dir / "scope_metadata_mapped.csv"
     stitched_index = metadata_dir / "stitched_image_index.csv"
     frame_manifest = metadata_dir / "frame_manifest.csv"
 
-    if not stitched_index.exists() or not frame_manifest.exists():
+    if not scope_mapped.exists() or not stitched_index.exists() or not frame_manifest.exists():
         pytest.skip("Smoke artifacts not built yet; run Snakemake workflow first.")
 
+    scope_df = pd.read_csv(scope_mapped)
     stitched_df = pd.read_csv(stitched_index)
     manifest_df = pd.read_csv(frame_manifest)
 
@@ -51,20 +53,50 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     assert set(stitched_df["well_index"].astype(str).unique()).issubset(allowed_wells)
     assert set(manifest_df["well_index"].astype(str).unique()).issubset(allowed_wells)
 
+    for col in [
+        "frame_index",
+        "time_int",
+        "experiment_time_s",
+        "frame_interval_s",
+        "frame_interval_min",
+        "frame_interval_hr",
+        "elapsed_time_s",
+        "elapsed_time_min",
+        "elapsed_time_hr",
+    ]:
+        assert col in scope_df.columns
+
+    scope_frame_vals = pd.to_numeric(scope_df["frame_index"], errors="coerce")
+    scope_time_vals = pd.to_numeric(scope_df["time_int"], errors="coerce")
+    assert (scope_frame_vals == scope_time_vals).all()
+
     base_cols = [
+        "experiment_id",
         "well_id",
         "well_index",
-        "channel_id",
-        "stitched_image_path",
         "frame_index",
+        "channel_id",
+        "image_id",
+        "time_int",
     ]
     for col in base_cols:
         assert col in stitched_df.columns
 
-    if "time_int" in stitched_df.columns:
-        frame_vals = pd.to_numeric(stitched_df["frame_index"], errors="coerce")
-        time_vals = pd.to_numeric(stitched_df["time_int"], errors="coerce")
-        assert (frame_vals == time_vals).all()
+    assert list(stitched_df.columns[: len(base_cols)]) == base_cols
+
+    frame_vals = pd.to_numeric(stitched_df["frame_index"], errors="coerce")
+    time_vals = pd.to_numeric(stitched_df["time_int"], errors="coerce")
+    assert (frame_vals == time_vals).all()
+    for col in [
+        "experiment_time_s",
+        "frame_interval_s",
+        "frame_interval_min",
+        "frame_interval_hr",
+        "elapsed_time_s",
+        "elapsed_time_min",
+        "elapsed_time_hr",
+    ]:
+        assert col in stitched_df.columns
 
     # Keyence rows include tiler diagnostics emitted at materialization.
     if experiment == "20240509_24hpf":
@@ -79,10 +111,35 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         ]:
             assert col in stitched_df.columns
 
-    for col in ["well_id", "well_index", "channel_id", "channel_name_raw", "stitched_image_path", "micrometers_per_pixel", "frame_index"]:
+    frame_manifest_front = [
+        "experiment_id",
+        "well_id",
+        "well_index",
+        "frame_index",
+        "channel_id",
+        "image_id",
+        "time_int",
+    ]
+    assert list(manifest_df.columns[: len(frame_manifest_front)]) == frame_manifest_front
+
+    for col in [
+        "well_id",
+        "well_index",
+        "channel_id",
+        "channel_name_raw",
+        "stitched_image_path",
+        "micrometers_per_pixel",
+        "frame_index",
+        "frame_interval_s",
+        "frame_interval_min",
+        "frame_interval_hr",
+        "elapsed_time_s",
+        "elapsed_time_min",
+        "elapsed_time_hr",
+        "experiment_time_s",
+    ]:
         assert col in manifest_df.columns
 
-    if "time_int" in manifest_df.columns:
-        frame_vals = pd.to_numeric(manifest_df["frame_index"], errors="coerce")
-        time_vals = pd.to_numeric(manifest_df["time_int"], errors="coerce")
-        assert (frame_vals == time_vals).all()
+    frame_vals = pd.to_numeric(manifest_df["frame_index"], errors="coerce")
+    time_vals = pd.to_numeric(manifest_df["time_int"], errors="coerce")
+    assert (frame_vals == time_vals).all()

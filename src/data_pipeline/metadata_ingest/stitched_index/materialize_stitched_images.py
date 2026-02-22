@@ -23,6 +23,9 @@ from data_pipeline.image_building.utils.frame_tiler import legacy_canvas_shape
 from data_pipeline.image_building.utils.frame_tiler import stitch_frame_tiles
 from data_pipeline.image_building.shared.log_focus import LoG_focus_stacker
 from data_pipeline.image_building.shared.log_focus import im_rescale
+from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
+from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
+from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +60,13 @@ def _to_uint8(image: np.ndarray) -> np.ndarray:
         return np.zeros_like(im, dtype=np.uint8)
     scaled = (im - im_min) / (im_max - im_min)
     return np.clip(scaled * 255.0, 0, 255).astype(np.uint8)
+
+
+def _safe_float(value: object, default: float = float("nan")) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _write_image(output_path: Path, image: np.ndarray, overwrite: bool, image_extension: str) -> str:
@@ -398,7 +408,10 @@ def materialize_stitched_images(
     done_flag: Path | None = None,
 ) -> pd.DataFrame:
     """Materialize stitched images for selected wells and emit stitched-image index."""
-    scope_df = pd.read_csv(scope_csv)
+    scope_df = ensure_frame_time_alias(
+        pd.read_csv(scope_csv),
+        stage_name="materialize_stitched_images.scope_csv",
+    )
     selected = _parse_selected_wells(selected_wells)
     if selected:
         scope_df = scope_df[scope_df["well_index"].astype(str).isin(selected)].copy()
@@ -409,9 +422,15 @@ def materialize_stitched_images(
     if "channel_id" not in scope_df.columns:
         scope_df["channel_id"] = scope_df.get("channel", "BF").astype(str)
 
+    scope_df = add_elapsed_time_columns(
+        scope_df,
+        group_cols=["experiment_id", "well_id", "channel_id"],
+    )
+    scope_df = add_frame_interval_unit_columns(scope_df)
+
     scope_df = (
-        scope_df.sort_values(["well_index", "channel_id", "time_int"])
-        .drop_duplicates(subset=["experiment_id", "well_id", "well_index", "channel_id", "time_int"], keep="first")
+        scope_df.sort_values(["well_index", "channel_id", "frame_index"])
+        .drop_duplicates(subset=["experiment_id", "well_id", "well_index", "channel_id", "frame_index"], keep="first")
         .copy()
     )
 
@@ -446,8 +465,15 @@ def materialize_stitched_images(
             well_index = str(row["well_index"])
             channel_id = str(row.get("channel_id", row.get("channel", "BF")))
             well_id = str(row["well_id"])
-            time_int = int(row["time_int"])
-            frame_index = int(row.get("frame_index", time_int))
+            frame_index = int(row["frame_index"])
+            time_int = int(row.get("time_int", frame_index))
+            frame_interval_s = _safe_float(row.get("frame_interval_s", np.nan))
+            frame_interval_min = _safe_float(row.get("frame_interval_min", np.nan))
+            frame_interval_hr = _safe_float(row.get("frame_interval_hr", np.nan))
+            elapsed_time_s = _safe_float(row.get("elapsed_time_s", np.nan))
+            elapsed_time_min = _safe_float(row.get("elapsed_time_min", np.nan))
+            elapsed_time_hr = _safe_float(row.get("elapsed_time_hr", np.nan))
+            experiment_time_s = _safe_float(row.get("experiment_time_s", np.nan))
 
             image_id = row.get("image_id")
             if pd.isna(image_id) or not str(image_id):
@@ -572,17 +598,24 @@ def materialize_stitched_images(
             rows.append(
                 {
                     "experiment_id": experiment,
-                    "microscope_id": microscope,
                     "well_id": well_id,
                     "well_index": well_index,
-                    "channel_id": channel_id,
-                    "time_int": time_int,
                     "frame_index": frame_index,
+                    "channel_id": channel_id,
                     "image_id": image_id,
+                    "time_int": time_int,
+                    "microscope_id": microscope,
                     "stitched_image_path": str(stitched_rel),
                     "materialization_status": status,
                     "source_artifact_path": str(source_artifact),
                     "source_artifact_kind": source_kind,
+                    "frame_interval_s": frame_interval_s,
+                    "frame_interval_min": frame_interval_min,
+                    "frame_interval_hr": frame_interval_hr,
+                    "experiment_time_s": experiment_time_s,
+                    "elapsed_time_s": elapsed_time_s,
+                    "elapsed_time_min": elapsed_time_min,
+                    "elapsed_time_hr": elapsed_time_hr,
                     "image_width_px": materialized_width,
                     "image_height_px": materialized_height,
                     "tiler_fallback_used": tiler_fallback_used,
@@ -607,6 +640,19 @@ def materialize_stitched_images(
                     candidate.unlink(missing_ok=True)
 
     stitched_index_df = pd.DataFrame(rows)
+    front_cols = [
+        "experiment_id",
+        "well_id",
+        "well_index",
+        "frame_index",
+        "channel_id",
+        "image_id",
+        "time_int",
+        "microscope_id",
+    ]
+    ordered = [col for col in front_cols if col in stitched_index_df.columns]
+    remainder = [col for col in stitched_index_df.columns if col not in ordered]
+    stitched_index_df = stitched_index_df.loc[:, ordered + remainder]
     output_stitched_index_csv.parent.mkdir(parents=True, exist_ok=True)
     stitched_index_df.to_csv(output_stitched_index_csv, index=False)
 
