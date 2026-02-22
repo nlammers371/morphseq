@@ -1,0 +1,12 @@
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+[sam2-onwards] JOB_ID=7872637 TASK=undefined
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Run flags - metadata:0 b02:1 sam2:0 b03:0 snip:0 b04:0 b06:0
+[sam2-onwards] Build02 params - mode:legacy workers:1 overwrite:1
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:1
+[sam2-onwards] SGE_TASK_ID='undefined' is non-numeric; ignoring array selection
+[sam2-onwards] Processing experiment(s): 20251017_part1,20251106
+mkdir: cannot create directory ‘logs’: File exists

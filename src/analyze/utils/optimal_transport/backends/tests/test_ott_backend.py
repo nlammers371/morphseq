@@ -6,6 +6,8 @@ All tests are guarded by pytest.importorskip("ott").
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -15,6 +17,7 @@ from analyze.utils.optimal_transport.config import UOTConfig, UOTSupport
 
 ott = pytest.importorskip("ott")
 
+import analyze.utils.optimal_transport.backends.ott_backend as _ott_mod
 from analyze.utils.optimal_transport.backends.ott_backend import OTTBackend
 
 
@@ -22,7 +25,7 @@ from analyze.utils.optimal_transport.backends.ott_backend import OTTBackend
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _circle_support(cx: float, cy: float, r: float, n: int = 100, seed: int = 0) -> UOTSupport:
+def _circle_support(cx: float = 50.0, cy: float = 50.0, r: float = 10.0, n: int = 100, seed: int = 0) -> UOTSupport:
     """Generate uniformly weighted points on a filled circle."""
     rng = np.random.default_rng(seed)
     theta = rng.uniform(0, 2 * np.pi, n)
@@ -266,3 +269,54 @@ class TestConditionalImport:
     def test_ott_in_top_level_init(self):
         from analyze.utils.optimal_transport import OTTBackend as OTT
         assert OTT is not None
+
+
+class TestJITCache:
+    """JIT cache behavioral tests — assert entry counts and warning counts, not wall-clock time."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_warn_flag(self):
+        """Reset module-level single-solve warning flag before and after each test."""
+        _ott_mod._SINGLE_SOLVE_WARNED = False
+        yield
+        _ott_mod._SINGLE_SOLVE_WARNED = False
+
+    def test_same_shape_reuses_cache(self):
+        backend = OTTBackend()
+        cfg = _default_config()
+        s1 = _circle_support(50, 50, 10, n=50, seed=1)
+        t1 = _circle_support(50, 60, 10, n=50, seed=2)
+        s2 = _circle_support(50, 40, 10, n=50, seed=3)
+        t2 = _circle_support(50, 50, 10, n=50, seed=4)
+        backend.solve(s1, t1, cfg)
+        backend.solve(s2, t2, cfg)
+        assert len(backend._jit_cache) == 1  # same (n_src, n_tgt, ...) → one entry
+
+    def test_different_shape_adds_entry(self):
+        backend = OTTBackend()
+        cfg = _default_config()
+        backend.solve(_circle_support(50, 50, 10, n=50), _circle_support(50, 50, 10, n=50), cfg)
+        backend.solve(_circle_support(50, 50, 10, n=80), _circle_support(50, 50, 10, n=70), cfg)
+        assert len(backend._jit_cache) == 2
+
+    def test_solve_batch_reuses_cache(self):
+        backend = OTTBackend()
+        cfg = _default_config()
+        problems = [
+            (_circle_support(50, 50, 10, n=50, seed=i),
+             _circle_support(50, 55, 10, n=50, seed=i + 100))
+            for i in range(8)
+        ]
+        backend.solve_batch(problems, cfg)
+        assert len(backend._jit_cache) == 1  # 8 pairs, 1 shape bucket → 1 compile
+
+    def test_single_solve_warns_once(self, caplog):
+        backend = OTTBackend()
+        cfg = _default_config()
+        s = _circle_support(50, 50, 10, n=40)
+        t = _circle_support(50, 55, 10, n=40)
+        with caplog.at_level(logging.WARNING):
+            backend.solve(s, t, cfg)
+            backend.solve(s, t, cfg)
+        warnings = [r for r in caplog.records if "single pair" in r.message.lower()]
+        assert len(warnings) == 1  # warned exactly once per process

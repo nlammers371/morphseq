@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from analyze.difference_detection.classification_test_multiclass import (
+from analyze.classification.classification_test import (
     _make_logistic_classifier,
     run_classification_test,
 )
@@ -45,7 +45,7 @@ class ClassWeightPolicyTests(unittest.TestCase):
         }
 
         with patch(
-            "analyze.difference_detection.classification_test_multiclass.run_multiclass_classification_test",
+            "analyze.classification.classification_test.run_multiclass_classification_test",
             return_value=fake_result,
         ):
             buf = io.StringIO()

@@ -29,7 +29,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from analyze.difference_detection.classification_test_multiclass import run_classification_test  # noqa: E402
+from analyze.classification.classification_test import run_classification_test  # noqa: E402
 from analyze.viz.plotting import plot_feature_over_time  # noqa: E402
 
 

@@ -46,16 +46,19 @@ from .classification_test import (
     run_binary_classification_test,
     compute_timeseries_divergence,
 )
-from .classification_test_multiclass import (
+from analyze.classification import (
     run_multiclass_classification_test,
     run_classification_test,
     extract_temporal_confusion_profile,
-)
-
-# Result containers
-from .results import (
     MulticlassOVRResults,
     ComparisonSpec,
+)
+import warnings
+warnings.warn(
+    "Classification APIs have moved to analyze.classification; "
+    "analyze.difference_detection exports are compatibility shims.",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
 # Classification test visualization
@@ -181,7 +184,7 @@ __all__ = [
     'run_binary_classification_test',
     'compute_timeseries_divergence',
     'run_multiclass_classification_test',
-    'run_comparison_test',  # New API
+    'run_classification_test',
     'extract_temporal_confusion_profile',
     # Result containers
     'MulticlassOVRResults',
