@@ -17,6 +17,7 @@ import torch
 
 from data_pipeline.image_building.utils.frame_tiler import FallbackParams
 from data_pipeline.image_building.utils.frame_tiler import FrameTilingConfig
+from data_pipeline.image_building.utils.frame_tiler import FrameTileResult
 from data_pipeline.image_building.utils.frame_tiler import TileSpec
 from data_pipeline.image_building.utils.frame_tiler import legacy_canvas_shape
 from data_pipeline.image_building.utils.frame_tiler import stitch_frame_tiles
@@ -357,7 +358,7 @@ def _stitch_keyence_tile_projections(
     tile_projections: list[np.ndarray],
     orientation: str,
     master_params_path: Path | None,
-) -> np.ndarray:
+) -> FrameTileResult:
     specs = [
         TileSpec(tile_id=f"tile_{idx:04d}", image=img)
         for idx, img in enumerate(tile_projections)
@@ -377,7 +378,7 @@ def _stitch_keyence_tile_projections(
         ),
         fallback=FallbackParams(master_params_path=master_params_path),
     )
-    return result.stitched
+    return result
 
 
 def materialize_stitched_images(
@@ -460,6 +461,13 @@ def materialize_stitched_images(
             height = int(float(row.get("image_height_px", 512)))
             materialized_width = width
             materialized_height = height
+            tiler_fallback_used: str = "not_applicable"
+            tiler_qc_passed: bool | None = None
+            tiler_qc_reasons: str = ""
+            tiler_tile_count: int | None = None
+            tiler_canvas_height_px: int | None = None
+            tiler_canvas_width_px: int | None = None
+            tiler_max_abs_shift_px: float | None = None
 
             status = "placeholder"
             source_artifact: Path
@@ -508,12 +516,25 @@ def materialize_stitched_images(
                             _materialize_keyence_tile_projection(tile_stacks[tile_id])
                             for tile_id in sorted(tile_stacks.keys())
                         ]
-                    image = _stitch_keyence_tile_projections(
+                    tiler_result = _stitch_keyence_tile_projections(
                         tile_projections=tile_projections,
                         orientation=keyence_orientation,
                         master_params_path=keyence_master_params,
                     )
+                    image = tiler_result.stitched
                     materialized_height, materialized_width = image.shape[:2]
+                    tiler_fallback_used = str(tiler_result.fallback_used)
+                    tiler_qc_passed = bool(tiler_result.qc.passed)
+                    tiler_qc_reasons = ";".join(str(reason) for reason in tiler_result.qc.reasons)
+                    tiler_tile_count = int(len(tile_stacks))
+                    tiler_canvas_height_px = int(tiler_result.canvas_shape[0])
+                    tiler_canvas_width_px = int(tiler_result.canvas_shape[1])
+                    metric_val = tiler_result.qc.metrics.get("max_abs_shift_px", np.nan)
+                    try:
+                        metric_float = float(metric_val)
+                        tiler_max_abs_shift_px = metric_float if np.isfinite(metric_float) else None
+                    except (TypeError, ValueError):
+                        tiler_max_abs_shift_px = None
                     status = _write_image(output_path, image, overwrite=overwrite, image_extension=image_extension)
                     source_artifact = tile_stacks[sorted(tile_stacks.keys())[0]][0]
                     source_kind = (
@@ -522,6 +543,9 @@ def materialize_stitched_images(
                         else "keyence_tiff_single_tile_log"
                     )
                 else:
+                    tiler_fallback_used = "no_tiles"
+                    tiler_qc_passed = False
+                    tiler_qc_reasons = "no_tiles"
                     status = _write_placeholder_image(
                         output_path,
                         width,
@@ -561,6 +585,13 @@ def materialize_stitched_images(
                     "source_artifact_kind": source_kind,
                     "image_width_px": materialized_width,
                     "image_height_px": materialized_height,
+                    "tiler_fallback_used": tiler_fallback_used,
+                    "tiler_qc_passed": tiler_qc_passed,
+                    "tiler_qc_reasons": tiler_qc_reasons,
+                    "tiler_tile_count": tiler_tile_count,
+                    "tiler_canvas_height_px": tiler_canvas_height_px,
+                    "tiler_canvas_width_px": tiler_canvas_width_px,
+                    "tiler_max_abs_shift_px": tiler_max_abs_shift_px,
                 }
             )
     finally:

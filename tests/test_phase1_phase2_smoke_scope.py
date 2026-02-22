@@ -51,8 +51,28 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     assert set(stitched_df["well_index"].astype(str).unique()).issubset(allowed_wells)
     assert set(manifest_df["well_index"].astype(str).unique()).issubset(allowed_wells)
 
-    for col in ["well_id", "well_index", "channel_id", "stitched_image_path", "time_int"]:
+    base_cols = [
+        "well_id",
+        "well_index",
+        "channel_id",
+        "stitched_image_path",
+        "time_int",
+    ]
+    for col in base_cols:
         assert col in stitched_df.columns
+
+    # Keyence rows include tiler diagnostics emitted at materialization.
+    if experiment == "20240509_24hpf":
+        for col in [
+            "tiler_fallback_used",
+            "tiler_qc_passed",
+            "tiler_qc_reasons",
+            "tiler_tile_count",
+            "tiler_canvas_height_px",
+            "tiler_canvas_width_px",
+            "tiler_max_abs_shift_px",
+        ]:
+            assert col in stitched_df.columns
 
     for col in ["well_id", "well_index", "channel_id", "channel_name_raw", "stitched_image_path", "micrometers_per_pixel"]:
         assert col in manifest_df.columns

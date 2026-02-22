@@ -95,16 +95,18 @@ def build_debug_artifacts(
     max_tiles = [_materialize_keyence_tile_projection(tile_stacks[tile_id]) for tile_id in tile_ids]
     log_tiles = _materialize_keyence_ff_tiles_with_log(tile_stacks, device=device, filter_size=filter_size)
 
-    stitched_max = _stitch_keyence_tile_projections(
+    stitched_max_result = _stitch_keyence_tile_projections(
         tile_projections=max_tiles,
         orientation=orientation,
         master_params_path=master_params,
     )
-    stitched_log = _stitch_keyence_tile_projections(
+    stitched_log_result = _stitch_keyence_tile_projections(
         tile_projections=log_tiles,
         orientation=orientation,
         master_params_path=master_params,
     )
+    stitched_max = stitched_max_result.stitched
+    stitched_log = stitched_log_result.stitched
 
     for tile_id, image in zip(tile_ids, max_tiles):
         skio.imsave(output_dir / f"tile_{tile_id:02d}_max.jpg", _to_u8(image), check_contrast=False)
@@ -137,6 +139,12 @@ def build_debug_artifacts(
         "tile_first_paths": {str(t): str(tile_stacks[t][0]) for t in tile_ids},
         "max_tile_stats": {str(t): _stats(img) for t, img in zip(tile_ids, max_tiles)},
         "log_tile_stats": {str(t): _stats(img) for t, img in zip(tile_ids, log_tiles)},
+        "stitched_max_fallback_used": stitched_max_result.fallback_used,
+        "stitched_log_fallback_used": stitched_log_result.fallback_used,
+        "stitched_max_qc_passed": bool(stitched_max_result.qc.passed),
+        "stitched_log_qc_passed": bool(stitched_log_result.qc.passed),
+        "stitched_max_qc_reasons": list(stitched_max_result.qc.reasons),
+        "stitched_log_qc_reasons": list(stitched_log_result.qc.reasons),
         "stitched_max_stats": _stats(stitched_max),
         "stitched_log_stats": _stats(stitched_log),
         "stitched_absdiff_stats": _stats(diff),
