@@ -1,0 +1,95 @@
+"""Frame-contract rules: stitched image materialization and validation."""
+
+
+def _selected_wells_csv(experiment: str) -> str:
+    wells = selected_wells_for_experiment(experiment)
+    return ",".join(wells)
+
+
+def _microscope(experiment: str) -> str:
+    return microscope_for_experiment(experiment)
+
+
+rule materialize_stitched_images:
+    input:
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
+        mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
+        raw_images_dir=lambda wc: RAW_IMAGES_DIR / _microscope(wc.experiment) / wc.experiment
+    output:
+        stitched_index_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv",
+        done_flag=EXPERIMENT_METADATA_DIR / "{experiment}" / ".materialize_stitched_images.done"
+    params:
+        python=PYTHON_EXE,
+        pythonpath=SRC_ROOT,
+        experiment=lambda wc: wc.experiment,
+        microscope=lambda wc: _microscope(wc.experiment),
+        selected_wells=lambda wc: _selected_wells_csv(wc.experiment),
+        output_root=BUILT_IMAGE_DATA_DIR,
+        device_preference=lambda wc: (
+            config.get("frame_contracts", {}).get("yx1", {}).get("device_preference")
+            or config.get("phase2", {}).get("yx1", {}).get("device_preference", "cuda")
+        ),
+        overwrite=lambda wc: str(
+            config.get("frame_contracts", {}).get("overwrite")
+            if config.get("frame_contracts", {}).get("overwrite") is not None
+            else config.get("phase2", {}).get("overwrite", False)
+        ).lower()
+    shell:
+        (
+            'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.pipeline_orchestrator.tasks '
+            'materialize-stitched --experiment "{params.experiment}" --microscope "{params.microscope}" '
+            '--raw-images-dir "{input.raw_images_dir}" --scope-csv "{input.scope_csv}" '
+            '--mapping-csv "{input.mapping_csv}" --output-root "{params.output_root}" '
+            '--output-stitched-index-csv "{output.stitched_index_csv}" --selected-wells "{params.selected_wells}" '
+            '--device-preference "{params.device_preference}" --overwrite "{params.overwrite}" '
+            '--done-flag "{output.done_flag}"'
+        )
+
+
+rule validate_stitched_image_index:
+    input:
+        stitched_index_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv"
+    output:
+        validation_flag=EXPERIMENT_METADATA_DIR / "{experiment}" / ".stitched_image_index.validated"
+    params:
+        python=PYTHON_EXE,
+        pythonpath=SRC_ROOT
+    shell:
+        (
+            'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.stitched_index.validate_stitched_image_index '
+            '--input-csv "{input.stitched_index_csv}" --output-flag "{output.validation_flag}"'
+        )
+
+
+rule build_frame_manifest:
+    input:
+        stitched_index_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv",
+        stitched_index_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".stitched_image_index.validated",
+        scope_and_plate_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_and_plate_metadata.csv"
+    output:
+        frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv"
+    params:
+        python=PYTHON_EXE,
+        pythonpath=SRC_ROOT
+    shell:
+        (
+            'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.frame_manifest.build_frame_manifest '
+            '--stitched-index-csv "{input.stitched_index_csv}" '
+            '--scope-and-plate-csv "{input.scope_and_plate_csv}" '
+            '--output-csv "{output.frame_manifest_csv}"'
+        )
+
+
+rule validate_frame_manifest:
+    input:
+        frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv"
+    output:
+        validation_flag=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated"
+    params:
+        python=PYTHON_EXE,
+        pythonpath=SRC_ROOT
+    shell:
+        (
+            'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.frame_manifest.validate_frame_manifest '
+            '--input-csv "{input.frame_manifest_csv}" --output-flag "{output.validation_flag}"'
+        )

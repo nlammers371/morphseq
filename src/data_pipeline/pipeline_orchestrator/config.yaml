@@ -1,55 +1,49 @@
-# MorphSeq Pipeline Configuration
+# MorphSeq Snakemake pipeline configuration
 
-# Data paths
+# Output root (relative to repo root unless absolute)
 data_root: "data_pipeline_output"
 
-# Experiments to process
+# Absolute interpreter for all rule modules
+python_executable: "/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python"
+
+# Smoke dataset defaults
 experiments:
-  - 20250912
+  - "20240418"
+  - "20240509_24hpf"
 
-# Phase 1: Metadata Alignment
-phase1:
-  # Input file patterns
-  plate_metadata_pattern: "{experiment}_plate_layout.csv"
-  raw_images_keyence_pattern: "Keyence/{experiment}"
-  raw_images_yx1_pattern: "YX1/{experiment}"
+# Explicit microscope assignment per experiment
+experiment_microscopes:
+  "20240418": "YX1"
+  "20240509_24hpf": "Keyence"
 
-  # Keyence-specific settings
-  keyence:
-    typical_micrometers_per_pixel: 0.65
-    typical_frame_interval_s: 300
-    typical_image_width: 1280
-    typical_image_height: 960
+# Fixed well scope for fast stitched-image tests
+experiment_wells:
+  "20240418": ["A01", "C01"]
+  "20240509_24hpf": ["A04", "B04"]
 
-  # YX1-specific settings
+# Input locations (can be symlinked inside data_root/inputs)
+inputs:
+  plate_metadata_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/well_metadata"
+  raw_image_data_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/raw_image_data"
+
+# Metadata-alignment settings
+metadata_alignment:
+  yx1_mapping:
+    method: "xy_reference"
+    ref_xy_csv: "/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground/metadata/YX1_nd2_ref_plate_xy_coordinates.csv"
+    max_distance_um: 4500.0
+
+# Frame-contract settings
+frame_contracts:
+  overwrite: false
   yx1:
-    typical_micrometers_per_pixel: 0.195
-    typical_frame_interval_s: 600
-    typical_image_width: 2048
-    typical_image_height: 2048
+    device_preference: "cuda"
+    z_buffer: false
+  keyence:
+    projection_method: "max"
 
-# Phase 2: Image Building (placeholder)
-phase2:
-  stitch_method: "tile_stitching"
-  z_collapse_method: "max_projection"
-
-# Phase 3: Segmentation (placeholder)
-phase3:
-  model: "SAM2"
-  gdino_threshold: 0.5
-
-# Phase 4: Snip Processing (placeholder)
-phase4:
-  target_pixel_size_um: 0.5
-  target_shape: [256, 256]
-
-# Phase 5: QC (placeholder)
-phase5:
-  edge_margin_pixels: 2
-  death_fraction_threshold: 0.9
-
-# Snakemake settings
+# Snakemake resources
 threads: 4
 resources:
-  mem_mb: 8000
-  gpu: 0
+  mem_mb: 12000
+  gpu: 1

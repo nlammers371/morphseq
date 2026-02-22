@@ -63,6 +63,11 @@ def process_plate_layout(
     if 'well_id' not in df.columns:
         df['well_id'] = df['experiment_id'] + '_' + df['well_index']
 
+    # Some historical well metadata files do not include temperature.
+    # Use zebrafish default culture temperature to preserve schema contract.
+    if 'temperature' not in df.columns:
+        df['temperature'] = 28.5
+
     # Validate against schema
     validate_dataframe_schema(df, REQUIRED_COLUMNS_PLATE_METADATA, "plate_metadata")
 

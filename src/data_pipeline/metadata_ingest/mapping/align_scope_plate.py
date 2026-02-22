@@ -7,6 +7,7 @@ to create a unified metadata table for downstream processing.
 
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 from data_pipeline.schemas.scope_and_plate_metadata import REQUIRED_COLUMNS_SCOPE_AND_PLATE_METADATA
 from data_pipeline.io.validators import validate_dataframe_schema
@@ -45,12 +46,21 @@ def align_scope_and_plate_metadata(
     plate_df = pd.read_csv(plate_metadata_csv)
     scope_df = pd.read_csv(scope_metadata_csv)
 
-    # Merge on experiment_id and well_id
+    # Canonicalize common plate columns for downstream contracts.
+    if 'temperature' not in plate_df.columns and 'temperature_c' in plate_df.columns:
+        plate_df = plate_df.rename(columns={'temperature_c': 'temperature'})
+    if 'embryos_per_well' not in plate_df.columns:
+        if 'embryos' in plate_df.columns:
+            plate_df['embryos_per_well'] = plate_df['embryos']
+        else:
+            plate_df['embryos_per_well'] = 1
+
+    # Merge on experiment_id and well_index
     # Use left join to keep all scope metadata (images)
     # Each image should match exactly one well from the plate layout
     merged_df = scope_df.merge(
         plate_df,
-        on=['experiment_id', 'well_id'],
+        on=['experiment_id', 'well_index'],
         how='left',
         validate='many_to_one',  # Many images per well
         suffixes=('', '_plate')
@@ -61,6 +71,12 @@ def align_scope_and_plate_metadata(
     if 'well_index_plate' in merged_df.columns:
         merged_df = merged_df.drop(columns=['well_index_plate'])
 
+    # Keep scope-derived well_id as source of truth.
+    if 'well_id_plate' in merged_df.columns:
+        merged_df = merged_df.drop(columns=['well_id_plate'])
+    if 'well_id' not in merged_df.columns:
+        merged_df['well_id'] = merged_df['experiment_id'].astype(str) + "_" + merged_df['well_index'].astype(str)
+
     # Check if any scope rows failed to match plate data
     unmatched = merged_df[merged_df['genotype'].isna()]
     if len(unmatched) > 0:
@@ -69,6 +85,20 @@ def align_scope_and_plate_metadata(
             f"Found {len(unmatched)} scope metadata rows with no matching plate data. "
             f"Unmatched well_ids: {list(unmatched_wells)[:10]}"
         )
+
+    # Backfill required metadata fields for historical sheets where values are blank.
+    defaults = {
+        'treatment': 'control',
+        'medium': 'EM',
+        'temperature': 28.5,
+        'start_age_hpf': 24.0,
+        'embryos_per_well': 1,
+    }
+    for col, default in defaults.items():
+        if col not in merged_df.columns:
+            merged_df[col] = default
+            continue
+        merged_df[col] = merged_df[col].replace(r'^\s*$', np.nan, regex=True).fillna(default)
 
     # Validate against schema
     validate_dataframe_schema(merged_df, REQUIRED_COLUMNS_SCOPE_AND_PLATE_METADATA, "scope_and_plate_metadata")

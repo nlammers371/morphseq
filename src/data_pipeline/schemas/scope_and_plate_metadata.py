@@ -19,7 +19,9 @@ REQUIRED_COLUMNS_SCOPE_AND_PLATE_METADATA = [
     # From plate_metadata
     'genotype',
     'treatment',
-    'temperature_c',
+    'temperature',
+    'medium',
+    'start_age_hpf',
     'embryos_per_well',
 
     # From scope_metadata

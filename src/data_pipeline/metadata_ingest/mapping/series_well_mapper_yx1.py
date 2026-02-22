@@ -71,7 +71,8 @@ def _build_implicit_mapping(scope_df: pd.DataFrame, plate_df: pd.DataFrame) -> d
     n_series = len(scope_wells)
 
     # Get wells from plate metadata (these are the experiment wells)
-    plate_wells = sorted(plate_df['well'].unique())
+    plate_col = 'well_index' if 'well_index' in plate_df.columns else 'well'
+    plate_wells = sorted(plate_df[plate_col].unique())
 
     log.info(f"Building implicit mapping: {n_series} series → {len(plate_wells)} plate wells")
 
@@ -237,7 +238,8 @@ def map_series_to_wells_yx1(
     output_provenance_json: Path,
     nd2_path: Path = None,
     use_xy_reference: bool = True,
-    ref_xy_csv: Path = None
+    ref_xy_csv: Path = None,
+    max_distance_um: float = 4500.0,
 ) -> pd.DataFrame:
     """
     Map YX1 ND2 series numbers to well positions.
@@ -280,7 +282,11 @@ def map_series_to_wells_yx1(
             nd2_positions = extract_nd2_stage_positions(nd2_path)
 
             # Map via XY matching
-            p_to_well_map, xy_diagnostics = _map_positions_to_wells_by_xy(nd2_positions, ref_coordinates)
+            p_to_well_map, xy_diagnostics = _map_positions_to_wells_by_xy(
+                nd2_positions,
+                ref_coordinates,
+                max_distance_um=max_distance_um,
+            )
 
             if p_to_well_map:
                 # Convert P-based mapping to series-based mapping (series = P + 1)
@@ -328,6 +334,7 @@ def map_series_to_wells_yx1(
         'source_scope_metadata': str(scope_metadata_csv),
         'nd2_path': str(nd2_path) if nd2_path else None,
         'ref_xy_csv': str(ref_xy_csv) if ref_xy_csv else str(DEFAULT_REF_XY_PATH),
+        'max_distance_um': float(max_distance_um),
         'mapping_summary': {
             'min_series': int(min(series_map.keys())),
             'max_series': int(max(series_map.keys())),

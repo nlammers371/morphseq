@@ -28,7 +28,7 @@ def _find_nd2_file(raw_data_dir: Path) -> Path:
     return nd2_files[0]
 
 
-def _extract_timestamps(nd: nd2.ND2File, n_t: int, n_w: int, n_z: int) -> np.ndarray:
+def _extract_timestamps(nd: nd2.ND2File, n_t: int, n_w: int, n_z: int, n_c: int = 1) -> np.ndarray:
     """
     Extract timestamps from ND2 file with gap imputation.
 
@@ -45,7 +45,7 @@ def _extract_timestamps(nd: nd2.ND2File, n_t: int, n_w: int, n_z: int) -> np.nda
     times = np.full((n_t,), np.nan, dtype=float)
 
     for t in range(n_t):
-        seq = t * n_w * n_z  # First well, first z-slice
+        seq = t * n_w * n_z * max(n_c, 1)  # First well, first z-slice, first channel
         try:
             times[t] = nd.frame_metadata(seq).channels[0].time.relativeTimeMs / 1000.0
         except Exception:
@@ -158,16 +158,17 @@ def extract_yx1_scope_metadata(
     log.info(f"Reading ND2 file: {nd2_path}")
 
     with nd2.ND2File(nd2_path) as nd:
-        # Get dimensions
-        shape = nd.shape  # (T, W, Z, C, Y, X)
+        # Get dimensions (supports both T,W,Z,C,Y,X and T,W,Z,Y,X layouts)
+        shape = nd.shape
         n_t, n_w, n_z = shape[:3]
+        n_c = int(shape[3]) if len(shape) >= 6 else 1
         log.info(f"ND2 shape: T={n_t}, W={n_w}, Z={n_z}")
 
         # Get spatial calibration
         voxel_size = nd.voxel_size()
         micrometers_per_pixel = voxel_size[0]  # X dimension
-        image_height_px = shape[4]  # Y
-        image_width_px = shape[5]   # X
+        image_height_px = shape[-2]  # Y
+        image_width_px = shape[-1]   # X
 
         # Get channel names
         channel_names = [c.channel.name for c in nd.frame_metadata(0).channels]
@@ -180,7 +181,7 @@ def extract_yx1_scope_metadata(
             objective = "Unknown"
 
         # Extract timestamps
-        timestamps = _extract_timestamps(nd, n_t, n_w, n_z)
+        timestamps = _extract_timestamps(nd, n_t, n_w, n_z, n_c=n_c)
 
         # Calculate frame interval
         if len(timestamps) >= 2:

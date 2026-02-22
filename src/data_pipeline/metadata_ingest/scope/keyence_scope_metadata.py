@@ -171,14 +171,20 @@ def _extract_well_from_path(file_path: Path) -> str:
     """
     path_str = str(file_path)
 
-    # Check for XY pattern in path (e.g., XY01a → A01)
+    # Check for XY pattern in path (e.g., XY01, XY16, XY01a)
     for part in file_path.parts:
         if part.startswith('XY'):
-            # XY01a format
-            well_num = part[2:4]  # Get "01"
-            well_letter = part[-1].upper()  # Get "a" → "A"
-            # Convert letter to row (a=A, b=B, etc.)
-            if well_letter.isalpha():
+            suffix = part[2:]
+            if suffix.isdigit():
+                xy_idx = int(suffix)
+                row = (xy_idx - 1) // 12
+                col = (xy_idx - 1) % 12 + 1
+                return f"{chr(65 + row)}{col:02d}"
+
+            # Legacy XY01a format
+            well_num = part[2:4]
+            well_letter = part[-1].upper()
+            if well_num.isdigit() and well_letter.isalpha():
                 return f"{well_letter}{well_num}"
 
     # Check for W0 pattern (W001 → A01)
@@ -248,11 +254,16 @@ def extract_keyence_scope_metadata(
             width_px = meta.get('Width (px)', 1)
             micrometers_per_pixel = width_um / width_px if width_px > 0 else 0
 
-            # Extract timepoint index from filename or path
-            # Common patterns: T0001, t0001, _t01, etc.
+            # Extract timepoint index from filename.
+            # Common Keyence format: *_00003_Z016_CH1.tif where 00003 is timepoint (1-based).
             import re
-            time_match = re.search(r'[Tt](\d+)', tiff_path.name)
-            time_int = int(time_match.group(1)) if time_match else 0
+            time_match = re.search(r'_(\d+)_Z\d+_CH\d+', tiff_path.name)
+            if time_match:
+                time_raw = int(time_match.group(1))
+                time_int = max(time_raw - 1, 0)
+            else:
+                alt_time_match = re.search(r'[Tt](\d+)', tiff_path.name)
+                time_int = int(alt_time_match.group(1)) if alt_time_match else 0
 
             # Build row
             row = {

@@ -42,15 +42,26 @@ def _discover_keyence_wells(raw_data_dir: Path, experiment_id: str) -> list:
 
     wells = []
 
-    # Check for XY pattern (e.g., XY01a → A01)
+    # Check for XY pattern (e.g., XY01, XY16)
     xy_dirs = sorted(exp_dir.glob("XY*"))
     if xy_dirs:
         for well_dir in xy_dirs:
             well_name = well_dir.name  # e.g., "XY01a"
-            well_num = well_name[2:4]  # Get "01"
-            well_letter = well_name[-1].upper()  # Get "a" → "A"
-            well_index = f"{well_letter}{well_num}"
-            wells.append((well_index, well_dir))
+            suffix = well_name[2:]
+            if suffix.isdigit():
+                xy_idx = int(suffix)
+                row = (xy_idx - 1) // 12
+                col = (xy_idx - 1) % 12 + 1
+                well_index = f"{chr(65 + row)}{col:02d}"
+                wells.append((well_index, well_dir))
+                continue
+
+            # Legacy format with trailing row letter (e.g. XY01a)
+            well_num = well_name[2:4]
+            well_letter = well_name[-1].upper()
+            if well_num.isdigit() and well_letter.isalpha():
+                well_index = f"{well_letter}{well_num}"
+                wells.append((well_index, well_dir))
 
     # Check for W0 pattern (W001 → A01)
     w0_dirs = sorted(exp_dir.glob("W0*"))
@@ -207,12 +218,12 @@ def map_series_to_wells_keyence(
         'experiment_id': experiment_id,
         'microscope': 'Keyence',
         'mapping_method': 'keyence_directory_structure',
-        'n_series': len(df),
-        'n_wells': df['well_index'].nunique(),
+        'n_series': int(len(df)),
+        'n_wells': int(df['well_index'].nunique()),
         'mapping_summary': {
-            'total_series': len(df),
-            'total_wells': df['well_index'].nunique(),
-            'wells_with_multiple_positions': (df['n_positions_in_well'] > 1).sum(),
+            'total_series': int(len(df)),
+            'total_wells': int(df['well_index'].nunique()),
+            'wells_with_multiple_positions': int((df['n_positions_in_well'] > 1).sum()),
         },
         'warnings': warnings if warnings else None,
         'source_files': {
