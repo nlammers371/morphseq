@@ -6,10 +6,17 @@ from analyze.utils.optimal_transport.config import (
     UOTFramePair,
     UOTSupport,
     UOTProblem,
-    UOTResult,
     SamplingMode,
     MassMode,
     Coupling,
+)
+from analyze.utils.optimal_transport.results import UOTResultWork, UOTResultCanonical
+from analyze.utils.optimal_transport.solve import run_uot_on_working_grid, lift_work_result_to_canonical
+from analyze.utils.optimal_transport.working_grid import (
+    OutputFrame,
+    WorkingGridConfig,
+    WorkingGridPair,
+    prepare_working_grid_pair,
 )
 from analyze.utils.optimal_transport.backends.base import UOTBackend, BackendResult
 from analyze.utils.optimal_transport.density_transforms import (
@@ -26,6 +33,7 @@ from analyze.utils.optimal_transport.multiscale_sampling import (
 )
 from analyze.utils.optimal_transport.transport_maps import compute_transport_maps, compute_cost_maps
 from analyze.utils.optimal_transport.metrics import summarize_metrics, compute_transport_metrics
+from analyze.utils.optimal_transport.batch import BatchItem, solve_working_grid_batch
 
 __all__ = [
     # Config and data structures
@@ -34,10 +42,20 @@ __all__ = [
     "UOTFramePair",
     "UOTSupport",
     "UOTProblem",
-    "UOTResult",
+    "UOTResultWork",
+    "UOTResultCanonical",
     "SamplingMode",
     "MassMode",
     "Coupling",
+    # Working-grid seam + solve
+    "OutputFrame",
+    "WorkingGridConfig",
+    "WorkingGridPair",
+    "prepare_working_grid_pair",
+    "run_uot_on_working_grid",
+    "lift_work_result_to_canonical",
+    "BatchItem",
+    "solve_working_grid_batch",
     # Backends
     "UOTBackend",
     "BackendResult",

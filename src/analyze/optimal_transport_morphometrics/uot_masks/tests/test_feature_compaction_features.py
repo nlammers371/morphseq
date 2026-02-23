@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from analyze.utils.optimal_transport import UOTResult
+from analyze.utils.optimal_transport import UOTResultCanonical, UOTResultWork
 from analyze.optimal_transport_morphometrics.uot_masks.feature_compaction.features import (
     dct_radial_band_energy_fractions,
     extract_pair_feature_record,
@@ -12,7 +12,7 @@ from analyze.optimal_transport_morphometrics.uot_masks.feature_compaction.featur
 )
 
 
-def _make_result() -> UOTResult:
+def _make_results() -> tuple[UOTResultWork, UOTResultCanonical]:
     coupling = np.array(
         [
             [0.6, 0.4],
@@ -20,25 +20,24 @@ def _make_result() -> UOTResult:
         ],
         dtype=np.float64,
     )
-    vel = np.zeros((8, 8, 2), dtype=np.float32)
-    vel[2:6, 2:6, 0] = 2.0
-    vel[2:6, 2:6, 1] = 1.0
-    mc = np.zeros((8, 8), dtype=np.float32)
-    md = np.zeros((8, 8), dtype=np.float32)
-    mc[2:6, 2:6] = 0.2
-    md[2:6, 2:6] = 0.1
+    vel_c = np.zeros((8, 8, 2), dtype=np.float32)
+    vel_c[2:6, 2:6, 0] = 2.0
+    vel_c[2:6, 2:6, 1] = 1.0
+    mc_c = np.zeros((8, 8), dtype=np.float32)
+    md_c = np.zeros((8, 8), dtype=np.float32)
+    mc_c[2:6, 2:6] = 0.2
+    md_c[2:6, 2:6] = 0.1
 
-    return UOTResult(
+    work = UOTResultWork(
         cost=10.0,
         coupling=coupling,
-        mass_created_px=mc,
-        mass_destroyed_px=md,
-        velocity_px_per_frame_yx=vel,
+        mass_created_work=np.zeros((4, 4), dtype=np.float32),
+        mass_destroyed_work=np.zeros((4, 4), dtype=np.float32),
+        velocity_work_px_per_step_yx=np.zeros((4, 4, 2), dtype=np.float32),
         support_src_yx=np.array([[2.0, 2.0], [5.0, 5.0]], dtype=np.float32),
         support_tgt_yx=np.array([[2.0, 3.0], [5.0, 6.0]], dtype=np.float32),
         weights_src=np.array([1.0, 1.0], dtype=np.float32),
         weights_tgt=np.array([1.0, 1.0], dtype=np.float32),
-        transform_meta={},
         diagnostics={
             "metrics": {
                 "total_transport_cost_um2": 10.0,
@@ -53,7 +52,19 @@ def _make_result() -> UOTResult:
                 "proportion_transported": 0.9,
             }
         },
+        work_shape_hw=(4, 4),
+        work_um_per_px=40.0,
     )
+    canon = UOTResultCanonical(
+        cost=10.0,
+        mass_created_canon=mc_c,
+        mass_destroyed_canon=md_c,
+        velocity_canon_px_per_step_yx=vel_c,
+        canonical_shape_hw=(8, 8),
+        canonical_um_per_px=10.0,
+        diagnostics=work.diagnostics,
+    )
+    return work, canon
 
 
 def test_dct_band_fractions_sum_to_one():
@@ -65,11 +76,12 @@ def test_dct_band_fractions_sum_to_one():
 
 
 def test_extract_pair_feature_record_contains_expected_keys():
-    result = _make_result()
+    result_work, result_canon = _make_results()
     rec = extract_pair_feature_record(
         run_id="run_a",
         pair_id="pair_a",
-        result=result,
+        result_work=result_work,
+        result_canon=result_canon,
         backend="OTT",
         n_bands=8,
     )

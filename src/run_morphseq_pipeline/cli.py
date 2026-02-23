@@ -118,6 +118,12 @@ def build_parser() -> argparse.ArgumentParser:
     p02.add_argument("--model-name", default="mask_v1_0050", help="Segmentation model name (legacy)")
     p02.add_argument("--n-classes", type=int, default=2)
     p02.add_argument("--num-workers", type=int, default=0, help="Number of DataLoader workers (0=single-threaded)")
+    p02.add_argument(
+        "--experiments",
+        type=str,
+        default="",
+        help="Optional comma-separated experiments to segment (default: all experiments).",
+    )
     p02.add_argument("--overwrite", action="store_true")
 
     # sam2
@@ -315,8 +321,10 @@ def main(argv: list[str] | None = None) -> int:
 
     elif args.cmd == "build02":
         from .steps.run_build02 import run_build02
+        build02_experiments = [x.strip() for x in args.experiments.split(",") if x.strip()] if args.experiments else None
         run_build02(root=resolve_root(args), mode=args.mode, model_name=args.model_name,
-                    n_classes=args.n_classes, num_workers=args.num_workers, overwrite=args.overwrite)
+                    n_classes=args.n_classes, num_workers=args.num_workers, overwrite=args.overwrite,
+                    experiments=build02_experiments)
 
     elif args.cmd == "sam2":
         root = resolve_root(args)

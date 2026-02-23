@@ -8,14 +8,15 @@
 #$ -pe serial 8
 #$ -cwd
 #$ -V
-#$ -o logs
-#$ -e logs
+#$ -o /net/trapnell/vol1/home/mdcolon/proj/morphseq/logs
+#$ -e /net/trapnell/vol1/home/mdcolon/proj/morphseq/logs
 
 # SAM2-onwards pipeline with optional metadata rebuild.
 # Usage with array jobs:
 #   qsub -t 1-14 -tc 3 -v EXP_FILE=/path/to/experiment_list.txt run_build03_onwards_force.sh
 # Override behaviour with env vars:
 #   RUN_METADATA_REBUILD=0      # skip Build01 metadata-only refresh
+#   RUN_BUILD02=1               # run Build02 UNet masks (legacy QC segmentation)
 #   RUN_SAM2=0                  # skip re-running SAM2
 #   RUN_BUILD03=0               # skip Build03 action
 #   BUILD03_SKIP_GEOMETRY_QC=1  # skip geometry QC computation (fast mode, all embryos marked usable)
@@ -36,7 +37,7 @@ ENV_NAME="segmentation_grounded_sam"
 PYTHON_EXEC="${PYTHON_EXEC:-/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/${ENV_NAME}/bin/python}"
 
 # Default experiment list (used if not running as array job)
-DEFAULT_EXPERIMENTS="20260122" #20251104,20250529_24hpf_ctrl_atf6
+DEFAULT_EXPERIMENTS="20251017_part1,20251106"
 
 # Tunable defaults — override by exporting the variable before invoking this script.
 # Example: RUN_SAM2=0 SAM2_WORKERS=2 EXP_LIST=20250305 bash run_build03_onwards_force.sh
@@ -49,12 +50,19 @@ DEFAULT_EXPERIMENTS="20260122" #20251104,20250529_24hpf_ctrl_atf6
 
 # Pipeline stage toggles (1=run, 0=skip)
 : "${RUN_METADATA_REBUILD:=0}"
+: "${RUN_BUILD02:=1}"
 : "${RUN_SAM2:=0}"
-: "${RUN_BUILD03:=1}"
+: "${RUN_BUILD03:=0}"
 : "${BUILD03_SKIP_GEOMETRY_QC:=0}"  # 0=compute full geometry QC (default), 1=fast mode (skip QC, mark all embryos usable)
-: "${RUN_BUILD04:=1}"
-: "${RUN_BUILD06:=1}"
-: "${RUN_SNIP_EXPORT:=1}"
+: "${RUN_BUILD04:=0}"
+: "${RUN_BUILD06:=0}"
+: "${RUN_SNIP_EXPORT:=0}"
+
+# Build02 knobs
+
+: "${BUILD02_MODE:=legacy}"         # legacy | skip
+: "${BUILD02_NUM_WORKERS:=1}"       # DataLoader workers for UNet inference
+: "${BUILD02_OVERWRITE:=1}"         # 1=overwrite existing masks, 0=skip existing
 
 # Snip export knobs (outscale fixed at 7.8 to match embedding expectations)
 : "${SNIP_WORKERS:=1}"
@@ -72,7 +80,8 @@ echo "[sam2-onwards] JOB_ID=${JOB_ID:-unknown} TASK=${SGE_TASK_ID:-0}"
 echo "[sam2-onwards] Repo root : ${REPO_ROOT}"
 echo "[sam2-onwards] Data root : ${DATA_ROOT}"
 
-echo "[sam2-onwards] Run flags - metadata:${RUN_METADATA_REBUILD} sam2:${RUN_SAM2} b03:${RUN_BUILD03} snip:${RUN_SNIP_EXPORT} b04:${RUN_BUILD04} b06:${RUN_BUILD06}"
+echo "[sam2-onwards] Run flags - metadata:${RUN_METADATA_REBUILD} b02:${RUN_BUILD02} sam2:${RUN_SAM2} b03:${RUN_BUILD03} snip:${RUN_SNIP_EXPORT} b04:${RUN_BUILD04} b06:${RUN_BUILD06}"
+echo "[sam2-onwards] Build02 params - mode:${BUILD02_MODE} workers:${BUILD02_NUM_WORKERS} overwrite:${BUILD02_OVERWRITE}"
 echo "[sam2-onwards] Build03 flags - skip_geometry_qc:${BUILD03_SKIP_GEOMETRY_QC}"
 echo "[sam2-onwards] SAM2 params - workers:${SAM2_WORKERS} conf:${SAM2_CONFIDENCE} iou:${SAM2_IOU}"
 echo "[sam2-onwards] Snip params - workers:${SNIP_WORKERS} dl_rad:${SNIP_DL_RAD_UM} overwrite:${SNIP_OVERWRITE}"
@@ -209,6 +218,21 @@ if [[ "${RUN_METADATA_REBUILD}" == "1" ]]; then
       --overwrite \
       || echo "[sam2-onwards] WARNING: Build01 metadata-only failed for ${exp_name}"
   done
+fi
+
+if [[ "${RUN_BUILD02}" == "1" ]]; then
+  echo "🔄 Step 0.5: Running Build02 UNet masks for ${EXPERIMENT}..."
+  BUILD02_ARGS=(
+    -m src.run_morphseq_pipeline.cli build02
+    --data-root "${DATA_ROOT}"
+    --mode "${BUILD02_MODE}"
+    --num-workers "${BUILD02_NUM_WORKERS}"
+    --experiments "${EXPERIMENT}"
+  )
+  if [[ "${BUILD02_OVERWRITE}" == "1" ]]; then
+    BUILD02_ARGS+=(--overwrite)
+  fi
+  "${PYTHON_EXEC}" "${BUILD02_ARGS[@]}"
 fi
 
 if [[ "${RUN_SAM2}" == "1" ]]; then

@@ -13,8 +13,14 @@ This module provides **general-purpose optimal transport utilities** that can be
 - `UOTFrame`, `UOTFramePair`: Frame containers
 - `UOTSupport`: Point cloud representation (coords + weights)
 - `UOTProblem`: Full problem specification
-- `UOTResult`: Solver output (cost, coupling, mass maps, velocity field)
+- `UOTResultWork`: Work-grid-only solver output (no mixed frames)
+- `UOTResultCanonical`: Canonical-grid-only lifted output (no mixed frames)
 - `SamplingMode`, `MassMode`: Configuration enums
+
+### Working Grid Seam (`working_grid.py`)
+- `WorkingGridPair`: canonical<->work mapping plus prepared work-grid densities
+- `prepare_working_grid_pair()`: crop/pad/downsample into a solver-friendly work grid
+- Lifting helpers: `WorkingGridPair.lift_*` + `lift_work_result_to_canonical()`
 
 ### Backends (`backends/`)
 - **`base.py`**: Abstract backend interface
@@ -43,49 +49,33 @@ This module provides **general-purpose optimal transport utilities** that can be
 ## Example Usage
 
 ```python
-from src.analyze.utils.optimal_transport import (
+import numpy as np
+
+from analyze.utils.coord.grids.canonical import CanonicalGridConfig, to_canonical_grid_mask
+from analyze.utils.optimal_transport import (
+    MassMode,
     UOTConfig,
-    POTBackend,
-    mask_to_density,
-    build_support,
-    compute_transport_maps,
+    WorkingGridConfig,
+    lift_work_result_to_canonical,
+    prepare_working_grid_pair,
+    run_uot_on_working_grid,
 )
 
-# Configure solver
-config = UOTConfig(
-    downsample_factor=4,
-    mass_mode="uniform",
-    epsilon=1e-2,
-    marginal_relaxation=10.0,
-)
+# 1) Canonicalize upstream (coord owns geometry)
+canonical_cfg = CanonicalGridConfig(reference_um_per_pixel=10.0, grid_shape_hw=(256, 576), align_mode="yolk")
+src_can = to_canonical_grid_mask(mask_src_raw, um_per_px=um_per_px_src, yolk_mask=yolk_src, cfg=canonical_cfg)
+tgt_can = to_canonical_grid_mask(mask_tgt_raw, um_per_px=um_per_px_tgt, yolk_mask=yolk_tgt, cfg=canonical_cfg)
 
-# Convert masks to densities
-density_src = mask_to_density(mask_src, config.mass_mode)
-density_tgt = mask_to_density(mask_tgt, config.mass_mode)
+# 2) Prepare work grid (working_grid owns crop/pad/downsample)
+working_cfg = WorkingGridConfig(downsample_factor=2, padding_px=16, mass_mode=MassMode.UNIFORM)
+pair = prepare_working_grid_pair(src_can, tgt_can, working_cfg)
 
-# Build support (point clouds)
-support_src, _ = build_support(
-    density_src,
-    max_points=config.max_support_points,
-    sampling_mode=config.sampling_mode,
-    sampling_strategy=config.sampling_strategy,
-    random_seed=config.random_seed,
-)
-support_tgt, _ = build_support(density_tgt, ...)
+# 3) Solve on work grid (solver/backends are math only)
+solver_cfg = UOTConfig(epsilon=1e-2, marginal_relaxation=10.0, max_support_points=5000)
+res_work = run_uot_on_working_grid(pair, config=solver_cfg)
 
-# Solve UOT
-backend = POTBackend()
-result = backend.solve(support_src, support_tgt, config)
-
-# Compute transport maps
-mass_created, mass_destroyed, velocity_field = compute_transport_maps(
-    result.coupling,
-    support_src.coords_yx,
-    support_tgt.coords_yx,
-    support_src.weights,
-    support_tgt.weights,
-    work_shape_hw=density_src.shape,
-)
+# 4) Lift to canonical (interpretation/mapping step)
+res_canon = lift_work_result_to_canonical(res_work, pair)
 ```
 
 ## Design Principles

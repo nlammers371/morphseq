@@ -28,12 +28,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from analyze.utils.optimal_transport import UOTConfig, UOTFramePair, POTBackend, MassMode
+from analyze.utils.coord.grids.canonical import CanonicalGridConfig, to_canonical_grid_mask
+from analyze.utils.optimal_transport import (
+    MassMode,
+    UOTConfig,
+    UOTFramePair,
+    WorkingGridConfig,
+    lift_work_result_to_canonical,
+    prepare_working_grid_pair,
+    run_uot_on_working_grid,
+)
 from analyze.utils.optimal_transport.backends.ott_backend import OTTBackend
-from analyze.optimal_transport_morphometrics.uot_masks.run_transport import run_uot_pair
 from analyze.optimal_transport_morphometrics.uot_masks.frame_mask_io import load_mask_from_csv
-from analyze.optimal_transport_morphometrics.uot_masks.preprocess import preprocess_pair_canonical
-from analyze.optimal_transport_morphometrics.uot_masks.uot_grid import CanonicalGridConfig
 
 # Import the proven plotting functions from debug_uot_params
 import importlib.util
@@ -90,28 +96,39 @@ def make_config(epsilon):
     return UOTConfig(
         epsilon=epsilon,
         marginal_relaxation=REG_M,
-        downsample_factor=1,
-        downsample_divisor=1,
-        padding_px=16,
-        mass_mode=MassMode.UNIFORM,
-        align_mode="none",
         max_support_points=5000,
         store_coupling=True,
         random_seed=42,
         metric="sqeuclidean",
         coord_scale=COORD_SCALE,
-        use_pair_frame=True,
-        use_canonical_grid=True,
-        canonical_grid_um_per_pixel=UM_PER_PX,
-        canonical_grid_shape_hw=CANONICAL_GRID_SHAPE,
-        canonical_grid_align_mode="yolk",
-        canonical_grid_center_mode="joint_centering",
     )
+
+
+class _VizResult:
+    """Adapter to the old debug_uot_params plotting contract."""
+
+    def __init__(self, *, result_work, result_canon):
+        self.cost = float(result_canon.cost)
+        self.coupling = result_work.coupling
+        self.support_src_yx = result_work.support_src_yx
+        self.support_tgt_yx = result_work.support_tgt_yx
+        self.weights_src = result_work.weights_src
+        self.weights_tgt = result_work.weights_tgt
+        self.diagnostics = result_work.diagnostics
+
+        # Legacy names expected by debug_uot_params plotting code.
+        self.mass_created_px = result_canon.mass_created_canon
+        self.mass_destroyed_px = result_canon.mass_destroyed_canon
+        self.velocity_px_per_frame_yx = result_canon.velocity_canon_px_per_step_yx * float(result_canon.canonical_um_per_px)
+        self.cost_src_px = result_canon.cost_src_canon
+        self.cost_tgt_px = result_canon.cost_tgt_canon
 
 
 def run_and_plot(pair, epsilon, backend, backend_name, output_subdir, plot_src_mask, plot_tgt_mask):
     """Run transport and generate all proven-format plots."""
     config = make_config(epsilon)
+    canonical_cfg = CanonicalGridConfig(reference_um_per_pixel=UM_PER_PX, grid_shape_hw=CANONICAL_GRID_SHAPE, align_mode="yolk")
+    working_cfg = WorkingGridConfig(downsample_factor=1, padding_px=16, mass_mode=MassMode.UNIFORM)
     eps_str = f"{epsilon:.0e}".replace("-", "m")
 
     out_dir = output_subdir / f"{backend_name}_eps{eps_str}"
@@ -119,7 +136,16 @@ def run_and_plot(pair, epsilon, backend, backend_name, output_subdir, plot_src_m
 
     print(f"\n  Running {backend_name} at eps={epsilon:.0e}...")
     t0 = time.time()
-    result = run_uot_pair(pair, config=config, backend=backend)
+    um_src = float(pair.src.meta.get("um_per_pixel", float("nan")))
+    um_tgt = float(pair.tgt.meta.get("um_per_pixel", float("nan")))
+    yolk_src = pair.src.meta.get("yolk_mask", None)
+    yolk_tgt = pair.tgt.meta.get("yolk_mask", None)
+    src_can = to_canonical_grid_mask(pair.src.embryo_mask, um_per_px=um_src, yolk_mask=yolk_src, cfg=canonical_cfg)
+    tgt_can = to_canonical_grid_mask(pair.tgt.embryo_mask, um_per_px=um_tgt, yolk_mask=yolk_tgt, cfg=canonical_cfg)
+    pair_work = prepare_working_grid_pair(src_can, tgt_can, working_cfg)
+    result_work = run_uot_on_working_grid(pair_work, config=config, backend=backend)
+    result_canon = lift_work_result_to_canonical(result_work, pair_work)
+    result = _VizResult(result_work=result_work, result_canon=result_canon)
     elapsed = time.time() - t0
     print(f"    cost={result.cost:.6f}  time={elapsed:.1f}s")
 
@@ -192,18 +218,14 @@ def main():
     tgt_frame = load_mask_from_csv(CSV_PATH, EMBRYO_B, frame_b, data_root=data_root)
     pair = UOTFramePair(src=src_frame, tgt=tgt_frame)
 
-    # Preprocess masks to canonical grid for plotting (same as debug_uot_params does)
-    config_for_preprocess = make_config(1e-4)  # epsilon doesn't matter for preprocessing
-    canonical_config = CanonicalGridConfig(
-        reference_um_per_pixel=config_for_preprocess.canonical_grid_um_per_pixel,
-        grid_shape_hw=config_for_preprocess.canonical_grid_shape_hw,
-        align_mode=config_for_preprocess.canonical_grid_align_mode,
-        downsample_factor=1,
-    )
-    plot_src_mask, plot_tgt_mask, preprocess_meta = preprocess_pair_canonical(
-        pair.src, pair.tgt, config_for_preprocess, canonical_config
-    )
-    print(f"  Preprocessed to canonical grid: {plot_src_mask.shape}")
+    canonical_cfg = CanonicalGridConfig(reference_um_per_pixel=UM_PER_PX, grid_shape_hw=CANONICAL_GRID_SHAPE, align_mode="yolk")
+    um_src = float(src_frame.meta.get("um_per_pixel", float("nan")))
+    um_tgt = float(tgt_frame.meta.get("um_per_pixel", float("nan")))
+    yolk_src = src_frame.meta.get("yolk_mask", None)
+    yolk_tgt = tgt_frame.meta.get("yolk_mask", None)
+    plot_src_mask = to_canonical_grid_mask(src_frame.embryo_mask, um_per_px=um_src, yolk_mask=yolk_src, cfg=canonical_cfg).mask
+    plot_tgt_mask = to_canonical_grid_mask(tgt_frame.embryo_mask, um_per_px=um_tgt, yolk_mask=yolk_tgt, cfg=canonical_cfg).mask
+    print(f"  Canonicalized for plotting: {plot_src_mask.shape}")
 
     comparison_dir = OUTPUT_DIR / "pot_vs_ott_comparison"
     comparison_dir.mkdir(parents=True, exist_ok=True)
@@ -217,9 +239,9 @@ def main():
         eps_dir.mkdir(parents=True, exist_ok=True)
 
         # Run both backends
-        pot_result, pot_mass, pot_vel = run_and_plot(
-            pair, eps, POTBackend(), "POT", eps_dir, plot_src_mask, plot_tgt_mask
-        )
+        from analyze.utils.optimal_transport.backends.pot_backend import POTBackend
+
+        pot_result, pot_mass, pot_vel = run_and_plot(pair, eps, POTBackend(), "POT", eps_dir, plot_src_mask, plot_tgt_mask)
         ott_result, ott_mass, ott_vel = run_and_plot(
             pair, eps, OTTBackend(), "OTT", eps_dir, plot_src_mask, plot_tgt_mask
         )

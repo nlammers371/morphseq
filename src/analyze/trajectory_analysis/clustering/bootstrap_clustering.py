@@ -20,6 +20,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from ..config import N_BOOTSTRAP, BOOTSTRAP_FRAC, RANDOM_SEED
+from analyze.utils import resampling as resample
 
 try:
     from sklearn_extra.cluster import KMedoids
@@ -83,7 +84,6 @@ def run_bootstrap_hierarchical(
     >>> idx = results['embryo_ids'].index('emb_02')
     >>> label = results['reference_labels'][idx]
     """
-    np.random.seed(random_state)
     n_samples = len(D)
 
     # Compute reference labels from full data
@@ -94,56 +94,59 @@ def run_bootstrap_hierarchical(
     )
     reference_labels = clusterer.fit_predict(D)
 
-    # Bootstrap iterations
-    bootstrap_results = []
+    # Subsample size — preserve original ceil semantics
     n_to_sample = max(int(np.ceil(frac * n_samples)), 1)
 
     if verbose:
         print(f"Running {n_bootstrap} bootstrap iterations...")
         print(f"  Sampling {n_to_sample}/{n_samples} samples per iteration")
 
-    for iter_idx in range(n_bootstrap):
-        if verbose and (iter_idx + 1) % 10 == 0:
-            print(f"  Progress: {iter_idx + 1}/{n_bootstrap}")
+    # Scorer for the resampling framework
+    def _hierarchical_scorer(data, rng):
+        n = data["n"]
+        k_val = data["k"]
+        idx = np.sort(data["indices"]) if "indices" in data else np.arange(n)
+        D_sub = data["D"][np.ix_(idx, idx)]
 
-        # Random sample
-        sampled_indices = np.random.choice(n_samples, size=n_to_sample, replace=False)
-        sampled_indices = np.sort(sampled_indices)
+        clusterer_boot = AgglomerativeClustering(
+            n_clusters=k_val,
+            linkage='average',
+            metric='precomputed'
+        )
+        labels_subset = clusterer_boot.fit_predict(D_sub)
 
-        # Create submatrix
-        D_subset = D[np.ix_(sampled_indices, sampled_indices)]
+        labels_full = np.full(n, -1, dtype=int)
+        labels_full[idx] = labels_subset
 
-        # Cluster subset
         try:
-            clusterer_boot = AgglomerativeClustering(
-                n_clusters=k,
-                linkage='average',
-                metric='precomputed'
-            )
-            labels_subset = clusterer_boot.fit_predict(D_subset)
+            sil = float(silhouette_score(D_sub, labels_subset, metric='precomputed'))
+        except Exception:
+            sil = np.nan
 
-            # Create full-size label array with -1 for unsampled
-            labels_full = np.full(n_samples, -1, dtype=int)
-            labels_full[sampled_indices] = labels_subset
+        return {
+            'labels': labels_full,
+            'indices': idx,
+            'silhouette': sil
+        }
 
-            # Compute silhouette if possible
-            try:
-                silhouette = silhouette_score(D_subset, labels_subset, metric='precomputed')
-            except:
-                silhouette = np.nan
+    data_bundle = {"n": n_samples, "D": D, "k": k, "embryo_ids": embryo_ids}
+    spec = resample.subsample(size=n_to_sample)
 
-            bootstrap_results.append({
-                'labels': labels_full,
-                'indices': sampled_indices,
-                'silhouette': silhouette
-            })
-        except Exception as e:
-            if verbose:
-                print(f"    Warning: Bootstrap iteration {iter_idx} failed: {e}")
-            continue
+    out = resample.run(
+        data_bundle,
+        spec,
+        _hierarchical_scorer,
+        n_iters=n_bootstrap,
+        seed=random_state,
+        store="all",
+        max_retries_per_iter=0,
+        verbose=verbose,
+    )
+
+    bootstrap_results = out.samples if out.samples is not None else []
 
     if verbose:
-        print(f"\nCompleted {len(bootstrap_results)} successful bootstrap iterations")
+        print(f"\nCompleted {out.n_success} successful bootstrap iterations")
 
     return {
         'embryo_ids': list(embryo_ids),
@@ -233,7 +236,6 @@ def run_bootstrap_kmedoids(
             "Install with: pip install scikit-learn-extra"
         )
 
-    np.random.seed(random_state)
     n_samples = len(D)
 
     # Compute reference labels from full data
@@ -247,58 +249,64 @@ def run_bootstrap_kmedoids(
     reference_labels = clusterer.fit_predict(D)
     reference_medoid_indices = clusterer.medoid_indices_
 
-    # Bootstrap iterations
-    bootstrap_results = []
+    # Subsample size — preserve original ceil semantics
     n_to_sample = max(int(np.ceil(frac * n_samples)), 1)
 
     if verbose:
         print(f"Running {n_bootstrap} bootstrap iterations (K-medoids)...")
         print(f"  Sampling {n_to_sample}/{n_samples} samples per iteration")
 
-    for iter_idx in range(n_bootstrap):
-        if verbose and (iter_idx + 1) % 10 == 0:
-            print(f"  Progress: {iter_idx + 1}/{n_bootstrap}")
+    # Scorer for the resampling framework
+    def _kmedoids_scorer(data, rng):
+        n = data["n"]
+        k_val = data["k"]
+        idx = np.sort(data["indices"]) if "indices" in data else np.arange(n)
+        D_sub = data["D"][np.ix_(idx, idx)]
 
-        # Random sample
-        sampled_indices = np.random.choice(n_samples, size=n_to_sample, replace=False)
-        sampled_indices = np.sort(sampled_indices)
+        # Derive a deterministic per-iteration seed from the rng
+        iter_seed = int(rng.integers(0, 2**31))
 
-        # Create submatrix
-        D_subset = D[np.ix_(sampled_indices, sampled_indices)]
+        clusterer_boot = KMedoids(
+            n_clusters=k_val,
+            metric='precomputed',
+            random_state=iter_seed,
+            init='k-medoids++',
+            max_iter=300
+        )
+        labels_subset = clusterer_boot.fit_predict(D_sub)
 
-        # Cluster subset
+        labels_full = np.full(n, -1, dtype=int)
+        labels_full[idx] = labels_subset
+
         try:
-            clusterer_boot = KMedoids(
-                n_clusters=k,
-                metric='precomputed',
-                random_state=random_state + iter_idx,  # Different seed per iteration
-                init='k-medoids++',
-                max_iter=300
-            )
-            labels_subset = clusterer_boot.fit_predict(D_subset)
+            sil = float(silhouette_score(D_sub, labels_subset, metric='precomputed'))
+        except Exception:
+            sil = np.nan
 
-            # Create full-size label array with -1 for unsampled
-            labels_full = np.full(n_samples, -1, dtype=int)
-            labels_full[sampled_indices] = labels_subset
+        return {
+            'labels': labels_full,
+            'indices': idx,
+            'silhouette': sil
+        }
 
-            # Compute silhouette if possible
-            try:
-                silhouette = silhouette_score(D_subset, labels_subset, metric='precomputed')
-            except:
-                silhouette = np.nan
+    data_bundle = {"n": n_samples, "D": D, "k": k, "embryo_ids": embryo_ids}
+    spec = resample.subsample(size=n_to_sample)
 
-            bootstrap_results.append({
-                'labels': labels_full,
-                'indices': sampled_indices,
-                'silhouette': silhouette
-            })
-        except Exception as e:
-            if verbose:
-                print(f"    Warning: Bootstrap iteration {iter_idx} failed: {e}")
-            continue
+    out = resample.run(
+        data_bundle,
+        spec,
+        _kmedoids_scorer,
+        n_iters=n_bootstrap,
+        seed=random_state,
+        store="all",
+        max_retries_per_iter=0,
+        verbose=verbose,
+    )
+
+    bootstrap_results = out.samples if out.samples is not None else []
 
     if verbose:
-        print(f"\nCompleted {len(bootstrap_results)} successful bootstrap iterations")
+        print(f"\nCompleted {out.n_success} successful bootstrap iterations")
 
     return {
         'embryo_ids': list(embryo_ids),
@@ -686,8 +694,6 @@ def run_bootstrap_projection(
     if metrics is None:
         metrics = ['baseline_deviation_normalized']
 
-    np.random.seed(random_state)
-
     # Get baseline projection (reference labels)
     if verbose:
         print("Computing reference projection (full dataset)...")
@@ -719,56 +725,75 @@ def run_bootstrap_projection(
         print(f"  Bootstrap iterations: {n_bootstrap}")
         print(f"  Subsample size: {n_to_sample} ({frac*100:.0f}%)")
 
-    # Bootstrap iterations
-    bootstrap_results = []
+    # Scorer for the resampling framework
+    def _projection_scorer(data, rng):
+        n = data["n"]
+        src_ids = data["source_embryo_ids"]
+        idx = np.sort(data["indices"]) if "indices" in data else np.arange(n)
+        sampled_ids = [src_ids[i] for i in idx]
+
+        source_subset = data["source_df"][
+            data["source_df"][data["embryo_id_col"]].isin(sampled_ids)
+        ].copy()
+
+        projection_subset, _ = project_onto_reference_clusters(
+            source_df=source_subset,
+            reference_df=data["reference_df"],
+            reference_cluster_map=data["reference_cluster_map"],
+            reference_category_map=data["reference_category_map"],
+            metrics=data["metrics"],
+            time_col=data["time_col"],
+            embryo_id_col=data["embryo_id_col"],
+            sakoe_chiba_radius=data["sakoe_chiba_radius"],
+            normalize=data["normalize"],
+            verbose=False
+        )
+
+        labels_full = np.full(n, -1, dtype=int)
+        for eid, cluster in zip(
+            projection_subset[data["embryo_id_col"]],
+            projection_subset['cluster']
+        ):
+            labels_full[src_ids.index(eid)] = int(cluster)
+
+        return {
+            'labels': labels_full,
+            'indices': idx
+        }
+
+    data_bundle = {
+        "n": n_samples,
+        "source_df": source_df,
+        "reference_df": reference_df,
+        "reference_cluster_map": reference_cluster_map,
+        "reference_category_map": reference_category_map,
+        "metrics": metrics,
+        "time_col": time_col,
+        "embryo_id_col": embryo_id_col,
+        "sakoe_chiba_radius": sakoe_chiba_radius,
+        "normalize": normalize,
+        "source_embryo_ids": source_embryo_ids,
+    }
+    spec = resample.subsample(size=n_to_sample)
 
     if verbose:
         print(f"\nRunning bootstrap iterations...")
 
-    for iter_idx in range(n_bootstrap):
-        if verbose and (iter_idx + 1) % 10 == 0:
-            print(f"  Progress: {iter_idx + 1}/{n_bootstrap}")
+    out = resample.run(
+        data_bundle,
+        spec,
+        _projection_scorer,
+        n_iters=n_bootstrap,
+        seed=random_state,
+        store="all",
+        max_retries_per_iter=1,
+        verbose=verbose,
+    )
 
-        # Subsample embryo indices (NO replacement, like bootstrap_clustering)
-        sampled_indices = np.random.choice(n_samples, size=n_to_sample, replace=False)
-        sampled_indices = np.sort(sampled_indices)
-        sampled_embryo_ids = [source_embryo_ids[i] for i in sampled_indices]
-
-        # Extract subsampled source data
-        source_subset = source_df[source_df[embryo_id_col].isin(sampled_embryo_ids)].copy()
-
-        # Project subsample onto reference
-        try:
-            projection_subset, _ = project_onto_reference_clusters(
-                source_df=source_subset,
-                reference_df=reference_df,
-                reference_cluster_map=reference_cluster_map,
-                reference_category_map=reference_category_map,
-                metrics=metrics,
-                time_col=time_col,
-                embryo_id_col=embryo_id_col,
-                sakoe_chiba_radius=sakoe_chiba_radius,
-                normalize=normalize,
-                verbose=False
-            )
-
-            # Create full-size label array with -1 for unsampled
-            labels_full = np.full(n_samples, -1, dtype=int)
-            for embryo_id, cluster in zip(projection_subset[embryo_id_col], projection_subset['cluster']):
-                idx = source_embryo_ids.index(embryo_id)
-                labels_full[idx] = int(cluster)
-
-            bootstrap_results.append({
-                'labels': labels_full,
-                'indices': sampled_indices
-            })
-        except Exception as e:
-            if verbose:
-                print(f"    Warning: Bootstrap iteration {iter_idx} failed: {e}")
-            continue
+    bootstrap_results = out.samples if out.samples is not None else []
 
     if verbose:
-        print(f"\nCompleted {len(bootstrap_results)} successful bootstrap iterations")
+        print(f"\nCompleted {out.n_success} successful bootstrap iterations")
 
     return {
         'embryo_ids': source_embryo_ids,
@@ -903,13 +928,13 @@ def bootstrap_projection_assignments_from_distance(
     """
     from ..projection import project_onto_reference_clusters_from_distance
 
-    np.random.seed(random_state)
     n_samples = len(source_ids)
     n_ref = len(ref_ids)
     n_clusters = len(set(reference_cluster_map.values()))
     if bootstrap_on not in {"reference", "source"}:
         raise ValueError("bootstrap_on must be 'reference' or 'source'")
-    n_to_sample = max(int(np.ceil(frac * (n_ref if bootstrap_on == "reference" else n_samples))), 1)
+    pop_size = n_ref if bootstrap_on == "reference" else n_samples
+    n_to_sample = max(int(np.ceil(frac * pop_size)), 1)
 
     # Full projection (reference labels)
     full_assignments = project_onto_reference_clusters_from_distance(
@@ -925,95 +950,135 @@ def bootstrap_projection_assignments_from_distance(
     reference_labels = full_assignments['cluster'].values
 
     id_to_idx = {embryo_id: i for i, embryo_id in enumerate(source_ids)}
-    bootstrap_results = []
 
     if verbose:
         print(f"\nRunning bootstrap iterations...")
 
-    for iter_idx in range(n_bootstrap):
-        if verbose and (iter_idx + 1) % 10 == 0:
-            print(f"  Progress: {iter_idx + 1}/{n_bootstrap}")
+    if bootstrap_on == "source":
+        def _source_scorer(data, rng):
+            n = data["n_samples"]
+            idx = np.sort(data["indices"]) if "indices" in data else np.arange(data["n"])
+            sampled_ids = [data["source_ids"][i] for i in idx]
+            D_sub = data["D_cross"][idx, :]
 
-        if bootstrap_on == "source":
-            sampled_indices = np.random.choice(n_samples, size=n_to_sample, replace=False)
-            sampled_indices = np.sort(sampled_indices)
-            sampled_ids = [source_ids[i] for i in sampled_indices]
+            subset_assignments = project_onto_reference_clusters_from_distance(
+                D_cross=D_sub,
+                source_ids=sampled_ids,
+                ref_ids=data["ref_ids"],
+                reference_cluster_map=data["reference_cluster_map"],
+                reference_category_map=data["reference_category_map"],
+                method=data["method"],
+                k=data["k_proj"],
+                verbose=False
+            )
 
-            D_subset = D_cross[sampled_indices, :]
+            labels_full = np.full(n, -1, dtype=int)
+            for eid, cluster in zip(
+                subset_assignments['embryo_id'],
+                subset_assignments['cluster']
+            ):
+                labels_full[data["id_to_idx"][eid]] = int(cluster)
 
-            try:
-                subset_assignments = project_onto_reference_clusters_from_distance(
-                    D_cross=D_subset,
-                    source_ids=sampled_ids,
-                    ref_ids=ref_ids,
-                    reference_cluster_map=reference_cluster_map,
-                    reference_category_map=reference_category_map,
-                    method=method,
-                    k=k,
-                    verbose=False
-                )
+            return {
+                'labels': labels_full,
+                'indices': idx
+            }
 
-                labels_full = np.full(n_samples, -1, dtype=int)
-                for embryo_id, cluster in zip(subset_assignments['embryo_id'], subset_assignments['cluster']):
-                    labels_full[id_to_idx[embryo_id]] = int(cluster)
+        data_bundle = {
+            "n": n_samples,
+            "D_cross": D_cross,
+            "source_ids": source_ids,
+            "ref_ids": ref_ids,
+            "reference_cluster_map": reference_cluster_map,
+            "reference_category_map": reference_category_map,
+            "method": method,
+            "k_proj": k,
+            "id_to_idx": id_to_idx,
+            "n_samples": n_samples,
+        }
+        spec = resample.subsample(size=n_to_sample)
 
-                bootstrap_results.append({
-                    'labels': labels_full,
-                    'indices': sampled_indices
-                })
-            except Exception as e:
-                if verbose:
-                    print(f"    Warning: Bootstrap iteration {iter_idx} failed: {e}")
-                continue
-        else:
-            sampled_ref_indices = np.random.choice(n_ref, size=n_to_sample, replace=False)
-            sampled_ref_indices = np.sort(sampled_ref_indices)
-            sampled_ref_ids = [ref_ids[i] for i in sampled_ref_indices]
+        out = resample.run(
+            data_bundle,
+            spec,
+            _source_scorer,
+            n_iters=n_bootstrap,
+            seed=random_state,
+            store="all",
+            max_retries_per_iter=1,
+            verbose=verbose,
+        )
 
-            # Subset reference maps to sampled refs only
+    else:  # bootstrap_on == "reference"
+        def _reference_scorer(data, rng):
+            n = data["n_samples"]
+            idx = np.sort(data["indices"]) if "indices" in data else np.arange(data["n"])
+            sampled_ref_ids = [data["ref_ids"][i] for i in idx]
+
             ref_cluster_sub = {
-                rid: reference_cluster_map[rid]
+                rid: data["reference_cluster_map"][rid]
                 for rid in sampled_ref_ids
-                if rid in reference_cluster_map
+                if rid in data["reference_cluster_map"]
             }
             if len(ref_cluster_sub) == 0:
-                continue
+                raise ValueError("No reference clusters after subsample")
 
             ref_category_sub = None
-            if reference_category_map is not None:
+            if data["reference_category_map"] is not None:
                 ref_category_sub = {
-                    rid: reference_category_map[rid]
+                    rid: data["reference_category_map"][rid]
                     for rid in sampled_ref_ids
-                    if rid in reference_category_map
+                    if rid in data["reference_category_map"]
                 }
 
-            D_subset = D_cross[:, sampled_ref_indices]
+            D_sub = data["D_cross"][:, idx]
 
-            try:
-                subset_assignments = project_onto_reference_clusters_from_distance(
-                    D_cross=D_subset,
-                    source_ids=source_ids,
-                    ref_ids=sampled_ref_ids,
-                    reference_cluster_map=ref_cluster_sub,
-                    reference_category_map=ref_category_sub,
-                    method=method,
-                    k=k,
-                    verbose=False
-                )
+            subset_assignments = project_onto_reference_clusters_from_distance(
+                D_cross=D_sub,
+                source_ids=data["source_ids"],
+                ref_ids=sampled_ref_ids,
+                reference_cluster_map=ref_cluster_sub,
+                reference_category_map=ref_category_sub,
+                method=data["method"],
+                k=data["k_proj"],
+                verbose=False
+            )
 
-                labels_full = subset_assignments['cluster'].astype(int).values
+            labels_full = subset_assignments['cluster'].astype(int).values
 
-                bootstrap_results.append({
-                    'labels': labels_full,
-                    'indices': np.arange(n_samples)
-                })
-            except Exception as e:
-                if verbose:
-                    print(f"    Warning: Bootstrap iteration {iter_idx} failed: {e}")
-                continue
+            return {
+                'labels': labels_full,
+                'indices': np.arange(n)
+            }
+
+        data_bundle = {
+            "n": n_ref,
+            "D_cross": D_cross,
+            "source_ids": source_ids,
+            "ref_ids": ref_ids,
+            "reference_cluster_map": reference_cluster_map,
+            "reference_category_map": reference_category_map,
+            "method": method,
+            "k_proj": k,
+            "n_samples": n_samples,
+        }
+        spec = resample.subsample(size=n_to_sample)
+
+        out = resample.run(
+            data_bundle,
+            spec,
+            _reference_scorer,
+            n_iters=n_bootstrap,
+            seed=random_state,
+            store="all",
+            max_retries_per_iter=1,
+            verbose=verbose,
+        )
+
+    bootstrap_results = out.samples if out.samples is not None else []
 
     if verbose:
-        print(f"\nCompleted {len(bootstrap_results)} successful bootstrap iterations")
+        print(f"\nCompleted {out.n_success} successful bootstrap iterations")
 
     return {
         'embryo_ids': source_ids,

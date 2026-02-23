@@ -27,8 +27,17 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from segmentation_sandbox.scripts.utils.mask_utils import decode_mask_rle
-from analyze.utils.optimal_transport import UOTConfig, UOTFrame, UOTFramePair, MassMode
-from analyze.optimal_transport_morphometrics.uot_masks.run_transport import run_uot_pair
+from analyze.utils.coord.grids.canonical import CanonicalGridConfig, to_canonical_grid_mask
+from analyze.utils.optimal_transport import (
+    MassMode,
+    UOTConfig,
+    UOTFrame,
+    UOTFramePair,
+    WorkingGridConfig,
+    lift_work_result_to_canonical,
+    prepare_working_grid_pair,
+    run_uot_on_working_grid,
+)
 from analyze.optimal_transport_morphometrics.uot_masks.feature_compaction.storage import (
     build_pair_id,
     build_pair_metrics_record,
@@ -110,22 +119,18 @@ def make_config(epsilon: float, reg_m: float, max_support_points: int) -> UOTCon
     return UOTConfig(
         epsilon=epsilon,
         marginal_relaxation=reg_m,
-        downsample_factor=1,
-        downsample_divisor=1,
-        padding_px=16,
-        mass_mode=MassMode.UNIFORM,
-        align_mode="none",
         max_support_points=int(max_support_points),
         store_coupling=True,
         random_seed=42,
         metric="sqeuclidean",
         coord_scale=COORD_SCALE,
-        use_pair_frame=True,
-        use_canonical_grid=True,
-        canonical_grid_um_per_pixel=UM_PER_PX,
-        canonical_grid_shape_hw=CANONICAL_GRID_SHAPE,
-        canonical_grid_align_mode="yolk",
-        canonical_grid_center_mode="joint_centering",
+    )
+
+def make_working_grid_config() -> WorkingGridConfig:
+    return WorkingGridConfig(
+        downsample_factor=1,
+        padding_px=16,
+        mass_mode=MassMode.UNIFORM,
     )
 
 
@@ -223,8 +228,12 @@ def _load_frame_from_csv(csv_path: Path, embryo_id: str, frame_index: int, data_
 
 
 def _support_mask(result) -> np.ndarray:
-    vel_mag = np.linalg.norm(result.velocity_px_per_frame_yx, axis=-1)
-    return (result.mass_created_px > 0) | (result.mass_destroyed_px > 0) | (vel_mag > 0)
+    vel_mag = np.linalg.norm(result.velocity_canon_px_per_step_yx, axis=-1)
+    return (
+        (result.mass_created_canon > 0)
+        | (result.mass_destroyed_canon > 0)
+        | (vel_mag > 0)
+    )
 
 
 def _dct_reconstruct_topk(
@@ -358,22 +367,65 @@ def run_spike(args):
     pair = UOTFramePair(src=src_frame, tgt=tgt_frame)
 
     backend, backend_name = _get_backend(args.backend)
-    config = make_config(args.epsilon, args.reg_m, args.max_support_points)
+    solver_cfg = make_config(args.epsilon, args.reg_m, args.max_support_points)
+    working_cfg = make_working_grid_config()
+    canonical_cfg = CanonicalGridConfig(
+        reference_um_per_pixel=UM_PER_PX,
+        grid_shape_hw=CANONICAL_GRID_SHAPE,
+        align_mode="yolk",
+    )
 
     run_id = args.run_id or f"dct_spike_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}"
     pair_id = build_pair_id(args.embryo_a, args.embryo_b, frame_a, frame_b)
 
     t0 = time.time()
-    result = run_uot_pair(pair, config=config, backend=backend)
+    # --- Canonicalize (coord owns geometry) ---
+    um_src = float(src_frame.meta.get("um_per_pixel", float("nan"))) if src_frame.meta else float("nan")
+    um_tgt = float(tgt_frame.meta.get("um_per_pixel", float("nan"))) if tgt_frame.meta else float("nan")
+    yolk_src = src_frame.meta.get("yolk_mask") if src_frame.meta else None
+    yolk_tgt = tgt_frame.meta.get("yolk_mask") if tgt_frame.meta else None
+
+    src_can = to_canonical_grid_mask(
+        np.asarray(src_frame.embryo_mask),
+        um_per_px=um_src,
+        yolk_mask=yolk_src,
+        cfg=canonical_cfg,
+    )
+    tgt_can = to_canonical_grid_mask(
+        np.asarray(tgt_frame.embryo_mask),
+        um_per_px=um_tgt,
+        yolk_mask=yolk_tgt,
+        cfg=canonical_cfg,
+    )
+
+    # --- Prepare work grid + solve (solver is math-only) ---
+    pair_work = prepare_working_grid_pair(src_can, tgt_can, working_cfg)
+    result_work = run_uot_on_working_grid(pair_work, config=solver_cfg, backend=backend)
+    result_canon = lift_work_result_to_canonical(result_work, pair_work)
     runtime_sec = time.time() - t0
+
+    cfg_record = {
+        "epsilon": float(solver_cfg.epsilon),
+        "marginal_relaxation": float(solver_cfg.marginal_relaxation),
+        "metric": str(solver_cfg.metric),
+        "coord_scale": float(solver_cfg.coord_scale),
+        "max_support_points": int(solver_cfg.max_support_points),
+        "mass_mode": working_cfg.mass_mode.value,
+        "downsample_factor": int(working_cfg.downsample_factor),
+        "padding_px": int(working_cfg.padding_px),
+        "use_canonical_grid": True,
+        "canonical_grid_align_mode": str(canonical_cfg.align_mode),
+        "canonical_grid_um_per_pixel": float(canonical_cfg.reference_um_per_pixel),
+        "canonical_grid_shape_hw": tuple(canonical_cfg.grid_shape_hw),
+    }
 
     record = build_pair_metrics_record(
         run_id=run_id,
         pair_id=pair_id,
-        result=result,
+        result=result_work,
         src_meta=src_frame.meta,
         tgt_meta=tgt_frame.meta,
-        config=config,
+        config=cfg_record,
         backend=backend_name,
         runtime_sec=runtime_sec,
         success=True,
@@ -384,15 +436,16 @@ def run_spike(args):
 
     artifact_root = output_root / "pair_artifacts"
     artifact_paths = save_pair_artifacts(
-        result=result,
+        result_work=result_work,
+        result_canon=result_canon,
         artifact_root=artifact_root,
         pair_id=pair_id,
         float_dtype="float32",
         include_barycentric=True,
     )
 
-    velocity = np.asarray(result.velocity_px_per_frame_yx, dtype=np.float32)
-    support_mask = _support_mask(result)
+    velocity = np.asarray(result_canon.velocity_canon_px_per_step_yx, dtype=np.float32)
+    support_mask = _support_mask(result_canon)
     total_freq = velocity.shape[0] * velocity.shape[1]
     ratios = _parse_ratios(args.ratios)
 
@@ -464,7 +517,8 @@ def run_spike(args):
     feature_record = extract_pair_feature_record(
         run_id=run_id,
         pair_id=pair_id,
-        result=result,
+        result_work=result_work,
+        result_canon=result_canon,
         backend=backend_name,
         n_bands=args.n_dct_bands,
     )

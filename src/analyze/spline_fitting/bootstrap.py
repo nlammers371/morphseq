@@ -17,11 +17,14 @@ Example:
 """
 
 import re
+import warnings
+
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from .lpc_model import LocalPrincipalCurve
+import analyze.utils.resampling as resample
 
 
 def spline_fit_wrapper(
@@ -190,9 +193,20 @@ def _fit_single_spline(
     bootstrap_size=2500,
     n_spline_points=500,
     time_window=2,
-    obs_weights=None
+    obs_weights=None,
+    random_state=42,
 ):
-    """Fit a single spline with bootstrap uncertainty (internal helper)."""
+    """Fit a single spline with bootstrap uncertainty (internal helper).
+
+    Uses the resampling framework with a scorer-owns-perturbation pattern:
+    the engine provides deterministic SeedSequence-based RNG per iteration,
+    while the scorer performs its own weighted sampling.
+
+    Parameters
+    ----------
+    random_state : int, default=42
+        Base seed for reproducibility via SeedSequence.
+    """
     # Auto-detect PCA columns if not provided
     if pca_cols is None:
         pattern = r"PCA_.*_bio"
@@ -235,26 +249,36 @@ def _fit_single_spline(
             f"Stage range: [{min_time}, {max_time}], time_window: {time_window}"
         )
 
-    # Bootstrap iterations — collect only successful fits
-    successful_splines = []
-    rng = np.random.RandomState(42)
-    max_attempts = n_bootstrap * 3  # allow retries for failed LPC fits
-    attempts = 0
+    # ── Build data bundle and scorer for resampling framework ──
 
-    pbar = tqdm(total=n_bootstrap, desc="Bootstrap iterations", leave=False)
+    data_bundle = {
+        "n": len(coord_array),
+        "coords": coord_array,
+        "obs_weights": obs_weights,
+        "early_points": early_points,
+        "late_points": late_points,
+    }
 
-    while len(successful_splines) < n_bootstrap and attempts < max_attempts:
-        attempts += 1
+    def scorer(data, rng):
+        """Bootstrap scorer: weighted sample, fit LPC, return spline coords.
 
-        # Sample data
-        subset_indices = rng.choice(len(coord_array), size=bootstrap_size, replace=True, p=obs_weights)
-        coord_subset = coord_array[subset_indices, :]
+        Uses scorer-owns-perturbation pattern: ignores data["indices"]
+        and performs its own weighted draw via the engine-provided rng.
+        """
+        coords = data["coords"]
+        weights = data["obs_weights"]
+        ep = data["early_points"]
+        lp = data["late_points"]
+
+        # Weighted draw using engine-provided rng
+        idx = rng.choice(len(coords), size=bootstrap_size, replace=True, p=weights)
+        coord_subset = coords[idx, :]
 
         # Random anchor points
-        start_idx = rng.choice(len(early_points))
-        stop_idx = rng.choice(len(late_points))
-        start_point = early_points[start_idx, :]
-        stop_point = late_points[stop_idx, :]
+        start_idx = rng.integers(len(ep))
+        stop_idx = rng.integers(len(lp))
+        start_point = ep[start_idx, :]
+        stop_point = lp[stop_idx, :]
 
         # Fit LPC
         lpc = LocalPrincipalCurve(
@@ -262,55 +286,81 @@ def _fit_single_spline(
             h=h,
             max_iter=max_iter,
             tol=tol,
-            angle_penalty_exp=angle_penalty_exp
+            angle_penalty_exp=angle_penalty_exp,
+        )
+        lpc.fit(
+            coord_subset,
+            start_points=start_point[None, :],
+            end_point=stop_point[None, :],
+            num_points=n_spline_points,
         )
 
-        try:
-            lpc.fit(
-                coord_subset,
-                start_points=start_point[None, :],
-                end_point=stop_point[None, :],
-                num_points=n_spline_points
-            )
-        except Exception:
-            continue
-
-        # Validate: LPC sometimes returns None for cubic_splines
-        if (not hasattr(lpc, 'cubic_splines')
+        # Validate LPC output — raise to trigger retry
+        if (not hasattr(lpc, "cubic_splines")
                 or lpc.cubic_splines is None
                 or len(lpc.cubic_splines) == 0
                 or lpc.cubic_splines[0] is None):
-            continue
+            raise RuntimeError("LPC produced no cubic_splines")
 
         spline = lpc.cubic_splines[0]
         if np.isnan(spline).any():
-            continue
+            raise RuntimeError("LPC produced NaN spline")
 
-        successful_splines.append(spline)
-        pbar.update(1)
+        return spline  # ndarray of shape (n_spline_points, n_coords)
 
-    pbar.close()
+    # ── Run resampling engine ──
 
-    n_failed = attempts - len(successful_splines)
+    spec = resample.bootstrap(size=bootstrap_size)
+    try:
+        out = resample.run(
+            data_bundle,
+            spec,
+            scorer,
+            n_iters=n_bootstrap,
+            seed=random_state,
+            max_retries_per_iter=2,
+            store="all",
+        )
+    except ValueError as exc:
+        # Preflight dry run can fail if the scorer always raises
+        # (e.g. LPC fitting is fundamentally broken for this data).
+        # Return NaN DataFrame so caller can detect failure.
+        if "dry run failed" in str(exc):
+            warnings.warn(
+                f"LPC fitting: preflight scorer failed — returning NaN spline. "
+                f"Detail: {exc}"
+            )
+            se_cols = [col + "_se" for col in pca_cols]
+            spline_df = pd.DataFrame(
+                np.nan, index=range(n_spline_points), columns=pca_cols
+            )
+            spline_df[se_cols] = np.nan
+            spline_df["spline_point_index"] = range(n_spline_points)
+            return spline_df
+        raise
+
+    # ── Post-processing ──
+
+    n_failed = out.n_failed
     if n_failed > 0:
-        import warnings
+        total_attempts = out.n_success + n_failed
         warnings.warn(
-            f"LPC fitting: {n_failed}/{attempts} bootstrap iterations failed "
-            f"and were retried ({len(successful_splines)} successful)"
+            f"LPC fitting: {n_failed}/{total_attempts} bootstrap iterations failed "
+            f"and were retried ({out.n_success} successful)"
         )
 
-    if len(successful_splines) == 0:
+    if out.n_success == 0:
         # Return NaN DataFrame so caller can detect failure
         se_cols = [col + "_se" for col in pca_cols]
         spline_df = pd.DataFrame(
             np.nan, index=range(n_spline_points), columns=pca_cols
         )
         spline_df[se_cols] = np.nan
-        spline_df['spline_point_index'] = range(n_spline_points)
+        spline_df["spline_point_index"] = range(n_spline_points)
         return spline_df
 
     # Stack successful fits and compute mean / SE
-    spline_boot_array = np.array(successful_splines)  # (n_success, n_points, n_coords)
+    spline_boot_array = np.array(out.samples)  # (n_success, n_points, n_coords)
     mean_spline = np.mean(spline_boot_array, axis=0)
     se_spline = np.std(spline_boot_array, axis=0)
 
@@ -318,6 +368,6 @@ def _fit_single_spline(
     se_cols = [col + "_se" for col in pca_cols]
     spline_df = pd.DataFrame(mean_spline, columns=pca_cols)
     spline_df[se_cols] = se_spline
-    spline_df['spline_point_index'] = range(len(spline_df))
+    spline_df["spline_point_index"] = range(len(spline_df))
 
     return spline_df

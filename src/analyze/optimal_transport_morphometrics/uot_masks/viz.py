@@ -17,7 +17,7 @@ try:
 except Exception:  # pragma: no cover
     sp = None
 
-from analyze.utils.optimal_transport import Coupling, UOTResult
+from analyze.utils.optimal_transport import Coupling, UOTResultCanonical
 
 
 # ==============================================================================
@@ -113,7 +113,7 @@ def _overlay_masks_rgb(
 
 def plot_uot_quiver(
     src_mask: np.ndarray,
-    result: UOTResult,
+    result: UOTResultCanonical,
     output_path: Path,
     stride: int = 6,
     canonical_shape: Optional[Tuple[int, int]] = None,
@@ -142,15 +142,16 @@ def plot_uot_quiver(
     if canonical_shape is None:
         canonical_shape = src_mask.shape
 
-    # Use property for μm/frame (fallback to pixels if pair_frame unavailable)
-    velocity_field = (
-        result.velocity_um_per_frame_yx
-        if result.velocity_um_per_frame_yx is not None
-        else result.velocity_px_per_frame_yx
-    )
+    velocity_px = np.asarray(result.velocity_canon_px_per_step_yx, dtype=np.float32)
+    scale_um = float(getattr(result, "canonical_um_per_px", float("nan")))
+    if np.isfinite(scale_um):
+        velocity_field = velocity_px * scale_um
+        unit_label = "μm/step"
+    else:
+        velocity_field = velocity_px
+        unit_label = "px/step"
 
     velocity_mag = np.sqrt(velocity_field[..., 0] ** 2 + velocity_field[..., 1] ** 2)
-    unit_label = "μm/frame" if result.velocity_um_per_frame_yx is not None else "px/frame"
 
     # Support mask
     support_mask = velocity_mag > 0
@@ -229,7 +230,7 @@ def plot_uot_quiver(
 
 
 def plot_uot_cost_field(
-    result: UOTResult,
+    result: UOTResultCanonical,
     output_path: Path,
     canonical_shape: Optional[Tuple[int, int]] = None,
     viz_config: Optional[UOTVizConfig] = None,
@@ -246,14 +247,14 @@ def plot_uot_cost_field(
     - Statistics on support only
 
     Args:
-        result: UOTResult containing cost field
+        result: UOTResultCanonical containing cost field
         output_path: Where to save the plot
         canonical_shape: Optional (H, W) for axis limits (inferred from cost field if None)
         viz_config: Visualization configuration (currently unused, for future consistency)
     """
-    cost_field_canonical = getattr(result, "cost_src_px", None)
+    cost_field_canonical = getattr(result, "cost_src_canon", None)
     if cost_field_canonical is None:
-        print("Warning: No cost_src_px on result; cost field plot skipped")
+        print("Warning: No cost_src_canon on result; cost field plot skipped")
         return
 
     if canonical_shape is None:
@@ -501,7 +502,7 @@ def plot_uot_creation_destruction(
 def plot_uot_overlay_with_transport(
     src_mask: np.ndarray,
     tgt_mask: np.ndarray,
-    result: UOTResult,
+    result: UOTResultCanonical,
     output_path: Path,
     stride: int = 6,
     canonical_shape: Optional[Tuple[int, int]] = None,
@@ -516,7 +517,7 @@ def plot_uot_overlay_with_transport(
     Args:
         src_mask: Source mask
         tgt_mask: Target mask
-        result: UOTResult containing transport data
+        result: UOTResultCanonical containing transport data
         output_path: Where to save the plot
         stride: Subsample stride for arrow density
         canonical_shape: Optional (H, W) for axis limits (defaults to src_mask.shape)
@@ -528,15 +529,11 @@ def plot_uot_overlay_with_transport(
     if canonical_shape is None:
         canonical_shape = src_mask.shape
 
-    velocity_field = (
-        result.velocity_um_per_frame_yx
-        if result.velocity_um_per_frame_yx is not None
-        else result.velocity_px_per_frame_yx
-    )
+    velocity_field = np.asarray(result.velocity_canon_px_per_step_yx, dtype=np.float32)
     velocity_mag = np.sqrt(velocity_field[..., 0] ** 2 + velocity_field[..., 1] ** 2)
     support_mask = velocity_mag > 0
 
-    cost_field = getattr(result, "cost_src_px", None)
+    cost_field = getattr(result, "cost_src_canon", None)
     if cost_field is None:
         cost_field = np.zeros_like(src_mask, dtype=np.float32)
 
@@ -611,7 +608,7 @@ def plot_uot_overlay_with_transport(
 def plot_uot_diagnostic_suite(
     src_mask: np.ndarray,
     tgt_mask: np.ndarray,
-    result: UOTResult,
+    result: UOTResultCanonical,
     output_dir: Path,
     prefix: str = "",
     canonical_shape: Optional[Tuple[int, int]] = None,
@@ -628,7 +625,7 @@ def plot_uot_diagnostic_suite(
     Args:
         src_mask: Source mask
         tgt_mask: Target mask
-        result: UOTResult containing transport data
+        result: UOTResultCanonical containing transport data
         output_dir: Directory to save plots
         prefix: Optional prefix for output filenames
         canonical_shape: Optional (H, W) for axis limits
@@ -655,15 +652,9 @@ def plot_uot_diagnostic_suite(
         result, outputs["cost_field"], canonical_shape=canonical_shape, viz_config=viz_config
     )
 
-    # Extract mass fields from result
-    mass_created = (
-        result.pair_frame.creation_map if result.pair_frame else result.mass_created_px
-    )
-    mass_destroyed = (
-        result.pair_frame.destruction_map
-        if result.pair_frame
-        else result.mass_destroyed_px
-    )
+    # Extract canonical mass fields from result
+    mass_created = result.mass_created_canon
+    mass_destroyed = result.mass_destroyed_canon
     created_pct = result.diagnostics.get("metrics", {}).get("created_mass_pct", 0.0)
     destroyed_pct = result.diagnostics.get("metrics", {}).get("destroyed_mass_pct", 0.0)
 
@@ -963,12 +954,12 @@ def apply_nan_mask(field: np.ndarray, support_mask: np.ndarray) -> np.ndarray:
 
 
 def _build_support_mask_from_result(result) -> np.ndarray:
-    """Build a combined support mask from a UOTResult."""
-    shape = result.mass_created_px.shape[:2]
+    """Build a combined support mask from a canonical-grid result."""
+    shape = result.mass_created_canon.shape[:2]
     mask = np.zeros(shape, dtype=bool)
-    mask |= (result.mass_created_px > 0)
-    mask |= (result.mass_destroyed_px > 0)
-    vel_mag = np.linalg.norm(result.velocity_px_per_frame_yx, axis=-1)
+    mask |= (result.mass_created_canon > 0)
+    mask |= (result.mass_destroyed_canon > 0)
+    vel_mag = np.linalg.norm(result.velocity_canon_px_per_step_yx, axis=-1)
     mask |= (vel_mag > 0)
     return mask
 
@@ -987,9 +978,9 @@ def plot_uot_summary(
     """
     support_mask = _build_support_mask_from_result(result)
 
-    created = apply_nan_mask(result.mass_created_px, support_mask)
-    destroyed = apply_nan_mask(result.mass_destroyed_px, support_mask)
-    velocity = result.velocity_px_per_frame_yx
+    created = apply_nan_mask(result.mass_created_canon, support_mask)
+    destroyed = apply_nan_mask(result.mass_destroyed_canon, support_mask)
+    velocity = result.velocity_canon_px_per_step_yx
     vel_mag = np.linalg.norm(velocity, axis=-1)
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10), constrained_layout=True)
@@ -1014,7 +1005,7 @@ def plot_uot_summary(
     ax.quiver(xx, yy, vx, vy, color="cyan", angles="xy", scale_units="xy", scale=1.0)
     max_vel = float(np.nanmax(vel_mag)) if vel_mag.size else 0.0
     mean_vel = float(np.nanmean(vel_mag[support_mask])) if support_mask.any() else 0.0
-    ax.set_title(f"Velocity (max={max_vel:.2f}, mean={mean_vel:.2f} px/fr)")
+    ax.set_title(f"Velocity (max={max_vel:.2f}, mean={mean_vel:.2f} px/step)")
     ax.axis("off")
 
     # Panel 3: Mass created
@@ -1048,7 +1039,7 @@ def plot_velocity_histogram(
 ) -> plt.Figure:
     """Histogram of velocity magnitudes on support pixels."""
     support_mask = _build_support_mask_from_result(result)
-    vel_mag = np.linalg.norm(result.velocity_px_per_frame_yx, axis=-1)
+    vel_mag = np.linalg.norm(result.velocity_canon_px_per_step_yx, axis=-1)
     valid_mags = vel_mag[support_mask]
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 4), constrained_layout=True)
@@ -1059,7 +1050,7 @@ def plot_velocity_histogram(
         ax.axvline(float(np.mean(valid_mags)), color="red", linestyle="--", label=f"mean={np.mean(valid_mags):.2f}")
         ax.legend()
     ax.set_title("Velocity magnitude distribution")
-    ax.set_xlabel("Velocity (px/frame)")
+    ax.set_xlabel("Velocity (px/step)")
     ax.set_ylabel("Count")
 
     if output_path:
@@ -1085,17 +1076,17 @@ def write_diagnostics_json(result, output_path: str):
 
     support_mask = _build_support_mask_from_result(result)
     out["n_support_pixels"] = int(support_mask.sum())
-    out["total_mass_created"] = float(result.mass_created_px.sum())
-    out["total_mass_destroyed"] = float(result.mass_destroyed_px.sum())
+    out["total_mass_created"] = float(result.mass_created_canon.sum())
+    out["total_mass_destroyed"] = float(result.mass_destroyed_canon.sum())
 
-    vel_mag = np.linalg.norm(result.velocity_px_per_frame_yx, axis=-1)
+    vel_mag = np.linalg.norm(result.velocity_canon_px_per_step_yx, axis=-1)
     valid_mags = vel_mag[support_mask]
     if valid_mags.size > 0:
-        out["mean_velocity_px_per_frame"] = float(np.mean(valid_mags))
-        out["max_velocity_px_per_frame"] = float(np.max(valid_mags))
+        out["mean_velocity_px_per_step"] = float(np.mean(valid_mags))
+        out["max_velocity_px_per_step"] = float(np.max(valid_mags))
     else:
-        out["mean_velocity_px_per_frame"] = 0.0
-        out["max_velocity_px_per_frame"] = 0.0
+        out["mean_velocity_px_per_step"] = 0.0
+        out["max_velocity_px_per_step"] = 0.0
 
     with open(output_path, "w") as f:
         json.dump(out, f, indent=2)

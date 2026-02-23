@@ -8,7 +8,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from analyze.utils.optimal_transport import UOTConfig, UOTFramePair
+from analyze.utils.coord.grids.canonical import CanonicalGridConfig
+from analyze.utils.optimal_transport import UOTConfig, UOTFramePair, WorkingGridConfig
 from analyze.utils.optimal_transport.backends.base import UOTBackend
 from .frame_mask_io import load_mask_series_from_csv
 from .run_transport import run_uot_pair
@@ -18,16 +19,18 @@ def run_timeseries_from_csv(
     csv_path: Path,
     embryo_id: str,
     frame_indices: Optional[List[int]] = None,
-    config: Optional[UOTConfig] = None,
+    solver_cfg: Optional[UOTConfig] = None,
+    canonical_cfg: Optional[CanonicalGridConfig] = None,
+    working_cfg: Optional[WorkingGridConfig] = None,
     backend: Optional[UOTBackend] = None,
     data_root: Optional[Path] = None,
 ) -> List[Tuple[int, int, dict]]:
-    if config is None:
-        config = UOTConfig()
-    if backend is None:
-        from analyze.utils.optimal_transport.backends.pot_backend import POTBackend
-
-        backend = POTBackend()
+    if solver_cfg is None:
+        solver_cfg = UOTConfig()
+    if canonical_cfg is None:
+        canonical_cfg = CanonicalGridConfig()
+    if working_cfg is None:
+        working_cfg = WorkingGridConfig()
 
     frames = load_mask_series_from_csv(csv_path, embryo_id, frame_indices=frame_indices, data_root=data_root)
     results: List[Tuple[int, int, dict]] = []
@@ -36,7 +39,14 @@ def run_timeseries_from_csv(
         src = frames[i]
         tgt = frames[i + 1]
         pair = UOTFramePair(src=src, tgt=tgt)
-        res = run_uot_pair(pair, config=config, backend=backend)
+        res = run_uot_pair(
+            pair,
+            canonical_cfg=canonical_cfg,
+            working_cfg=working_cfg,
+            solver_cfg=solver_cfg,
+            backend=backend,
+            output_frame="work",
+        )
         frame_src = int(src.meta.get("frame_index", i))
         frame_tgt = int(tgt.meta.get("frame_index", i + 1))
         metrics = res.diagnostics.get("metrics", {})

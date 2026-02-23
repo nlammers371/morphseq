@@ -9,7 +9,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from analyze.utils.optimal_transport import UOTConfig
+from analyze.utils.optimal_transport import UOTConfig, WorkingGridConfig
 from .frame_mask_io import load_mask_pair_from_csv
 from .run_transport import run_uot_pair
 
@@ -27,9 +27,9 @@ def benchmark_downsample(
 
     results = []
     for factor in downsample_factors:
-        cfg = UOTConfig(**{**base_config.__dict__, "downsample_factor": int(factor)})
+        working_cfg = WorkingGridConfig(downsample_factor=int(factor))
         start = time.perf_counter()
-        res = run_uot_pair(pair, config=cfg)
+        res = run_uot_pair(pair, solver_cfg=base_config, working_cfg=working_cfg, output_frame="work")
         elapsed = time.perf_counter() - start
 
         metrics = res.diagnostics.get("metrics", {})

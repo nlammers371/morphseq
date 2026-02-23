@@ -13,7 +13,8 @@ __all__ = [
     "UOTFramePair",
     "UOTSupport",
     "UOTProblem",
-    "UOTResult",
+    "UOTResultWork",
+    "UOTResultCanonical",
     "SamplingMode",
     "MassMode",
     "POTBackend",
@@ -23,10 +24,8 @@ __all__ = [
     "load_mask_series_from_csv",
     "load_mask_from_png",
     # Embryo-specific preprocessing
-    "preprocess_pair",
     # Pipeline orchestration
     "run_uot_pair",
-    "build_problem",
     "run_timeseries_from_csv",
     # Phase 2: Contract-compliant visualization
     "plot_uot_quiver",
@@ -46,7 +45,8 @@ def __getattr__(name: str):
         "UOTFramePair",
         "UOTSupport",
         "UOTProblem",
-        "UOTResult",
+        "UOTResultWork",
+        "UOTResultCanonical",
         "SamplingMode",
         "MassMode",
         "POTBackend",
@@ -65,12 +65,7 @@ def __getattr__(name: str):
 
         return getattr(_io, name)
 
-    if name == "preprocess_pair":
-        from . import preprocess as _pre
-
-        return _pre.preprocess_pair
-
-    if name in {"run_uot_pair", "build_problem"}:
+    if name in {"run_uot_pair"}:
         from . import run_transport as _rt
 
         return getattr(_rt, name)

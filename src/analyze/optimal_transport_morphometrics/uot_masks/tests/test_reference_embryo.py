@@ -21,9 +21,9 @@ from analyze.optimal_transport_morphometrics.uot_masks.reference_embryo import (
 @dataclass
 class _FakeResult:
     """Minimal UOTResult mock."""
-    mass_created_px: np.ndarray
-    mass_destroyed_px: np.ndarray
-    velocity_px_per_frame_yx: np.ndarray
+    mass_created_canon: np.ndarray
+    mass_destroyed_canon: np.ndarray
+    velocity_canon_px_per_step_yx: np.ndarray
     cost: float = 1.0
     diagnostics: Optional[dict] = None
 
@@ -40,9 +40,9 @@ def _make_result(h=10, w=10, vel_y=1.0, vel_x=0.5, created=0.1, destroyed=0.05, 
     vel[3:7, 3:7, 1] = vel_x
 
     return _FakeResult(
-        mass_created_px=mc,
-        mass_destroyed_px=md,
-        velocity_px_per_frame_yx=vel,
+        mass_created_canon=mc,
+        mass_destroyed_canon=md,
+        velocity_canon_px_per_step_yx=vel,
     )
 
 
@@ -51,15 +51,15 @@ class TestBuildReferenceField:
         """Reference from 3 identical results → mean == input."""
         r = _make_result(vel_y=2.0, vel_x=1.0, created=0.5, destroyed=0.3, seed=99)
         # Use exact same data 3 times
-        r1 = _FakeResult(r.mass_created_px.copy(), r.mass_destroyed_px.copy(), r.velocity_px_per_frame_yx.copy())
-        r2 = _FakeResult(r.mass_created_px.copy(), r.mass_destroyed_px.copy(), r.velocity_px_per_frame_yx.copy())
-        r3 = _FakeResult(r.mass_created_px.copy(), r.mass_destroyed_px.copy(), r.velocity_px_per_frame_yx.copy())
+        r1 = _FakeResult(r.mass_created_canon.copy(), r.mass_destroyed_canon.copy(), r.velocity_canon_px_per_step_yx.copy())
+        r2 = _FakeResult(r.mass_created_canon.copy(), r.mass_destroyed_canon.copy(), r.velocity_canon_px_per_step_yx.copy())
+        r3 = _FakeResult(r.mass_created_canon.copy(), r.mass_destroyed_canon.copy(), r.velocity_canon_px_per_step_yx.copy())
 
         ref = build_reference_field([r1, r2, r3])
         assert ref.n_embryos == 3
-        np.testing.assert_allclose(ref.velocity_yx, r.velocity_px_per_frame_yx, atol=1e-5)
-        np.testing.assert_allclose(ref.mass_created, r.mass_created_px, atol=1e-5)
-        np.testing.assert_allclose(ref.mass_destroyed, r.mass_destroyed_px, atol=1e-5)
+        np.testing.assert_allclose(ref.velocity_yx, r.velocity_canon_px_per_step_yx, atol=1e-5)
+        np.testing.assert_allclose(ref.mass_created, r.mass_created_canon, atol=1e-5)
+        np.testing.assert_allclose(ref.mass_destroyed, r.mass_destroyed_canon, atol=1e-5)
 
     def test_empty_raises(self):
         with pytest.raises(ValueError, match="No results"):
@@ -93,7 +93,7 @@ class TestComputeDeviation:
         r = _make_result(vel_y=3.0, vel_x=2.0, seed=42)
         ref = build_reference_field([_make_result(vel_y=1.0, vel_x=1.0, seed=42)])
         residual = compute_residual_field(r, ref)
-        assert residual.shape == r.velocity_px_per_frame_yx.shape
+        assert residual.shape == r.velocity_canon_px_per_step_yx.shape
         # In the active region, residual should be ~(2.0, 1.0)
         assert np.abs(residual[5, 5, 0] - 2.0) < 0.1
         assert np.abs(residual[5, 5, 1] - 1.0) < 0.1

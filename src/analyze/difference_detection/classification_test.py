@@ -289,6 +289,7 @@ def run_binary_classification_test(
 
     if verbose:
         print(f"Comparing {group1} (n={n_group1}) vs {group2} (n={n_group2})")
+        print("Classification weighting: class_weight='balanced' (enabled by default)")
 
     # Determine feature columns
     if isinstance(features, str):
@@ -415,6 +416,12 @@ def _run_classification(
 
         n_positive = int(np.sum(y_labels == positive_label))
         n_negative = int(np.sum(y_labels == negative_label))
+
+        if verbose:
+            print(
+                f"    Class counts (positive={positive_label}: {n_positive}, "
+                f"negative={negative_label}: {n_negative}); using balanced class weights"
+            )
 
         # Check class count (must contain both positive and negative labels)
         if n_positive == 0 or n_negative == 0:

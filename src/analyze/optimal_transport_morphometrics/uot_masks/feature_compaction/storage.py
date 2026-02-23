@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover - scipy may be optional
     sp = None
 
 
-FEATURE_SCHEMA_VERSION = "1.0.0"
+FEATURE_SCHEMA_VERSION = "2.0.0"
 PAIR_KEY_COLUMNS = ("run_id", "pair_id")
 
 # Repeated low-cardinality config columns to compress parquet size.
@@ -226,25 +226,25 @@ def upsert_ot_pair_metrics_parquet(
 
 
 def compute_barycentric_projection(
-    result,
+    result_work,
     min_mass: float = 1e-12,
 ) -> Dict[str, np.ndarray]:
     """Compute source-support barycentric targets from a solved coupling."""
-    if result.coupling is None:
+    if result_work.coupling is None:
         raise ValueError("Result coupling is None; cannot compute barycentric projection.")
 
-    src = np.asarray(result.support_src_yx, dtype=np.float64)
-    tgt = np.asarray(result.support_tgt_yx, dtype=np.float64)
+    src = np.asarray(result_work.support_src_yx, dtype=np.float64)
+    tgt = np.asarray(result_work.support_tgt_yx, dtype=np.float64)
     n_src = src.shape[0]
 
-    if sp is not None and sp.issparse(result.coupling):
-        coo = result.coupling.tocoo()
+    if sp is not None and sp.issparse(result_work.coupling):
+        coo = result_work.coupling.tocoo()
         transported_mass = np.zeros(n_src, dtype=np.float64)
         weighted_tgt = np.zeros((n_src, 2), dtype=np.float64)
         np.add.at(transported_mass, coo.row, coo.data)
         np.add.at(weighted_tgt, coo.row, coo.data[:, None] * tgt[coo.col])
     else:
-        coupling = np.asarray(result.coupling, dtype=np.float64)
+        coupling = np.asarray(result_work.coupling, dtype=np.float64)
         transported_mass = coupling.sum(axis=1)
         weighted_tgt = coupling @ tgt
 
@@ -263,13 +263,19 @@ def compute_barycentric_projection(
 
 def save_pair_artifacts(
     *,
-    result,
+    result_work,
+    result_canon=None,
     artifact_root: Path,
     pair_id: str,
     float_dtype: str = "float32",
     include_barycentric: bool = True,
 ) -> Dict[str, Path]:
-    """Save per-pair field artifacts and optional barycentric projection."""
+    """Save per-pair field artifacts and optional barycentric projection.
+
+    Contract:
+    - `result_work` is a `UOTResultWork` (work-grid fields + coupling + supports).
+    - `result_canon` is optional `UOTResultCanonical` (canonical-grid rasters only).
+    """
     artifact_root = Path(artifact_root)
     pair_dir = artifact_root / pair_id
     pair_dir.mkdir(parents=True, exist_ok=True)
@@ -278,21 +284,36 @@ def save_pair_artifacts(
 
     fields_path = pair_dir / "fields.npz"
     fields_payload = {
-        "velocity_px_per_frame_yx": np.asarray(result.velocity_px_per_frame_yx, dtype=float_dtype_np),
-        "mass_created_px": np.asarray(result.mass_created_px, dtype=float_dtype_np),
-        "mass_destroyed_px": np.asarray(result.mass_destroyed_px, dtype=float_dtype_np),
-        "support_src_yx": np.asarray(result.support_src_yx, dtype=np.float32),
-        "support_tgt_yx": np.asarray(result.support_tgt_yx, dtype=np.float32),
+        "velocity_work_px_per_step_yx": np.asarray(result_work.velocity_work_px_per_step_yx, dtype=float_dtype_np),
+        "mass_created_work": np.asarray(result_work.mass_created_work, dtype=float_dtype_np),
+        "mass_destroyed_work": np.asarray(result_work.mass_destroyed_work, dtype=float_dtype_np),
+        "support_src_yx": np.asarray(result_work.support_src_yx, dtype=np.float32),
+        "support_tgt_yx": np.asarray(result_work.support_tgt_yx, dtype=np.float32),
     }
-    if result.cost_src_px is not None:
-        fields_payload["cost_src_px"] = np.asarray(result.cost_src_px, dtype=float_dtype_np)
-    if result.cost_tgt_px is not None:
-        fields_payload["cost_tgt_px"] = np.asarray(result.cost_tgt_px, dtype=float_dtype_np)
+    if getattr(result_work, "cost_src_work", None) is not None:
+        fields_payload["cost_src_work"] = np.asarray(result_work.cost_src_work, dtype=float_dtype_np)
+    if getattr(result_work, "cost_tgt_work", None) is not None:
+        fields_payload["cost_tgt_work"] = np.asarray(result_work.cost_tgt_work, dtype=float_dtype_np)
+
+    if result_canon is not None:
+        fields_payload.update(
+            {
+                "velocity_canon_px_per_step_yx": np.asarray(
+                    result_canon.velocity_canon_px_per_step_yx, dtype=float_dtype_np
+                ),
+                "mass_created_canon": np.asarray(result_canon.mass_created_canon, dtype=float_dtype_np),
+                "mass_destroyed_canon": np.asarray(result_canon.mass_destroyed_canon, dtype=float_dtype_np),
+            }
+        )
+        if getattr(result_canon, "cost_src_canon", None) is not None:
+            fields_payload["cost_src_canon"] = np.asarray(result_canon.cost_src_canon, dtype=float_dtype_np)
+        if getattr(result_canon, "cost_tgt_canon", None) is not None:
+            fields_payload["cost_tgt_canon"] = np.asarray(result_canon.cost_tgt_canon, dtype=float_dtype_np)
     np.savez_compressed(fields_path, **fields_payload)
 
     paths: Dict[str, Path] = {"fields": fields_path}
-    if include_barycentric and result.coupling is not None:
-        bary = compute_barycentric_projection(result)
+    if include_barycentric and result_work.coupling is not None:
+        bary = compute_barycentric_projection(result_work)
         bary_path = pair_dir / "barycentric_projection.npz"
         np.savez_compressed(
             bary_path,
@@ -306,19 +327,25 @@ def save_pair_artifacts(
     metadata = {
         "pair_id": pair_id,
         "float_dtype": str(float_dtype_np),
-        "velocity_shape": list(result.velocity_px_per_frame_yx.shape),
-        "mass_shape": list(result.mass_created_px.shape),
-        "n_support_src": int(len(result.support_src_yx)),
-        "n_support_tgt": int(len(result.support_tgt_yx)),
-        "has_coupling": result.coupling is not None,
-        "has_pair_frame": result.pair_frame is not None,
+        "work_velocity_shape": list(result_work.velocity_work_px_per_step_yx.shape),
+        "work_mass_shape": list(result_work.mass_created_work.shape),
+        "n_support_src": int(len(result_work.support_src_yx)),
+        "n_support_tgt": int(len(result_work.support_tgt_yx)),
+        "has_coupling": result_work.coupling is not None,
+        "has_pair_frame": result_work.pair_frame is not None,
+        "has_canonical_fields": result_canon is not None,
     }
-    if result.pair_frame is not None:
+    if result_work.pair_frame is not None:
         metadata["pair_frame"] = {
-            "canon_shape_hw": list(result.pair_frame.canon_shape_hw),
-            "work_shape_hw": list(result.pair_frame.work_shape_hw),
-            "downsample_factor": int(result.pair_frame.downsample_factor),
-            "px_size_um": float(result.pair_frame.px_size_um),
+            "canon_shape_hw": list(result_work.pair_frame.canon_shape_hw),
+            "work_shape_hw": list(result_work.pair_frame.work_shape_hw),
+            "downsample_factor": int(result_work.pair_frame.downsample_factor),
+            "px_size_um": float(result_work.pair_frame.px_size_um),
+        }
+    if result_canon is not None:
+        metadata["canonical"] = {
+            "canonical_shape_hw": list(result_canon.mass_created_canon.shape),
+            "canonical_um_per_px": float(result_canon.canonical_um_per_px),
         }
     metadata_path = pair_dir / "metadata.json"
     with open(metadata_path, "w", encoding="utf-8") as f:

@@ -35,9 +35,13 @@ def _metric_with_fallback(metrics: Mapping, *keys: str) -> float:
     return float("nan")
 
 
-def _support_mask(result) -> np.ndarray:
-    vel_mag = np.linalg.norm(result.velocity_px_per_frame_yx, axis=-1)
-    return (result.mass_created_px > 0) | (result.mass_destroyed_px > 0) | (vel_mag > 0)
+def _support_mask(result_canon) -> np.ndarray:
+    vel_mag = np.linalg.norm(result_canon.velocity_canon_px_per_step_yx, axis=-1)
+    return (
+        (result_canon.mass_created_canon > 0)
+        | (result_canon.mass_destroyed_canon > 0)
+        | (vel_mag > 0)
+    )
 
 
 def _divergence_and_curl(velocity_hw2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -90,30 +94,31 @@ def extract_pair_feature_record(
     *,
     run_id: str,
     pair_id: str,
-    result,
+    result_work,
+    result_canon,
     backend: str,
     n_bands: int = 8,
     feature_schema_version: str = FEATURE_VECTOR_SCHEMA_VERSION,
 ) -> Dict:
     """Extract compact per-pair features for downstream PCA/ML."""
-    diagnostics = result.diagnostics or {}
+    diagnostics = result_work.diagnostics or {}
     metrics = diagnostics.get("metrics", {}) if isinstance(diagnostics, Mapping) else {}
-    support_mask = _support_mask(result)
+    support_mask = _support_mask(result_canon)
 
-    velocity = np.asarray(result.velocity_px_per_frame_yx, dtype=np.float32)
+    velocity = np.asarray(result_canon.velocity_canon_px_per_step_yx, dtype=np.float32)
     vy = velocity[..., 0]
     vx = velocity[..., 1]
     divergence, curl = _divergence_and_curl(velocity)
 
     # Convert barycentric displacement to micrometers if pair-frame metadata exists.
-    bary = compute_barycentric_projection(result)
+    bary = compute_barycentric_projection(result_work)
     disp = np.linalg.norm(bary["barycentric_velocity_yx"], axis=1).astype(np.float64)
     mass = np.asarray(bary["transported_mass_src"], dtype=np.float64)
     valid = mass > 1e-12
     disp = disp[valid] if np.any(valid) else disp
     scale_um = 1.0
-    if getattr(result, "pair_frame", None) is not None:
-        scale_um = float(result.pair_frame.work_px_size_um)
+    if getattr(result_work, "work_um_per_px", None) is not None and not np.isnan(float(result_work.work_um_per_px)):
+        scale_um = float(result_work.work_um_per_px)
     disp_um = disp * scale_um
 
     record = {

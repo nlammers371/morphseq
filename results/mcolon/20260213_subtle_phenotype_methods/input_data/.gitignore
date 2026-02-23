@@ -1,0 +1,4 @@
+# Generated local data artifacts (do not commit by default)
+experiments/
+datasets_manifest.csv
+column_inventory.csv

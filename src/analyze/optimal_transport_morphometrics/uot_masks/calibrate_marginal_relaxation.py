@@ -8,7 +8,7 @@ from typing import Iterable, List
 import numpy as np
 import pandas as pd
 
-from analyze.utils.optimal_transport import UOTConfig, UOTFrame, UOTFramePair
+from analyze.utils.optimal_transport import UOTConfig, UOTFrame, UOTFramePair, WorkingGridConfig
 from .frame_mask_io import load_mask_from_csv
 from .run_transport import run_uot_pair
 
@@ -26,7 +26,7 @@ def calibrate_on_identity(
     for reg_m in reg_m_values:
         cfg = UOTConfig(**{**base_config.__dict__, "marginal_relaxation": float(reg_m)})
         pair = UOTFramePair(src=frame, tgt=frame)
-        res = run_uot_pair(pair, config=cfg)
+        res = run_uot_pair(pair, solver_cfg=cfg, working_cfg=WorkingGridConfig(), output_frame="work")
         metrics = res.diagnostics.get("metrics", {})
         transported = metrics.get("transported_mass", np.nan)
         total = float(frame.embryo_mask.sum())

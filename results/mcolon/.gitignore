@@ -50,6 +50,7 @@
 
 # Tabular and metadata artifacts (generated analysis outputs)
 **/*.csv
+**/*.tsv
 **/*.json
 
 # Avoid accidental package scaffolding from experiment scratch dirs

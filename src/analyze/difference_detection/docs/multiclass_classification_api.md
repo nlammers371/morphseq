@@ -4,6 +4,11 @@ This document shows how to use the new Scanpy-style comparison API with visualiz
 
 ## Basic Usage
 
+> **Class imbalance default:** the routed `run_classification_test()` path uses logistic regression with `class_weight='balanced'` for both binary and multiclass runs.
+>
+> **Verbose logging:** with `verbose=True` (default), the run now prints the balancing policy and per-bin class counts so balancing assumptions are explicit in logs.
+
+
 ```python
 from analyze.difference_detection import run_classification_test
 

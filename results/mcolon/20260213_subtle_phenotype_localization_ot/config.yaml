@@ -1,0 +1,61 @@
+# Subtle-Phenotype Localization Config
+# 2026-02-13
+
+# Data selection
+hpf_bin_start: 47.0
+hpf_bin_end: 49.0  # Use 48 hpf as reference timepoint
+target_hpf: 48.0
+selection_tolerance_hpf: 1.25
+window_mode: "single_2hpf_bin"  # "single_2hpf_bin" or "expanded_4hpf_window"
+expanded_window_hpf: [46.0, 50.0]  # Optional robustness run
+multi_frame_collapse: "median_per_embryo_per_feature"  # Required when window_mode=expanded_4hpf_window
+genotype_wt: "cep290_wildtype"
+genotype_mutant: "cep290_homozygous"
+n_reference_wt: 1  # WT reference (OT target/template, defines coordinate system)
+n_control_wt: 10  # WT controls (mapped to reference, used in statistical tests)
+n_mutants: 20  # Mutants (mapped to reference, compared to WT controls)
+# NOTE: Reference WT is NOT included in statistical comparisons
+
+# OT parameters (already tuned)
+ot_epsilon: 1.0e-4
+ot_marginal_relaxation: 10.0
+ot_downsample_factor: 1
+ot_canonical_grid_um_per_pixel: 10.0
+ot_canonical_grid_shape_hw: [256, 576]
+ot_align_mode: "yolk"
+
+# Outlier filtering
+outlier_method: "iqr"
+outlier_iqr_multiplier: 1.5
+
+# S binning
+n_s_bins: 10  # Start with 10, try 20 for higher resolution
+s_orientation: "head_to_tail"  # S=0 head, S=1 tail
+
+# Gaussian kernel smoothing (visualization only, also provides density measure)
+# IMPORTANT: Specify in MICROMETERS (μm), not pixels, for anatomical interpretability
+gaussian_kernel_sigma_2d: 20.0  # μm (for 2D cost density maps; ~2 pixels at 10 μm/px)
+gaussian_kernel_sigma_1d: 10.0  # μm (for 1D along-S profiles)
+um_per_pixel: 10.0  # Canonical grid resolution (μm/pixel)
+
+# AUROC computation
+auroc_n_bootstrap: 1000  # Bootstrap iterations for CI
+auroc_cv_folds: 5  # GroupKFold folds for CV-by-embryo
+auroc_stratify: true  # Stratify resampling by genotype
+
+# Statistical testing (permutation tests)
+n_permutations: 999  # Number of permutations for null distribution
+fdr_alpha: 0.05  # FDR significance threshold
+fdr_method: "fdr_bh"  # Benjamini-Hochberg FDR correction
+
+# Patch search
+patch_min_length: 2  # Minimum S bins per interval
+patch_max_length: 10  # Maximum S bins per interval
+patch_length_penalty: 0.01  # Optional penalty on interval length
+
+# Random seed
+random_seed: 42
+
+# Output
+save_intermediate_maps: true  # Save c(x), d(x), etc. as .npy files
+save_diagnostic_plots: true

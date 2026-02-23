@@ -1,8 +1,10 @@
 # MorphSeq Snakemake Rules and Data Flow
 
-**Status:** Current Implementation Spec
+**Status:** Target Rules + Data Flow Spec (refactor)
 **Audience:** Scientists and developers wiring/maintaining the pipeline
 **Last Updated:** 2026-02-10
+
+**Note:** This describes the intended refactor end-state; the repo may still contain legacy paths (for example `experiment_image_manifest.json`) until the implementation is complete.
 
 ## 2026-02-10 - Addendum, highlighting what we need to change in the original doc
 This addendum only updates ingest/handoff interpretation. Existing downstream rule logic remains unchanged.
@@ -17,8 +19,8 @@ Rule-level clarifications:
    - `frame_manifest.csv`
 6. For frame-level contracts, standardize on:
    - `channel_id`
-   - `channel_raw_name`
-   - `temperature_c`
+   - `channel_name_raw`
+   - `temperature`
    - required `micrometers_per_pixel`
 
 ## TL;DR
@@ -75,7 +77,7 @@ PHASE 3+
 
 **Purpose**
 - Parse/normalize plate annotations.
-- Ensure `temperature_c` and `start_age_hpf` are available for downstream joining.
+- Ensure `temperature` and `start_age_hpf` are available for downstream joining.
 
 ---
 
@@ -243,7 +245,7 @@ Required columns:
 - `well_id`
 - `well_index`
 - `channel_id`
-- `channel_raw_name`
+- `channel_name_raw`
 - `time_int`
 - `frame_index`
 - `image_id`
@@ -258,7 +260,7 @@ Required columns:
 - `genotype`
 - `treatment`
 - `medium`
-- `temperature_c`
+- `temperature`
 - `start_age_hpf`
 - `embryos_per_well`
 
@@ -270,7 +272,7 @@ Uniqueness key for both:
 ## Naming and ID Conventions
 
 - `channel_id`: normalized channel (`BF`, `GFP`, etc.)
-- `channel_raw_name`: microscope-native channel label
+- `channel_name_raw`: microscope-native channel label
 - `image_id`: `{well_id}_{channel_id}_t{frame_index:04d}`
 
 Frame semantics:
@@ -288,7 +290,7 @@ If you want to know:
 
 ---
 
-## Deprecated Rules and Files (Removed)
+## Deprecated Rules and Files (Planned)
 
 Deprecated rule:
 - `rule generate_image_manifest`
@@ -307,7 +309,7 @@ Do not add new dependencies on `experiment_image_manifest.json`.
 2. No duplicate frame keys in frame manifest.
 3. Every stitched path in frame manifest exists.
 4. `micrometers_per_pixel` is non-null for every row.
-5. `temperature_c` and `start_age_hpf` are present where required.
+5. `temperature` and `start_age_hpf` are present where required.
 6. No `embryo_id` appears before segmentation outputs.
 
 ---
@@ -323,7 +325,10 @@ How to read this safely:
   - `generate_image_manifest` / `experiment_image_manifest.json` -> stitched index + frame manifest flow
   - old flat module references -> scope-first modules + shared handoff validation
 
-# Preliminary Snakemake Rules for MorphSeq Pipeline
+> [!WARNING]
+> Everything below is retained historical context. The canonical contracts and flow are defined above; if anything below conflicts, follow the sections above.
+
+## (Legacy) Preliminary Snakemake Rules for MorphSeq Pipeline
 
 **Author:** Claude Code + User
 **Date:** 2025-10-11
@@ -338,7 +343,7 @@ How to read this safely:
 - `raw_plate_layout.xlsx` (user-provided, various formats)
 
 **Output:**
-- `input_metadata_alignment/{exp}/raw_inputs/plate_layout.csv` [VALIDATED]
+- `experiment_metadata/{exp}/plate_metadata.csv` [VALIDATED]
 
 **Module:**
 - `metadata_ingest/plate/plate_processing.py`
@@ -355,11 +360,11 @@ Parse and normalize plate layout spreadsheets into the schema-backed CSV under P
 - `raw_image_data/{microscope}/{exp}/` (raw microscope files)
 
 **Output:**
-- `input_metadata_alignment/{exp}/raw_inputs/{microscope}_scope_raw.csv` [VALIDATED]
+- `experiment_metadata/{exp}/scope_metadata_raw.csv` [VALIDATED]
 
 **Module:**
-- `metadata_ingest/scope/{microscope}_scope_metadata.py`
-- Schema: `REQUIRED_COLUMNS_SCOPE_METADATA`
+- `metadata_ingest/scope/{microscope}/extract_scope_metadata.py`
+- Schema: `REQUIRED_COLUMNS_SCOPE_METADATA_RAW`
 
 **Purpose:**
 Pull per-microscope series metadata (micrometers_per_pixel, frame_interval_s, timestamps, raw channel labels) into schema-conformant CSVs stored alongside the plate layout. Keeps parsed scope headers separate from aligned metadata for auditing and remapping.
@@ -368,36 +373,35 @@ Pull per-microscope series metadata (micrometers_per_pixel, frame_interval_s, ti
 
 ### `rule map_series_to_wells`
 **Input:**
-- `input_metadata_alignment/{exp}/raw_inputs/plate_layout.csv`
-- `input_metadata_alignment/{exp}/raw_inputs/{microscope}_scope_raw.csv`
+- `experiment_metadata/{exp}/plate_metadata.csv`
+- `experiment_metadata/{exp}/scope_metadata_raw.csv`
 
 **Output:**
-- `input_metadata_alignment/{exp}/series_mapping/series_well_mapping.csv`
-- `input_metadata_alignment/{exp}/series_mapping/mapping_provenance.json`
+- `experiment_metadata/{exp}/series_well_mapping.csv`
+- `experiment_metadata/{exp}/series_well_mapping_provenance.json`
 
 **Module:**
-- `metadata_ingest/mapping/series_well_mapper.py`
+- `metadata_ingest/scope/{microscope}/map_series_to_wells.py`
 - Schema: `REQUIRED_COLUMNS_SERIES_MAPPING`
 
 **Purpose:**
 Create an explicit series_number → well_index lookup with provenance. Falls back to deterministic implicit mappings when spreadsheets lack explicit maps, and fails fast on ambiguities.
 
-### `rule align_scope_and_plate`
+### `rule apply_series_mapping`
 **Input:**
-- `input_metadata_alignment/{exp}/raw_inputs/plate_layout.csv`
-- `input_metadata_alignment/{exp}/raw_inputs/{microscope}_scope_raw.csv`
-- `input_metadata_alignment/{exp}/series_mapping/series_well_mapping.csv`
+- `experiment_metadata/{exp}/plate_metadata.csv`
+- `experiment_metadata/{exp}/scope_metadata_raw.csv`
+- `experiment_metadata/{exp}/series_well_mapping.csv`
 
 **Output:**
-- `input_metadata_alignment/{exp}/aligned_metadata/scope_and_plate.csv` [VALIDATED]
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` [VALIDATED copy]
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv` [VALIDATED]
 
 **Module:**
-- `metadata_ingest/mapping/align_scope_plate.py`
-- Schema: `REQUIRED_COLUMNS_SCOPE_AND_PLATE_METADATA`
+- `metadata_ingest/scope/shared/apply_series_mapping.py`
+- Schema: `REQUIRED_COLUMNS_SCOPE_METADATA_MAPPED`
 
 **Purpose:**
-Join plate and scope metadata using the mapping to provide a schema-checked table that downstream stages consume. Writes both the Phase 1 aligned artifact and the legacy hand-off in `experiment_metadata/`.
+Join plate and scope metadata using the mapping to provide a schema-checked table that downstream stages consume.
 
 ---
 
@@ -405,39 +409,58 @@ Join plate and scope metadata using the mapping to provide a schema-checked tabl
 
 **Input:**
 - `raw_image_data/{microscope}/{exp}/`
-- `input_metadata_alignment/{exp}/aligned_metadata/scope_and_plate.csv`
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv`
 
 **Output:**
 - `built_image_data/{exp}/stitched_ff_images/` (directory target)
 - `build_diagnostics/{exp}/stitching_{microscope}.csv`
 
 **Module:**
-- `image_building/{microscope}/stitched_ff_builder.py`
+- `image_building/scope/{microscope}/stitched_ff_builder.py`
 
 **Purpose:**
-Perform microscope-specific z-stack collapse and tile stitching to produce normalized FF images (`{well_index}/{channel}/{image_id}.tif`) and emit QA logs for each experiment.
+Perform microscope-specific z-stack collapse and tile stitching to produce normalized FF images (`{well_index}/{channel_id}/{image_id}.tif`), emit `stitched_image_index.csv` rows via reporter pattern, and emit QA logs for each experiment.
 
 **Note:** Diagnostics CSVs are for human review and do not require schema validation. See Phase 2 docs for rationale.
 
 ---
 
-### `rule generate_image_manifest`
+### `rule validate_stitched_image_index`
 **Input:**
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` [VALIDATED, includes normalized channels]
-- `built_image_data/{exp}/stitched_ff_images/`
+- `experiment_metadata/{exp}/stitched_image_index.csv` (emitted by builders via reporter pattern)
 
 **Output:**
-- `experiment_metadata/{exp}/experiment_image_manifest.json` [VALIDATED]
+- `experiment_metadata/{exp}/stitched_image_index.csv` [VALIDATED]
 
 **Module:**
-- `metadata_ingest/manifests/generate_image_manifest.py`
-- Schema: `schemas/image_manifest.py` (REQUIRED_EXPERIMENT_FIELDS, REQUIRED_WELL_FIELDS, REQUIRED_CHANNEL_FIELDS, REQUIRED_FRAME_FIELDS)
+- `image_building/handoff/validate_stitched_index.py`
+- Schema: `schemas/stitched_image_index.py`
 
 **Purpose:**
-- Build experiment-level manifest with all wells, channels, and frames
+- Validate stitched image index has no duplicate frame keys
+- Validate all stitched image paths exist
 - Validate channel normalization (BF must be present, all names in VALID_CHANNEL_NAMES)
-- Sort frames by time_int (required for SAM2 ordering)
-- Single source of truth for image inventory consumed by segmentation
+
+---
+
+### `rule build_frame_manifest`
+**Input:**
+- `experiment_metadata/{exp}/stitched_image_index.csv` [VALIDATED]
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv` [VALIDATED]
+- `experiment_metadata/{exp}/plate_metadata.csv` [VALIDATED]
+
+**Output:**
+- `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
+
+**Module:**
+- `metadata_ingest/frame_manifest/build_frame_manifest.py`
+- Schema: `schemas/frame_manifest.py` (REQUIRED_COLUMNS_FRAME_MANIFEST)
+
+**Purpose:**
+- Join stitched image index + scope metadata + plate metadata into canonical frame-level table
+- Sort frames by time_int per (experiment_id, well_id, channel_id)
+- Assign contiguous `frame_index`
+- Single source of truth for frame inventory consumed by segmentation
 
 **Key point:** This is where channel normalization is validated. All downstream rules use normalized channel names from this manifest.
 
@@ -445,14 +468,14 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 
 ## Phase 3: Segmentation (SAM2 Pipeline)
 
-**Note:** Processing happens **per-well** basis using `experiment_image_manifest.json` to get per-well frame lists.
+**Note:** Processing happens **per-well** basis using `frame_manifest.csv` to get per-well frame lists.
 
 ---
 
 ### `rule gdino_detection`
 **Input:**
 - `built_image_data/{exp}/stitched_ff_images/`
-- `experiment_metadata/{exp}/experiment_image_manifest.json` [VALIDATED]
+- `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
 
 **Output:**
 - `segmentation/{exp}/gdino_detections.json` (per-well)
@@ -473,7 +496,7 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 ### `rule sam2_segmentation_and_tracking`
 **Input:**
 - `gdino_detections.json` (seed frame bboxes)
-- `experiment_metadata/{exp}/experiment_image_manifest.json` [VALIDATED]
+- `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
 - `built_image_data/{exp}/stitched_ff_images/`
 
 **Output:**
@@ -517,7 +540,7 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 ### `rule flatten_sam2_to_csv`
 **Input:**
 - `segmentation/{exp}/sam2_raw_output.json`
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` (to inject well_id, experiment_id, calibration)
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv` (to inject well_id, experiment_id, calibration)
 
 **Output:**
 - `segmentation/{exp}/segmentation_tracking.csv` [VALIDATED]
@@ -629,7 +652,7 @@ BRIGHTFIELD_CHANNELS = {"BF", "Phase"}
       "well_id": "20250529_30hpf_ctrl_A01",
       "genotype": "WT",
       "treatment": "ctrl",
-      "temperature_c": 28.5,
+      "temperature": 28.5,
       "embryos_per_well": 1,
       "micrometers_per_pixel": 0.65,
       "pixels_per_micrometer": 1.538,
@@ -638,8 +661,8 @@ BRIGHTFIELD_CHANNELS = {"BF", "Phase"}
       "image_height_px": 2048,
       "channels": {
         "BF": {
-          "channel_name": "BF",
-          "raw_name": "EYES - Dia",
+          "channel_id": "BF",
+          "channel_name_raw": "EYES - Dia",
           "microscope_channel_index": 0,
           "frames": [
             {
@@ -659,8 +682,8 @@ BRIGHTFIELD_CHANNELS = {"BF", "Phase"}
           ]
         },
         "GFP": {
-          "channel_name": "GFP",
-          "raw_name": "GFP",
+          "channel_id": "GFP",
+          "channel_name_raw": "GFP",
           "microscope_channel_index": 1,
           "frames": [
             {
@@ -682,8 +705,8 @@ BRIGHTFIELD_CHANNELS = {"BF", "Phase"}
 2. **`channels` indexed by normalized name** ("BF", "GFP" - NOT "ch00", "ch01")
 3. **`image_id` uses normalized channel name** ("..._BF_t0000" - self-documenting!)
 4. **`well_id`** = `experiment_id_{well_index}` (full identifier)
-5. **Full metadata** from `scope_and_plate_metadata.csv` at well level
-6. **Provenance preserved:** `raw_name` + `microscope_channel_index` track original values
+5. **Full metadata** from `scope_metadata_mapped.csv` at well level
+6. **Provenance preserved:** `channel_name_raw` + `microscope_channel_index` track original values
 7. **Frames list per channel** (chronological order for SAM2)
 
 ### **Why normalized channel names in image_id?**
@@ -710,14 +733,15 @@ image_id: "20250529_30hpf_ctrl_A01_GFP_t0000"  # GFP channel
 ```
 experiment_metadata/{exp}/
   ├── plate_metadata.csv
-  ├── scope_metadata.csv
-  ├── scope_and_plate_metadata.csv
-  └── experiment_image_manifest.json  ← Single file per experiment
+  ├── scope_metadata_raw.csv
+  ├── scope_metadata_mapped.csv
+  ├── stitched_image_index.csv
+  └── frame_manifest.csv  ← Single tabular manifest per experiment
 ```
 
 ### **Schema Validation:**
 ```python
-# schemas/image_manifest.py
+# schemas/frame_manifest.py (replaces deprecated schemas/image_manifest.py)
 
 REQUIRED_EXPERIMENT_FIELDS = [
     'experiment_id',
@@ -730,7 +754,7 @@ REQUIRED_WELL_FIELDS = [
     'well_id',
     'genotype',
     'treatment',
-    'temperature_c',
+    'temperature',
     'embryos_per_well',
     'micrometers_per_pixel',
     'frame_interval_s',
@@ -740,8 +764,8 @@ REQUIRED_WELL_FIELDS = [
 ]
 
 REQUIRED_CHANNEL_FIELDS = [
-    'channel_name',              # Normalized: "BF", "GFP", etc.
-    'raw_name',                  # Original: "EYES - Dia", "Empty", etc.
+    'channel_id',              # Normalized: "BF", "GFP", etc.
+    'channel_name_raw',          # Original: "EYES - Dia", "Empty", etc.
     # 'microscope_channel_index',  # Original index (0, 1, 2...) for provenance
     'frames'
 ]
@@ -784,51 +808,63 @@ def validate_channels(channels_dict):
 
 ### **How it's generated:**
 ```
-rule generate_image_manifest:
+rule validate_stitched_image_index:
     input:
-        - experiment_metadata/{exp}/scope_and_plate_metadata.csv [FULL METADATA]
-        - built_image_data/{exp}/stitched_ff_images/
+        - experiment_metadata/{exp}/stitched_image_index.csv  [emitted by builders]
     output:
-        - experiment_metadata/{exp}/experiment_image_manifest.json [VALIDATED]
+        - experiment_metadata/{exp}/stitched_image_index.csv [VALIDATED]
 
-    # Module: metadata/generate_image_manifest.py
-    # 1. Read scope_and_plate_metadata.csv (includes normalized channel info from preprocessing)
-    # 2. Group by well_index
-    # 3. Scan stitched_ff_images/ directory for each well + channel
-    # 4. Sort frames by time_int (required for SAM2 ordering)
-    # 5. Build nested JSON structure (wells → channels → frames)
-    # 6. Validate against schema (REQUIRED_*_FIELDS + validate_channels())
-    # 7. Write experiment_image_manifest.json [VALIDATED]
+    # Module: image_building/handoff/validate_stitched_index.py
+    # 1. Read stitched_image_index.csv rows emitted by scope-specific builders
+    # 2. Check for duplicate frame keys
+    # 3. Validate all image paths exist
+    # 4. Validate channel normalization (BF must be present)
+
+rule build_frame_manifest:
+    input:
+        - experiment_metadata/{exp}/stitched_image_index.csv [VALIDATED]
+        - experiment_metadata/{exp}/scope_metadata_mapped.csv [VALIDATED]
+        - experiment_metadata/{exp}/plate_metadata.csv [VALIDATED]
+    output:
+        - experiment_metadata/{exp}/frame_manifest.csv [VALIDATED]
+
+    # Module: metadata_ingest/frame_manifest/build_frame_manifest.py
+    # 1. Read scope_metadata_mapped.csv (includes normalized channel info from preprocessing)
+    # 2. Join with stitched_image_index.csv and plate_metadata.csv
+    # 3. Sort frames by time_int per (experiment_id, well_id, channel_id)
+    # 4. Assign contiguous frame_index
+    # 5. Validate against schema (REQUIRED_COLUMNS_FRAME_MANIFEST)
+    # 6. Write frame_manifest.csv [VALIDATED]
 ```
 
 ### **Pipeline Flow for Channel Normalization:**
 
 ```
 1. Preprocessing (microscope-specific normalization)
-   ├─ preprocessing/yx1/extract_scope_metadata.py
+   ├─ metadata_ingest/scope/yx1/extract_scope_metadata.py
    │  ├─ Import CHANNEL_NORMALIZATION_MAP from schemas/
    │  ├─ Detect raw channel names from ND2 metadata
    │  ├─ Normalize: "EYES - Dia" → "BF", "GFP" → "GFP"
-   │  └─ Write scope_metadata.csv with normalized channel_name column
+   │  └─ Write scope_metadata_raw.csv with channel_id + channel_name_raw columns
    │
-   └─ preprocessing/keyence/extract_scope_metadata.py
+   └─ metadata_ingest/scope/keyence/extract_scope_metadata.py
       ├─ Import CHANNEL_NORMALIZATION_MAP from schemas/
       ├─ Detect raw channel names from Keyence file structure
       ├─ Normalize: "Brightfield" → "BF", "gfp" → "GFP"
-      └─ Write scope_metadata.csv with normalized channel_name column
+      └─ Write scope_metadata_raw.csv with channel_id + channel_name_raw columns
 
-2. Manifest Generation (shared validation)
-   └─ metadata/generate_image_manifest.py
-      ├─ Read scope_and_plate_metadata.csv (includes normalized channels)
-      ├─ Build nested JSON (wells → channels → frames)
-      ├─ Validate channels using schemas/image_manifest.py
-      │  ├─ Check BF channel present (BRIGHTFIELD_CHANNELS)
-      │  ├─ Check all channel names in VALID_CHANNEL_NAMES
-      │  └─ Check REQUIRED_CHANNEL_FIELDS present
-      └─ Write experiment_image_manifest.json [VALIDATED]
+2. Frame Manifest Generation (shared validation)
+   └─ metadata_ingest/frame_manifest/build_frame_manifest.py
+      ├─ Read scope_metadata_mapped.csv (includes normalized channel info from preprocessing)
+      ├─ Join with stitched_image_index.csv + plate_metadata.csv
+      ├─ Validate channels using schemas/frame_manifest.py
+      │  ├─ Check BF channel_id present (BRIGHTFIELD_CHANNELS)
+      │  ├─ Check all channel_id values in VALID_CHANNEL_NAMES
+      │  └─ Check REQUIRED_COLUMNS_FRAME_MANIFEST present
+      └─ Write frame_manifest.csv [VALIDATED]
 
 3. Downstream Rules (consume normalized names)
-   └─ All rules use normalized channel names ("BF", "GFP")
+   └─ All rules use normalized channel_id values ("BF", "GFP")
       └─ No microscope-specific logic needed
 ```
 
@@ -954,7 +990,7 @@ processed_snips/{exp}/
 ### `rule compute_mask_geometry`
 **Input:**
 - `segmentation/{exp}/segmentation_tracking.csv` [VALIDATED]
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` [for pixel_size calibration]
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv` [for pixel_size calibration]
 
 **Output:**
 - `computed_features/{exp}/mask_geometry_metrics.csv`
@@ -968,7 +1004,7 @@ processed_snips/{exp}/
   - `perimeter_px`, `perimeter_um`
   - `length_um`, `width_um` (via PCA on mask contour)
   - `centroid_x_um`, `centroid_y_um`
-- **Critical:** Must convert area_px → area_um2 using micrometers_per_pixel from scope_and_plate_metadata.csv
+- **Critical:** Must convert area_px → area_um2 using micrometers_per_pixel from scope_metadata_mapped.csv
 - **Critical:** Fail if pixel-based areas are used without calibration (downstream stage inference requires um2)
 
 **Key columns:**
@@ -991,7 +1027,7 @@ OUTPUT_COLUMNS_MASK_GEOMETRY = [
 ### `rule compute_pose_kinematics`
 **Input:**
 - `segmentation/{exp}/segmentation_tracking.csv` [VALIDATED]
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` [for pixel_size + frame_interval_s]
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv` [for pixel_size + frame_interval_s]
 
 **Output:**
 - `computed_features/{exp}/pose_kinematics_metrics.csv`
@@ -1078,7 +1114,7 @@ OUTPUT_COLUMNS_STAGE_PREDICTIONS = [
 - `computed_features/{exp}/pose_kinematics_metrics.csv`
 - `computed_features/{exp}/fraction_alive.csv`
 - `computed_features/{exp}/stage_predictions.csv`
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` [for joining experiment_id, well_id]
+- `experiment_metadata/{exp}/scope_metadata_mapped.csv` [for joining experiment_id, well_id]
 
 **Output:**
 - `computed_features/{exp}/consolidated_snip_features.csv` [VALIDATED]
@@ -1089,7 +1125,7 @@ OUTPUT_COLUMNS_STAGE_PREDICTIONS = [
 
 **Purpose:**
 - Merge all feature tables on snip_id
-- Add experiment metadata (experiment_id, well_id, genotype, treatment, temperature_c)
+- Add experiment metadata (experiment_id, well_id, genotype, treatment, temperature)
 - Validate completeness:
   - All snips from segmentation_tracking.csv have features
   - No missing critical columns (area_um2, predicted_stage_hpf)
@@ -1332,11 +1368,12 @@ Embeddings run only on snips that pass QC (`use_embryo_flag == True`). We stage 
 ```
 src/data_pipeline/schemas/
 ├── __init__.py
-├── channel_normalization.py          # NEW - Channel name mappings
-├── image_manifest.py                 # NEW - Image manifest schema
+├── channel_normalization.py          # Channel name mappings
 ├── plate_metadata.py
-├── scope_metadata.py
-├── scope_and_plate_metadata.py
+├── scope_metadata_raw.py             # RENAMED from scope_metadata.py
+├── scope_metadata_mapped.py          # RENAMED from scope_and_plate_metadata.py
+├── stitched_image_index.py           # NEW
+├── frame_manifest.py                 # NEW (replaces deprecated image_manifest.py)
 ├── segmentation.py
 ├── snip_processing.py
 ├── features.py
@@ -1347,15 +1384,27 @@ src/data_pipeline/schemas/
 ### **New Processing Modules**
 ```
 src/data_pipeline/
-├── metadata/
-│   ├── plate_processing.py
-│   └── generate_image_manifest.py
-├── preprocessing/
-│   ├── keyence/
-│   │   └── extract_scope_metadata.py
-│   ├── yx1/
-│   │   └── extract_scope_metadata.py
-│   └── consolidate_plate_n_scope_metadata.py
+├── metadata_ingest/
+│   ├── scope/
+│   │   ├── yx1/
+│   │   │   ├── extract_scope_metadata.py
+│   │   │   └── map_series_to_wells.py
+│   │   ├── keyence/
+│   │   │   ├── extract_scope_metadata.py
+│   │   │   └── map_series_to_wells.py
+│   │   └── shared/
+│   │       └── apply_series_mapping.py
+│   └── frame_manifest/
+│       └── build_frame_manifest.py
+├── image_building/
+│   ├── scope/
+│   │   ├── yx1/
+│   │   │   └── stitched_ff_builder.py
+│   │   └── keyence/
+│   │       └── stitched_ff_builder.py
+│   └── handoff/
+│       ├── io.py
+│       └── validate_stitched_index.py
 ├── snip_processing/
 │   ├── extraction.py
 │   ├── rotation.py
@@ -1378,9 +1427,10 @@ src/data_pipeline/
 ```
 experiment_metadata/{exp}/
 ├── plate_metadata.csv [VALIDATED]
-├── scope_metadata.csv [VALIDATED]
-├── scope_and_plate_metadata.csv [VALIDATED]
-└── experiment_image_manifest.json [VALIDATED]  # NEW - Single manifest per experiment 
+├── scope_metadata_raw.csv [VALIDATED]
+├── scope_metadata_mapped.csv [VALIDATED]
+├── stitched_image_index.csv [VALIDATED]
+└── frame_manifest.csv [VALIDATED]  # Single tabular manifest per experiment
 
 
 segmentation/{exp}/
@@ -1408,11 +1458,11 @@ latent_embeddings/{model_name}/
 
 ### **Key Changes from Original Plan**
 1. ✅ **Renamed directory:** `processed_metadata/` → `experiment_metadata/`
-2. ✅ **Added rule:** `generate_image_manifest` (Phase 2)
-3. ✅ **Channel normalization:** YX1/Keyence extract + normalize → manifest validates → downstream consumes
+2. ✅ **Replaced rule:** `generate_image_manifest` → `validate_stitched_image_index` + `build_frame_manifest`
+3. ✅ **Channel normalization:** YX1/Keyence extract + normalize → `channel_id` + `channel_name_raw` columns; frame manifest validates → downstream consumes
 4. ✅ **Self-documenting image_ids:** `_BF_t0000` instead of `_ch00_t0000`
-5. ✅ **Provenance preserved:** `raw_name` + `microscope_channel_index` in manifest
-6. ✅ **Single manifest file:** experiment_image_manifest.json (all wells + channels)
+5. ✅ **Provenance preserved:** `channel_name_raw` + `microscope_channel_index` track original values
+6. ✅ **Single tabular manifest:** `frame_manifest.csv` (flat CSV; replaces nested JSON)
 
 ---
 

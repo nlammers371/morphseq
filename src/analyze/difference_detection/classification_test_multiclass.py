@@ -388,6 +388,7 @@ def run_multiclass_classification_test(
 
     if verbose:
         print(f"Multiclass comparison with {n_classes} classes: {class_labels}")
+        print("Classification weighting: class_weight='balanced' (enabled by default)")
 
     # Build embryo_id -> class_label mapping
     embryo_to_class = {}
@@ -553,6 +554,9 @@ def _run_multiclass_classification(
 
         # Check class counts
         class_counts = {label: np.sum(y_labels == label) for label in class_labels}
+        if verbose:
+            print(f"    Class counts: {class_counts}")
+            print("    Using balanced class weights for this bin")
         present_classes = [label for label, count in class_counts.items() if count > 0]
         missing_classes = [label for label, count in class_counts.items() if count == 0]
 
@@ -1052,6 +1056,7 @@ def run_classification_test(
         print(f"Groupby column: {groupby}")
         print(f"Groups: {groups}")
         print(f"Reference: {reference}")
+        print("Classifier policy: class_weight='balanced' for all logistic models")
     
     # Resolve comparisons
     comparison_specs = _resolve_comparison_groups(

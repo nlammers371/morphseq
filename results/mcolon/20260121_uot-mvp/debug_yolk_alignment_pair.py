@@ -57,17 +57,17 @@ def _plot_overlay(
     ax.set_ylim(h, 0)
 
     if meta_a is not None:
-        head = meta_a.get("head_yx_final")
+        yolk_pt = meta_a.get("yolk_yx_final")
         back = meta_a.get("back_yx_final")
-        if head:
-            ax.scatter([head[1]], [head[0]], s=40, c="cyan", marker="o", label="A head")
+        if yolk_pt:
+            ax.scatter([yolk_pt[1]], [yolk_pt[0]], s=40, c="cyan", marker="o", label="A yolk")
         if show_back and back:
             ax.scatter([back[1]], [back[0]], s=40, c="blue", marker="x", label="A back")
     if meta_b is not None:
-        head = meta_b.get("head_yx_final")
+        yolk_pt = meta_b.get("yolk_yx_final")
         back = meta_b.get("back_yx_final")
-        if head:
-            ax.scatter([head[1]], [head[0]], s=40, c="magenta", marker="o", label="B head")
+        if yolk_pt:
+            ax.scatter([yolk_pt[1]], [yolk_pt[0]], s=40, c="magenta", marker="o", label="B yolk")
         if show_back and back:
             ax.scatter([back[1]], [back[0]], s=40, c="purple", marker="x", label="B back")
 

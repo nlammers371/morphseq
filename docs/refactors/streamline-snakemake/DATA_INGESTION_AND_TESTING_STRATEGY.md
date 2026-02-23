@@ -18,8 +18,8 @@ What to update:
 3. Validate and use `frame_manifest.csv` as the canonical pre-segmentation frame metadata table.
 4. Use canonical frame-level naming in checks:
    - `channel_id`
-   - `channel_raw_name`
-   - `temperature_c`
+   - `channel_name_raw`
+   - `temperature`
    - required `micrometers_per_pixel`
 
 ---
@@ -202,14 +202,16 @@ data_pipeline_output/                           # NEW PIPELINE OUTPUT ROOT
 ├── experiment_metadata/                        # PHASE 1 OUTPUTS (pipeline writes)
 │   └── {experiment_id}/
 │       ├── plate_metadata.csv [VALIDATED]
-│       ├── scope_metadata.csv [VALIDATED]
-│       ├── scope_and_plate_metadata.csv [VALIDATED]
-│       └── experiment_image_manifest.json [VALIDATED]
+│       ├── scope_metadata_raw.csv [VALIDATED]
+│       ├── series_well_mapping.csv
+│       ├── scope_metadata_mapped.csv [VALIDATED]
+│       ├── stitched_image_index.csv [VALIDATED]
+│       └── frame_manifest.csv [VALIDATED]
 │
 ├── built_image_data/                           # PHASE 2 OUTPUTS (pipeline writes)
 │   └── {experiment_id}/
 │       └── stitched_ff_images/
-│           └── {image_id}.tif
+│           └── {well_index}/{channel_id}/{image_id}.tif
 │
 ├── segmentation/                               # PHASE 3 OUTPUTS (pipeline writes)
 │   └── {experiment_id}/
@@ -261,7 +263,10 @@ data_pipeline_output/                           # NEW PIPELINE OUTPUT ROOT
 
 **Snakemake config.yaml:**
 ```yaml
-# data_pipeline_output/config.yaml (or src/data_pipeline/pipeline_orchestrator/config/defaults.yaml)
+# src/data_pipeline/pipeline_orchestrator/config.yaml
+#
+# You can also keep a local copy under data_pipeline_output/ for convenience, but
+# the repo-tracked canonical config lives under src/.
 
 # Data root - can be overridden at runtime
 data_root: "data_pipeline_output"  # LOCAL: symlinks
@@ -349,13 +354,13 @@ mkdir -p data_pipeline_output/inputs/raw_image_data/Keyence/test_keyence_001
 
 # Create plate metadata CSVs
 cat > data_pipeline_output/inputs/plate_metadata/test_yx1_001_plate_layout.csv <<EOF
-experiment_id,well_id,well_index,genotype,treatment,temperature_c,embryos_per_well
+experiment_id,well_id,well_index,genotype,treatment,temperature,embryos_per_well
 test_yx1_001,test_yx1_001_A01,A01,wildtype,control,28.5,1
 test_yx1_001,test_yx1_001_C01,C01,wildtype,control,28.5,1
 EOF
 
 cat > data_pipeline_output/inputs/plate_metadata/test_keyence_001_plate_layout.csv <<EOF
-experiment_id,well_id,well_index,genotype,treatment,temperature_c,embryos_per_well
+experiment_id,well_id,well_index,genotype,treatment,temperature,embryos_per_well
 test_keyence_001,test_keyence_001_A12,A12,atf6_ctrl,control,28.5,1
 EOF
 ```
@@ -436,16 +441,22 @@ NETWORK_ROOT="/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
 
 ### Rules to Define (Phase 1-8)
 
+Note: the rule names below are illustrative; prefer the canonical rule names in `snakemake_rules_data_flow.md`.
+
 - [ ] **Phase 1: Metadata Processing**
   - `rule_extract_plate_metadata`
   - `rule_extract_yx1_scope_metadata`
   - `rule_extract_keyence_scope_metadata`
-  - `rule_align_scope_plate_metadata`
+  - `rule_map_series_to_wells_yx1`
+  - `rule_map_series_to_wells_keyence`
+  - `rule_apply_series_mapping_yx1`
+  - `rule_apply_series_mapping_keyence`
 
-- [ ] **Phase 2: Image Building**
+- [ ] **Phase 2: Image Building + Frame Contract**
   - `rule_build_yx1_stitched_images`
   - `rule_build_keyence_stitched_images`
-  - `rule_generate_image_manifest`
+  - `rule_validate_stitched_image_index`
+  - `rule_build_frame_manifest`
 
 - [ ] **Phase 3: Segmentation**
   - `rule_prepare_frames_for_sam2`
@@ -489,19 +500,20 @@ rule rule_extract_yx1_scope_metadata:
         expand(f"{RAW_DATA}/YX1/{{exp}}/{{well}}_Seq0001.nd2",
                exp=EXPERIMENTS, well=["A01"])
     output:
-        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_metadata.csv"
+        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_metadata_raw.csv"
     shell:
-        "python -m src.data_pipeline.metadata_ingest.scope.yx1_scope_metadata {input} {output}"
+        "\"$PYTHON\" -m data_pipeline.metadata_ingest.scope.yx1.extract_scope_metadata {input} {output}"
 
 # Rules build on each other
-rule rule_align_scope_plate_metadata:
+rule rule_apply_series_mapping_yx1:
     input:
         scope=rules.rule_extract_yx1_scope_metadata.output,
-        plate=rules.rule_extract_plate_metadata.output
+        plate=rules.rule_extract_plate_metadata.output,
+        mapping=rules.rule_map_series_to_wells_yx1.output
     output:
-        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_and_plate_metadata.csv"
+        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_metadata_mapped.csv"
     shell:
-        "python -m src.data_pipeline.metadata_ingest.mapping.align_scope_plate {input.scope} {input.plate} {output}"
+        "\"$PYTHON\" -m data_pipeline.metadata_ingest.scope.yx1.apply_series_mapping {input.scope} {input.plate} {input.mapping} {output}"
 ```
 
 ---
@@ -511,31 +523,29 @@ rule rule_align_scope_plate_metadata:
 ### Phase 1-2 Validation (Metadata + Image Building)
 
 ```bash
+PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python
+
 # Run first 2 phases
 snakemake \
     --config data_root=data_pipeline_output \
-    --until rule_generate_image_manifest \
+    --until build_frame_manifest \
     -j 4
 
-# Validate outputs
-python scripts/validate_phase2_outputs.py \
-    --data-root data_pipeline_output \
-    --exp test_yx1_001 \
-    --microscope yx1
-
-python scripts/validate_phase2_outputs.py \
-    --data-root data_pipeline_output \
-    --exp test_keyence_001 \
-    --microscope keyence
+# Validate Phase 1 outputs (metadata alignment)
+#
+# Note: the repo currently has a Phase 1 validation harness under test_data/.
+"$PYTHON" test_data/test_phase1_metadata_alignment.py
 
 # Expected outputs
 ls data_pipeline_output/experiment_metadata/test_yx1_001/
-# Should show: plate_metadata.csv, scope_metadata.csv, scope_and_plate_metadata.csv, experiment_image_manifest.json
+# Should show: plate_metadata.csv, scope_metadata_raw.csv, series_well_mapping.csv, scope_metadata_mapped.csv, stitched_image_index.csv, frame_manifest.csv
 ```
 
 ### Phase 3-8 Validation (Full Pipeline)
 
 ```bash
+PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python
+
 # Run full pipeline
 snakemake \
     --config data_root=data_pipeline_output \
@@ -543,9 +553,9 @@ snakemake \
     -j 4
 
 # Validate final outputs
-python scripts/validate_full_pipeline.py \
-    --data-root data_pipeline_output \
-    --exp test_yx1_001
+# TODO: add a dedicated validation script once the refactor implementation is wired end-to-end.
+# For now, validate by checking that expected contract files exist and are non-empty.
+ls -la data_pipeline_output/analysis_ready/test_yx1_001/features_qc_embeddings.csv
 
 # Expected: features_qc_embeddings.csv with correct columns
 wc -l data_pipeline_output/analysis_ready/test_yx1_001/features_qc_embeddings.csv

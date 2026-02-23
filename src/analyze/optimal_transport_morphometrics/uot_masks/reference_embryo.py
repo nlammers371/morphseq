@@ -43,12 +43,12 @@ def build_reference_field(
     results: List,
     method: str = "mean",
 ) -> ReferenceField:
-    """Build a reference field from multiple UOTResult objects.
+    """Build a reference field from multiple canonical-grid OT results.
 
     Args:
-        results: List of UOTResult objects (same frame pair, different embryos).
-            Each must have mass_created_px, mass_destroyed_px,
-            velocity_px_per_frame_yx of the same shape.
+        results: List of canonical-grid results (same frame pair, different embryos).
+            Each must have mass_created_canon, mass_destroyed_canon,
+            velocity_canon_px_per_step_yx of the same shape.
         method: Aggregation method ("mean" only for now).
 
     Returns:
@@ -59,8 +59,8 @@ def build_reference_field(
     if method != "mean":
         raise ValueError(f"Unsupported method: {method}. Only 'mean' is supported.")
 
-    shape = results[0].mass_created_px.shape
-    vel_shape = results[0].velocity_px_per_frame_yx.shape
+    shape = results[0].mass_created_canon.shape
+    vel_shape = results[0].velocity_canon_px_per_step_yx.shape
 
     vel_stack = np.zeros((*vel_shape,), dtype=np.float64)
     created_stack = np.zeros(shape, dtype=np.float64)
@@ -68,15 +68,15 @@ def build_reference_field(
     support_union = np.zeros(shape, dtype=bool)
 
     for r in results:
-        assert r.mass_created_px.shape == shape, \
-            f"Shape mismatch: {r.mass_created_px.shape} vs {shape}"
-        vel_stack += r.velocity_px_per_frame_yx.astype(np.float64)
-        created_stack += r.mass_created_px.astype(np.float64)
-        destroyed_stack += r.mass_destroyed_px.astype(np.float64)
+        assert r.mass_created_canon.shape == shape, \
+            f"Shape mismatch: {r.mass_created_canon.shape} vs {shape}"
+        vel_stack += r.velocity_canon_px_per_step_yx.astype(np.float64)
+        created_stack += r.mass_created_canon.astype(np.float64)
+        destroyed_stack += r.mass_destroyed_canon.astype(np.float64)
 
         # Build support from non-zero data
-        vel_mag = np.linalg.norm(r.velocity_px_per_frame_yx, axis=-1)
-        support_union |= (r.mass_created_px > 0) | (r.mass_destroyed_px > 0) | (vel_mag > 0)
+        vel_mag = np.linalg.norm(r.velocity_canon_px_per_step_yx, axis=-1)
+        support_union |= (r.mass_created_canon > 0) | (r.mass_destroyed_canon > 0) | (vel_mag > 0)
 
     n = len(results)
     return ReferenceField(
@@ -92,7 +92,7 @@ def compute_deviation_from_reference(
     result,
     reference: ReferenceField,
 ) -> Dict[str, float]:
-    """Compute deviation metrics of a single UOTResult from a reference.
+    """Compute deviation metrics of a single canonical-grid result from a reference.
 
     Args:
         result: UOTResult to compare against reference.
@@ -108,7 +108,7 @@ def compute_deviation_from_reference(
     mask = reference.support_mask
 
     # Velocity RMSE
-    v_test = result.velocity_px_per_frame_yx.astype(np.float64)
+    v_test = result.velocity_canon_px_per_step_yx.astype(np.float64)
     v_ref = reference.velocity_yx.astype(np.float64)
     diff = v_test - v_ref
     if mask.any():
@@ -134,8 +134,8 @@ def compute_deviation_from_reference(
         cos_sim = 1.0
 
     # Mass RMSE
-    mc_diff = result.mass_created_px.astype(np.float64) - reference.mass_created.astype(np.float64)
-    md_diff = result.mass_destroyed_px.astype(np.float64) - reference.mass_destroyed.astype(np.float64)
+    mc_diff = result.mass_created_canon.astype(np.float64) - reference.mass_created.astype(np.float64)
+    md_diff = result.mass_destroyed_canon.astype(np.float64) - reference.mass_destroyed.astype(np.float64)
     if mask.any():
         rmse_mc = float(np.sqrt(np.mean(mc_diff[mask] ** 2)))
         rmse_md = float(np.sqrt(np.mean(md_diff[mask] ** 2)))
@@ -160,7 +160,7 @@ def compute_residual_field(
     Returns:
         (H, W, 2) residual velocity field.
     """
-    return (result.velocity_px_per_frame_yx.astype(np.float64) -
+    return (result.velocity_canon_px_per_step_yx.astype(np.float64) -
             reference.velocity_yx.astype(np.float64)).astype(np.float32)
 
 

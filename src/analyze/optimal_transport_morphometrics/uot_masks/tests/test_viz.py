@@ -22,9 +22,9 @@ from analyze.optimal_transport_morphometrics.uot_masks.viz import (
 @dataclass
 class _FakeResult:
     """Minimal mock of UOTResult for viz testing."""
-    mass_created_px: np.ndarray
-    mass_destroyed_px: np.ndarray
-    velocity_px_per_frame_yx: np.ndarray
+    mass_created_canon: np.ndarray
+    mass_destroyed_canon: np.ndarray
+    velocity_canon_px_per_step_yx: np.ndarray
     cost: float = 1.0
     diagnostics: Optional[dict] = None
 
@@ -42,9 +42,9 @@ def _make_fake_result(h=20, w=30):
     velocity[5:15, 10:20, 1] = 0.5  # vx
 
     return _FakeResult(
-        mass_created_px=created,
-        mass_destroyed_px=destroyed,
-        velocity_px_per_frame_yx=velocity,
+        mass_created_canon=created,
+        mass_destroyed_canon=destroyed,
+        velocity_canon_px_per_step_yx=velocity,
         diagnostics={"metrics": {"total_transport_cost": 1.0, "transported_mass": 0.5}},
     )
 
@@ -118,4 +118,4 @@ class TestWriteDiagnosticsJson:
         assert "cost" in data
         assert "n_support_pixels" in data
         assert data["n_support_pixels"] > 0
-        assert "mean_velocity_px_per_frame" in data
+        assert "mean_velocity_px_per_step" in data

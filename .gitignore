@@ -106,5 +106,12 @@ logs/
 log/
 _Archive/
 
+# Ignore Zarr datasets and large output files
+**/*.zarr/
+*.zarr
+*.parquet
+**/output/phase0_*/
+**/scripts/output/
+
 # mdcolon results-specific rules moved to results/mcolon/.gitignore
 # (see results/mcolon/.gitignore for details)

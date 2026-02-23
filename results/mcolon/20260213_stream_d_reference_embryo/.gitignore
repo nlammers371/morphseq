@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+pipeline/__pycache__/
+
+# Heavy cached OT exports (persist locally for reuse, do not track)
+output/ot_24_48_exports/
+
+# Large per-bin reference tensors
+output/reference_fields/*.npz
+
+# Permutation null arrays
+output/difference_detection/*.npy

@@ -102,7 +102,7 @@ def rasterize_mass_to_canonical(
 def rasterize_velocity_to_canonical(
     velocity_work_px: np.ndarray,
     pair_frame: "PairFrameGeometry",
-    convert_to_um: bool = True,
+    convert_to_um: bool = False,
 ) -> np.ndarray:
     """
     Rasterize work-space velocity field to canonical grid.
@@ -111,9 +111,9 @@ def rasterize_velocity_to_canonical(
     We simply expand via kron, mask out padding, and paste the real crop.
 
     Args:
-        velocity_work_px: (Hw, Ww, 2) velocity in work pixels per frame
+        velocity_work_px: (Hw, Ww, 2) velocity in work pixels per step/frame
         pair_frame: Pair frame geometry
-        convert_to_um: If True, scale to μm/frame; else keep as canonical px/frame
+        convert_to_um: If True, scale to μm/step. If False, scale to canonical px/step.
 
     Returns:
         (Hc, Wc, 2) velocity field in canonical space
@@ -128,7 +128,7 @@ def rasterize_velocity_to_canonical(
     pad_h, pad_w = pair_frame.crop_pad_hw
     padded_h, padded_w = crop_h + pad_h, crop_w + pad_w
 
-    # Scale factor for velocity magnitude
+    # Scale factor for velocity magnitude (dy, dx ordering is preserved).
     if convert_to_um:
         scale = pair_frame.work_px_size_um
     else:
@@ -200,13 +200,11 @@ def compute_transport_maps(
     weights_src: np.ndarray,
     weights_tgt: np.ndarray,
     work_shape_hw: Tuple[int, int],
-    pair_frame: "PairFrameGeometry" = None,  # NEW PARAMETER
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Compute transport maps, optionally rasterized to canonical grid.
+    Compute transport maps on the work grid.
 
-    If pair_frame is provided, outputs are canonical-shaped (Hc, Wc).
-    Otherwise, outputs are work-shaped (Hw, Ww) - legacy behavior.
+    Lifting to canonical is owned by `working_grid.py` (via rasterize_* helpers).
     """
     if coupling is None:
         raise ValueError("Coupling is required to compute transport maps.")
@@ -243,14 +241,6 @@ def compute_transport_maps(
     v = T - support_src_yx
     velocity_field[src_y, src_x, :] = v.astype(np.float32)
 
-    # NEW: Rasterize to canonical if pair_frame provided
-    if pair_frame is not None:
-        mass_created_hw = rasterize_mass_to_canonical(mass_created_hw, pair_frame)
-        mass_destroyed_hw = rasterize_mass_to_canonical(mass_destroyed_hw, pair_frame)
-        velocity_field = rasterize_velocity_to_canonical(
-            velocity_field, pair_frame, convert_to_um=True
-        )
-
     return mass_created_hw, mass_destroyed_hw, velocity_field
 
 
@@ -260,7 +250,6 @@ def compute_cost_maps(
     support_src_yx: np.ndarray,
     support_tgt_yx: np.ndarray,
     work_shape_hw: Tuple[int, int],
-    pair_frame: "PairFrameGeometry" = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Rasterize per-support transport cost to work or canonical grids.
@@ -279,9 +268,5 @@ def compute_cost_maps(
 
     cost_src_hw[src_y, src_x] = cost_per_src.astype(np.float32)
     cost_tgt_hw[tgt_y, tgt_x] = cost_per_tgt.astype(np.float32)
-
-    if pair_frame is not None:
-        cost_src_hw = rasterize_scalar_to_canonical(cost_src_hw, pair_frame)
-        cost_tgt_hw = rasterize_scalar_to_canonical(cost_tgt_hw, pair_frame)
 
     return cost_src_hw, cost_tgt_hw

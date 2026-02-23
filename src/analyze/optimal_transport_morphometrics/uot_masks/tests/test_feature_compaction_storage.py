@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from analyze.utils.optimal_transport import UOTResult
+from analyze.utils.optimal_transport import UOTResultCanonical, UOTResultWork
 from analyze.optimal_transport_morphometrics.uot_masks.feature_compaction.storage import (
     apply_contract_dtypes,
     build_pair_metrics_record,
@@ -16,7 +16,7 @@ from analyze.optimal_transport_morphometrics.uot_masks.feature_compaction.storag
 )
 
 
-def _make_result() -> UOTResult:
+def _make_results() -> tuple[UOTResultWork, UOTResultCanonical]:
     coupling = np.array(
         [
             [0.6, 0.4],
@@ -24,19 +24,30 @@ def _make_result() -> UOTResult:
         ],
         dtype=np.float64,
     )
-    return UOTResult(
+    work = UOTResultWork(
         cost=1.23,
         coupling=coupling,
-        mass_created_px=np.zeros((2, 2), dtype=np.float32),
-        mass_destroyed_px=np.zeros((2, 2), dtype=np.float32),
-        velocity_px_per_frame_yx=np.zeros((2, 2, 2), dtype=np.float32),
+        mass_created_work=np.zeros((2, 2), dtype=np.float32),
+        mass_destroyed_work=np.zeros((2, 2), dtype=np.float32),
+        velocity_work_px_per_step_yx=np.zeros((2, 2, 2), dtype=np.float32),
         support_src_yx=np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32),
         support_tgt_yx=np.array([[0.0, 1.0], [1.0, 2.0]], dtype=np.float32),
         weights_src=np.array([1.0, 1.0], dtype=np.float32),
         weights_tgt=np.array([1.0, 1.0], dtype=np.float32),
-        transform_meta={},
         diagnostics={"metrics": {"total_transport_cost": 1.23, "created_mass_pct": 3.0}},
+        work_shape_hw=(2, 2),
+        work_um_per_px=40.0,
     )
+    canon = UOTResultCanonical(
+        cost=1.23,
+        mass_created_canon=np.zeros((4, 4), dtype=np.float32),
+        mass_destroyed_canon=np.zeros((4, 4), dtype=np.float32),
+        velocity_canon_px_per_step_yx=np.zeros((4, 4, 2), dtype=np.float32),
+        canonical_shape_hw=(4, 4),
+        canonical_um_per_px=10.0,
+        diagnostics=work.diagnostics,
+    )
+    return work, canon
 
 
 def test_upsert_pair_metrics_idempotent():
@@ -88,8 +99,8 @@ def test_apply_contract_dtypes_normalizes_identifier_strings():
 
 
 def test_compute_barycentric_projection_dense():
-    result = _make_result()
-    bary = compute_barycentric_projection(result)
+    result_work, _result_canon = _make_results()
+    bary = compute_barycentric_projection(result_work)
     np.testing.assert_allclose(bary["barycentric_tgt_yx"][0], np.array([0.4, 1.4]), atol=1e-6)
     np.testing.assert_allclose(bary["barycentric_tgt_yx"][1], np.array([1.0, 2.0]), atol=1e-6)
     np.testing.assert_allclose(bary["barycentric_velocity_yx"][0], np.array([0.4, 1.4]), atol=1e-6)
@@ -97,9 +108,10 @@ def test_compute_barycentric_projection_dense():
 
 
 def test_save_pair_artifacts_writes_npz(tmp_path):
-    result = _make_result()
+    result_work, result_canon = _make_results()
     paths = save_pair_artifacts(
-        result=result,
+        result_work=result_work,
+        result_canon=result_canon,
         artifact_root=tmp_path,
         pair_id="pair_a",
         float_dtype="float32",
@@ -161,7 +173,7 @@ def test_upsert_ot_pair_metrics_parquet_handles_mixed_identifier_types(tmp_path)
 
 
 def test_build_pair_metrics_record_includes_core_fields():
-    result = _make_result()
+    result, _canon = _make_results()
     src_meta = {"embryo_id": "src_e", "frame_index": 10, "relative_time_s": 100.0}
     tgt_meta = {"embryo_id": "tgt_e", "frame_index": 11, "relative_time_s": 130.0}
     rec = build_pair_metrics_record(
