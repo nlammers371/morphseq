@@ -1,0 +1,9 @@
+Interpretation notes
+--------------------
+n_permutations=100 => min possible p-value is 1/(n_perm+1) = 0.009901
+
+If you see p=0.009900..., that just means 'more extreme than all 100 permutations'.
+Increase n_permutations (e.g. 1000+) to better resolve borderline effects.
+
+If `auc_mean_hpf_predicts_label` is far from 0.5 within a bin,
+you likely have within-bin time-distribution imbalance, which can induce apparent signal.

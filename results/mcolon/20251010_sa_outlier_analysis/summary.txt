@@ -1,0 +1,113 @@
+SURFACE AREA OUTLIER ANALYSIS SUMMARY
+================================================================================
+
+Dataset: 20250711
+Total embryos: 93
+Total frames: 16647
+Current SA outlier flags: 47
+
+Problem embryos:
+  20250711_F06_e01: SA range 328024 - 1342835 µm
+  20250711_H07_e01: SA range 468957 - 1518214 µm
+
+
+================================================================================
+SURFACE AREA OUTLIER ANALYSIS
+================================================================================
+
+Total rows: 16647
+Reference embryos (wt or control & usable): 7914
+SA outlier flags: 47
+
+================================================================================
+SURFACE AREA BY PREDICTED STAGE (HPF) - REFERENCE EMBRYOS
+================================================================================
+/net/trapnell/vol1/home/mdcolon/proj/morphseq/tests/sa_outlier_analysis/analyze_sa_outliers.py:43: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  bin_stats = df_ref.groupby('stage_bin')['surface_area_um'].agg([
+
+Reference SA statistics by 5 hpf bins:
+            count       mean     median         p5        p95        max
+stage_bin                                                               
+(0, 5]          0        NaN        NaN        NaN        NaN        NaN
+(5, 10]         6   421134.0   417508.5   395648.8   451356.3   454229.3
+(10, 15]        9   506785.7   510949.3   470677.5   531094.6   533307.4
+(15, 20]        8   590995.5   560994.1   522818.8   695121.6   709855.3
+(20, 25]        1  1173155.2  1173155.2  1173155.2  1173155.2  1173155.2
+(25, 30]        2  1454975.3  1454975.3  1424411.4  1485539.3  1488935.3
+(30, 35]      637   836814.3   866007.4   488374.0   969299.5  1058765.5
+(35, 40]      665   975722.0  1014779.9   590954.3  1127322.1  1184250.8
+(40, 45]      586  1084648.3  1135427.2   610050.0  1225219.9  1257191.4
+(45, 50]      582  1142881.2  1199537.2   618564.8  1298641.1  1345538.4
+(50, 55]      553  1197672.3  1248006.0   884257.2  1376299.1  1691285.9
+(55, 60]      604  1221372.6  1291532.3   976149.4  1452259.4  1540926.8
+(60, 65]      508  1194978.1  1135103.6   981756.2  1495352.0  1615683.6
+(65, 70]      504  1169153.7  1099238.7   984042.1  1506915.2  1569255.5
+(70, 75]      474  1161453.8  1093878.8   984272.8  1503737.9  1645369.2
+(75, 80]      457  1154305.0  1107907.5   984453.4  1504034.9  1754800.9
+(80, 85]      418  1155683.0  1126330.5  1016547.5  1484789.3  1567355.8
+(85, 90]      463  1175336.4  1156037.0  1074845.2  1417982.1  1808848.8
+(90, 95]      379  1189603.4  1188603.4  1087222.5  1289445.8  1717892.3
+(95, 100]     304  1224145.4  1221357.8  1111435.0  1336644.7  1589400.8
+(100, 105]    254  1260612.3  1254806.3  1160971.0  1389242.7  1458070.2
+(105, 110]    172  1315743.0  1310524.2  1199644.2  1481882.3  1534945.9
+(110, 115]    131  1400140.7  1368710.7  1245062.5  1571290.9  1652320.9
+(115, 120]    110  1497507.6  1483298.8  1335887.4  1699720.8  1731586.9
+(120, 125]     58  1588436.0  1590319.3  1333050.4  1855440.2  2083972.9
+
+================================================================================
+PROBLEM EMBRYO ANALYSIS
+================================================================================
+
+20250711_F06_e01:
+  Frames: 179
+  SA range: 328024 - 1342835 µm
+  Predicted stage range: 31.0 - 127.9 hpf
+  SA outlier flags: 0 / 179
+
+  Sample frames compared to reference p95:
+    Frame   0, stage  31.0 hpf: SA=    328024, ref_p95=    925966, ratio=0.35x
+    Frame  54, stage  60.5 hpf: SA=    426757, ref_p95=   1481980, ratio=0.29x
+    Frame  70, stage  69.2 hpf: SA=   1191724, ref_p95=   1507049, ratio=0.79x
+    Frame   5, stage  33.8 hpf: SA=    428354, ref_p95=   1006166, ratio=0.43x
+    Frame  30, stage  47.4 hpf: SA=    444846, ref_p95=   1298641, ratio=0.34x
+    Frame 154, stage 115.0 hpf: SA=   1088315, ref_p95=   1629455, ratio=0.67x
+    Frame 170, stage 123.6 hpf: SA=    917769, ref_p95=   1901450, ratio=0.48x
+    Frame 105, stage  88.3 hpf: SA=   1310477, ref_p95=   1411257, ratio=0.93x
+    Frame 130, stage 101.9 hpf: SA=   1225282, ref_p95=   1376720, ratio=0.89x
+
+20250711_H07_e01:
+  Frames: 179
+  SA range: 468957 - 1518214 µm
+  Predicted stage range: 31.0 - 127.9 hpf
+  SA outlier flags: 0 / 179
+
+  Sample frames compared to reference p95:
+    Frame 116, stage  94.3 hpf: SA=   1094056, ref_p95=   1293449, ratio=0.85x
+    Frame 113, stage  92.7 hpf: SA=   1080988, ref_p95=   1289446, ratio=0.84x
+    Frame 111, stage  91.6 hpf: SA=   1070498, ref_p95=   1291662, ratio=0.83x
+    Frame 176, stage 126.9 hpf: SA=   1208049, ref_p95=   1919118, ratio=0.63x
+    Frame 151, stage 113.4 hpf: SA=   1395046, ref_p95=   1586100, ratio=0.88x
+    Frame  35, stage  50.1 hpf: SA=    644994, ref_p95=   1343450, ratio=0.48x
+    Frame  10, stage  36.5 hpf: SA=    620652, ref_p95=   1097258, ratio=0.57x
+    Frame  75, stage  71.9 hpf: SA=   1105642, ref_p95=   1506593, ratio=0.73x
+    Frame  49, stage  57.7 hpf: SA=   1061699, ref_p95=   1452611, ratio=0.73x
+
+================================================================================
+OUTLIER DETECTION SIMULATION
+================================================================================
+
+margin_k = 1.2:
+  Embryos that would be flagged: 12 / 93
+  Percentage: 12.9%
+
+margin_k = 1.4:
+  Embryos that would be flagged: 8 / 93
+  Percentage: 8.6%
+
+margin_k = 1.6:
+  Embryos that would be flagged: 7 / 93
+  Percentage: 7.5%
+
+margin_k = 2.0:
+  Embryos that would be flagged: 5 / 93
+  Percentage: 5.4%

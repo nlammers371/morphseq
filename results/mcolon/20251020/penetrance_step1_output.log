@@ -1,0 +1,204 @@
+
+================================================================================
+STEP 1: CORRELATION ANALYSIS FOR INCOMPLETE PENETRANCE
+================================================================================
+
+Output directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020
+================================================================================
+PENETRANCE CORRELATION ANALYSIS: CEP290
+================================================================================
+
+================================================================================
+STEP 1: Loading and binning data
+================================================================================
+Loaded 20250305: 20648 rows
+  Genotypes: {'cep290_heterozygous': 6164, 'cep290_unknown': 5786, 'cep290_wildtype': 4916, 'cep290_homozygous': 3782}
+Loaded 20250416: 3395 rows
+  Genotypes: {'cep290_unknown': 3395}
+Loaded 20250512: 6730 rows
+  Genotypes: {'cep290_heterozygous': 2388, 'cep290_wildtype': 2089, 'cep290_homozygous': 1235, 'cep290_unkown': 1018}
+Loaded 20250515_part2: 871 rows
+  Genotypes: {'cep290_heterozygous': 466, 'cep290_homozygous': 192, 'cep290_wildtype': 142, 'cep290_unkown': 71}
+Loaded 20250519: 2997 rows
+  Genotypes: {'b9d2_heterozygous': 1359, 'b9d2_wildtype': 692, 'b9d2_homozygous': 646, 'b9d2_unkown': 300}
+
+Total: 34641 rows from 5 experiments
+Overall genotype distribution:
+genotype
+cep290_unknown         9181
+cep290_heterozygous    9018
+cep290_wildtype        7147
+cep290_homozygous      5209
+b9d2_heterozygous      1359
+cep290_unkown          1089
+b9d2_wildtype           692
+b9d2_homozygous         646
+b9d2_unkown             300
+Name: count, dtype: int64
+Binned: 5289 timepoints from 407 embryos
+
+================================================================================
+STEP 2: Computing Euclidean distances to WT
+================================================================================
+
+Reference: ['cep290_wildtype']
+  52 embryos
+
+All genotypes: ['cep290_wildtype', 'cep290_homozygous']
+  100 embryos
+
+Computed distances: 1348 timepoints across 31 bins
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/cep290_distances.csv
+
+================================================================================
+STEP 3: Generating classifier predictions (WT vs homozygous)
+================================================================================
+  Filtering to binary classification:
+    WT: ['cep290_wildtype']
+    Homozygous: cep290_homozygous
+    Total embryos: 100
+Skipping time bin 120: insufficient samples (4 < 5)
+
+  Generated predictions for 1487 timepoints
+  Prediction columns: ['embryo_id', 'time_bin', 'true_label', 'pred_proba', 'confidence', 'predicted_label', 'support_true', 'signed_margin', 'mutant_class', 'wt_class']
+
+  Verification - pred_proba should be P(mutant):
+    cep290_wildtype: mean pred_proba = 0.450
+    cep290_homozygous: mean pred_proba = 0.557
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/cep290_predictions.csv
+
+================================================================================
+STEP 4: Computing per-embryo averages (homozygous only)
+================================================================================
+  32 homozygous embryos with complete data
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/cep290_homozygous_per_embryo_metrics.csv
+
+================================================================================
+STEP 5: Computing correlation statistics
+================================================================================
+
+cep290_homozygous Correlation Results:
+  N embryos: 32
+  Pearson r:  0.569 (p=6.738e-04)
+  Spearman ρ: 0.648 (p=6.055e-05)
+  Mean distance: 1.148
+  Mean prob: 0.518
+
+================================================================================
+STEP 6: Computing bootstrap confidence intervals
+================================================================================
+
+Bootstrap 95% CIs:
+  Pearson:  [0.283, 0.830]
+  Spearman: [0.327, 0.841]
+
+================================================================================
+STEP 7: Creating visualizations
+================================================================================
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/penetrance/cep290_homozygous_scatter.png
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/cep290_homozygous_correlation_summary.csv
+================================================================================
+PENETRANCE CORRELATION ANALYSIS: TMEM67
+================================================================================
+
+================================================================================
+STEP 1: Loading and binning data
+================================================================================
+Loaded 20250711: 7628 rows
+  Genotypes: {'tmem67_heterozygote': 2895, 'tmem67_homozygous': 2692, 'tmem67_wildtype': 2041}
+
+Total: 7628 rows from 1 experiments
+Overall genotype distribution:
+genotype
+tmem67_heterozygote    2895
+tmem67_homozygous      2692
+tmem67_wildtype        2041
+Name: count, dtype: int64
+Binned: 2531 timepoints from 88 embryos
+
+================================================================================
+STEP 2: Computing Euclidean distances to WT
+================================================================================
+
+Reference: ['tmem67_wildtype']
+  22 embryos
+
+All genotypes: ['tmem67_wildtype', 'tmem67_homozygous']
+  53 embryos
+
+Computed distances: 1406 timepoints across 37 bins
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/tmem67_distances.csv
+
+================================================================================
+STEP 3: Generating classifier predictions (WT vs homozygous)
+================================================================================
+  Filtering to binary classification:
+    WT: ['tmem67_wildtype']
+    Homozygous: tmem67_homozygous
+    Total embryos: 53
+Skipping time bin 116: insufficient samples (3 < 5)
+Skipping time bin 118: insufficient samples (4 < 5)
+Skipping time bin 120: insufficient samples (3 < 5)
+Skipping time bin 122: insufficient samples (3 < 5)
+Skipping time bin 124: insufficient samples (3 < 5)
+Skipping time bin 126: insufficient samples (2 < 5)
+
+  Generated predictions for 1499 timepoints
+  Prediction columns: ['embryo_id', 'time_bin', 'true_label', 'pred_proba', 'confidence', 'predicted_label', 'support_true', 'signed_margin', 'mutant_class', 'wt_class']
+
+  Verification - pred_proba should be P(mutant):
+    tmem67_wildtype: mean pred_proba = 0.480
+    tmem67_homozygous: mean pred_proba = 0.526
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/tmem67_predictions.csv
+
+================================================================================
+STEP 4: Computing per-embryo averages (homozygous only)
+================================================================================
+  31 homozygous embryos with complete data
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/tmem67_homozygous_per_embryo_metrics.csv
+
+================================================================================
+STEP 5: Computing correlation statistics
+================================================================================
+
+tmem67_homozygous Correlation Results:
+  N embryos: 31
+  Pearson r:  0.807 (p=4.139e-08)
+  Spearman ρ: 0.787 (p=1.542e-07)
+  Mean distance: 0.875
+  Mean prob: 0.518
+
+================================================================================
+STEP 6: Computing bootstrap confidence intervals
+================================================================================
+
+Bootstrap 95% CIs:
+  Pearson:  [0.722, 0.896]
+  Spearman: [0.537, 0.931]
+
+================================================================================
+STEP 7: Creating visualizations
+================================================================================
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/penetrance/tmem67_homozygous_scatter.png
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/penetrance/tmem67_homozygous_correlation_summary.csv
+
+================================================================================
+Creating summary comparison plot
+================================================================================
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/penetrance/correlation_comparison.png
+
+================================================================================
+STEP 1 ANALYSIS COMPLETE!
+================================================================================
+
+Results saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020
+
+Generated files:
+  DATA:
+    - data/penetrance/{genotype}_distances.csv
+    - data/penetrance/{genotype}_predictions.csv
+    - data/penetrance/{genotype}_per_embryo_metrics.csv
+    - data/penetrance/{genotype}_correlation_summary.csv
+  PLOTS:
+    - plots/penetrance/{genotype}_scatter.png
+    - plots/penetrance/correlation_comparison.png

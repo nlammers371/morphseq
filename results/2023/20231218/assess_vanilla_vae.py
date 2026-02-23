@@ -1,5 +1,3 @@
-from src.vae.auxiliary_scripts.infer_developmental_age import get_embryo_age_predictions
-
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 # root = "E:\\Nick\\Cole Trapnell's Lab Dropbox\\Nick Lammers\\Nick\\morphseq\\"
 batch_size = 64  # batch size to use generating latent encodings and image reconstructions

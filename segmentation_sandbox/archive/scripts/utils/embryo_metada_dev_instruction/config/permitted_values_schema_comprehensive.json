@@ -1,0 +1,121 @@
+{
+  "version": "1.0",
+  "last_updated": "2024-12-15T10:00:00",
+  "phenotypes": {
+    "NONE": {
+      "description": "No phenotype observed",
+      "is_default": true,
+      "color": "#CCCCCC"
+    },
+    "TBD": {
+      "description": "To be determined",
+      "is_default": false,
+      "color": "#999999"
+    },
+    "EDEMA": {
+      "description": "Fluid accumulation/swelling",
+      "is_default": false,
+      "color": "#3498DB"
+    },
+    "BODY_AXIS": {
+      "description": "Body axis formation defect",
+      "is_default": false,
+      "color": "#E74C3C"
+    },
+    "CONVERGENCE_EXTENSION": {
+      "description": "Convergent extension defect",
+      "is_default": false,
+      "color": "#F39C12"
+    },
+      "DEAD": {
+      "description": "Embryo death",
+      "is_default": false,
+      "exclusive": true,
+      "terminal": true,
+      "color": "#2C3E50"
+    }
+  },
+  "genotypes": {
+    "TBD": {
+      "description": "To be determined",
+      "is_default": true
+    },
+    "wildtype": {
+      "description": "Wild type",
+      "aliases": ["wt", "WT", "+/+"]
+    },
+    "heterozygous": {
+      "description": "Heterozygous mutant",
+      "aliases": ["het", "+/-"]
+    },
+    "homozygous": {
+      "description": "Homozygous mutant",
+      "aliases": ["homo", "-/-"]
+    }
+  },
+  "treatments": {
+    "NONE": {
+      "description": "No treatment",
+      "is_default": true,
+      "type": "control"
+    },
+    "DMSO": {
+      "description": "DMSO vehicle control",
+      "type": "control",
+      "concentration_unit": "%"
+    },
+    "SU5402": {
+      "description": "FGFR inhibitor",
+      "type": "chemical",
+      "concentration_unit": "μM",
+      "target": "FGFR"
+    },
+    "heat_shock": {
+      "description": "Heat shock treatment",
+      "type": "temperature",
+      "temperature_unit": "°C"
+    }
+  },
+  "flags": {
+    "snip_level": {
+      "MOTION_BLUR": {
+        "description": "Motion blur detected in frame",
+        "severity": "warning"
+      },
+      "HIGHLY_VAR_MASK": {
+        "description": "Mask area variance >10% between frames",
+        "severity": "warning"
+      },
+      "MASK_ON_EDGE": {
+        "description": "Mask within 5 pixels of image edge",
+        "severity": "info"
+      }
+    },
+    "image_level": {
+      "DETECTION_FAILURE": {
+        "description": "Embryo detection failed",
+        "severity": "error"
+      }
+    },
+    "video_level": {
+      "NONZERO_SEED_FRAME": {
+        "description": "Seed frame is not the first frame",
+        "severity": "info"
+      },
+      "NO_EMBRYO": {
+        "description": "No embryo detected in entire video",
+        "severity": "error"
+      }
+    },
+    "experiment_level": {
+      "INCOMPLETE": {
+        "description": "Experiment data incomplete",
+        "severity": "warning"
+      },
+      "PROTOCOL_DEVIATION": {
+        "description": "Deviation from standard protocol",
+        "severity": "warning"
+      }
+    }
+  }
+}

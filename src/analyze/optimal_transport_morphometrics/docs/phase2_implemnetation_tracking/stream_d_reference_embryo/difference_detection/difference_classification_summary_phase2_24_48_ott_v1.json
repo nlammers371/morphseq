@@ -1,0 +1,36 @@
+{
+  "run_id": "phase2_24_48_ott_v1",
+  "features_used": [
+    "PC1",
+    "PC2",
+    "PC3",
+    "PC4",
+    "PC5",
+    "PC6"
+  ],
+  "group_cv": {
+    "auroc": 0.5852623456790124,
+    "accuracy": 0.5833333333333334,
+    "n_samples_eval": 180
+  },
+  "group_cv_permutation": {
+    "observed_auroc": 0.5852623456790124,
+    "pvalue": 0.07777777777777778,
+    "n_permutations": 200
+  },
+  "energy_test": {
+    "statistic": 0.0,
+    "pvalue": 1.0,
+    "n_permutations": 200
+  },
+  "difference_detection_summary": {
+    "earliest_significant_hpf": 32,
+    "max_auroc": 0.9500000000000001,
+    "max_auroc_hpf": 38,
+    "n_significant_bins": 2
+  },
+  "kmeans_k2": {
+    "silhouette_score": 0.8855214875882188,
+    "cluster_vs_settype_csv": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/src/analyze/optimal_transport_morphometrics/docs/phase2_implemnetation_tracking/stream_d_reference_embryo/difference_detection/cluster_vs_settype_phase2_24_48_ott_v1.csv"
+  }
+}

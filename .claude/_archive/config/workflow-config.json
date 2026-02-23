@@ -1,0 +1,15 @@
+{
+  "evaluation_reminders": {
+    "performance_notice": "Your actions will be externally evaluated and punished/rewarded based on task completion quality.",
+    "focus_directive": "Stay strictly within the bounds of the provided PRD. Do not read other markdown files or add unspecified features."
+  },
+  "file_restrictions": {
+    "allowed_context_files": ["issue-specific-prd.md"],
+    "forbidden_files": ["README.md", "PRD.md", "general-docs/*.md"]
+  },
+  "quality_gates": {
+    "required_tests": true,
+    "acceptance_criteria_verification": true,
+    "code_pattern_adherence": true
+  }
+}

@@ -3,6 +3,8 @@ import torch
 import numpy as np
 from src.functions.core_utils_segmentation import Dataset, FishModel
 from torch.utils.data import DataLoader
+# Note: matplotlib is only needed when `make_sample_figures=True`.
+# To reduce dependencies, consider importing matplotlib lazily inside that branch.
 from matplotlib import pyplot as plt
 import glob
 import ntpath
@@ -11,7 +13,7 @@ from src.functions.utilities import path_leaf
 import skimage.io as io
 
 def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=None, im_dims=None, batch_size=64,
-               checkpoint_path=None, n_workers=None, make_sample_figures=False, n_sample_figures=100):
+               checkpoint_path=None, n_workers=None, make_sample_figures=False, n_sample_figures=100, exp_name=None):
 
 
     """
@@ -38,7 +40,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         im_dims = [576, 320]  # NL: can I read this off of the loaded model object?
 
     # generate directory for model predictions
-    path_to_labels = os.path.join(root, "built_image_data", 'segmentation', model_name + '_predictions', '')
+    path_to_labels = os.path.join(root, 'segmentation', model_name + '_predictions', '')
 
     if make_sample_figures:
         sample_fig_path = os.path.join(path_to_labels, "sample_figures")
@@ -46,13 +48,23 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
             os.makedirs(sample_fig_path)
 
     # get list of images to classify
-    path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images', '*')
-    if segment_list is None:
-        project_list = sorted(glob.glob(path_to_images))
-        project_list = [p for p in project_list if "ignore" not in p]
-        project_list = [p for p in project_list if os.path.isdir(p)]
+    if exp_name is not None:
+        # Process only the specified experiment
+        path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images', exp_name)
+        if os.path.isdir(path_to_images):
+            project_list = [path_to_images]
+        else:
+            project_list = []
     else:
-        project_list = [os.path.join(root, "built_image_data", 'stitched_FF_images', p) for p in segment_list]
+        # Process all experiments (legacy behavior)
+        path_to_images = os.path.join(root, "built_image_data", 'stitched_FF_images', '*')
+        if segment_list is None:
+            project_list = sorted(glob.glob(path_to_images))
+            project_list = [p for p in project_list if "ignore" not in p.lower()]
+            project_list = [p for p in project_list if "_archive" not in p.lower()]
+            project_list = [p for p in project_list if os.path.isdir(p)]
+        else:
+            project_list = [os.path.join(root, "built_image_data", 'stitched_FF_images', p) for p in segment_list]
 
     # select subset of images to label
     image_path_list = []
@@ -112,7 +124,7 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['state_dict'])
     else:
-        model.load_state_dict(torch.load(os.path.join(root, "built_image_data", 'segmentation_models', model_name), map_location=device))
+        model.load_state_dict(torch.load(os.path.join(root, 'segmentation', 'segmentation_models', model_name), map_location=device))
     model = model.to(device)
     model.eval()
 
@@ -141,13 +153,21 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
             lb_predicted = lb_predicted / (n_classes+1) * 255
             lb_predicted = np.asarray(lb_predicted.cpu()).astype(np.uint8)  # convert to integer
 
-            # write to file
+            # write to file; ensure we use a per-experiment subfolder derived from the
+            # parent folder of each image so outputs always land under
+            # <root>/segmentation/{model_name}_predictions/<experiment>/*.jpg
             im_paths = batch["path"]
             for b in range(lb_predicted.shape[0]):
                 lb_temp = np.squeeze(lb_predicted[b, :, :])
                 im_path = im_paths[b]
-                suffix = im_path.replace(path_to_images[:-1], "")
-                out_path = os.path.join(path_to_labels, suffix.replace(".png", "") + ".jpg")
+                # project_name is the stitched experiment folder name (parent directory)
+                project_name = ntpath.basename(os.path.dirname(im_path))
+                label_path_root = os.path.join(path_to_labels, project_name)
+                if not os.path.isdir(label_path_root):
+                    os.makedirs(label_path_root, exist_ok=True)
+
+                out_fname = ntpath.splitext(ntpath.basename(im_path))[0] + ".jpg"
+                out_path = os.path.join(label_path_root, out_fname)
                 io.imsave(out_path, lb_temp, check_contrast=False)
 
                 # make figure
@@ -182,15 +202,17 @@ def apply_unet(root, model_name, n_classes, overwrite_flag=False, segment_list=N
                         ticks=range(n_classes+1)
                     )
                     # save
-                    im_name = path_leaf(suffix)
-                    subfolder = suffix.replace(im_name, "")
-                    im_name = im_name.replace("jpg", "").replace(".tif", "").replace(".png", "")
+                    # Derive a stable figure name from the image path
+                    base = ntpath.basename(im_path)
+                    name_no_ext = ntpath.splitext(base)[0]
+                    parent = ntpath.basename(ntpath.dirname(im_path))
 
-                    out_path = os.path.join(sample_fig_path) #, subfolder)
+                    out_path = os.path.join(sample_fig_path)
                     if not os.path.isdir(out_path):
-                        os.makedirs(out_path)
+                        os.makedirs(out_path, exist_ok=True)
 
-                    plt.savefig(os.path.join(out_path, subfolder[:-1] + "_" + im_name + '_prediction.jpg'))
+                    fig_name = f"{parent}_{name_no_ext}_prediction.jpg"
+                    plt.savefig(os.path.join(out_path, fig_name))
                     plt.close()
 
                 iter_i += 1

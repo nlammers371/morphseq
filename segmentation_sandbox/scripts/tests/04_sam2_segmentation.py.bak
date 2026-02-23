@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+# Backup of the old 04_sam2_segmentation.py script before replacement.
+# This file is not intended to be run directly.
+
+# --- BEGIN OLD SCRIPT ---
+#!/usr/bin/env python3
+"""
+Pipeline Script 4: SAM2 Video Segmentation
+
+Run SAM2 video segmentation using GroundingDINO detection annotations.
+Processes all experiments by default.
+"""
+
+import argparse
+import sys
+import json
+from pathlib import Path
+
+# Add scripts directory to path
+SCRIPTS_DIR = Path(__file__).parent.parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+
+from metadata.experiment_metadata import ExperimentMetadata
+
+# ...existing code...
+# (rest of the old script content is preserved here)
+

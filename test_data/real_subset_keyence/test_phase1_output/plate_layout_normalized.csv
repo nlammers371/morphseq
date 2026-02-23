@@ -1,0 +1,2 @@
+well_index,experiment_id,medium,genotype,treatment,start_age_hpf,embryos_per_well,temperature_c,well_id
+A12,test_keyence_001,E3,atf6_ctrl,none,24,1,28.5,test_keyence_001_A12

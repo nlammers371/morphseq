@@ -1,0 +1,62 @@
+
+
+Main instrunction for Claude:
+
+Imagine you are the best cheif pipeline data architect and you have been contracted to give out tasks to employees. You are contracted to help me be implementing an embryometadata class this will be at the end of the morphseq pipeline You will be tasked with generating pseudocode for the implementation. And to break this into modular implementation
+This is because this will make it easier for smaller models to implement these functionalities, and that you dont waste commpute actually coding these. Most of you compute sould be in planning this class output
+and then writing modular code that can be generated in steps, with psuedo code if necessary (as models are good at following pseudocode) You job will be to be the architect and deisnger of this and to think on the level of deisgn rather than specific implementation. 
+You should provide as  output an overview file (so models know everall place of task in the steps to implement this class), and corresponding smaller markdown filled with pseudocode and function requirements. Glossary and Specific instructions. 
+
+If you want to make changes to other files (such as groundeSamANNOTATIONS class to generate the key to pair it with embryometadaclass, then invlude this as a step or separate markdown flile )
+
+Overview of previous steps and classes:
+where in step01, we create experimentmetada to keep track of raw data via exerimenr,video, and image id tracking and organization
+then in step02 the exeprimentqc class is used to detect and store qc problems with images and keep track of that  (this class is important)
+then in step03 we use use gdinoannotation class to store detections and then filter for high quality _load_or_initialize_results
+then in step04 we use these high quality annotations to generate embryo_ids and their snip_ids by tracking these embryos through video_ids, storying and organizing this data in groundedSamannotation class. 
+
+Functionality of next step in pipeline:
+Now the next step is to use the embryo_ids to create a storage base/class capabel of storing and organizing information about embryos
+
+This class will need to be able to store three things [phenotype], [genotype] [flag], and [source], [config] information. 
+
+The class  can, and should, implement similat functionality for the phenotype and flag sections, e,g,: tracking of authorship, phenotype or flag, permite values, batch processing, and initialitztion checks,etc...
+
+Organization wise:
+the [flag] section of the embryometadataclass object will be at the level of snip_ids, video_ids,image_ds, and epxeriment_ids and should will be where manual or automatic (via future classification models we will train),
+    simply this section will allow us to store problems with embryo_ids such as MOTION BLUR (an snip_id evel flag), DETECTION FAILURE such as when embryo is detected for some frames but not other (image_id, in the notes you'd add the embryo_id missing level),
+    some others would be MASK_ON_EDGE (embryo snip_id mask within 5 pxiels ) of edge of image, HIGHLY_VAR_MASK (nsip_id level) that the mask has a greater than 10% change in surfact area in comparison to the average mask size between two snip_ids before, or two snip_ds afterwards
+    video_level {NONZERO_SEED_FRAME} or NO EBMRYO detected (video level), 
+
+the [phenotype] section will be at the level of snip_ids as embryo_ids can develop different phenotypes at different time. some phenotype examples will be EDEMA, BODY_AXIS, CONVERGENCE_EXTENSION, DEAD. Note you can also add a embro_id level to this, which simply aggregates this at the level of embryos, but primarily analysis will be done will be done at the. 
+    One caveat is that DEAD phenotype cannot overlap with other phenotypes, and will not be overwriteable (unless overwite_dead option is turned to be true). safe gaurds should be implemted to insure this, the default phenotype will be none 
+    none 
+
+the [genotype] top level will have a similar requirements as phenotypes, though this will have no default and should ge given a warning every time when loaded if embryos are missing [stating the number of missing embryos and which exepriments are missing genottpe data]. there should be a function to change or assign genotype,
+    There should be a fcuntion variabel if there is a phenotype already there the system overwrite_genotype=False, turn to true if knowingly changing it. This is to prevent manipulation of genotypes which sohuld be happening. 
+    each embryo_id can have a note: associated with it (which can be passed to a batch or individual level)
+
+Though the Embryo metadaclass will not have the ability to generate these flag, genotype,  phenotype catagories, it must have an API (most of which can be borrowed from ExpeerimentQC class ), to make storgage, tracking, retrieving, archiving of these fields easy and scalable!
+
+the next top level section in [source] it will store the expeirment metada of embryos stored in the experiment_ids, video_ids, and snip_ids of all entries in this object {this can be done at the level of snip_ds and will be inhereritefd from groundedSamannotation class}
+    however, phenotype will be by default 
+
+then finally [configs] section that will store data confic data from stored in the groundedSaMANNOTAION class from which snip_ids are generated from [this source file should be tracked so that it garuntees that you can either track the name of the file, or you could suggest adding a gsam_annotation_id add ing it to the gsamannoation class and the embryometadataclass and the embryo metadata class will inherentthis note it will only need to be 4 number integer]
+    additionally config will store detection_model{ config (this is the model architecture), weights (checkpoint file) } and segmentation_model{config and weights} these are stored already in the groundedSAMANNOT class already so can be inherited from it 
+
+In terms of loading the embryometadataclass obj it will take in a path to a sam2_annotation fiel (e.g. /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/annotation_and_masks/sam2_annotations/grounded_sam_ft_annotations_test.json)
+and a path to the location where it should be loaded from (e.g. /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/embryo_metadata/embryo_metada_ft.json) and if one is not there there should be an variable (default False), gen_if_no_file varavle or some name
+    in iterms of initiation similar to the classes in this pipeline it should have consistency checks, changes should be implemented locally (unless specified otherwise) and then propogated to the base file. 
+
+
+Other Consideration and Tips:
+I will have provided you files with the exepriemnQC flag, gdinoannotaionclass, and groundedsSamannotationclass, and embryometadataclass utils so you can understand the ecosystem and rules this ecosystem exists in. 
+
+Aslo a final note for manual additions at the levels of snip_ids it would be nice to have a way to pass or list in a way that automatically can propogate to the end in terms of a flag or a phenotype.
+For example for an embryo i might say idx [23:len(num of frames)] in the batch pass, however some way to just say [23::] instead would be nice. I am not sure how you can do this. (this will synergize well with functions that simply dont allow you to overawite cetain phenotoes e.g. dead) However this would be very important 
+
+Also note that it is powerful to have a base function to add phenotypes or genotypes or flags, which more complicated fucntions can interface. this is attempted with the QX class and batch processing however this could be improved uppon. 
+
+
+
+

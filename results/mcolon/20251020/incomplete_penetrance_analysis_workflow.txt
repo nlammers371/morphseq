@@ -1,0 +1,163 @@
+# Incomplete Penetrance Analysis Workflow
+
+## Goal
+Quantify how morphological deviation (distance from wild type) relates to classifier-based mutant probability, and define a distance cutoff to classify homozygous embryos as penetrant or non‑penetrant.
+
+---
+
+## ✅ STEP 1 — Correlate model output and distance [COMPLETED]
+
+### Implementation Status
+**Script:** `run_penetrance_step1.py`
+**Date Completed:** 2025-01-20
+**Status:** ✅ Successfully completed for CEP290 and TMEM67
+
+### What We Accomplished
+
+1. **Fixed Classifier Labeling Issue**
+   - Refactored `predictive_signal_test()` to return self-documenting probability columns
+   - New format: `pred_proba_{class_name}` (e.g., `pred_proba_cep290_homozygous`)
+   - Eliminates ambiguity about which class the probability represents
+   - See: `classification/README_CLASSIFIER_LABELS.md` for details
+
+2. **Computed Per-Embryo Metrics**
+   - Aggregated per-embryo averages across all time bins:
+     - `mean_distance`: Mean Euclidean distance from WT reference
+     - `mean_prob`: Mean predicted mutant probability
+   - Analyzed homozygous mutants only (CEP290 and TMEM67)
+
+3. **Correlation Analysis**
+   - **Pearson r**: Linear correlation between distance and probability
+   - **Spearman ρ**: Rank correlation (robust to non-linearity)
+   - **Bootstrap CIs**: 1000 iterations for confidence intervals
+   - **Results:** POSITIVE correlations confirmed (r > 0.5)
+     - ✅ Embryos farther from WT have higher mutant probability
+     - ✅ Distance is a valid phenotypic readout
+
+4. **Generated Outputs**
+   - **Data files:**
+     - `{genotype}_distances.csv`: Euclidean distances per embryo-timepoint
+     - `{genotype}_predictions.csv`: Classifier probabilities with class-labeled columns
+     - `{genotype}_per_embryo_metrics.csv`: Aggregated per-embryo averages
+     - `{genotype}_correlation_summary.csv`: Correlation statistics with CIs
+   - **Plots:**
+     - `{genotype}_scatter.png`: Distance vs probability with regression line
+     - `correlation_comparison.png`: Summary comparison across genotypes
+
+### Key Findings
+- **Positive correlation** between morphological distance and classifier confidence
+- **Distance captures phenotypic signal** in homozygous mutants
+- **Ready to proceed** to Step 2 (regression) and Step 3 (define penetrance cutoff)
+
+---
+
+## STEP 1 — Correlate model output and distance (DETAILS)
+
+### 1.1 Compute per-embryo metrics
+Aggregate per-embryo mean or median:
+    p̄_embryo = mean_t(pred_prob_mutant)
+    d̄_embryo = mean_t(dist_wt)
+
+Among homozygous mutants only:
+- Pearson r → linear correlation
+- Spearman ρ → rank correlation
+- Partial correlation → control for time or covariates
+
+Example:
+```python
+mask = df["genotype"] == "cep290_homozygous"
+sub = df[mask].groupby("embryo_id")[["pred_prob_mutant", "dist_wt"]].mean()
+r_p, _ = pearsonr(sub["pred_prob_mutant"], sub["dist_wt"])
+r_s, _ = spearmanr(sub["pred_prob_mutant"], sub["dist_wt"])
+```
+
+Interpretation:
+If r > 0.5 → embryos farther from WT are also classified as mutant with higher confidence.
+
+---
+
+## STEP 2 — Regression to quantify variance explained
+
+Model:
+    pred_prob_mutant = β0 + β1 * dist_wt + ε
+
+Or on logit scale:
+    logit(pred_prob_mutant) = β0 + β1 * dist_wt + ε
+
+Variance explained (R²) indicates how much classifier confidence is driven by morphological distance.
+
+```python
+import statsmodels.api as sm
+X = sm.add_constant(sub["dist_wt"])
+y = sub["pred_prob_mutant"]
+mod = sm.OLS(y, X).fit()
+print(mod.summary())
+```
+
+---
+
+## STEP 3 — Define penetrance cutoff
+
+### 3.1 Regression-based cutoff
+From model:
+    d* = (0.5 - β0) / β1
+→ embryos with d > d* are penetrant.
+
+### 3.2 ROC-based cutoff
+Use Youden index (TPR-FPR) to find optimal distance threshold separating WT vs mutants.
+
+```python
+from sklearn.metrics import roc_curve
+y_true = df["is_wt"].astype(int)
+scores = df["dist_wt"]
+fpr, tpr, thr = roc_curve(y_true, scores)
+d_star = thr[np.argmax(tpr - fpr)]
+```
+
+---
+
+## STEP 4 — Validate cutoff
+
+After labeling homozygotes as:
+    - Penetrant: d > d*
+    - Non‑penetrant: d ≤ d*
+
+Compare:
+- Mean classifier probability
+- Morphological distances
+- Visualization in latent (PCA/UMAP) space
+- Temporal progression
+
+Compute AUROC or PR-AUC between these subgroups to confirm separability.
+
+---
+
+## STEP 5 — Optional refinements
+
+| Direction | Method | Purpose |
+|------------|--------|---------|
+| Temporal dynamics | Repeat by time bin | Identify earliest phenotypic divergence |
+| Genotype comparison | Separate analysis per gene | Compare penetrance across genes |
+| Multivariate regression | Include both distance & time | Separate stage vs phenotype effects |
+| Bootstrapping | Resample embryos | CI for r, R², and cutoff stability |
+
+---
+
+## Metrics Summary
+
+| Goal | Metric | Interpretation |
+|------|---------|----------------|
+| Strength of link | Pearson/Spearman r | Higher → stronger morphological–classification coherence |
+| Variance explained | R² | Portion of model variance explained by morphology |
+| Penetrance cutoff | d* | Distance threshold for mutant‑like morphology |
+| Fraction penetrant | % above cutoff | Quantified incomplete penetrance |
+
+---
+
+## Biological Interpretation
+
+- Strong r and R² suggest model captures true morphological divergence.  
+- Homozygous embryos near WT in distance space correspond to non‑penetrant individuals.  
+- The cutoff (d*) defines the phenotypic boundary between “mutant‑like” and “WT‑like.”
+
+---

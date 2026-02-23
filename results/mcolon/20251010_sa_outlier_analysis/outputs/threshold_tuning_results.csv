@@ -1,0 +1,17 @@
+k_upper,k_lower,n_flagged,pct_flagged,F03_caught,F06_caught,H07_caught,all_caught
+1.2,0.5,23,24.731182795698924,True,True,False,False
+1.2,0.6,27,29.032258064516128,True,True,False,False
+1.2,0.7,36,38.70967741935484,True,True,True,True
+1.2,0.8,43,46.236559139784944,True,True,True,True
+1.4,0.5,22,23.655913978494624,True,True,False,False
+1.4,0.6,26,27.956989247311828,True,True,False,False
+1.4,0.7,35,37.634408602150536,True,True,True,True
+1.4,0.8,42,45.16129032258065,True,True,True,True
+1.6,0.5,21,22.580645161290324,True,True,False,False
+1.6,0.6,26,27.956989247311828,True,True,False,False
+1.6,0.7,35,37.634408602150536,True,True,True,True
+1.6,0.8,42,45.16129032258065,True,True,True,True
+2.0,0.5,21,22.580645161290324,True,True,False,False
+2.0,0.6,26,27.956989247311828,True,True,False,False
+2.0,0.7,35,37.634408602150536,True,True,True,True
+2.0,0.8,42,45.16129032258065,True,True,True,True

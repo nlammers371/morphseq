@@ -1,0 +1,291 @@
+
+================================================================================
+DISTANCE METRIC COMPARISON: DIAGONAL MAHALANOBIS vs. EUCLIDEAN
+================================================================================
+
+Output directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020
+================================================================================
+ANALYZING CEP290
+================================================================================
+
+================================================================================
+STEP 1: Loading and binning data
+================================================================================
+Loaded 20250305: 20648 rows
+  Genotypes: {'cep290_heterozygous': 6164, 'cep290_unknown': 5786, 'cep290_wildtype': 4916, 'cep290_homozygous': 3782}
+Loaded 20250416: 3395 rows
+  Genotypes: {'cep290_unknown': 3395}
+Loaded 20250512: 6730 rows
+  Genotypes: {'cep290_heterozygous': 2388, 'cep290_wildtype': 2089, 'cep290_homozygous': 1235, 'cep290_unkown': 1018}
+Loaded 20250515_part2: 871 rows
+  Genotypes: {'cep290_heterozygous': 466, 'cep290_homozygous': 192, 'cep290_wildtype': 142, 'cep290_unkown': 71}
+Loaded 20250519: 2997 rows
+  Genotypes: {'b9d2_heterozygous': 1359, 'b9d2_wildtype': 692, 'b9d2_homozygous': 646, 'b9d2_unkown': 300}
+
+Total: 34641 rows from 5 experiments
+Overall genotype distribution:
+genotype
+cep290_unknown         9181
+cep290_heterozygous    9018
+cep290_wildtype        7147
+cep290_homozygous      5209
+b9d2_heterozygous      1359
+cep290_unkown          1089
+b9d2_wildtype           692
+b9d2_homozygous         646
+b9d2_unkown             300
+Name: count, dtype: int64
+Binned data: 5289 timepoints from 407 embryos
+
+================================================================================
+STEP 2: Computing distances for all embryos
+================================================================================
+
+Reference genotypes: ['cep290_wildtype']
+  Total reference embryos: 52
+
+All genotypes for analysis: ['cep290_wildtype', 'cep290_heterozygous', 'cep290_homozygous']
+  Total embryos: 190
+  Computing distances across 40 time bins...
+    Progress: 5/40 bins processed
+    Progress: 10/40 bins processed
+    Progress: 15/40 bins processed
+    Progress: 20/40 bins processed
+    Progress: 25/40 bins processed
+    Progress: 30/40 bins processed
+  Skipping time bin 74: only 9 reference samples
+  Skipping time bin 106: only 9 reference samples
+  Skipping time bin 108: only 8 reference samples
+  Skipping time bin 110: only 8 reference samples
+  Skipping time bin 112: only 7 reference samples
+  Skipping time bin 114: only 6 reference samples
+  Skipping time bin 116: only 5 reference samples
+  Skipping time bin 118: only 5 reference samples
+  Skipping time bin 120: only 4 reference samples
+  ✓ Computed distances for 2305 timepoints across 31 time bins
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/cep290_distances.csv
+
+================================================================================
+STEP 3: AUROC analysis per time bin
+================================================================================
+  Analyzing 31 time bins...
+  [1/31] Time bin 12 hpf: Diag_Mahal=0.480, Euclidean=0.443
+  [2/31] Time bin 14 hpf: Diag_Mahal=0.485, Euclidean=0.483
+  [3/31] Time bin 16 hpf: Diag_Mahal=0.688, Euclidean=0.679
+  [4/31] Time bin 18 hpf: Diag_Mahal=0.603, Euclidean=0.603
+  [5/31] Time bin 20 hpf: Diag_Mahal=0.525, Euclidean=0.517
+  [6/31] Time bin 22 hpf: Diag_Mahal=0.452, Euclidean=0.470
+  [7/31] Time bin 24 hpf: Diag_Mahal=0.543, Euclidean=0.517
+  [8/31] Time bin 26 hpf: Diag_Mahal=0.504, Euclidean=0.504
+  [9/31] Time bin 28 hpf: Diag_Mahal=0.496, Euclidean=0.505
+  [10/31] Time bin 30 hpf: Diag_Mahal=0.543, Euclidean=0.502
+  [11/31] Time bin 32 hpf: Diag_Mahal=0.549, Euclidean=0.529
+  [12/31] Time bin 34 hpf: Diag_Mahal=0.591, Euclidean=0.559
+  [13/31] Time bin 36 hpf: Diag_Mahal=0.622, Euclidean=0.581
+  [14/31] Time bin 38 hpf: Diag_Mahal=0.578, Euclidean=0.535
+  [15/31] Time bin 40 hpf: Diag_Mahal=0.608, Euclidean=0.586
+  [16/31] Time bin 42 hpf: Diag_Mahal=0.594, Euclidean=0.547
+  [17/31] Time bin 44 hpf: Diag_Mahal=0.606, Euclidean=0.555
+  [18/31] Time bin 46 hpf: Diag_Mahal=0.644, Euclidean=0.593
+  [19/31] Time bin 48 hpf: Diag_Mahal=0.674, Euclidean=0.600
+  [20/31] Time bin 50 hpf: Diag_Mahal=0.613, Euclidean=0.593
+  [21/31] Time bin 52 hpf: Diag_Mahal=0.656, Euclidean=0.637
+  [22/31] Time bin 54 hpf: Diag_Mahal=0.639, Euclidean=0.589
+  [23/31] Time bin 56 hpf: Diag_Mahal=0.623, Euclidean=0.614
+  [24/31] Time bin 58 hpf: Diag_Mahal=0.629, Euclidean=0.639
+  [25/31] Time bin 60 hpf: Diag_Mahal=0.634, Euclidean=0.639
+  [26/31] Time bin 62 hpf: Diag_Mahal=0.582, Euclidean=0.608
+  [27/31] Time bin 64 hpf: Diag_Mahal=0.648, Euclidean=0.645
+  [28/31] Time bin 66 hpf: Diag_Mahal=0.613, Euclidean=0.588
+  [29/31] Time bin 68 hpf: Diag_Mahal=0.650, Euclidean=0.611
+  [30/31] Time bin 70 hpf: Diag_Mahal=0.640, Euclidean=0.576
+  [31/31] Time bin 72 hpf: Diag_Mahal=0.559, Euclidean=0.503
+
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/cep290_per_bin_auroc.csv
+
+================================================================================
+STEP 4: Computing aggregate statistics
+================================================================================
+
+DIAGONAL_MAHALANOBIS:
+  Median AUROC: 0.606
+  Std: 0.060
+  Range: [0.452, 0.688]
+
+EUCLIDEAN:
+  Median AUROC: 0.581
+  Std: 0.057
+  Range: [0.443, 0.679]
+
+================================================================================
+STEP 5: Bootstrap paired difference test
+================================================================================
+  Running 100 bootstrap iterations using 192 CPUs...
+    Bootstrap: 100/100 (100%) - Done! (100 successful iterations)
+
+Paired difference (Diagonal Mahalanobis - Euclidean):
+  Mean difference: 0.0180
+  95% CI: [0.0069, 0.0319]
+  P-value: 0.0100
+
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/cep290_summary.csv
+
+================================================================================
+STEP 6: Creating visualizations
+================================================================================
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/cep290_auroc_by_time.png
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/cep290_roc_curves.png
+================================================================================
+ANALYZING TMEM67
+================================================================================
+
+================================================================================
+STEP 1: Loading and binning data
+================================================================================
+Loaded 20250711: 7628 rows
+  Genotypes: {'tmem67_heterozygote': 2895, 'tmem67_homozygous': 2692, 'tmem67_wildtype': 2041}
+
+Total: 7628 rows from 1 experiments
+Overall genotype distribution:
+genotype
+tmem67_heterozygote    2895
+tmem67_homozygous      2692
+tmem67_wildtype        2041
+Name: count, dtype: int64
+Binned data: 2531 timepoints from 88 embryos
+
+================================================================================
+STEP 2: Computing distances for all embryos
+================================================================================
+
+Reference genotypes: ['tmem67_wildtype']
+  Total reference embryos: 22
+
+All genotypes for analysis: ['tmem67_wildtype', 'tmem67_heterozygote', 'tmem67_homozygous']
+  Total embryos: 88
+  Computing distances across 56 time bins...
+  Skipping time bin 6: only 1 reference samples
+  Skipping time bin 8: only 1 reference samples
+  Skipping time bin 10: only 1 reference samples
+  Skipping time bin 12: only 1 reference samples
+  Skipping time bin 14: only 1 reference samples
+  Skipping time bin 16: only 1 reference samples
+  Skipping time bin 18: only 1 reference samples
+    Progress: 5/56 bins processed
+    Progress: 10/56 bins processed
+    Progress: 15/56 bins processed
+    Progress: 20/56 bins processed
+    Progress: 25/56 bins processed
+    Progress: 30/56 bins processed
+    Progress: 35/56 bins processed
+  Skipping time bin 104: only 9 reference samples
+  Skipping time bin 106: only 9 reference samples
+  Skipping time bin 108: only 7 reference samples
+  Skipping time bin 110: only 6 reference samples
+  Skipping time bin 112: only 7 reference samples
+  Skipping time bin 114: only 5 reference samples
+  Skipping time bin 116: only 3 reference samples
+  Skipping time bin 118: only 4 reference samples
+  Skipping time bin 120: only 3 reference samples
+  Skipping time bin 122: only 3 reference samples
+  Skipping time bin 124: only 3 reference samples
+  Skipping time bin 126: only 2 reference samples
+  ✓ Computed distances for 2308 timepoints across 37 time bins
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/tmem67_distances.csv
+
+================================================================================
+STEP 3: AUROC analysis per time bin
+================================================================================
+  Analyzing 37 time bins...
+  [1/37] Time bin 30 hpf: Diag_Mahal=0.514, Euclidean=0.484
+  [2/37] Time bin 32 hpf: Diag_Mahal=0.581, Euclidean=0.579
+  [3/37] Time bin 34 hpf: Diag_Mahal=0.601, Euclidean=0.609
+  [4/37] Time bin 36 hpf: Diag_Mahal=0.648, Euclidean=0.634
+  [5/37] Time bin 38 hpf: Diag_Mahal=0.601, Euclidean=0.590
+  [6/37] Time bin 40 hpf: Diag_Mahal=0.601, Euclidean=0.627
+  [7/37] Time bin 42 hpf: Diag_Mahal=0.574, Euclidean=0.581
+  [8/37] Time bin 44 hpf: Diag_Mahal=0.587, Euclidean=0.572
+  [9/37] Time bin 46 hpf: Diag_Mahal=0.593, Euclidean=0.577
+  [10/37] Time bin 48 hpf: Diag_Mahal=0.553, Euclidean=0.511
+  [11/37] Time bin 50 hpf: Diag_Mahal=0.618, Euclidean=0.582
+  [12/37] Time bin 52 hpf: Diag_Mahal=0.540, Euclidean=0.514
+  [13/37] Time bin 54 hpf: Diag_Mahal=0.570, Euclidean=0.558
+  [14/37] Time bin 56 hpf: Diag_Mahal=0.568, Euclidean=0.535
+  [15/37] Time bin 58 hpf: Diag_Mahal=0.597, Euclidean=0.546
+  [16/37] Time bin 60 hpf: Diag_Mahal=0.576, Euclidean=0.525
+  [17/37] Time bin 62 hpf: Diag_Mahal=0.622, Euclidean=0.587
+  [18/37] Time bin 64 hpf: Diag_Mahal=0.654, Euclidean=0.625
+  [19/37] Time bin 66 hpf: Diag_Mahal=0.622, Euclidean=0.575
+  [20/37] Time bin 68 hpf: Diag_Mahal=0.657, Euclidean=0.618
+  [21/37] Time bin 70 hpf: Diag_Mahal=0.655, Euclidean=0.609
+  [22/37] Time bin 72 hpf: Diag_Mahal=0.640, Euclidean=0.591
+  [23/37] Time bin 74 hpf: Diag_Mahal=0.650, Euclidean=0.614
+  [24/37] Time bin 76 hpf: Diag_Mahal=0.658, Euclidean=0.624
+  [25/37] Time bin 78 hpf: Diag_Mahal=0.689, Euclidean=0.642
+  [26/37] Time bin 80 hpf: Diag_Mahal=0.694, Euclidean=0.617
+  [27/37] Time bin 82 hpf: Diag_Mahal=0.690, Euclidean=0.592
+  [28/37] Time bin 84 hpf: Diag_Mahal=0.653, Euclidean=0.592
+  [29/37] Time bin 86 hpf: Diag_Mahal=0.740, Euclidean=0.655
+  [30/37] Time bin 88 hpf: Diag_Mahal=0.702, Euclidean=0.611
+  [31/37] Time bin 90 hpf: Diag_Mahal=0.641, Euclidean=0.606
+  [32/37] Time bin 92 hpf: Diag_Mahal=0.567, Euclidean=0.544
+  [33/37] Time bin 94 hpf: Diag_Mahal=0.588, Euclidean=0.548
+  [34/37] Time bin 96 hpf: Diag_Mahal=0.552, Euclidean=0.547
+  [35/37] Time bin 98 hpf: Diag_Mahal=0.516, Euclidean=0.493
+  [36/37] Time bin 100 hpf: Diag_Mahal=0.554, Euclidean=0.571
+  [37/37] Time bin 102 hpf: Diag_Mahal=0.628, Euclidean=0.576
+
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/tmem67_per_bin_auroc.csv
+
+================================================================================
+STEP 4: Computing aggregate statistics
+================================================================================
+
+DIAGONAL_MAHALANOBIS:
+  Median AUROC: 0.601
+  Std: 0.053
+  Range: [0.514, 0.740]
+
+EUCLIDEAN:
+  Median AUROC: 0.582
+  Std: 0.041
+  Range: [0.484, 0.655]
+
+================================================================================
+STEP 5: Bootstrap paired difference test
+================================================================================
+  Running 100 bootstrap iterations using 192 CPUs...
+    Bootstrap: 100/100 (100%) - Done! (100 successful iterations)
+
+Paired difference (Diagonal Mahalanobis - Euclidean):
+  Mean difference: 0.0327
+  95% CI: [0.0227, 0.0446]
+  P-value: 0.0000
+
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/data/tmem67_summary.csv
+
+================================================================================
+STEP 6: Creating visualizations
+================================================================================
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/tmem67_auroc_by_time.png
+Saved: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020/plots/tmem67_roc_curves.png
+
+================================================================================
+ANALYSIS COMPLETE!
+================================================================================
+
+Results saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251020
+
+Generated files:
+  DATA:
+    - cep290_distances.csv
+    - cep290_per_bin_auroc.csv
+    - cep290_summary.csv
+    - tmem67_distances.csv
+    - tmem67_per_bin_auroc.csv
+    - tmem67_summary.csv
+  PLOTS:
+    - cep290_auroc_by_time.png
+    - cep290_roc_curves.png
+    - tmem67_auroc_by_time.png
+    - tmem67_roc_curves.png

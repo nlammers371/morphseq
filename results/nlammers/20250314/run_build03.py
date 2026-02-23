@@ -4,7 +4,7 @@ import sys
 code_root = "/net/trapnell/vol1/home/nlammers/projects/repositories/morphseq"
 sys.path.insert(0, code_root)
 
-from src.build.build03A_process_embryos_main_par import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
+from src.build.build03A_process_images import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
 import multiprocessing
 
 def main():

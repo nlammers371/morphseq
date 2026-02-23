@@ -1,0 +1,2 @@
+python training.py -m lossconfig.kld_weight=1.0, 10.0 \
+                        trainconfig.max_epochs=5

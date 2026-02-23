@@ -1,0 +1,63 @@
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+[sam2-onwards] JOB_ID=827331 TASK=2
+[sam2-onwards] JOB_ID=827331 TASK=1
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Run flags - metadata:1 sam2:1 b03:1 snip:1 b04:1 b06:1
+[sam2-onwards] Run flags - metadata:1 sam2:1 b03:1 snip:1 b04:1 b06:1
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:0
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:0
+[sam2-onwards] Array task ID: 2
+[sam2-onwards] Array task ID: 1
+[sam2-onwards] ERROR: Task index 1 out of range (len=1)
+[sam2-onwards] Processing experiment(s): 20250529_24hpf_ctrl_atf6
+mkdir: cannot create directory ‘logs’: File exists
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+[sam2-onwards] JOB_ID=827376 TASK=2
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Run flags - metadata:1 sam2:1 b03:1 snip:1 b04:1 b06:1
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:0
+[sam2-onwards] Array task ID: 2
+[sam2-onwards] ERROR: Task index 1 out of range (len=1)
+[sam2-onwards] JOB_ID=827376 TASK=1
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Run flags - metadata:1 sam2:1 b03:1 snip:1 b04:1 b06:1
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:0
+[sam2-onwards] Array task ID: 1
+[sam2-onwards] Processing experiment(s): 20250529_24hpf_ctrl_atf6
+mkdir: cannot create directory ‘logs’: File exists
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+/net/trapnell/vol1/home/mdcolon/.bashrc: line 63: conda: command not found
+[sam2-onwards] JOB_ID=827851 TASK=1
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Run flags - metadata:1 sam2:1 b03:1 snip:1 b04:1 b06:1
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:0
+[sam2-onwards] Array task ID: 1
+[sam2-onwards] Processing experiment(s): 20250529_24hpf_ctrl_atf6
+mkdir: cannot create directory ‘logs’: File exists
+[sam2-onwards] JOB_ID=827851 TASK=2
+[sam2-onwards] Repo root : /net/trapnell/vol1/home/mdcolon/proj/morphseq
+[sam2-onwards] Data root : /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+[sam2-onwards] Run flags - metadata:1 sam2:1 b03:1 snip:1 b04:1 b06:1
+[sam2-onwards] Build03 flags - skip_geometry_qc:0
+[sam2-onwards] SAM2 params - workers:8 conf:0.45 iou:0.5
+[sam2-onwards] Snip params - workers:1 dl_rad:50 overwrite:0
+[sam2-onwards] Array task ID: 2
+[sam2-onwards] ERROR: Task index 1 out of range (len=1)

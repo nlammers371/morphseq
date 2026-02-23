@@ -1,0 +1,37 @@
+ND2 Grid Verification Report (Clustering-based) - 20251113
+================================================================================
+
+METHOD: KMeans clustering of stage positions by X and Y coordinates
+Verification checks if well labels match clustered positions.
+
+ROW VERIFICATION:
+------------------------------------------------------------
+  Row A: Y = -31277.6 ±   0.1 µm (11 wells)
+  Row B: Y = -22277.5 ±   0.1 µm (12 wells)
+  Row C: Y = -13277.6 ±   0.1 µm (12 wells)
+  Row D: Y =  -4277.5 ±   0.1 µm (12 wells)
+  Row E: Y =   4722.4 ±   0.1 µm (12 wells)
+  Row F: Y =  13722.4 ±   0.1 µm (12 wells)
+  Row G: Y =  22722.5 ±   0.1 µm (12 wells)
+  Row H: Y =  31722.6 ±   0.1 µm (12 wells)
+
+COLUMN VERIFICATION:
+------------------------------------------------------------
+  Column 01: X =  48678.8 ±   0.1 µm (7 wells)
+  Column 02: X =  39678.8 ±   0.1 µm (8 wells)
+  Column 03: X =  30678.8 ±   0.0 µm (8 wells)
+  Column 04: X =  21678.8 ±   0.1 µm (8 wells)
+  Column 05: X =  12678.7 ±   0.1 µm (8 wells)
+  Column 06: X =   3678.8 ±   0.1 µm (8 wells)
+  Column 07: X =  -5321.1 ±   0.1 µm (8 wells)
+  Column 08: X = -14321.0 ±   0.1 µm (8 wells)
+  Column 09: X = -23321.2 ±   0.1 µm (8 wells)
+  Column 10: X = -32321.1 ±   0.1 µm (8 wells)
+  Column 11: X = -41321.1 ±   0.1 µm (8 wells)
+  Column 12: X = -50321.1 ±   0.1 µm (8 wells)
+
+SUMMARY:
+================================================================================
+Row clustering match: NO
+Column clustering match: NO
+Overall: FAIL ✗

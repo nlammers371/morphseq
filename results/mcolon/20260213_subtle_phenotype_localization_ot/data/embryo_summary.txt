@@ -1,0 +1,17 @@
+Embryo Selection Summary
+============================================================
+
+Target HPF: 48.0 ± 1.25
+Total embryos: 31
+
+By role:
+  control     :  10 embryos, coverage=1.00, curvature=0.000590
+  mutant      :  20 embryos, coverage=1.00, curvature=0.000718
+  reference   :   1 embryos, coverage=1.00, curvature=0.000454
+
+By genotype:
+  cep290_homozygous   :  20
+  cep290_wildtype     :  11
+
+Stage range: 46.83 - 47.81 hpf
+Mean stage: 47.52 hpf

@@ -1,0 +1,2 @@
+bin_width	time_bin_start	time_bin_end	rows_parsed	rows_used_in_bin	n_embryos_pos	n_embryos_neg	auc_mean_hpf_predicts_label	auc_mean_baseline_deviation_normalized_predicts_label	auc_n_rows_predicts_label
+2	12	14	45767	346	24	27	0.466821	0.489198	0.496914

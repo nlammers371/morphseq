@@ -1,0 +1,2 @@
+Cluster,n_embryos,Early_mean,Late_mean,Pearson_r,P_value,Permutation_p_value,Interpretation
+0,29,0.06765696381967716,0.04996605279335074,-0.31001280565129247,0.10170494740364203,0.099,Anti-correlated

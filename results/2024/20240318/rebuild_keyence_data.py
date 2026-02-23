@@ -1,4 +1,4 @@
-from src.build.build01A_compile_keyence_images import build_ff_from_keyence, stitch_ff_from_keyence
+from src.build.build01A_compile_keyence_torch import build_ff_from_keyence, stitch_ff_from_keyence
 import multiprocessing
 
 

@@ -1,0 +1,28 @@
+experiment_id: 20260202
+total_rows: 9779
+total_embryo_ids: 198
+
+genotype_raw_proportions:
+- scospondin_crispant: n=75, proportion=0.378788, percent=37.88
+- if88_ift74_crispant: n=34, proportion=0.171717, percent=17.17
+- foxj1a_crispant: n=31, proportion=0.156566, percent=15.66
+- ift88_crispant: n=31, proportion=0.156566, percent=15.66
+- ab: n=27, proportion=0.136364, percent=13.64
+
+ab_vs_crispant_raw_proportions:
+- crispant: n=171, proportion=0.863636, percent=86.36
+- ab: n=27, proportion=0.136364, percent=13.64
+
+classification_top_hits_one_vs_all:
+- [curvature] ab vs rest: max_auroc=0.954, min_pval=0.0099
+- [curvature] scospondin_crispant vs rest: max_auroc=0.846, min_pval=0.0099
+- [curvature] ift88_crispant vs rest: max_auroc=0.833, min_pval=0.0099
+- [curvature] if88_ift74_crispant vs rest: max_auroc=0.827, min_pval=0.0099
+- [curvature] foxj1a_crispant vs rest: max_auroc=0.796, min_pval=0.0099
+
+classification_top_hits_each_vs_ab:
+- [curvature] scospondin_crispant vs ab: max_auroc=0.998, min_pval=0.0099
+- [curvature] foxj1a_crispant vs ab: max_auroc=0.986, min_pval=0.0099
+- [curvature] if88_ift74_crispant vs ab: max_auroc=0.947, min_pval=0.0099
+- [curvature] ift88_crispant vs ab: max_auroc=0.874, min_pval=0.0099
+- [length] if88_ift74_crispant vs ab: max_auroc=0.917, min_pval=0.0099

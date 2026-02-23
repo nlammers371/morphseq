@@ -1,0 +1,3 @@
+snip_id,mask_cleaned_success,preprocessing_success,skeleton_success,endpoints_success,geodesic_path_success,bspline_success
+20251017_combined_C04_e01_t0114,True,True,True,True,True,True
+20251017_combined_F11_e01_t0065,True,True,True,True,True,True

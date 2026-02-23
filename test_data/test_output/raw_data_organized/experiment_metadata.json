@@ -1,0 +1,19 @@
+{
+  "file_info": {
+    "creation_time": "2025-08-28T15:31:15.035125",
+    "script_version": "Module_0_Simplified"
+  },
+  "experiments": {},
+  "entity_tracker": {
+    "creation_time": "2025-08-28T15:31:15.216365",
+    "last_updated": "2025-08-28T15:31:15.216377",
+    "pipeline_step": "module_0_data_organization",
+    "entities": {
+      "experiments": [],
+      "videos": [],
+      "images": [],
+      "embryos": [],
+      "snips": []
+    }
+  }
+}

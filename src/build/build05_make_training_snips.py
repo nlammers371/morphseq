@@ -1,12 +1,14 @@
 # We will save the data in folders to mimic the desired example
 import os
-import torch
+# Note: torch is not used in this script; can be removed to lighten imports.
+# import torch
 import numpy as np
 import glob as glob
 import pandas as pd
 from src.functions.utilities import path_leaf
 import skimage.io as io
 from tqdm import tqdm
+# If scikit-image is heavy for your environment, consider `cv2.resize` as a drop-in replacement for `rescale`.
 from skimage.transform import rescale
 
 def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_flag=False):
@@ -22,9 +24,11 @@ def make_image_snips(root, train_name, label_var=None, rs_factor=1.0, overwrite_
     # read in metadata database
     embryo_metadata_df = pd.read_csv(os.path.join(metadata_path, "embryo_metadata_df02.csv"))
 
-    # remove extra columns
+    # remove extra columns (only drop columns that actually exist)
     rm_cols = ['time_string', 'Height (um)', 'Width (um)', 'Height (px)', 'Width (px)', 'Time (s)', 'embryos_per_well', 'region_label', 'time_of_addition']
-    embryo_metadata_df = embryo_metadata_df.drop(labels=rm_cols, axis=1)
+    existing_rm_cols = [col for col in rm_cols if col in embryo_metadata_df.columns]
+    if existing_rm_cols:
+        embryo_metadata_df = embryo_metadata_df.drop(labels=existing_rm_cols, axis=1)
 
     ###################
     # incorporate manual curation info

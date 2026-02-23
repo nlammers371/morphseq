@@ -1,0 +1,20 @@
+Data: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251229_cep290_phenotype_extraction/final_data/embryo_data_with_labels.csv
+Bin: 16.0–20.0 hpf (time_bin=16, bin_width=4.0)
+Per-embryo samples in bin: Penetrant=42, Control=77
+
+Within-bin time skew (per-embryo mean_time):
+  mean_time Penetrant mean=17.909, Control mean=17.926
+  Cohen's d (Pen-Control) = -0.129
+  Cliff's delta           = 0.188
+
+Curvature distribution (per-embryo curvature_mean):
+  curvature_mean Penetrant mean=0.1124, Control mean=0.1168
+  Cohen's d (Pen-Control) = -0.112
+  Cliff's delta           = -0.072
+
+Permutation AUROC checks (labels shuffled within time strata):
+  time_only (stratified perm within time strata): AUROC=0.406, p=0.9652 (null n=200)
+  curvature_only (stratified perm within time strata): AUROC=0.507, p=0.5721 (null n=200)
+  curvature_plus_time (stratified perm within time strata): AUROC=0.451, p=0.6915 (null n=200)
+  n_obs_only (stratified perm within time strata): AUROC=0.591, p=0.02985 (null n=200)
+  embedding_only (stratified perm within time strata): AUROC=0.628, p=0.03483 (null n=200)

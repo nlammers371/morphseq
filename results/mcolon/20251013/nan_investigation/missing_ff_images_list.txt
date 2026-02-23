@@ -1,0 +1,123 @@
+Missing Full-Frame Images (24 total)
+================================================================================
+
+Embryo: 20250305_H04_e01
+  Image ID: 20250305_H04_ch00_t0339
+  Well: H04
+  Time: 340
+
+Embryo: 20250305_B02_e01
+  Image ID: 20250305_B02_ch00_t0339
+  Well: B02
+  Time: 340
+
+Embryo: 20250305_F01_e01
+  Image ID: 20250305_F01_ch00_t0339
+  Well: F01
+  Time: 340
+
+Embryo: 20250305_D01_e01
+  Image ID: 20250305_D01_ch00_t0339
+  Well: D01
+  Time: 340
+
+Embryo: 20250305_D03_e01
+  Image ID: 20250305_D03_ch00_t0339
+  Well: D03
+  Time: 340
+
+Embryo: 20250305_D02_e01
+  Image ID: 20250305_D02_ch00_t0339
+  Well: D02
+  Time: 340
+
+Embryo: 20250305_A01_e01
+  Image ID: 20250305_A01_ch00_t0339
+  Well: A01
+  Time: 340
+
+Embryo: 20250305_F03_e01
+  Image ID: 20250305_F03_ch00_t0339
+  Well: F03
+  Time: 340
+
+Embryo: 20250305_G03_e01
+  Image ID: 20250305_G03_ch00_t0339
+  Well: G03
+  Time: 340
+
+Embryo: 20250305_F04_e01
+  Image ID: 20250305_F04_ch00_t0339
+  Well: F04
+  Time: 340
+
+Embryo: 20250305_G01_e01
+  Image ID: 20250305_G01_ch00_t0339
+  Well: G01
+  Time: 340
+
+Embryo: 20250305_B03_e01
+  Image ID: 20250305_B03_ch00_t0339
+  Well: B03
+  Time: 340
+
+Embryo: 20250305_G04_e01
+  Image ID: 20250305_G04_ch00_t0339
+  Well: G04
+  Time: 340
+
+Embryo: 20250305_A03_e01
+  Image ID: 20250305_A03_ch00_t0339
+  Well: A03
+  Time: 340
+
+Embryo: 20250305_E02_e01
+  Image ID: 20250305_E02_ch00_t0339
+  Well: E02
+  Time: 340
+
+Embryo: 20250305_C02_e01
+  Image ID: 20250305_C02_ch00_t0339
+  Well: C02
+  Time: 340
+
+Embryo: 20250305_E01_e01
+  Image ID: 20250305_E01_ch00_t0339
+  Well: E01
+  Time: 340
+
+Embryo: 20250305_F02_e01
+  Image ID: 20250305_F02_ch00_t0339
+  Well: F02
+  Time: 340
+
+Embryo: 20250305_H02_e01
+  Image ID: 20250305_H02_ch00_t0339
+  Well: H02
+  Time: 340
+
+Embryo: 20250305_H01_e01
+  Image ID: 20250305_H01_ch00_t0339
+  Well: H01
+  Time: 340
+
+Embryo: 20250305_G02_e01
+  Image ID: 20250305_G02_ch00_t0339
+  Well: G02
+  Time: 340
+
+Embryo: 20250305_A02_e01
+  Image ID: 20250305_A02_ch00_t0339
+  Well: A02
+  Time: 340
+
+Embryo: 20250305_A05_e01
+  Image ID: 20250305_A05_ch00_t0339
+  Well: A05
+  Time: 340
+
+Embryo: 20250305_E04_e01
+  Image ID: 20250305_E04_ch00_t0339
+  Well: E04
+  Time: 340
+

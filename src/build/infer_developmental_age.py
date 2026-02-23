@@ -3,6 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import LinearRegression
 from src.functions.dataset_utils import *
 import os
+# Note: matplotlib is only used for plotting; make this import lazy or optional to reduce hard deps.
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

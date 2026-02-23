@@ -1,0 +1,21 @@
+{
+  "embryo_id": "20251017_part2_D06",
+  "timepoint": "t0022",
+  "image_path": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground/sam2_pipeline_files/raw_data_organized/20251017_part2/images/20251017_part2_D06/20251017_part2_D06_ch00_t0022.jpg",
+  "mask_path": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground/sam2_pipeline_files/exported_masks/20251017_part2/masks/20251017_part2_D06_ch00_t0022_masks_emnum_1.png",
+  "gaussian_sigma": 10.0,
+  "n_slices": 100,
+  "spline_smoothing": 0.01,
+  "mask_area_original_pixels": 113639,
+  "mask_area_smoothed_pixels": 113316,
+  "centerline_points": 100,
+  "arc_length_total_pixels": 1018.5324749360411,
+  "curvature_mean": 0.005016694844450974,
+  "curvature_std": 0.007490694910259632,
+  "curvature_max": 0.05267134077549427,
+  "curvature_min": 7.4202034718999e-05,
+  "principal_axis_x": 0.212230908953612,
+  "principal_axis_y": 0.9772195461024732,
+  "center_x": 529.5920081894878,
+  "center_y": 1147.7107204631297
+}

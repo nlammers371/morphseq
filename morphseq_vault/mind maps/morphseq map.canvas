@@ -14,19 +14,19 @@
 		{"id":"311aea1385a7758d","type":"text","text":"Latent trajectory inference ( #Marz)","x":440,"y":288,"width":250,"height":60,"color":"#4973b6"},
 		{"id":"ca9618ce10ba003d","type":"text","text":"Revise latent space visualization app","x":787,"y":288,"width":250,"height":60,"color":"#4973b6"},
 		{"id":"eaaf4d4d83337a4a","type":"text","text":"Build training dataset","x":-880,"y":-595,"width":250,"height":60,"color":"4"},
-		{"id":"283a16af60fc86f6","type":"text","text":"Build morphVAE v1","x":-563,"y":-593,"width":250,"height":60,"color":"#4973b6"},
+		{"id":"283a16af60fc86f6","type":"text","text":"Build metricVAE v1","x":-563,"y":-593,"width":250,"height":60,"color":"#4973b6"},
 		{"id":"ba65965d2e2fd522","type":"text","text":"lmx1b morphseq pilot","x":-880,"y":-424,"width":250,"height":60,"color":"4"},
 		{"id":"f4c4526b52e14fd6","type":"text","text":"Basic image processing pipeline","x":-563,"y":-424,"width":250,"height":60,"color":"#4973b6"},
 		{"id":"a59be8f6e773cacd","type":"text","text":"Improve image processing pipeline","x":-90,"y":-154,"width":250,"height":60,"color":"#4973b4"},
-		{"id":"d490f9d8c8de0191","type":"text","text":"morphVAE model selection ( #Marz)","x":-90,"y":-44,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"d490f9d8c8de0191","type":"text","text":"metricVAE model selection ( #Marz)","x":-90,"y":-44,"width":250,"height":60,"color":"#4973b4"},
 		{"id":"e6526c4c7ab21bf3","type":"text","text":"### Build out seq-to-morph modeling framework","x":-588,"y":-47,"width":300,"height":95},
 		{"id":"b045de824b118190","type":"text","text":" [[lmx1b planning]]","x":-240,"y":313,"width":250,"height":60,"color":"6"},
 		{"id":"e2cc2c92541012ab","type":"text","text":"SeaHub crispant analysis","x":60,"y":313,"width":250,"height":60,"color":"6"},
 		{"id":"806baadd0909687f","type":"text","text":"Request/receive/raise cep290 and related lines ( #David)","x":380,"y":-111,"width":279,"height":85,"color":"#4973b6"},
 		{"id":"ea00801063365aa1","type":"text","text":"Increase imaging throughput","x":709,"y":-104,"width":286,"height":57},
 		{"id":"23086a376072d90b","type":"text","text":"De novo image generation","x":388,"y":-583,"width":250,"height":60,"color":"#4973b4"},
-		{"id":"d655c9c7790e459e","type":"text","text":"Improve morphVAE image reconstruction","x":88,"y":-493,"width":250,"height":60,"color":"#4973b4"},
-		{"id":"804551284ce51bfa","type":"text","text":"Incrorporate z slices into morphVAE","x":366,"y":-433,"width":250,"height":60,"color":"#4973b4"}
+		{"id":"d655c9c7790e459e","type":"text","text":"Improve metricVAE image reconstruction","x":88,"y":-493,"width":250,"height":60,"color":"#4973b4"},
+		{"id":"804551284ce51bfa","type":"text","text":"Incrorporate z slices into metricVAE","x":366,"y":-433,"width":250,"height":60,"color":"#4973b4"}
 	],
 	"edges":[
 		{"id":"162fa01a93237eab","fromNode":"12bc355fb475faeb","fromSide":"right","toNode":"a5e0e82155f79da7","toSide":"top"},

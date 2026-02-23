@@ -1,0 +1,1770 @@
+🎬 SAM2 Video Processing Pipeline
+==================================================
+📋 Config: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/configs/pipeline_config.yaml
+📊 Metadata: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/experiment_metadata.json
+🎯 Annotations: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/detections/gdino_detections.json
+💾 Output: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+🎭 Target prompt: 'individual embryo'
+📦 Format: rle
+🖥️  Device: cuda
+🔬 Processing entities: ['20250612_30hpf_ctrl_atf6']
+
+🔧 Loading SAM2 configuration...
+🎬 Initializing GroundedSamAnnotations...
+🎬 Initializing GroundedSamAnnotations...
+   Target prompt: 'individual embryo'
+   Segmentation format: rle
+   Output file: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+📚 Loading components...
+✅ Components loaded successfully
+📂 Loaded existing results from /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+✅ GroundedSamAnnotations initialized successfully
+🔧 Loading SAM2 model...
+🔧 Loading SAM2 model...
+ℹ️ Using SAM2 model root from config: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/models/sam2/sam2
+✅ SAM2 model loaded on GPU
+✅ SAM2 model loaded successfully
+🎯 Found 92 videos to process
+📹 Videos:
+   - 20250612_30hpf_ctrl_atf6_F11: 1 images
+   - 20250612_30hpf_ctrl_atf6_A05: 1 images
+   - 20250612_30hpf_ctrl_atf6_F09: 1 images
+   - 20250612_30hpf_ctrl_atf6_G03: 1 images
+   - 20250612_30hpf_ctrl_atf6_D12: 1 images
+   ... and 87 more videos
+
+🔍 Entity cross-reference:
+   GroundedDINO videos: 92
+   SAM2 processed videos: 92
+   Missing videos: 92
+🎯 Processing 92 videos for SAM2 segmentation
+
+📹 Processing video 1/92: 20250612_30hpf_ctrl_atf6_C10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C10_e01 (normalized): bbox=[417.9,1365.4,1094.2,2485.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C10 processed successfully
+
+📹 Processing video 2/92: 20250612_30hpf_ctrl_atf6_A02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A02_e01 (normalized): bbox=[612.3,847.7,1130.3,1231.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A02 processed successfully
+
+📹 Processing video 3/92: 20250612_30hpf_ctrl_atf6_H07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H07_e01 (normalized): bbox=[462.7,1399.4,1086.5,1791.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H07 processed successfully
+
+📹 Processing video 4/92: 20250612_30hpf_ctrl_atf6_A04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A04_e01 (normalized): bbox=[642.8,1031.3,980.2,2338.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A04 processed successfully
+
+📹 Processing video 5/92: 20250612_30hpf_ctrl_atf6_D05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D05_e01 (normalized): bbox=[562.8,564.4,967.1,1651.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D05 processed successfully
+
+📹 Processing video 6/92: 20250612_30hpf_ctrl_atf6_H08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H08_e01 (normalized): bbox=[600.1,581.7,1014.4,1711.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H08 processed successfully
+
+📹 Processing video 7/92: 20250612_30hpf_ctrl_atf6_H02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H02_e01 (normalized): bbox=[409.5,1701.8,831.8,2836.5]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H02 processed successfully
+
+📹 Processing video 8/92: 20250612_30hpf_ctrl_atf6_D10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D10_e01 (normalized): bbox=[461.3,1831.9,1110.7,3052.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D10 processed successfully
+
+📹 Processing video 9/92: 20250612_30hpf_ctrl_atf6_G01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G01_e01 (normalized): bbox=[328.6,1593.4,915.9,1998.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G01 processed successfully
+
+📹 Processing video 10/92: 20250612_30hpf_ctrl_atf6_D08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D08_e01 (normalized): bbox=[479.0,1693.4,901.3,2276.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D08 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 10, 'embryos': 10, 'snips': 10}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125244.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_121801.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 10 videos
+
+📹 Processing video 11/92: 20250612_30hpf_ctrl_atf6_E05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E05_e01 (normalized): bbox=[424.4,675.3,1085.8,1447.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E05 processed successfully
+
+📹 Processing video 12/92: 20250612_30hpf_ctrl_atf6_E06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E06
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E06_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E06
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E06_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E06_e01 (normalized): bbox=[278.6,815.0,917.9,1712.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E06_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E06_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E06 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E06 processed successfully
+
+📹 Processing video 13/92: 20250612_30hpf_ctrl_atf6_D01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D01_e01 (normalized): bbox=[454.1,804.0,987.9,1239.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D01 processed successfully
+
+📹 Processing video 14/92: 20250612_30hpf_ctrl_atf6_G08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G08_e01 (normalized): bbox=[435.3,1626.4,1205.8,2141.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G08 processed successfully
+
+📹 Processing video 15/92: 20250612_30hpf_ctrl_atf6_G06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G06
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G06_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G06
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G06_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G06_e01 (normalized): bbox=[374.1,1305.6,886.1,2163.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G06_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G06_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G06 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G06 processed successfully
+
+📹 Processing video 16/92: 20250612_30hpf_ctrl_atf6_B12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B12_e01 (normalized): bbox=[521.9,1241.5,1202.7,2021.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B12 processed successfully
+
+📹 Processing video 17/92: 20250612_30hpf_ctrl_atf6_B10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B10_e01 (normalized): bbox=[586.2,824.0,930.2,2093.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B10 processed successfully
+
+📹 Processing video 18/92: 20250612_30hpf_ctrl_atf6_G02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G02_e01 (normalized): bbox=[546.4,1325.4,940.9,2442.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G02 processed successfully
+
+📹 Processing video 19/92: 20250612_30hpf_ctrl_atf6_D12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D12_e01 (normalized): bbox=[556.9,1246.8,1387.6,1636.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D12 processed successfully
+
+📹 Processing video 20/92: 20250612_30hpf_ctrl_atf6_B07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B07_e01 (normalized): bbox=[501.9,1353.2,956.5,1859.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B07 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 20, 'embryos': 20, 'snips': 20}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125246.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125244.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 20 videos
+
+📹 Processing video 21/92: 20250612_30hpf_ctrl_atf6_G10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G10_e01 (normalized): bbox=[607.0,1372.1,967.2,2714.2]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G10 processed successfully
+
+📹 Processing video 22/92: 20250612_30hpf_ctrl_atf6_C02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C02_e01 (normalized): bbox=[285.2,1050.2,871.2,1546.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C02 processed successfully
+
+📹 Processing video 23/92: 20250612_30hpf_ctrl_atf6_E12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E12_e01 (normalized): bbox=[312.2,1449.7,724.5,2299.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E12 processed successfully
+
+📹 Processing video 24/92: 20250612_30hpf_ctrl_atf6_G03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G03_e01 (normalized): bbox=[523.7,828.8,922.6,1995.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G03 processed successfully
+
+📹 Processing video 25/92: 20250612_30hpf_ctrl_atf6_E07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E07_e01 (normalized): bbox=[626.5,1432.3,1083.0,1980.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E07 processed successfully
+
+📹 Processing video 26/92: 20250612_30hpf_ctrl_atf6_H05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H05_e01 (normalized): bbox=[633.2,1668.2,1394.3,2507.2]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H05 processed successfully
+
+📹 Processing video 27/92: 20250612_30hpf_ctrl_atf6_F05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F05_e01 (normalized): bbox=[348.1,1510.3,954.0,2428.5]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F05 processed successfully
+
+📹 Processing video 28/92: 20250612_30hpf_ctrl_atf6_C08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C08_e01 (normalized): bbox=[487.3,2145.7,933.2,2770.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C08 processed successfully
+
+📹 Processing video 29/92: 20250612_30hpf_ctrl_atf6_A08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A08_e01 (normalized): bbox=[628.6,802.8,1021.5,1292.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A08 processed successfully
+
+📹 Processing video 30/92: 20250612_30hpf_ctrl_atf6_H06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H06
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H06_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H06
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H06_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H06_e01 (normalized): bbox=[595.7,703.5,1131.6,1587.5]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H06_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H06_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H06 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H06 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 30, 'embryos': 30, 'snips': 30}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125249.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125246.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 30 videos
+
+📹 Processing video 31/92: 20250612_30hpf_ctrl_atf6_H11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H11_e01 (normalized): bbox=[508.2,1716.8,1069.3,2558.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H11 processed successfully
+
+📹 Processing video 32/92: 20250612_30hpf_ctrl_atf6_A01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A01_e01 (normalized): bbox=[389.4,1468.7,848.2,1965.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A01 processed successfully
+
+📹 Processing video 33/92: 20250612_30hpf_ctrl_atf6_C03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C03_e01 (normalized): bbox=[522.0,1438.8,953.4,2549.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C03 processed successfully
+
+📹 Processing video 34/92: 20250612_30hpf_ctrl_atf6_B11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B11_e01 (normalized): bbox=[402.9,2025.4,1216.8,3057.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B11 processed successfully
+
+📹 Processing video 35/92: 20250612_30hpf_ctrl_atf6_A09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A09_e01 (normalized): bbox=[393.2,1610.2,1030.7,2370.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A09 processed successfully
+
+📹 Processing video 36/92: 20250612_30hpf_ctrl_atf6_D07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D07_e01 (normalized): bbox=[619.4,2199.9,1204.9,2683.2]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D07 processed successfully
+
+📹 Processing video 37/92: 20250612_30hpf_ctrl_atf6_E10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E10_e01 (normalized): bbox=[599.6,1147.5,1130.2,2461.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E10 processed successfully
+
+📹 Processing video 38/92: 20250612_30hpf_ctrl_atf6_C11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C11_e01 (normalized): bbox=[609.4,1334.1,1144.2,2422.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C11 processed successfully
+
+📹 Processing video 39/92: 20250612_30hpf_ctrl_atf6_E02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E02_e01 (normalized): bbox=[514.2,642.2,1138.1,1556.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E02 processed successfully
+
+📹 Processing video 40/92: 20250612_30hpf_ctrl_atf6_F07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F07_e01 (normalized): bbox=[459.9,943.3,975.1,1471.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F07 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 40, 'embryos': 40, 'snips': 40}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125251.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125249.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 40 videos
+
+📹 Processing video 41/92: 20250612_30hpf_ctrl_atf6_F04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F04_e01 (normalized): bbox=[426.0,675.7,1132.9,1821.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F04 processed successfully
+
+📹 Processing video 42/92: 20250612_30hpf_ctrl_atf6_A03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A03_e01 (normalized): bbox=[465.8,578.9,1173.7,1494.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A03 processed successfully
+
+📹 Processing video 43/92: 20250612_30hpf_ctrl_atf6_B04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B04_e01 (normalized): bbox=[605.9,1698.2,1025.2,2986.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B04 processed successfully
+
+📹 Processing video 44/92: 20250612_30hpf_ctrl_atf6_A05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A05_e01 (normalized): bbox=[570.2,903.7,993.0,2100.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A05 processed successfully
+
+📹 Processing video 45/92: 20250612_30hpf_ctrl_atf6_F06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F06
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F06_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F06
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F06_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F06_e01 (normalized): bbox=[484.2,552.6,1058.6,1577.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F06_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F06_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F06 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F06 processed successfully
+
+📹 Processing video 46/92: 20250612_30hpf_ctrl_atf6_C09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C09_e01 (normalized): bbox=[507.1,807.7,860.2,1885.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C09 processed successfully
+
+📹 Processing video 47/92: 20250612_30hpf_ctrl_atf6_F02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F02_e01 (normalized): bbox=[474.3,753.2,856.3,1813.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F02 processed successfully
+
+📹 Processing video 48/92: 20250612_30hpf_ctrl_atf6_E03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E03_e01 (normalized): bbox=[564.1,880.5,939.7,1984.5]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E03 processed successfully
+
+📹 Processing video 49/92: 20250612_30hpf_ctrl_atf6_H12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H12_e01 (normalized): bbox=[730.8,1260.3,1283.5,2110.2]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H12 processed successfully
+
+📹 Processing video 50/92: 20250612_30hpf_ctrl_atf6_B09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B09_e01 (normalized): bbox=[568.1,670.6,932.6,1790.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B09 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 50, 'embryos': 50, 'snips': 50}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125254.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125251.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 50 videos
+
+📹 Processing video 51/92: 20250612_30hpf_ctrl_atf6_A07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A07_e01 (normalized): bbox=[563.5,722.4,1146.6,1285.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A07 processed successfully
+
+📹 Processing video 52/92: 20250612_30hpf_ctrl_atf6_D09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D09_e01 (normalized): bbox=[344.4,1171.7,892.1,2108.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D09 processed successfully
+
+📹 Processing video 53/92: 20250612_30hpf_ctrl_atf6_H10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H10_e01 (normalized): bbox=[401.2,556.1,875.8,1908.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H10 processed successfully
+
+📹 Processing video 54/92: 20250612_30hpf_ctrl_atf6_F09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F09_e01 (normalized): bbox=[545.3,629.2,942.1,1744.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F09 processed successfully
+
+📹 Processing video 55/92: 20250612_30hpf_ctrl_atf6_G09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G09_e01 (normalized): bbox=[555.4,1036.1,970.5,1783.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G09 processed successfully
+
+📹 Processing video 56/92: 20250612_30hpf_ctrl_atf6_G07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G07
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G07_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G07
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G07_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G07_e01 (normalized): bbox=[655.9,1103.7,1165.6,1545.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G07_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G07_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G07 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G07 processed successfully
+
+📹 Processing video 57/92: 20250612_30hpf_ctrl_atf6_E08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E08_e01 (normalized): bbox=[451.3,1307.8,844.5,2451.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E08 processed successfully
+
+📹 Processing video 58/92: 20250612_30hpf_ctrl_atf6_H04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H04_e01 (normalized): bbox=[634.8,869.9,1022.5,2065.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H04 processed successfully
+
+📹 Processing video 59/92: 20250612_30hpf_ctrl_atf6_G11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G11_e01 (normalized): bbox=[666.0,969.3,1183.0,1885.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G11 processed successfully
+
+📹 Processing video 60/92: 20250612_30hpf_ctrl_atf6_D11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D11_e01 (normalized): bbox=[719.8,649.8,1074.4,1965.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D11 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 60, 'embryos': 60, 'snips': 60}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125257.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125254.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 60 videos
+
+📹 Processing video 61/92: 20250612_30hpf_ctrl_atf6_H09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H09
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H09_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H09
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H09_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H09_e01 (normalized): bbox=[552.1,1885.9,1239.0,2891.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H09_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H09_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H09 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H09 processed successfully
+
+📹 Processing video 62/92: 20250612_30hpf_ctrl_atf6_B05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B05_e01 (normalized): bbox=[591.3,936.6,1067.3,2236.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B05 processed successfully
+
+📹 Processing video 63/92: 20250612_30hpf_ctrl_atf6_C04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C04_e01 (normalized): bbox=[672.3,1494.5,1032.8,2849.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C04 processed successfully
+
+📹 Processing video 64/92: 20250612_30hpf_ctrl_atf6_F11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F11_e01 (normalized): bbox=[475.4,780.7,1258.1,1487.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F11 processed successfully
+
+📹 Processing video 65/92: 20250612_30hpf_ctrl_atf6_A06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A06
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A06_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A06
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A06_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A06_e01 (normalized): bbox=[258.9,608.6,1143.9,1375.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A06_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A06_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A06 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A06 processed successfully
+
+📹 Processing video 66/92: 20250612_30hpf_ctrl_atf6_A10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A10_e01 (normalized): bbox=[330.9,2146.5,755.9,2967.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A10 processed successfully
+
+📹 Processing video 67/92: 20250612_30hpf_ctrl_atf6_B02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B02_e01 (normalized): bbox=[493.8,582.2,987.3,1168.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B02 processed successfully
+
+📹 Processing video 68/92: 20250612_30hpf_ctrl_atf6_F08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F08_e01 (normalized): bbox=[262.9,1302.6,963.9,1762.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F08 processed successfully
+
+📹 Processing video 69/92: 20250612_30hpf_ctrl_atf6_F10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F10
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F10_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F10
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F10_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F10_e01 (normalized): bbox=[595.8,882.9,986.8,2151.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F10_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F10_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F10 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F10 processed successfully
+
+📹 Processing video 70/92: 20250612_30hpf_ctrl_atf6_C05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C05_e01 (normalized): bbox=[589.0,1741.9,964.1,3052.5]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C05 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 70, 'embryos': 70, 'snips': 70}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125259.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125257.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 70 videos
+
+📹 Processing video 71/92: 20250612_30hpf_ctrl_atf6_C01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C01_e01 (normalized): bbox=[325.7,1209.1,751.0,1662.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C01 processed successfully
+
+📹 Processing video 72/92: 20250612_30hpf_ctrl_atf6_B03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B03_e01 (normalized): bbox=[541.3,1304.0,988.4,2420.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B03 processed successfully
+
+📹 Processing video 73/92: 20250612_30hpf_ctrl_atf6_F03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F03_e01 (normalized): bbox=[661.2,1175.7,1047.1,2278.2]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F03 processed successfully
+
+📹 Processing video 74/92: 20250612_30hpf_ctrl_atf6_D03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D03_e01 (normalized): bbox=[312.0,1844.1,869.3,2863.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D03 processed successfully
+
+📹 Processing video 75/92: 20250612_30hpf_ctrl_atf6_D02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D02
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D02_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D02
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D02_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D02_e01 (normalized): bbox=[527.1,1255.8,929.7,1780.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D02_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D02_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D02 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D02 processed successfully
+
+📹 Processing video 76/92: 20250612_30hpf_ctrl_atf6_B01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B01_e01 (normalized): bbox=[177.7,1079.9,722.2,1626.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B01 processed successfully
+
+📹 Processing video 77/92: 20250612_30hpf_ctrl_atf6_G04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G04_e01 (normalized): bbox=[752.3,785.0,1101.1,2114.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G04 processed successfully
+
+📹 Processing video 78/92: 20250612_30hpf_ctrl_atf6_C12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_C12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_C12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_C12_e01 (normalized): bbox=[441.6,1279.4,807.4,1980.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_C12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_C12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_C12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_C12 processed successfully
+
+📹 Processing video 79/92: 20250612_30hpf_ctrl_atf6_E04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E04_e01 (normalized): bbox=[593.9,737.2,965.7,2019.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E04 processed successfully
+
+📹 Processing video 80/92: 20250612_30hpf_ctrl_atf6_B08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B08
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_B08_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B08
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_B08_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_B08_e01 (normalized): bbox=[592.3,935.5,1051.2,1454.6]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_B08_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_B08_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_B08 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_B08 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 80, 'embryos': 80, 'snips': 80}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125302.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125259.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 80 videos
+
+📹 Processing video 81/92: 20250612_30hpf_ctrl_atf6_H01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H01_e01 (normalized): bbox=[484.6,975.9,955.2,1446.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H01 processed successfully
+
+📹 Processing video 82/92: 20250612_30hpf_ctrl_atf6_D06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D06
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D06_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D06
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D06_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D06_e01 (normalized): bbox=[315.8,1326.9,891.8,2200.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D06_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D06_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D06 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D06 processed successfully
+
+📹 Processing video 83/92: 20250612_30hpf_ctrl_atf6_E01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E01_e01 (normalized): bbox=[392.1,1920.1,933.6,2413.4]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E01 processed successfully
+
+📹 Processing video 84/92: 20250612_30hpf_ctrl_atf6_A12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A12_e01 (normalized): bbox=[332.6,1507.2,971.1,2232.5]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A12 processed successfully
+
+📹 Processing video 85/92: 20250612_30hpf_ctrl_atf6_D04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D04
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_D04_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D04
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_D04_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_D04_e01 (normalized): bbox=[444.1,1446.2,868.0,2771.2]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_D04_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_D04_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_D04 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_D04 processed successfully
+
+📹 Processing video 86/92: 20250612_30hpf_ctrl_atf6_E11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_E11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_E11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_E11_e01 (normalized): bbox=[357.4,1887.3,1161.5,2303.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_E11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_E11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_E11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_E11 processed successfully
+
+📹 Processing video 87/92: 20250612_30hpf_ctrl_atf6_G12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G12_e01 (normalized): bbox=[471.6,1401.9,922.5,2215.7]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G12 processed successfully
+
+📹 Processing video 88/92: 20250612_30hpf_ctrl_atf6_F12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F12
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F12_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F12
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F12_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F12_e01 (normalized): bbox=[382.3,1191.6,1282.4,1578.8]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F12_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F12_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F12 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F12 processed successfully
+
+📹 Processing video 89/92: 20250612_30hpf_ctrl_atf6_H03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H03
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_H03_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H03
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_H03_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_H03_e01 (normalized): bbox=[470.6,1048.6,918.4,2146.0]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_H03_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_H03_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_H03 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_H03 processed successfully
+
+📹 Processing video 90/92: 20250612_30hpf_ctrl_atf6_A11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A11
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_A11_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A11
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_A11_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_A11_e01 (normalized): bbox=[661.8,1803.0,1057.9,3055.1]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_A11_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_A11_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_A11 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_A11 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 90, 'embryos': 90, 'snips': 90}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125304.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125302.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+💾 Auto-saved after 90 videos
+
+📹 Processing video 91/92: 20250612_30hpf_ctrl_atf6_F01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F01
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_F01_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F01
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_F01_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_F01_e01 (normalized): bbox=[342.6,1313.9,799.9,1885.9]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_F01_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_F01_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_F01 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_F01 processed successfully
+
+📹 Processing video 92/92: 20250612_30hpf_ctrl_atf6_G05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G05
+🖼️ Total frames: 1
+🌱 Seed frame: 20250612_30hpf_ctrl_atf6_G05_ch00_t0000 (index 0)
+🎯 Seed detections: 1
+🔄 Running SAM2 propagation from frame 0...
+   Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G05
+   Seed frame image_id: 20250612_30hpf_ctrl_atf6_G05_ch00_t0000
+   📁 Creating SAM2-compatible frame directory with 1 frames
+   SAM2 prompt for 20250612_30hpf_ctrl_atf6_G05_e01 (normalized): bbox=[317.2,968.7,929.8,1716.3]
+   Propagating through 1 video frames...
+✅ SAM2 propagation complete for 1 frames
+DEBUG: Processing image 20250612_30hpf_ctrl_atf6_G05_ch00_t0000, keys: ['20250612_30hpf_ctrl_atf6_G05_e01']
+✅ Video 20250612_30hpf_ctrl_atf6_G05 processed: 1 frames
+✅ Video 20250612_30hpf_ctrl_atf6_G05 processed successfully
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 92, 'embryos': 92, 'snips': 92}
+📦 Created backup: grounded_sam_segmentations.backup.20250829_125305.json
+🗑️  Removed old backup: grounded_sam_segmentations.backup.20250829_125304.json
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+
+✅ Processing complete: {'processed': 92, 'errors': 0, 'total': 92}
+
+==================================================
+✅ SAM2 Video Processing Complete!
+⏱️  Processing time: 0:00:29.532114
+📊 Videos processed: 92
+❌ Errors: 0
+💾 Output saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+
+📈 Final Statistics:
+   🧪 Experiments: 1
+   🖼️  Images: 92
+   🎭 Snips: 92
+   📦 Format: rle

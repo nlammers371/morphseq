@@ -1,0 +1,97 @@
+# MorphSeq Embryo Segmentation Pipeline Configuration
+# This file contains all configuration parameters for the pipeline
+
+# Directory paths
+# 
+# Two types of paths are used:
+# 1. morphseq_data_dir-relative: External data paths that reference the base morphseq data directory
+# 2. sandbox-relative: Internal paths for models, outputs, etc. relative to segmentation_sandbox/
+#
+paths:
+  # Base morphseq data directory - all external data paths reference this
+  # Change this to point to your morphseq data location
+  morphseq_data_dir: "/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground"
+
+
+  # Source data directories (relative to morphseq_data_dir)
+  stitched_images_dir: "built_image_data/stitched_FF_images"
+    
+  # Mask directories (relative to morphseq_data_dir)
+  embryo_mask_root: "mask_data/embryo_mask_data"
+  yolk_mask_root: "mask_data/yolk_mask_data"
+  via_mask_root: "mask_data/via_annotation_data"
+  
+  # Generated video directory (will be created by pipeline, relative to sandbox)
+  morphseq_well_videos: "data/intermediate/morphseq_well_videos"
+  
+  # Model directories (relative to sandbox)
+  models_dir: "models"
+  groundingdino_path: "models/GroundingDINO"
+  # Path to the sam2 models directory. Can be absolute or sandbox-relative.
+  # If this path points directly to the 'sam2' package directory, it will be used as SAM2_ROOT.
+  # Example sandbox-relative: "models/sam2/sam2" or "models/sam2"
+  sam2_models_root: "models/sam2/sam2"
+
+  # Output directories (relative to sandbox)
+  intermediate_dir: "data/intermediate"
+  final_dir: "data/final"
+  logs_dir: "logs"
+  
+  # Intermediate processing directories (relative to sandbox)
+  intermediate:
+    jpeg_frames: "data/intermediate/jpeg_frames"
+
+# Model configuration
+models:
+  groundingdino:
+    config: "models/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
+    # weights: "models/GroundingDINO/weights/groundingdino_swint_ogc.pth"  # Original weights
+    weights: "/net/trapnell/vol1/home/mdcolon/proj/image_segmentation/Open-GroundingDino/finetune_output/finetune_output_run_nick_masks_20250308/checkpoint_best_regular.pth"
+    
+  sam2:
+    config: "configs/sam2.1/sam2.1_hiera_l.yaml"
+    checkpoint: "../checkpoints/sam2.1_hiera_large.pt"
+
+
+
+# Detection parameters
+detection:
+  # GroundedDINO parameters
+  text_prompt: "individual embryo"
+  box_threshold: 0.35
+  text_threshold: 0.2
+  
+  # Overlap thresholds
+  bbox_mask_overlap_threshold: 0.10  # 10% of box must overlap with embryo mask
+  sam2_embryo_mask_overlap_threshold: 0.30  # 30% of SAM2 mask must overlap with embryo mask
+  sam2_necrosis_mask_overlap_threshold: 0.25
+  iou_threshold: 0.1  # For non-max suppression
+  
+
+# Quality control parameters
+qc:
+  # Variance thresholds for flagging
+  high_variance_threshold: 0.3  # Coefficient of variation for embryo counts
+  
+  # Tracking gap detection
+  max_tracking_gap: 3  # Maximum frames an embryo can be missing before flagging
+  
+  # Segmentation variability
+  mask_overlap_variance_threshold: 0.2  # Threshold for mask consistency
+
+# Processing parameters
+processing:
+  # Parallelization
+  max_workers: 4
+  use_gpu: true
+  
+  # Video processing
+  skip_existing: false  # Skip videos that already have annotations
+  overwrite_intermediate: false  # Whether to overwrite existing intermediate files
+  
+  # Image processing
+  convert_to_jpeg: true
+  jpeg_quality: 95
+
+# COCO dataset structure
+

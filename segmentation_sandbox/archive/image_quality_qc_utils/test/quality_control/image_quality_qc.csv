@@ -1,0 +1,6 @@
+experiment_id,video_id,image_id,qc_flag,notes,annotator
+20241215,20241215_A01,20241215_A01_t002,BLUR,Image appears blurry under inspection,mcolon
+20241216,20241216_A01,20241216_A01_t001,ARTIFACT,Debris visible in well,nlammers
+20241216,20241216_A01,20241216_A01_t002,OUT_OF_FOCUS,Entire sequence appears out of focus,mcolon
+20241215,20241215_A01,20241215_A01_t001,PASS,Quality metrics within normal range,automatic
+20241215,20241215_A01,20241215_A01_t003,PASS,Quality metrics within normal range,automatic

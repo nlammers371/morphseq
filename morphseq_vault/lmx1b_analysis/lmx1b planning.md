@@ -1,4 +1,4 @@
-Now that we have done our due diligence and identified well-performing morphVAE architectures, it's high time to use the tools we've been building to do some biology. Revisiting lmx1b crispant analysis provides a nice test case that will allow us to develop conceptual and computational approaches for bridging the gap between sequence and morphology space while also (potentially) answering some interesting biological and technical questions.
+Now that we have done our due diligence and identified well-performing metricVAE architectures, it's high time to use the tools we've been building to do some biology. Revisiting lmx1b crispant analysis provides a nice test case that will allow us to develop conceptual and computational approaches for bridging the gap between sequence and morphology space while also (potentially) answering some interesting biological and technical questions.
 
 ## Key questions 
 
@@ -9,7 +9,7 @@ Now that we have done our due diligence and identified well-performing morphVAE 
 4. Make sure the lmx1b images look ok after the most recent pipeline revision
 
 ##### Does the morphological "severity" of crispant embryos correlate with the severity of the corresponding transcriptional phenotype?
-- Initial thought would be to use distance in PCA space (both morphVAE and sequence space) from WT and/or injection controls.
+- Initial thought would be to use distance in PCA space (both metricVAE and sequence space) from WT and/or injection controls.
 - Use cell type abundances as our transcriptional readout for now.
 - If there *is* a relationship, can we dig into which cell type-level differences are implicated?
 

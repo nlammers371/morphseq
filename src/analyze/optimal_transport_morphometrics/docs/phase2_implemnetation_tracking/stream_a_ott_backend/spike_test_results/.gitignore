@@ -1,0 +1,7 @@
+# Generated visualization artifacts
+*.png
+*.jpg
+*.jpeg
+
+# Generated transport comparison outputs
+pot_vs_ott_comparison/

@@ -47,28 +47,28 @@ functions/.ipynb_checkpoints/
 src/functions/.ipynb_checkpoints/
 jupyter/.ipynb_checkpoints/
 src/functions/__pychache__/
-visualization/__pychache__/
+_Archive/visualization/__pychache__/
 .idea/
 src/__pycache__/
 src/functions/__pycache__/
-src/vae/models/__pycache__/
-src/vae/models/base/__pycache__/
-src/vae/models/metric_vae/__pycache__/
-src/vae/models/seq_vae/__pycache__/
-src/vae/models/nn/__pycache__/
-src/vae/__pycache__/
-src/vae/models/vae/__pycache__/
-src/vae/pipelines/__pycache__/
-src/vae/trainers/__pycache__/
-src/vae/auxiliary_scripts/__pycache__/
-src/vae/trainers/base_trainer/__pycache__/
+src/_Archive/vae/models/__pycache__/
+src/_Archive/vae/models/base/__pycache__/
+src/_Archive/vae/models/_Archive/metric_vae/__pycache__/
+src/_Archive/vae/models/seq_vae/__pycache__/
+src/_Archive/vae/models/nn/__pycache__/
+src/_Archive/vae/__pycache__/
+src/_Archive/vae/models/vae/__pycache__/
+src/_Archive/vae/pipelines/__pycache__/
+src/_Archive/vae/trainers/__pycache__/
+src/_Archive/vae/auxiliary_scripts/__pycache__/
+src/_Archive/vae/trainers/base_trainer/__pycache__/
 
-visualization/__pycache__/*
+_Archive/visualization/__pycache__/*
 
 
-src/seq/.RData
-src/seq/.RHistory
-src/seq/.RDataTemp
+dev/seq/.RData
+dev/seq/.RHistory
+dev/seq/.RDataTemp
 
 train/20231204/beta_temp_sweep.py
 .Rproj.user
@@ -81,3 +81,37 @@ src/build/__pychache__/
 
 # Ignore __pycache__ directories (recursively)
 **/__pycache__/
+src/core/data/
+.aider*
+
+# Ignore large test data files (but keep structure and documentation)
+test_data/**/*.tif
+test_data/**/*.tiff
+test_data/**/*.nd2
+test_data/**/*.jpg
+test_data/**/*.jpeg
+test_data/**/*.png
+# *.csv
+*.mp4
+# *.jpg
+# *.png
+*.html
+*.pyc
+
+
+morphseq_playground/
+
+# Ignore log directories
+logs/
+log/
+_Archive/
+
+# Ignore Zarr datasets and large output files
+**/*.zarr/
+*.zarr
+*.parquet
+**/output/phase0_*/
+**/scripts/output/
+
+# mdcolon results-specific rules moved to results/mcolon/.gitignore
+# (see results/mcolon/.gitignore for details)

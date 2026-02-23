@@ -1,0 +1,9 @@
+Outlier Detection Method: IQR 4.0×
+Threshold: 504.954
+Outliers removed: 3
+Inliers retained: 91
+
+Outlier embryos:
+  20251121_A05_e01: median_distance = 1069.792
+  20251121_A07_e01: median_distance = 852.726
+  20251121_F09_e01: median_distance = 519.412

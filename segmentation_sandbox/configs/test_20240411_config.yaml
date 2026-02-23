@@ -1,0 +1,97 @@
+# Test configuration for processing only 20240411 directory
+# This is a temporary config for testing purposes
+
+# Directory paths
+paths:
+  # Base morphseq data directory 
+  morphseq_data_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
+  
+  # Source data directories (relative to morphseq_data_dir) 
+  stitched_images_dir: "built_image_data/stitched_FF_images"
+    
+  # Mask directories (relative to morphseq_data_dir)
+  embryo_mask_root: "mask_data/embryo_mask_data"
+  yolk_mask_root: "mask_data/yolk_mask_data"
+  via_mask_root: "mask_data/via_annotation_data"
+  
+  # Generated video directory (will be created by pipeline, relative to sandbox)
+  morphseq_well_videos: "data/intermediate/morphseq_well_videos"
+  
+  # Model directories (relative to sandbox)
+  models_dir: "models"
+  groundingdino_path: "models/GroundingDINO"
+  sam2_path: "models/sam2/sam2"
+
+  # Output directories (relative to sandbox)
+  intermediate_dir: "data/intermediate"
+  final_dir: "data/final"
+  logs_dir: "logs"
+  
+  # Intermediate processing directories (relative to sandbox)
+  intermediate:
+    jpeg_frames: "data/intermediate/jpeg_frames"
+
+# Model configuration
+models:
+  groundingdino:
+    config: "models/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
+    weights: "models/GroundingDINO/groundingdino_swint_ogc.pth"
+    
+  sam2:
+    config: "models/sam2/sam2_configs/sam2_hiera_l.yaml"
+    checkpoint: "models/sam2/checkpoints/sam2_hiera_large.pt"
+
+# Detection parameters
+detection:
+  # GroundedDINO parameters
+  text_prompt: "individual embryo."
+  box_threshold: 0.46
+  text_threshold: 0.2
+  
+  # Overlap thresholds
+  bbox_mask_overlap_threshold: 0.10
+  sam2_embryo_mask_overlap_threshold: 0.30
+  sam2_necrosis_mask_overlap_threshold: 0.25
+  iou_threshold: 0.1
+  
+  # Death detection parameters
+  num_consecutive_undetected: 4
+  
+  # First frame seeding parameters
+  max_seed_frame: 10
+
+# QC parameters
+qc:
+  # Video quality thresholds
+  min_sequence_length: 2  # Minimum frames for video creation
+  max_frame_loss_percent: 20  # Maximum acceptable frame loss
+  
+  # Detection quality thresholds
+  min_confidence: 0.3
+  max_detection_variance: 0.5
+
+# Processing parameters
+processing:
+  # Video creation
+  fps: 2
+  codec: "mp4v"
+  jpeg_quality: 95
+  convert_to_jpeg: true
+  overwrite_intermediate: true  # For testing - overwrite existing outputs
+  
+  # Parallel processing
+  num_workers: 1  # Use single worker for testing to avoid issues
+
+# Logging configuration
+logging:
+  level: "DEBUG"  # More verbose for testing
+  log_to_file: true
+  log_to_console: true
+
+# COCO annotation parameters
+coco:
+  categories:
+    - id: 1
+      name: "embryo"
+    - id: 2  
+      name: "dead embryo"

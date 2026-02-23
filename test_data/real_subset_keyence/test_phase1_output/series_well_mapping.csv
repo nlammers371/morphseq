@@ -1,0 +1,2 @@
+experiment_id,series_number,well_id,well_index,provenance
+test_keyence_001,0,test_keyence_001_A12,A12,test_data_mapping

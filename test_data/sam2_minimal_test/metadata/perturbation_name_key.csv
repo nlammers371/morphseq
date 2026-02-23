@@ -1,0 +1,4 @@
+master_perturbation,short_pert_name,phenotype,control_flag,pert_type,background
+atf6,atf6,unknown,False,CRISPR,wik
+inj-ctrl,inj-ctrl,wt,True,control,wik
+EM,EM,wt,True,medium,wik

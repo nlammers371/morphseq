@@ -1,0 +1,1 @@
+scp -vrpC mdcolon@nexus.gs.washington.edu:/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground/sam2_pipeline_files/raw_data_organized/20250912/vids /Users/marazzanocolon/Downloads/vids_20250912

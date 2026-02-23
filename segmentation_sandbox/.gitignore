@@ -1,0 +1,10 @@
+# raw_data_organized/*
+# !raw_data_organized/.gitkeep
+
+data/raw_data_organized/*
+!data/raw_data_organized/.gitkeep
+
+data/*
+
+
+/models/*

@@ -1,6 +1,4 @@
-import os
-
-from src.ml_preprocessing.train_embryo_morph_segmenter import train_unet_classifier
+from src.legacy.segmentation.ml_preprocessing.train_embryo_morph_segmenter import train_unet_classifier
 
 def main():
 

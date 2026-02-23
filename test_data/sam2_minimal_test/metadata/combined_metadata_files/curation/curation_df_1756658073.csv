@@ -1,0 +1,3 @@
+snip_id,short_pert_name,master_perturbation,temperature,medium,bubble_flag,focus_flag,frame_flag,dead_flag2,no_yolk_flag,use_embryo_flag,predicted_stage_hpf,confinement_flag,segmentation_flag,hq_flag,manual_stage_hpf,use_embryo_manual,dv_orientation,head_orientation,manual_update_flag
+20250612_30hpf_ctrl_atf6_C12_e01_t0000,atf6,atf6,35.0,EM,False,False,False,False,False,True,30.240358443366155,,,,,,,,0
+20250612_30hpf_ctrl_atf6_E06_e01_t0000,inj-ctrl,inj-ctrl,35.0,EM,False,False,False,False,False,True,30.363717788187664,,,,,,,,0

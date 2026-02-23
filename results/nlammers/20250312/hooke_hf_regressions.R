@@ -65,6 +65,7 @@ print("Setting up Hooke regression(s)...")
 # time_formula = build_interval_formula(ccs, num_breaks = num_spline_breaks, interval_start = start_time, interval_stop = stop_time)
 
 temperature_list = sort(unique(colData(hot_cds)$temp))
+temperature_list = sort(unique(colData(hot_cds)$temp))
 # mdl_name_list <- c("bead_expt_linear", "bead_expt_inter")
 # formula_list <- c(paste0(time_formula, " + expt"),
 #                   paste0(time_formula, " * expt"))

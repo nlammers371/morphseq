@@ -1,0 +1,35 @@
+MISSING SNIPS DIAGNOSTIC SUMMARY
+================================================================================
+
+Total problem embryos investigated: 24
+  - With 100% NaN: 22
+  - With partial NaN: 2
+
+FAILURE MODE BREAKDOWN:
+--------------------------------------------------------------------------------
+  FF_IMAGE_MISSING: 24
+
+SAM2 METADATA CHECK:
+--------------------------------------------------------------------------------
+  Embryos in SAM2 CSV: 24
+  Embryos with mask path: 24
+  Embryos with image ID: 24
+  Embryos with time info: 24
+  Embryos with duplicates: 0
+
+FILE EXISTENCE CHECK:
+--------------------------------------------------------------------------------
+  Mask files checked: 8160
+  Mask files missing: 0
+  FF images checked: 8160
+  FF images missing: 24
+  Snips expected: 8160
+  Snips found: 161
+  Snips missing: 7999
+
+NEXT STEPS:
+--------------------------------------------------------------------------------
+
+1. FF_IMAGE_MISSING (24 embryos):
+   → Run Build01 to generate stitched full-frame images
+   → Check that experiment 20250305 raw data exists

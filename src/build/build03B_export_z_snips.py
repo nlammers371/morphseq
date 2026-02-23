@@ -1,4 +1,9 @@
 import os
+# Dependency simplification notes (comments only; no behavior change):
+# - nd2: consider optional import and guiding users to preconvert ND2 → TIFF; then load with imageio/cv2.
+# - skimage: IO/resize/exposure can be swapped for imageio/cv2 operations to reduce dependency count.
+# - torch: LoG focus stacker can run on CPU; add clear documentation and possibly a pure NumPy/OpenCV fallback.
+# - tqdm/process_map: fallback to `concurrent.futures` when tqdm isn't installed; progress bar optional.
 import glob
 from tqdm import tqdm
 from skimage.measure import label, regionprops, find_contours
@@ -8,7 +13,7 @@ import pandas as pd
 from src.functions.utilities import path_leaf
 from src.functions.image_utils import crop_embryo_image, get_embryo_angle, process_masks, rotate_image
 from src.functions.image_utils import LoG_focus_stacker
-from src.build.build03A_process_embryos_main_par import estimate_image_background
+from src.build.build03A_process_images import estimate_image_background
 from functools import partial
 import scipy
 import warnings
@@ -33,8 +38,8 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
     ############################
     # set generic path variables
 
-    # set path to segmentation data
-    segmentation_path = os.path.join(root, 'built_image_data', 'segmentation', '')
+    # set path to segmentation_sandbox mask export data
+    segmentation_path = os.path.join(root, 'segmentation_sandbox', 'data', 'exported_masks', '')
 
     # initialize folder to save temporary metadata files
     metadata_temp_dir = os.path.join(root, 'metadata', f'metadata_files_temp_z{n_z_max:02}', '')
@@ -44,9 +49,6 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
     # generate path and image name
     seg_dir_list_raw = glob.glob(segmentation_path + "*")
     seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
-
-    emb_path = [m for m in seg_dir_list if "mask" in m][0]
-    yolk_path = [m for m in seg_dir_list if "yolk" in m][0]
 
     ##########################
     # get metadata
@@ -83,15 +85,31 @@ def export_embryo_snips_z(r, root, embryo_metadata_df, experiment_log, dl_rad_um
     ############
     im_stub = well + f"_t{time_int:04}*"
 
-    # load main embryo mask
-    im_emb_path = glob.glob(os.path.join(emb_path, date, im_stub))[0]
-    im_mask = io.imread(im_emb_path)
+    # load integer-labeled embryo mask from segmentation_sandbox
+    mask_candidates = sorted(glob.glob(os.path.join(segmentation_path, date, 'masks', im_stub)))
+    if len(mask_candidates) == 0:
+        print(f"No SAM2 mask found for {date} {im_stub}")
+        return
+    im_emb_path = mask_candidates[0]
+    im_mask_int = io.imread(im_emb_path)
+    # Load yolk from legacy segmentation (keep non-embryo masks unchanged)
+    legacy_seg = os.path.join(root, 'built_image_data', 'segmentation', '')
+    seg_dir_list_raw = glob.glob(legacy_seg + "*")
+    seg_dir_list = [s for s in seg_dir_list_raw if os.path.isdir(s)]
+    yolk_dirs_legacy = [m for m in seg_dir_list if "yolk" in m]
+    if not yolk_dirs_legacy:
+        raise FileNotFoundError(f"Legacy yolk segmentation directory not found under {legacy_seg}")
+    yolk_candidates = sorted(glob.glob(os.path.join(yolk_dirs_legacy[0], date, im_stub)))
+    if not yolk_candidates:
+        raise FileNotFoundError(f"Legacy yolk mask not found for pattern: {os.path.join(yolk_dirs_legacy[0], date, im_stub)}")
+    im_yolk = io.imread(yolk_candidates[0])
 
-    # load yolk mask
-    im_yolk_path = glob.glob(os.path.join(yolk_path, date, im_stub))[0]
-    im_yolk = io.imread(im_yolk_path)
-
-    im_mask_ft, im_yolk = process_masks(im_mask, im_yolk, row)
+    # Convert integer-labeled mask to single-embryo binary via region_label, then set region_label=1
+    lbi = int(row["region_label"])  # expects region_label present from SAM2 metadata
+    im_mask = ((im_mask_int == lbi) * 255).astype(np.uint8)
+    row_for_mask = row.copy()
+    row_for_mask["region_label"] = 1
+    im_mask_ft, im_yolk = process_masks(im_mask, im_yolk, row_for_mask)
 
     ############
     # Load Image Stack
@@ -359,9 +377,9 @@ def extract_embryo_z_snips(root, outscale=5.66, overwrite_flag=False, par_flag=F
 
 
 if __name__ == "__main__":
+    # Use repository root (two levels up from this file's directory)
+    from pathlib import Path
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+    root = str(REPO_ROOT)
 
-    # root = "/Users/nick/Dropbox (Cole Trapnell's Lab)/Nick/morphseq/"
-    root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq"
-    
-    # print('Compiling well metadata...')
     extract_embryo_z_snips(root, par_flag=False, overwrite_flag=False, dl_rad_um=10)

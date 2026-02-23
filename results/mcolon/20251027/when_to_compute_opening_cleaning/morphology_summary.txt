@@ -1,0 +1,106 @@
+================================================================================
+MORPHOLOGICAL METRICS ANALYSIS SUMMARY
+================================================================================
+
+Dataset: part1 (n=500 samples)
+Problem cases from part2: n=3
+
+================================================================================
+DISTRIBUTION STATISTICS
+================================================================================
+
+SOLIDITY:
+  Mean:   0.7485
+  Median: 0.7624
+  Std:    0.0742
+  Min:    0.3769
+  Max:    0.8821
+  5th percentile:  0.6215
+  95th percentile: 0.8471
+  Problem cases: [0.46511664 0.59856354 0.3836327 ]
+
+CIRCULARITY:
+  Mean:   3.5472
+  Median: 3.2129
+  Std:    0.8248
+  Min:    1.9084
+  Max:    8.1068
+  5th percentile:  2.9255
+  95th percentile: 5.4112
+  Problem cases: [10.14274305  4.87039806  9.35300133]
+
+EXTENT:
+  Mean:   0.3739
+  Median: 0.3536
+  Std:    0.1189
+  Min:    0.1389
+  Max:    0.6842
+  5th percentile:  0.2129
+  95th percentile: 0.5809
+  Problem cases: [0.26341545 0.28212993 0.27342699]
+
+ECCENTRICITY:
+  Mean:   0.9792
+  Median: 0.9843
+  Std:    0.0164
+  Min:    0.8197
+  Max:    0.9945
+  5th percentile:  0.9521
+  95th percentile: 0.9929
+  Problem cases: [0.98702042 0.96884204 0.97914286]
+
+PERIMETER AREA RATIO:
+  Mean:   6.6383
+  Median: 6.3541
+  Std:    0.7131
+  Min:    4.8971
+  Max:    10.0932
+  5th percentile:  6.0633
+  95th percentile: 8.2462
+  Problem cases: [11.2897063   7.82324914 10.84127672]
+
+================================================================================
+THRESHOLD RECOMMENDATIONS FOR OPENING DETECTION
+================================================================================
+
+1. SOLIDITY < 0.621 (5th percentile)
+   → Catches bottom 5% of normal distribution
+   → Catches 3/3 problem cases
+
+2. CIRCULARITY > 5.411 (95th percentile)
+   → Catches top 5% of normal distribution (most irregular)
+   → Catches 2/3 problem cases
+
+3. EXTENT < 0.213 (5th percentile)
+   → Catches bottom 5% (least bbox-filling)
+   → Catches 0/3 problem cases
+
+4. COMBINED RULE: solidity < 0.621 OR circularity > 5.411
+   → Catches 3/3 problem cases
+
+================================================================================
+PROBLEM CASE DETAILS
+================================================================================
+
+20251017_part2_B05_e01_t0037:
+  Solidity:     0.4651
+  Circularity:  10.1427
+  Extent:       0.2634
+  Eccentricity: 0.9870
+  Perim/Area:   11.2897
+
+20251017_part2_G07_e01_t0013:
+  Solidity:     0.5986
+  Circularity:  4.8704
+  Extent:       0.2821
+  Eccentricity: 0.9688
+  Perim/Area:   7.8232
+
+20251017_part2_B05_e01_t0005:
+  Solidity:     0.3836
+  Circularity:  9.3530
+  Extent:       0.2734
+  Eccentricity: 0.9791
+  Perim/Area:   10.8413
+
+================================================================================

@@ -33,7 +33,7 @@ ct_broad_filt <- as.data.frame(ct_broad) %>%
 
 ################
 # make output dir
-model_dir <- "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/sci-PLEX/hooke_model_files/"
+model_dir <- "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/sci-PLEX/hooke_model_files_v2/"
 dir.create(model_dir, showWarnings = FALSE, recursive = TRUE) 
 cds_list <- list()
 
@@ -125,9 +125,9 @@ num_spline_breaks <- 5
 spline_names <- lapply(seq_len(num_spline_breaks-1), function(x) paste0("t_spline_", x))
 time_formula = build_interval_formula(ccs, num_breaks = num_spline_breaks, interval_start = start_time, interval_stop = stop_time)
 
-mdl_name_list <- c("bead_expt_linear", "bead_expt_inter")
-formula_list <- c(paste0(time_formula, " + expt"),
-                  paste0(time_formula, " * expt"))
+mdl_name_list <- c("bead_expt_linear_20250606")#, "bead_expt_inter")
+formula_list <- c(paste0(time_formula, " + expt"))#,
+                  # paste0(time_formula, " * expt"))
 
 # initialize the progress bar (style = 3 shows a percentage bar)
 # pb <- txtProgressBar(min = 0, max = length(formula_list), style = 3)

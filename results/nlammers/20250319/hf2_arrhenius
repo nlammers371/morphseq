@@ -1,0 +1,260 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "0",
+   "metadata": {},
+   "source": [
+    "#### Use CCA to look for axes of correspondence between morph and seq modalities"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "1",
+   "metadata": {
+    "pycharm": {
+     "is_executing": true
+    }
+   },
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import plotly.express as px\n",
+    "import plotly.graph_objects as go\n",
+    "import os\n",
+    "from glob2 import glob"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2",
+   "metadata": {},
+   "source": [
+    "### Set paths"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "root = \"/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/\"\n",
+    "\n",
+    "# path to save data\n",
+    "out_path = os.path.join(root, \"results\", \"20250312\", \"morph_latent_space\", \"\")\n",
+    "os.makedirs(out_path, exist_ok=True)\n",
+    "\n",
+    "# path to figures and data\n",
+    "fig_path = \"/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/slides/morphseq/20250312/morphseq_cca/\"\n",
+    "os.makedirs(fig_path, exist_ok=True)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "4",
+   "metadata": {},
+   "source": [
+    "### Load data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "5",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# morph latent encodings\n",
+    "morph_df = pd.read_csv(out_path + \"hf_pca_morph_df.csv\")\n",
+    "\n",
+    "# hooke latent encodings\n",
+    "seq_df = pd.read_csv(out_path + \"hf_seq_df.csv\", index_col=0)\n",
+    "\n",
+    "# metadata df that allows us to link the two\n",
+    "morphseq_df = pd.read_csv(os.path.join(root, \"metadata\", \"morphseq_metadata.csv\"))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "6",
+   "metadata": {},
+   "source": [
+    "### Subset for hotfish2 "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "7",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(141, 100)\n",
+      "(141, 10)\n",
+      "(141, 43)\n"
+     ]
+    }
+   ],
+   "source": [
+    "import re\n",
+    "hf_experiments = np.asarray([\"20240813_24hpf\", \"20240813_30hpf\", \"20240813_36hpf\"])\n",
+    "hf_morphseq_df = morphseq_df.loc[np.isin(morphseq_df[\"experiment_date\"], hf_experiments), :].reset_index(drop=True)\n",
+    "\n",
+    "# subset morph \n",
+    "# mu_cols = [col for col in morph_df.columns.tolist() if \"z_mu_b\" in col]\n",
+    "pattern = r\"PCA_.*_bio\"\n",
+    "pca_cols_morph = [col for col in morph_df.columns if re.search(pattern, col)]\n",
+    "pca_cols_seq = [col for col in seq_df.columns if \"PCA\" in col]\n",
+    "\n",
+    "hf_morph_df = pd.DataFrame(hf_morphseq_df.loc[:, [\"snip_id\", \"sample\"]]).merge(morph_df, how=\"inner\", on=\"snip_id\")\n",
+    "hf_morph_df = hf_morph_df.set_index(\"snip_id\")\n",
+    "hf_morph_df = hf_morph_df.loc[:, pca_cols_morph + [\"sample\"]]\n",
+    "\n",
+    "\n",
+    "# subset seq dataset\n",
+    "hf_seq_df = pd.DataFrame(hf_morph_df.loc[:, \"sample\"]).merge(seq_df, how=\"inner\", right_index=True, left_on=\"sample\")\n",
+    "hf_seq_df = hf_seq_df.set_index(\"sample\")\n",
+    "print(hf_seq_df.shape)\n",
+    "\n",
+    "# get rid of sample col\n",
+    "hf_morph_df = hf_morph_df.drop(labels=[\"sample\"], axis=1)\n",
+    "print(hf_morph_df.shape)\n",
+    "\n",
+    "# filter out a couple observations that had QC problems\n",
+    "hf_morphseq_df = hf_morphseq_df.loc[np.isin(hf_morphseq_df[\"snip_id\"], hf_morph_df.index), :].reset_index()\n",
+    "hf_morphseq_df = hf_morphseq_df.merge(morph_df.loc[:, [\"snip_id\", \"mdl_stage_hpf\"]])\n",
+    "print(hf_morphseq_df.shape)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "31",
+   "metadata": {},
+   "source": [
+    "### make arrhenius plots"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "32",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn.metrics import mean_squared_error\n",
+    "\n",
+    "# get cohort averages\n",
+    "morph_df_true = hf_morph_df.copy().reset_index()\n",
+    "morph_df_true = morph_df_true.merge(morphseq_df.loc[:, [\"snip_id\", \"timepoint\", \"temperature\"]], how=\"left\", on=\"snip_id\")\n",
+    "morph_df_mean = morph_df_true.drop(labels=[\"snip_id\"], axis=1).groupby([\"temperature\", \"timepoint\"]).agg([\"mean\"])\n",
+    "\n",
+    "# Flatten the MultiIndex columns to a single level:\n",
+    "morph_df_mean.columns = [f\"{col[0]}_{col[1]}\" for col in morph_df_mean.columns]\n",
+    "morph_df_mean = morph_df_mean.reset_index()\n",
+    "\n",
+    "# merge back to original obs\n",
+    "morph_df_null = morph_df_true.loc[:, [\"snip_id\", \"timepoint\", \"temperature\"]].merge(\n",
+    "                morph_df_mean, how=\"left\", on=[\"timepoint\", \"temperature\"])\n",
+    "\n",
+    "# extract just the PCA values to compare\n",
+    "Y_pd = morph_pd_df[mean_cols].values\n",
+    "Y_mean = morph_df_null[mean_cols].values\n",
+    "Y_true = morph_df_true[pca_cols_morph[:n_dim_out]].values\n",
+    "\n",
+    "# calculate mse\n",
+    "pd_error = (Y_true-Y_pd)**2\n",
+    "null_error = (Y_true-Y_mean)**2\n",
+    "\n",
+    "# convert to DFz\n",
+    "pd_df = pd.DataFrame(pd_error, columns=pca_cols_morph[:n_dim_out])\n",
+    "pd_df[\"total_se\"] = np.sqrt(np.sum(pd_df[pca_cols_morph[:n_dim_out]], axis=1))\n",
+    "pd_df[\"timepoint\"] = morph_df_true[\"timepoint\"].to_numpy()\n",
+    "pd_df[\"temperature\"] = morph_df_true[\"temperature\"].to_numpy()\n",
+    "pd_df_mean = pd_df.groupby([\"temperature\", \"timepoint\"]).agg([\"mean\"])\n",
+    "pd_df_mean.columns = [f\"{col[0]}_{col[1]}\" for col in pd_df_mean.columns]\n",
+    "pd_df_mean = pd_df_mean.reset_index()\n",
+    "\n",
+    "null_df = pd.DataFrame(null_error, columns=pca_cols_morph[:n_dim_out])\n",
+    "null_df[\"total_se\"] = np.sqrt(np.sum(null_df[pca_cols_morph[:n_dim_out]], axis=1))\n",
+    "null_df[\"timepoint\"] = morph_df_true[\"timepoint\"].to_numpy()\n",
+    "null_df[\"temperature\"] = morph_df_true[\"temperature\"].to_numpy()\n",
+    "null_df_mean = null_df.groupby([\"temperature\", \"timepoint\"]).agg([\"mean\"])\n",
+    "null_df_mean.columns = [f\"{col[0]}_{col[1]}\" for col in null_df_mean.columns]\n",
+    "null_df_mean = null_df_mean.reset_index()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "33",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "ind = 0\n",
+    "fig = px.scatter(pd_df_mean, x=\"total_se_mean\", y=null_df_mean[\"total_se_mean\"], color=\"temperature\", symbol=\"timepoint\")\n",
+    "                # log_x=True, log_y=True)\n",
+    "fig.update_traces(marker=dict(size=8))\n",
+    "fig.update_layout(width=1000, height=800)\n",
+    "fig.update_xaxes(range=[0, 4])\n",
+    "fig.update_yaxes(range=[0, 4])\n",
+    "fig.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "34",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "pca_cols_morph"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "35",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "mean_cols"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "36",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

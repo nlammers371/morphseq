@@ -1,0 +1,25 @@
+Outlier Detection Method: IQR 4.0×
+Threshold: 142.460
+Outliers removed: 19
+Inliers retained: 268
+
+Outlier embryos:
+  20251104_A10_e01: median_distance = 235.864
+  20251104_B02_e01: median_distance = 235.864
+  20251104_B03_e01: median_distance = 235.864
+  20251104_D06_e01: median_distance = 235.864
+  20251104_H07_e01: median_distance = 166.477
+  20251119_A01_e01: median_distance = 169.200
+  20251119_C04_e01: median_distance = 180.893
+  20251119_E01_e01: median_distance = 178.047
+  20251119_E03_e01: median_distance = 148.422
+  20251121_A05_e01: median_distance = 235.864
+  20251125_A02_e01: median_distance = 173.451
+  20251125_D02_e01: median_distance = 188.442
+  20251125_E02_e01: median_distance = 172.054
+  20251125_F04_e01: median_distance = 201.406
+  20251125_F05_e01: median_distance = 166.841
+  20251125_F08_e01: median_distance = 143.715
+  20251125_G04_e01: median_distance = 159.902
+  20251125_G08_e01: median_distance = 157.310
+  20251125_H12_e01: median_distance = 169.199

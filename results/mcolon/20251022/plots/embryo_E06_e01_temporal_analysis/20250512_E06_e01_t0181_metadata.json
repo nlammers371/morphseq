@@ -1,0 +1,16 @@
+{
+  "embryo_id": "20250512_E06_e01",
+  "snip_id": "20250512_E06_e01_t0181",
+  "timepoint": "t0181",
+  "gaussian_sigma": 10.0,
+  "mask_area_original_pixels": 104323,
+  "mask_area_smoothed_pixels": 104016,
+  "arc_length_total_pixels": 488.1573455831594,
+  "curvature_mean": 0.014044997287856232,
+  "curvature_std": 0.01981383917897933,
+  "curvature_max": 0.13558581192880081,
+  "principal_axis_x": -0.4364006712095977,
+  "principal_axis_y": 0.8997524404900565,
+  "center_x": 566.4771189047839,
+  "center_y": 1064.2315989847716
+}

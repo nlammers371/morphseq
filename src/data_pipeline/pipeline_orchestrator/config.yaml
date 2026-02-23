@@ -1,0 +1,55 @@
+# MorphSeq Pipeline Configuration
+
+# Data paths
+data_root: "data_pipeline_output"
+
+# Experiments to process
+experiments:
+  - 20250912
+
+# Phase 1: Metadata Alignment
+phase1:
+  # Input file patterns
+  plate_metadata_pattern: "{experiment}_plate_layout.csv"
+  raw_images_keyence_pattern: "Keyence/{experiment}"
+  raw_images_yx1_pattern: "YX1/{experiment}"
+
+  # Keyence-specific settings
+  keyence:
+    typical_micrometers_per_pixel: 0.65
+    typical_frame_interval_s: 300
+    typical_image_width: 1280
+    typical_image_height: 960
+
+  # YX1-specific settings
+  yx1:
+    typical_micrometers_per_pixel: 0.195
+    typical_frame_interval_s: 600
+    typical_image_width: 2048
+    typical_image_height: 2048
+
+# Phase 2: Image Building (placeholder)
+phase2:
+  stitch_method: "tile_stitching"
+  z_collapse_method: "max_projection"
+
+# Phase 3: Segmentation (placeholder)
+phase3:
+  model: "SAM2"
+  gdino_threshold: 0.5
+
+# Phase 4: Snip Processing (placeholder)
+phase4:
+  target_pixel_size_um: 0.5
+  target_shape: [256, 256]
+
+# Phase 5: QC (placeholder)
+phase5:
+  edge_margin_pixels: 2
+  death_fraction_threshold: 0.9
+
+# Snakemake settings
+threads: 4
+resources:
+  mem_mb: 8000
+  gpu: 0

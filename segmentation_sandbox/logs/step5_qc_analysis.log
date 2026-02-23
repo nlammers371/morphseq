@@ -1,0 +1,429 @@
+🔍 Starting QC analysis on: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+🔄 Initializing entity tracking...
+✅ Entity tracking initialized in 0.00s
+   New entities: 1 experiments, 92 videos, 0 images, 0 snips
+❌ No snips found in the data structure!
+   Running diagnosis...
+
+🔍 GSAM Data Structure Diagnosis
+==================================================
+Total experiments: 1
+
+📁 Experiment: 20250612_30hpf_ctrl_atf6
+   Videos: 92
+   📹 Video: 20250612_30hpf_ctrl_atf6_G05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H06
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A06
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_C09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B03
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H12
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H02
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F01
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_B10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G06
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D11
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_E06
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F06
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F05
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F10
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D06
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_F08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_A09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_H09
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D08
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_D04
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+   📹 Video: 20250612_30hpf_ctrl_atf6_G07
+      Images: 0
+      ❌ No images found in this video!
+      Available keys in video: ['video_id', 'well_id', 'sam2_success', 'processing_timestamp', 'error_message', 'image_ids']
+
+==================================================
+🔍 Loaded GSAM annotations from /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+📊 Found 0 already processed snips
+
+🔍 Starting QC analysis with author='pipeline_qc'
+📊 Entities to process: 1 experiments, 92 videos, 0 images, 0 snips
+🚀 Running quality checks...
+🔍 Checking segmentation variability...
+   ✓ Segmentation variability check completed in 0.00s
+🔍 Checking masks on image edges...
+   ✓ Edge detection check completed in 0.00s (0 masks flagged)
+🔍 Checking for overlapping masks...
+   ✓ Overlapping masks check completed in 0.00s (0 images flagged)
+🔍 Checking for unusually large masks...
+   ✓ Large mask check completed in 0.00s (0 masks flagged)
+🔍 Checking for unusually small masks...
+   ✓ Small mask check completed in 0.00s (0 masks flagged)
+🔍 Checking for detection failures...
+   ✓ Detection failure check completed in 0.00s (0 images flagged)
+   DEBUG STATS: Checked 0 images, found 0 total embryos
+   Current threshold: 1 embryos minimum per image
+🔍 Checking for discontinuous masks...
+   ✓ Discontinuous mask check completed in 0.00s (0 masks flagged)
+✅ All QC checks completed in 0.00s
+📋 Generating overview section...
+📊 Generated overview - no flags found in the system
+💾 QC results updated in memory (not saved to disk)
+📦 Created backup: grounded_sam_segmentations.backup.20250829_072409.json
+💾 Results saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+
+🏁 QC Summary
+========================================
+Total flags: 0
+
+Flags by category:
+
+Entities with flags:
+  experiments: 0
+  videos: 0
+  images: 0
+  snips: 0
+
+✅ No quality issues detected!
+
+🕒 Last Run: 2025-08-29T07:24:09.615931 by pipeline_qc
+========================================
+✅ QC analysis completed successfully!

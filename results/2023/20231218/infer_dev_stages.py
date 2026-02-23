@@ -1,4 +1,4 @@
-from src.vae.auxiliary_scripts.infer_developmental_age import infer_developmental_age
+from src.legacy.vae import infer_developmental_age
 
 root = "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/"
 train_name = "20231106_ds"

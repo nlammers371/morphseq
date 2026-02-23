@@ -1,0 +1,10 @@
+create a file called grounded_sam_utils to help
+with lots of the functionality. this utils should, such as loading grounded_dino, load experiment metadata, greate annoataions class with the json data storage, i also need a way of performing inference also one that can, additionaly i need a wraper function for it that can also let me see the results of an image from the inference,
+
+Ideally I would be able to load fdrom the saved grounded dino annotations so each image_id willhave annotations, and each annotation will have a prompt, model config, so that way i can save results from multiple prompts the same model to the same image for example.
+
+then create a demo grounded_dino_annotations demo.
+
+inference_with_visualization
+run_inference
+visualize_detections

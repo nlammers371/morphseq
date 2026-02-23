@@ -1,0 +1,35 @@
+
+
+Goal here is to look at the phenotypes found from 'results/mcolon/20251219_b9d2_phenotype_extraction' 
+
+I looked and saw that there were
+- CE 
+    - results/mcolon/20251219_b9d2_phenotype_extraction/phenotype_lists/b9d2-CE-phenotype.txt
+- HTA  
+    - results/mcolon/20251219_b9d2_phenotype_extraction/phenotype_lists/b9d2-curved-rescue.txt
+- BA-rescue
+
+
+HTA and BA-rescue look very simialr earlier on pre 60hpf, and then afterwatds the 
+
+BA-rescue straightens out, i suspect that HTA and BA-rescue are actually the samephenotype
+but the BA-resuce straightens out. 
+
+I will use functionality src/analyze/difference_detection from as spoken in results/mcolon/20251218_difference_detection_permutation_testing_consolidation/PROPOSAL.md,
+doing the analysis similar to results/mcolon/20251210_b9d2_earliest_prediction_analysis/output/figures/prediction_vs_divergence_comprehensive.png
+
+
+so first i need to extract the embryo_id's names from these files and then incoportate these ids into the experiments. 
+
+because HTA only appears after 60 hpf, we will only use expeirments 20251121 and 20251125
+
+then we will do difference detection,
+
+comaring each phenotype to all other embryos that have no phenotype (lets use wildtype embryos)
+
+Then compare them to eachother. 
+
+
+
+
+

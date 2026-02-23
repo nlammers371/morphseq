@@ -1,5 +1,5 @@
 #### Initial goals 
-The goal of this exercise was to explore hyperparameter space to identify morphVAE model architectures that produce latent spaces with the following features:
+The goal of this exercise was to explore hyperparameter space to identify metricVAE model architectures that produce latent spaces with the following features:
 1. **Discriminative:** captures biologically relevant differences in embryo morphology (e.g. different stages or perturbations)
 2. **Stable:** the overall structure of latent space encodings is robust to the addition or removal of classes/time points from the training set.
 3. **Generalizable:** coherently encodes morphologies not included in its training set (related to stability)

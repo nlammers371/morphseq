@@ -1,0 +1,131 @@
+# Side-by-Side Video Comparison Instructions
+
+Follow these steps to generate side-by-side comparison videos between base and finetuned GSAM annotations:
+
+---
+
+## 1. Add helper to `sam2_video_generator.py`
+
+```python
+def create_side_by_side_video(
+    video_id: str,
+    base_dir: Path,
+    ft_dir: Path,
+    output_path: str,
+    frame_ids: List[str],
+    fps: int = 10
+) -> bool:
+    """
+    Reads each frame from `base_dir` and `ft_dir` (same filenames),
+    concatenates them horizontally, and writes to output_path.
+    Returns True if successful.
+    """
+    import cv2
+    from tqdm import tqdm
+
+    # Prepare video writer once
+    writer = None
+
+    for frame_id in tqdm(frame_ids, desc=f"Building SxS {video_id}"):
+        base_frame = base_dir / f"{frame_id}.jpg"
+        ft_frame   = ft_dir   / f"{frame_id}.jpg"
+
+        img1 = cv2.imread(str(base_frame))
+        img2 = cv2.imread(str(ft_frame))
+        if img1 is None or img2 is None:
+            print(f"   ❌ Missing frame: {frame_id}")
+            return False
+
+        # Resize to match dimensions
+        if img1.shape != img2.shape:
+            img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+
+        combined = cv2.hconcat([img1, img2])
+
+        if writer is None:
+            h, w = combined.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+            if not writer.isOpened():
+                print("   ❌ Cannot open video writer")
+                return False
+
+        writer.write(combined)
+
+    writer.release()
+    print(f"   ✅ Side-by-side saved: {output_path}")
+    return True
+```
+
+---
+
+## 2. Export frames from `create_video()`
+
+Modify your demo script (`generate_disagreement_videos.py`) so that `create_video()` saves frames into directories:
+
+```python
+# Inside create_video(), after reading each frame but before writing to video:
+frame_dir = Path(output_path).with_suffix('') / "frames"
+frame_dir.mkdir(parents=True, exist_ok=True)
+cv2.imwrite(str(frame_dir / f"{image_id}.jpg"), img)
+```
+
+Now each video will have a `.../video_id/frames/` folder with individual JPEGs.
+
+---
+
+## 3. Invoke side-by-side helper in your demo script
+
+After generating base and finetuned videos and frames, add:
+
+```python
+from scripts.utils.video_generation.sam2_video_generator import create_side_by_side_video
+
+# Assume `frame_ids` is the sorted list of image_ids
+side_by_side_path = out_dir / f"{vid}_side_by_side.mp4"
+create_side_by_side_video(
+    vid,
+    base_dir=out_dir / vid / "base_frames",
+    ft_dir=out_dir / vid / "ft_frames",
+    output_path=str(side_by_side_path),
+    frame_ids=frame_ids,
+    fps=args.fps
+)
+```
+
+---
+
+## 4. Example command
+
+```bash
+python generate_disagreement_videos.py \
+    grounded_sam_annotations.json \
+    grounded_sam_annotations_finetuned.json \
+    visualization_output/20250716 \
+    --top_k 3 \
+    --fps 8
+```
+
+Then for side-by-side:
+
+```bash
+python - <<'PYCODE'
+from pathlib import Path
+from scripts.utils.video_generation.sam2_video_generator import create_side_by_side_video
+
+vid = "20240306_A04"
+base_frames = Path("visualization_output/20250716") / vid / "base_frames"
+ft_frames   = Path("visualization_output/20250716") / vid / "ft_frames"
+frame_ids = sorted([p.stem for p in base_frames.glob("*.jpg")])
+create_side_by_side_video(
+    vid,
+    base_dir=base_frames,
+    ft_dir=ft_frames,
+    output_path=str(Path("visualization_output/20250716")/f"{vid}_side_by_side.mp4"),
+    frame_ids=frame_ids,
+    fps=8
+)
+PYCODE
+```
+
+---

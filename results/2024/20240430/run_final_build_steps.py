@@ -1,5 +1,5 @@
 from src.build.build04_perform_embryo_qc import perform_embryo_qc
-from src.build.build03A_process_embryos_main_par import segment_wells, compile_embryo_stats, extract_embryo_snips
+from src.build.build03A_process_images import segment_wells, compile_embryo_stats, extract_embryo_snips
 
 def main():
     root = "/media/nick/hdd02/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/"

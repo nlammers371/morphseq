@@ -1,0 +1,175 @@
+=== Environment Setup ===
+REPO_ROOT: /net/trapnell/vol1/home/mdcolon/proj/morphseq
+DATA_ROOT: /net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground
+CUDA_VISIBLE_DEVICES: not set
+
+=== Checking Conda Environment ===
+Already in segmentation_grounded_sam environment
+Current conda environment: segmentation_grounded_sam
+
+PYTHONPATH: /net/trapnell/vol1/home/mdcolon/proj/morphseq:
+
+=== GPU Availability Check ===
+index, name, memory.total [MiB], memory.free [MiB]
+0, NVIDIA A100-PCIE-40GB, 40960 MiB, 40445 MiB
+
+=== Starting Build01B for Experiment 20251020 ===
+Running with MSEQ_YX1_DEBUG=1 for diagnostic output
+Start time: Mon Nov 10 18:43:41 PST 2025
+
+Experiment : 20251020
+Microscope : YX1
+Overwrite  : 1
+
+18:44:46 [INFO] ============================================================
+18:44:46 [INFO] GPU DIAGNOSTICS - build_ff_from_yx1
+18:44:46 [INFO] Torch CUDA available: True
+18:44:46 [INFO] CUDA device count: 1
+18:44:46 [INFO] CUDA version: 12.1
+18:44:46 [INFO] Selected device: cuda
+18:44:46 [INFO] GPU 0: NVIDIA A100-PCIE-40GB
+18:44:46 [INFO] n_workers: 1 
+18:44:46 [INFO] ============================================================
+18:44:46 [INFO] Calculating FF for 20251020
+18:44:49 [WARNING] Skipping out-of-range series index 96 (valid 1..92) at well A12
+18:44:49 [WARNING] Skipping out-of-range series index 95 (valid 1..92) at well B12
+18:44:49 [WARNING] Skipping out-of-range series index 94 (valid 1..92) at well C12
+18:44:49 [WARNING] Skipping out-of-range series index 93 (valid 1..92) at well D12
+18:44:49 [INFO] YX1 series_number_map: selected_wells=92, series_min=1, series_max=92
+18:44:49 [INFO] YX1 map examples: first A01->1 | last E12->92
+18:44:49 [INFO] DEBUG YX1 coverage: well A01 (nd2 0) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B01 (nd2 1) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C01 (nd2 2) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D01 (nd2 3) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E01 (nd2 4) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F01 (nd2 5) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G01 (nd2 6) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well H01 (nd2 7) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well H02 (nd2 8) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G02 (nd2 9) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F02 (nd2 10) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E02 (nd2 11) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D02 (nd2 12) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C02 (nd2 13) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B02 (nd2 14) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well A02 (nd2 15) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well A03 (nd2 16) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B03 (nd2 17) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C03 (nd2 18) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D03 (nd2 19) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E03 (nd2 20) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F03 (nd2 21) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G03 (nd2 22) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well H03 (nd2 23) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well H04 (nd2 24) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G04 (nd2 25) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F04 (nd2 26) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E04 (nd2 27) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D04 (nd2 28) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C04 (nd2 29) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B04 (nd2 30) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well A04 (nd2 31) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well A05 (nd2 32) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B05 (nd2 33) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C05 (nd2 34) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D05 (nd2 35) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E05 (nd2 36) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F05 (nd2 37) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G05 (nd2 38) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well H05 (nd2 39) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well H06 (nd2 40) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G06 (nd2 41) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F06 (nd2 42) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E06 (nd2 43) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D06 (nd2 44) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C06 (nd2 45) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B06 (nd2 46) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well A06 (nd2 47) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well A07 (nd2 48) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well B07 (nd2 49) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well C07 (nd2 50) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well D07 (nd2 51) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well E07 (nd2 52) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well F07 (nd2 53) frames_available=57/57
+18:44:49 [INFO] DEBUG YX1 coverage: well G07 (nd2 54) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well H07 (nd2 55) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well H08 (nd2 56) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well G08 (nd2 57) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well F08 (nd2 58) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well E08 (nd2 59) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well D08 (nd2 60) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well C08 (nd2 61) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well B08 (nd2 62) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well A08 (nd2 63) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well A09 (nd2 64) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well B09 (nd2 65) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well C09 (nd2 66) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well D09 (nd2 67) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well E09 (nd2 68) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well F09 (nd2 69) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well G09 (nd2 70) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well H09 (nd2 71) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well H10 (nd2 72) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well G10 (nd2 73) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well F10 (nd2 74) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well E10 (nd2 75) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well D10 (nd2 76) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well C10 (nd2 77) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well B10 (nd2 78) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well A10 (nd2 79) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well A11 (nd2 80) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well B11 (nd2 81) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well C11 (nd2 82) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well D11 (nd2 83) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well E11 (nd2 84) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well F11 (nd2 85) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well G11 (nd2 86) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well H11 (nd2 87) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well H12 (nd2 88) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well G12 (nd2 89) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well F12 (nd2 90) frames_available=57/57
+18:44:50 [INFO] DEBUG YX1 coverage: well E12 (nd2 91) frames_available=57/57
+18:44:50 [INFO] Using reference wells: [0, 46, 91] from 92 selected wells
+18:44:50 [INFO] Extracted 57/57 valid timestamps from ND2 metadata
+18:44:50 [INFO] Calculated cycle time: 2105.30s from 56 intervals
+18:44:50 [INFO] Timestamp imputation complete: 57/57 valid timestamps
+18:44:50 [INFO] Time range: 6.0s to 120760.9s (median interval: 2105.30s)
+18:44:50 [WARNING] Skipping YX1 well-assignment QC due to error: 
+18:44:50 [INFO] Calculating FF for 20251020
+18:44:50 [INFO] YX1 batching auto-tune: free=42.0 GB total=42.4 GB per-stack=90.2 MB safety=70% -> batch=16
+🔧 Dispatching run_build01(root=/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground, exp=20251020, microscope=YX1, overwrite=True)
+🔍 Validating Build01 inputs...
+✅ Build01 validation passed
+ND2 reports: n_t=57 timepoints, n_w=92 wells, n_z=17 z-slices
+Total expected frames in ND2: 89148
+Actual frame count from ND2 metadata: 89148
+Subsetting to 92 wells from metadata
+Sample lookup entries (every 8th): {1: 'A01', 9: 'H02', 17: 'A03', 25: 'H04', 33: 'A05', 41: 'H06', 49: 'A07', 57: 'H08', 65: 'A09', 73: 'H10', 81: 'A11', 89: 'H12', 92: 'E12'}
+  0%|          | 0/5244 [00:00<?, ?it/s]  0%|          | 1/5244 [00:04<6:57:59,  4.78s/it]  0%|          | 2/5244 [00:06<4:03:19,  2.79s/it]  0%|          | 3/5244 [00:07<3:07:16,  2.14s/it]  0%|          | 4/5244 [00:09<2:47:33,  1.92s/it]  0%|          | 5/5244 [00:10<2:43:51,  1.88s/it]  0%|          | 6/5244 [00:12<2:36:46,  1.80s/it]  0%|          | 7/5244 [00:14<2:39:27,  1.83s/it]  0%|          | 8/5244 [00:16<2:38:55,  1.82s/it]  0%|          | 9/5244 [00:18<2:57:08,  2.03s/it]  0%|          | 10/5244 [00:20<2:47:37,  1.92s/it]  0%|          | 11/5244 [00:21<2:35:19,  1.78s/it]  0%|          | 12/5244 [00:23<2:30:02,  1.72s/it]  0%|          | 13/5244 [00:25<2:35:20,  1.78s/it]  0%|          | 14/5244 [00:27<2:31:50,  1.74s/it]  0%|          | 15/5244 [00:29<2:39:41,  1.83s/it]18:45:26 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:45:26 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+18:45:31 [INFO] Saved profiler trace to: profiler_trace_stack_000.json
+  0%|          | 16/5244 [00:40<6:57:24,  4.79s/it]  0%|          | 17/5244 [00:42<5:31:08,  3.80s/it]  0%|          | 18/5244 [00:44<4:38:17,  3.20s/it]  0%|          | 19/5244 [00:45<4:00:04,  2.76s/it]  0%|          | 20/5244 [00:47<3:43:21,  2.57s/it]  0%|          | 21/5244 [00:50<3:38:46,  2.51s/it]  0%|          | 22/5244 [00:51<3:17:42,  2.27s/it]  0%|          | 23/5244 [00:53<3:09:59,  2.18s/it]  0%|          | 24/5244 [00:55<2:56:21,  2.03s/it]  0%|          | 25/5244 [00:58<3:28:06,  2.39s/it]  0%|          | 26/5244 [01:01<3:29:08,  2.40s/it]  1%|          | 27/5244 [01:03<3:21:17,  2.32s/it]  1%|          | 28/5244 [01:04<2:56:21,  2.03s/it]  1%|          | 29/5244 [01:06<2:39:23,  1.83s/it]  1%|          | 30/5244 [01:07<2:31:34,  1.74s/it]  1%|          | 31/5244 [01:09<2:33:34,  1.77s/it]18:46:06 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:46:06 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+18:46:06 [INFO] Saved profiler trace to: profiler_trace_stack_001.json
+  1%|          | 32/5244 [01:16<4:37:04,  3.19s/it]  1%|          | 33/5244 [01:17<3:55:53,  2.72s/it]  1%|          | 34/5244 [01:19<3:27:42,  2.39s/it]  1%|          | 35/5244 [01:20<3:04:47,  2.13s/it]  1%|          | 36/5244 [01:22<2:52:22,  1.99s/it]  1%|          | 37/5244 [01:23<2:36:07,  1.80s/it]  1%|          | 38/5244 [01:25<2:24:27,  1.66s/it]  1%|          | 39/5244 [01:26<2:20:13,  1.62s/it]  1%|          | 40/5244 [01:27<2:12:38,  1.53s/it]  1%|          | 41/5244 [01:30<2:33:13,  1.77s/it]  1%|          | 42/5244 [01:31<2:27:46,  1.70s/it]  1%|          | 43/5244 [01:33<2:29:24,  1.72s/it]  1%|          | 44/5244 [01:36<2:46:22,  1.92s/it]  1%|          | 45/5244 [01:37<2:33:13,  1.77s/it]  1%|          | 46/5244 [01:39<2:31:31,  1.75s/it]  1%|          | 47/5244 [01:41<2:44:01,  1.89s/it]18:46:38 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:46:38 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+18:46:38 [INFO] Saved profiler trace to: profiler_trace_stack_002.json
+  1%|          | 48/5244 [01:48<4:50:20,  3.35s/it]  1%|          | 49/5244 [01:49<4:00:34,  2.78s/it]  1%|          | 50/5244 [01:50<3:25:07,  2.37s/it]  1%|          | 51/5244 [01:52<2:59:26,  2.07s/it]  1%|          | 52/5244 [01:53<2:46:55,  1.93s/it]  1%|          | 53/5244 [01:55<2:35:19,  1.80s/it]  1%|          | 54/5244 [01:57<2:35:24,  1.80s/it]  1%|          | 55/5244 [01:58<2:18:43,  1.60s/it]  1%|          | 56/5244 [02:00<2:20:31,  1.63s/it]  1%|          | 57/5244 [02:01<2:19:46,  1.62s/it]  1%|          | 58/5244 [02:03<2:15:56,  1.57s/it]  1%|          | 59/5244 [02:04<2:09:38,  1.50s/it]  1%|          | 60/5244 [02:07<2:43:36,  1.89s/it]  1%|          | 61/5244 [02:08<2:30:59,  1.75s/it]  1%|          | 62/5244 [02:10<2:31:47,  1.76s/it]  1%|          | 63/5244 [02:12<2:34:12,  1.79s/it]18:47:10 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:47:10 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  1%|          | 64/5244 [02:19<4:56:11,  3.43s/it]  1%|          | 65/5244 [02:21<4:17:33,  2.98s/it]  1%|▏         | 66/5244 [02:23<3:55:29,  2.73s/it]  1%|▏         | 67/5244 [02:25<3:34:31,  2.49s/it]  1%|▏         | 68/5244 [02:27<3:15:33,  2.27s/it]  1%|▏         | 69/5244 [02:29<3:03:57,  2.13s/it]  1%|▏         | 70/5244 [02:31<2:58:40,  2.07s/it]  1%|▏         | 71/5244 [02:33<3:17:01,  2.29s/it]  1%|▏         | 72/5244 [02:35<3:02:32,  2.12s/it]  1%|▏         | 73/5244 [02:37<2:45:58,  1.93s/it]  1%|▏         | 74/5244 [02:38<2:29:23,  1.73s/it]  1%|▏         | 75/5244 [02:39<2:18:40,  1.61s/it]  1%|▏         | 76/5244 [02:41<2:12:19,  1.54s/it]  1%|▏         | 77/5244 [02:42<2:11:33,  1.53s/it]  1%|▏         | 78/5244 [02:43<2:06:34,  1.47s/it]  2%|▏         | 79/5244 [02:45<2:16:43,  1.59s/it]18:47:42 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:47:42 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  2%|▏         | 80/5244 [02:52<4:21:33,  3.04s/it]  2%|▏         | 81/5244 [02:53<3:40:47,  2.57s/it]  2%|▏         | 82/5244 [02:55<3:13:51,  2.25s/it]  2%|▏         | 83/5244 [02:56<2:54:47,  2.03s/it]  2%|▏         | 84/5244 [02:59<3:24:27,  2.38s/it]  2%|▏         | 85/5244 [03:01<3:11:15,  2.22s/it]  2%|▏         | 86/5244 [03:03<2:48:56,  1.97s/it]  2%|▏         | 87/5244 [03:04<2:46:13,  1.93s/it]  2%|▏         | 88/5244 [03:08<3:24:48,  2.38s/it]  2%|▏         | 89/5244 [03:10<3:11:27,  2.23s/it]  2%|▏         | 90/5244 [03:12<3:06:47,  2.17s/it]  2%|▏         | 91/5244 [03:13<2:51:55,  2.00s/it]  2%|▏         | 92/5244 [03:15<2:35:00,  1.81s/it]  2%|▏         | 93/5244 [03:16<2:27:36,  1.72s/it]  2%|▏         | 94/5244 [03:18<2:32:42,  1.78s/it]  2%|▏         | 95/5244 [03:20<2:31:14,  1.76s/it]18:48:17 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:48:17 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  2%|▏         | 96/5244 [03:27<4:37:08,  3.23s/it]  2%|▏         | 97/5244 [03:30<4:49:17,  3.37s/it]  2%|▏         | 98/5244 [03:32<4:18:28,  3.01s/it]  2%|▏         | 99/5244 [03:35<3:59:05,  2.79s/it]  2%|▏         | 100/5244 [03:37<3:37:30,  2.54s/it]  2%|▏         | 101/5244 [03:38<3:11:56,  2.24s/it]  2%|▏         | 102/5244 [03:40<2:58:32,  2.08s/it]  2%|▏         | 103/5244 [03:42<3:02:16,  2.13s/it]  2%|▏         | 104/5244 [03:44<3:02:44,  2.13s/it]  2%|▏         | 105/5244 [03:48<3:32:50,  2.49s/it]  2%|▏         | 106/5244 [03:51<3:47:44,  2.66s/it]  2%|▏         | 107/5244 [03:53<3:51:24,  2.70s/it]  2%|▏         | 108/5244 [03:55<3:18:50,  2.32s/it]  2%|▏         | 109/5244 [03:57<3:00:31,  2.11s/it]  2%|▏         | 110/5244 [03:58<2:41:32,  1.89s/it]  2%|▏         | 111/5244 [04:06<5:27:16,  3.83s/it]18:49:04 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:49:04 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  2%|▏         | 112/5244 [04:14<7:00:08,  4.91s/it]  2%|▏         | 113/5244 [04:15<5:40:42,  3.98s/it]  2%|▏         | 114/5244 [04:18<4:53:13,  3.43s/it]  2%|▏         | 115/5244 [04:20<4:25:57,  3.11s/it]  2%|▏         | 116/5244 [04:21<3:41:40,  2.59s/it]  2%|▏         | 117/5244 [04:23<3:13:04,  2.26s/it]  2%|▏         | 118/5244 [04:25<2:58:15,  2.09s/it]  2%|▏         | 119/5244 [04:26<2:45:43,  1.94s/it]  2%|▏         | 120/5244 [04:28<2:31:39,  1.78s/it]  2%|▏         | 121/5244 [04:29<2:22:45,  1.67s/it]  2%|▏         | 122/5244 [04:31<2:32:46,  1.79s/it]  2%|▏         | 123/5244 [04:32<2:24:24,  1.69s/it]  2%|▏         | 124/5244 [04:35<2:47:16,  1.96s/it]  2%|▏         | 125/5244 [04:37<2:35:16,  1.82s/it]  2%|▏         | 126/5244 [04:38<2:33:50,  1.80s/it]  2%|▏         | 127/5244 [04:40<2:42:03,  1.90s/it]18:49:37 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:49:37 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  2%|▏         | 128/5244 [04:47<4:34:35,  3.22s/it]  2%|▏         | 129/5244 [04:48<3:53:28,  2.74s/it]  2%|▏         | 130/5244 [04:50<3:24:13,  2.40s/it]  2%|▏         | 131/5244 [04:53<3:32:34,  2.49s/it]  3%|▎         | 132/5244 [04:54<3:13:55,  2.28s/it]  3%|▎         | 133/5244 [04:56<2:58:42,  2.10s/it]  3%|▎         | 134/5244 [04:58<2:46:14,  1.95s/it]  3%|▎         | 135/5244 [05:00<3:03:02,  2.15s/it]  3%|▎         | 136/5244 [05:02<2:50:04,  2.00s/it]  3%|▎         | 137/5244 [05:04<2:38:58,  1.87s/it]  3%|▎         | 138/5244 [05:07<3:27:33,  2.44s/it]  3%|▎         | 139/5244 [05:09<3:07:36,  2.21s/it]  3%|▎         | 140/5244 [05:11<2:50:17,  2.00s/it]  3%|▎         | 141/5244 [05:13<2:52:16,  2.03s/it]  3%|▎         | 142/5244 [05:14<2:39:48,  1.88s/it]  3%|▎         | 143/5244 [05:16<2:44:03,  1.93s/it]18:50:13 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:50:13 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  3%|▎         | 144/5244 [05:23<4:37:55,  3.27s/it]  3%|▎         | 145/5244 [05:25<4:21:26,  3.08s/it]  3%|▎         | 146/5244 [05:27<3:39:38,  2.58s/it]  3%|▎         | 147/5244 [05:28<3:07:28,  2.21s/it]  3%|▎         | 148/5244 [05:30<3:03:47,  2.16s/it]  3%|▎         | 149/5244 [05:32<3:01:38,  2.14s/it]  3%|▎         | 150/5244 [05:34<2:48:18,  1.98s/it]  3%|▎         | 151/5244 [05:35<2:41:11,  1.90s/it]  3%|▎         | 152/5244 [05:38<3:04:38,  2.18s/it]  3%|▎         | 153/5244 [05:41<3:08:42,  2.22s/it]  3%|▎         | 154/5244 [05:42<2:55:48,  2.07s/it]  3%|▎         | 155/5244 [05:44<2:57:44,  2.10s/it]  3%|▎         | 156/5244 [05:46<2:48:19,  1.98s/it]  3%|▎         | 157/5244 [05:48<2:42:22,  1.92s/it]  3%|▎         | 158/5244 [05:50<2:46:12,  1.96s/it]  3%|▎         | 159/5244 [05:52<2:39:54,  1.89s/it]18:50:49 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:50:49 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  3%|▎         | 160/5244 [05:58<4:38:01,  3.28s/it]  3%|▎         | 161/5244 [06:00<3:58:35,  2.82s/it]  3%|▎         | 162/5244 [06:02<3:35:03,  2.54s/it]  3%|▎         | 163/5244 [06:04<3:19:42,  2.36s/it]  3%|▎         | 164/5244 [06:07<3:30:14,  2.48s/it]  3%|▎         | 165/5244 [06:09<3:15:46,  2.31s/it]  3%|▎         | 166/5244 [06:11<3:13:11,  2.28s/it]  3%|▎         | 167/5244 [06:12<2:59:47,  2.12s/it]  3%|▎         | 168/5244 [06:14<2:54:44,  2.07s/it]  3%|▎         | 169/5244 [06:16<2:44:32,  1.95s/it]  3%|▎         | 170/5244 [06:18<2:35:11,  1.84s/it]  3%|▎         | 171/5244 [06:19<2:31:04,  1.79s/it]  3%|▎         | 172/5244 [06:21<2:29:56,  1.77s/it]  3%|▎         | 173/5244 [06:23<2:29:28,  1.77s/it]  3%|▎         | 174/5244 [06:25<2:35:37,  1.84s/it]  3%|▎         | 175/5244 [06:26<2:28:23,  1.76s/it]18:51:23 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:51:23 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  3%|▎         | 176/5244 [06:33<4:25:47,  3.15s/it]  3%|▎         | 177/5244 [06:34<3:39:55,  2.60s/it]  3%|▎         | 178/5244 [06:36<3:21:09,  2.38s/it]  3%|▎         | 179/5244 [06:37<2:57:55,  2.11s/it]  3%|▎         | 180/5244 [06:39<2:43:50,  1.94s/it]  3%|▎         | 181/5244 [06:42<3:13:05,  2.29s/it]  3%|▎         | 182/5244 [06:44<2:52:37,  2.05s/it]  3%|▎         | 183/5244 [06:46<3:12:24,  2.28s/it]  4%|▎         | 184/5244 [06:49<3:23:19,  2.41s/it]  4%|▎         | 185/5244 [06:53<3:48:39,  2.71s/it]  4%|▎         | 186/5244 [06:55<3:39:54,  2.61s/it]  4%|▎         | 187/5244 [06:59<4:21:37,  3.10s/it]  4%|▎         | 188/5244 [07:05<5:20:47,  3.81s/it]  4%|▎         | 189/5244 [07:10<5:52:20,  4.18s/it]  4%|▎         | 190/5244 [07:12<5:06:44,  3.64s/it]  4%|▎         | 191/5244 [07:14<4:15:22,  3.03s/it]18:52:16 [INFO] _focus_stack: tensor shape=torch.Size([16, 17, 2189, 1152]) device=cuda:0 cuda_available=True
+18:52:16 [INFO] _focus_stack: cuda mem allocated 2743.6 MB
+  4%|▎         | 192/5244 [07:25<7:46:42,  5.54s/it]

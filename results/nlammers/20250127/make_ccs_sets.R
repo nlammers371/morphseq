@@ -23,8 +23,8 @@ ct_broad_filt <- as.data.frame(ct_broad) %>%
 # iterate through list of cds files
 seahub_root <- "/net/seahub_zfish/vol1/data/annotated/v2.2.0/"
 
-cds_name_list <- c("CHEM1.0","CHEM1.1","CHEM9", "HF","REF1","REF2",
-                    "LMX1B", "GENE1", "GENE2", "GENE3")
+cds_name_list <- c("GENE3")#c("CHEM1.0","CHEM1.1","CHEM9", "HF","REF1","REF2",
+                    #"LMX1B", "GENE1", "GENE2", "GENE3")
 
 for(c in seq_len(length(cds_name_list))) {
 

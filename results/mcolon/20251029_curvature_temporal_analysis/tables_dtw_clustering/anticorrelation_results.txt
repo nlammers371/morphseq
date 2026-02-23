@@ -1,0 +1,25 @@
+================================================================================
+DTW CLUSTERING ANALYSIS SUMMARY
+================================================================================
+
+Best k: 2
+Silhouette score: 0.6892
+
+Anti-Correlation Test Results:
+--------------------------------------------------------------------------------
+
+Cluster 0:
+  N embryos: 31
+  Early mean: 0.0427
+  Late mean: 0.0183
+  Pearson r: 0.5245 (p=0.0025)
+  Permutation p: 0.0050
+  Interpretation: Correlated
+
+Cluster 1:
+  N embryos: 16
+  Early mean: 0.0563
+  Late mean: 0.0881
+  Pearson r: -0.3926 (p=0.1325)
+  Permutation p: 0.1510
+  Interpretation: Anti-correlated

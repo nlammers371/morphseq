@@ -1,0 +1,386 @@
+🚀 Starting GroundingDINO Detection with Quality Filtering (Module 2)
+======================================================================
+🔍 Quick check: Do we need to do any work?
+⚡ Quick check: Do HQ annotations exist for specific entities?
+⚡ Found 96 images needing work
+🔧 Loading full pipeline components...
+📱 Using device: cuda
+📊 Loaded metadata: ExperimentMetadata(1 experiments, 96 videos, 96 images)
+🎯 Processing entities: ['20250612_30hpf_ctrl_atf6']
+   📁 Experiment 20250612_30hpf_ctrl_atf6: 96 images
+📊 Found: 1 experiments, 0 videos, 0 images
+
+============================================================
+🔍 PHASE 1: GroundingDINO Detection ('individual embryo')
+============================================================
+💾 Annotations will be saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/detections/gdino_detections.json
+🔍 Checking for missing annotations...
+📊 Prompt 'individual embryo': 96 missing, 0 annotated
+📊 Found 96 images needing annotation
+🔄 Loading GroundingDINO model...
+final text_encoder_type: bert-base-uncased
+GroundedDINO model loaded successfully on cuda.
+✅ Model loaded successfully
+🔄 Processing annotations for prompt: 'individual embryo'
+🔧 Model-specific mode: Only considering annotations from checkpoint_best_regular.pth
+📊 Prompt 'individual embryo' (for checkpoint_best_regular.pth): 96 missing, 0 annotated
+📊 Found 96 missing annotations to process
+
+🔄 Processing 96 images for prompt 'individual embryo'...
+📁 Found paths for 96 images
+🚀 Starting inference on 96 images with 1 prompts (96 total operations)
+🔄 [1/96] Processing 20250612_30hpf_ctrl_atf6_F11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [2/96] Processing 20250612_30hpf_ctrl_atf6_A05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [3/96] Processing 20250612_30hpf_ctrl_atf6_F09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [4/96] Processing 20250612_30hpf_ctrl_atf6_G03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [5/96] Processing 20250612_30hpf_ctrl_atf6_D12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [6/96] Processing 20250612_30hpf_ctrl_atf6_G04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [7/96] Processing 20250612_30hpf_ctrl_atf6_H02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [8/96] Processing 20250612_30hpf_ctrl_atf6_G08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [9/96] Processing 20250612_30hpf_ctrl_atf6_H06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H06_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H06_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [10/96] Processing 20250612_30hpf_ctrl_atf6_F01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [11/96] Processing 20250612_30hpf_ctrl_atf6_G10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [12/96] Processing 20250612_30hpf_ctrl_atf6_G09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [13/96] Processing 20250612_30hpf_ctrl_atf6_E02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [14/96] Processing 20250612_30hpf_ctrl_atf6_C07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C07_ch00_t0000] with prompt 'individual embryo'...
+   Found 0 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C07_ch00_t0000: 0 detections (prompt: 'individual embryo')
+🔄 [15/96] Processing 20250612_30hpf_ctrl_atf6_D03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [16/96] Processing 20250612_30hpf_ctrl_atf6_F07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [17/96] Processing 20250612_30hpf_ctrl_atf6_H12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [18/96] Processing 20250612_30hpf_ctrl_atf6_B11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [19/96] Processing 20250612_30hpf_ctrl_atf6_H10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [20/96] Processing 20250612_30hpf_ctrl_atf6_D08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [21/96] Processing 20250612_30hpf_ctrl_atf6_G01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [22/96] Processing 20250612_30hpf_ctrl_atf6_H11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [23/96] Processing 20250612_30hpf_ctrl_atf6_C08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [24/96] Processing 20250612_30hpf_ctrl_atf6_F12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [25/96] Processing 20250612_30hpf_ctrl_atf6_B12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [26/96] Processing 20250612_30hpf_ctrl_atf6_A07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [27/96] Processing 20250612_30hpf_ctrl_atf6_G12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [28/96] Processing 20250612_30hpf_ctrl_atf6_E03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [29/96] Processing 20250612_30hpf_ctrl_atf6_A04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [30/96] Processing 20250612_30hpf_ctrl_atf6_A03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [31/96] Processing 20250612_30hpf_ctrl_atf6_D10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [32/96] Processing 20250612_30hpf_ctrl_atf6_C03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [33/96] Processing 20250612_30hpf_ctrl_atf6_A06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A06_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A06_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [34/96] Processing 20250612_30hpf_ctrl_atf6_C01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [35/96] Processing 20250612_30hpf_ctrl_atf6_G02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [36/96] Processing 20250612_30hpf_ctrl_atf6_B09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [37/96] Processing 20250612_30hpf_ctrl_atf6_D01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [38/96] Processing 20250612_30hpf_ctrl_atf6_A08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [39/96] Processing 20250612_30hpf_ctrl_atf6_B01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [40/96] Processing 20250612_30hpf_ctrl_atf6_H01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [41/96] Processing 20250612_30hpf_ctrl_atf6_C04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [42/96] Processing 20250612_30hpf_ctrl_atf6_D11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [43/96] Processing 20250612_30hpf_ctrl_atf6_C06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C06_ch00_t0000] with prompt 'individual embryo'...
+   Found 0 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C06_ch00_t0000: 0 detections (prompt: 'individual embryo')
+🔄 [44/96] Processing 20250612_30hpf_ctrl_atf6_B05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [45/96] Processing 20250612_30hpf_ctrl_atf6_G06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G06_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G06_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [46/96] Processing 20250612_30hpf_ctrl_atf6_H03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [47/96] Processing 20250612_30hpf_ctrl_atf6_E12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [48/96] Processing 20250612_30hpf_ctrl_atf6_C02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [49/96] Processing 20250612_30hpf_ctrl_atf6_B08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [50/96] Processing 20250612_30hpf_ctrl_atf6_H08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [51/96] Processing 20250612_30hpf_ctrl_atf6_E05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [52/96] Processing 20250612_30hpf_ctrl_atf6_F02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [53/96] Processing 20250612_30hpf_ctrl_atf6_H05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [54/96] Processing 20250612_30hpf_ctrl_atf6_F06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F06_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F06_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [55/96] Processing 20250612_30hpf_ctrl_atf6_C12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [56/96] Processing 20250612_30hpf_ctrl_atf6_C10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [57/96] Processing 20250612_30hpf_ctrl_atf6_D02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [58/96] Processing 20250612_30hpf_ctrl_atf6_E07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [59/96] Processing 20250612_30hpf_ctrl_atf6_G05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [60/96] Processing 20250612_30hpf_ctrl_atf6_F08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [61/96] Processing 20250612_30hpf_ctrl_atf6_F10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [62/96] Processing 20250612_30hpf_ctrl_atf6_E11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [63/96] Processing 20250612_30hpf_ctrl_atf6_H09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [64/96] Processing 20250612_30hpf_ctrl_atf6_E06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E06_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E06_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [65/96] Processing 20250612_30hpf_ctrl_atf6_B10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [66/96] Processing 20250612_30hpf_ctrl_atf6_B06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B06_ch00_t0000] with prompt 'individual embryo'...
+   Found 0 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B06_ch00_t0000: 0 detections (prompt: 'individual embryo')
+🔄 [67/96] Processing 20250612_30hpf_ctrl_atf6_H07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [68/96] Processing 20250612_30hpf_ctrl_atf6_D04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [69/96] Processing 20250612_30hpf_ctrl_atf6_E01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [70/96] Processing 20250612_30hpf_ctrl_atf6_E10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [71/96] Processing 20250612_30hpf_ctrl_atf6_E08_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E08_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E08_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [72/96] Processing 20250612_30hpf_ctrl_atf6_E09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [73/96] Processing 20250612_30hpf_ctrl_atf6_A09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [74/96] Processing 20250612_30hpf_ctrl_atf6_A12_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A12_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A12_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [75/96] Processing 20250612_30hpf_ctrl_atf6_D05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [76/96] Processing 20250612_30hpf_ctrl_atf6_F05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [77/96] Processing 20250612_30hpf_ctrl_atf6_D07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [78/96] Processing 20250612_30hpf_ctrl_atf6_F03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [79/96] Processing 20250612_30hpf_ctrl_atf6_C09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [80/96] Processing 20250612_30hpf_ctrl_atf6_D06_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D06_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D06_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [81/96] Processing 20250612_30hpf_ctrl_atf6_D09_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_D09_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_D09_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [82/96] Processing 20250612_30hpf_ctrl_atf6_G11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [83/96] Processing 20250612_30hpf_ctrl_atf6_E04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_E04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_E04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [84/96] Processing 20250612_30hpf_ctrl_atf6_C11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [85/96] Processing 20250612_30hpf_ctrl_atf6_C05_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_C05_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_C05_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [86/96] Processing 20250612_30hpf_ctrl_atf6_B03_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B03_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B03_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [87/96] Processing 20250612_30hpf_ctrl_atf6_A01_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A01_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A01_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [88/96] Processing 20250612_30hpf_ctrl_atf6_B02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [89/96] Processing 20250612_30hpf_ctrl_atf6_G07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_G07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_G07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [90/96] Processing 20250612_30hpf_ctrl_atf6_F04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_F04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_F04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [91/96] Processing 20250612_30hpf_ctrl_atf6_B07_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B07_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B07_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [92/96] Processing 20250612_30hpf_ctrl_atf6_A10_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A10_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A10_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [93/96] Processing 20250612_30hpf_ctrl_atf6_H04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_H04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_H04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [94/96] Processing 20250612_30hpf_ctrl_atf6_B04_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_B04_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_B04_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [95/96] Processing 20250612_30hpf_ctrl_atf6_A11_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A11_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A11_ch00_t0000: 1 detections (prompt: 'individual embryo')
+🔄 [96/96] Processing 20250612_30hpf_ctrl_atf6_A02_ch00_t0000.jpg [image_id: 20250612_30hpf_ctrl_atf6_A02_ch00_t0000] with prompt 'individual embryo'...
+   Found 1 detections
+➕ Added annotation for 20250612_30hpf_ctrl_atf6_A02_ch00_t0000: 1 detections (prompt: 'individual embryo')
+💾 Final save after processing 96 images...
+✅ Entity validation passed: 96 images
+✅ Inference complete: processed 96/96 images
+✅ Processed 96 images
+✅ Entity validation passed: 96 images
+📦 Created backup: gdino_detections.backup.20250829_072332.json
+✅ Phase 1 complete: Detection finished
+
+============================================================
+🎯 PHASE 2: High-Quality Filtering
+============================================================
+Found 96 images with 'individual embryo' annotations
+🎯 Generating high-quality annotations...
+   Confidence threshold: 0.45
+   IoU threshold: 0.5
+🎯 Generating high-quality annotations for 96 images
+   Prompt: 'individual embryo', Confidence: 0.45, IoU: 0.5
+   Found 93 raw detections
+   📈 Confidence Statistics (before filtering):
+      Total detections: 93
+      Mean: 0.558
+      Median: 0.560
+      Min: 0.414
+      Max: 0.644
+      Q90: 0.602
+   After confidence filter: 92 (1 removed)
+   After IoU filtering: 92 (0 removed)
+   📊 Final Statistics:
+      Original: 93 detections
+      Final: 92 detections (98.9% retained)
+      Images: 92
+      Experiments: 1
+📊 Filtering Summary:
+   Original detections: 93
+   Confidence removed: 1
+   IoU removed: 0
+   Final detections: 92
+   Retention rate: 98.9%
+   Final images: 92
+   Experiments processed: 1
+✅ Entity validation passed: 96 images
+📦 Created backup: gdino_detections.backup.20250829_072332.json
+✅ Phase 2 complete: Quality filtering finished
+
+============================================================
+📊 FINAL PIPELINE SUMMARY
+============================================================
+
+📊 ANNOTATION SUMMARY
+==============================
+🖼️  Annotated images: 96
+📝 Total annotations: 96
+📍 Total detections: 93
+📊 Avg annotations/image: 1.0
+📊 Avg detections/annotation: 1.0
+📂 Metadata images: 96
+📈 Coverage: 100.0%
+🎯 High-quality: 1 experiments, 92 images
+
+📁 OUTPUT:
+   Annotations file: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/detections/gdino_detections.json
+   Prompt processed: 'individual embryo'
+   Quality filtering: Applied
+   High-quality results: 1 experiments, 92 images, 92 detections
+
+✅ ANNOTATION GENERATION COMPLETE!
+🎯 Ready for downstream processing (SAM2, etc.)

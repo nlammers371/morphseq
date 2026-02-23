@@ -1,0 +1,10 @@
+# Generated sweep tables and summaries
+dct_sweep_metrics*.csv
+dct_sweep_summary*.json
+
+# Generated catalog/feature stores
+ot_pair_metrics.parquet
+ot_feature_matrix.parquet
+
+# Generated per-pair artifacts (fields + barycentric projections)
+pair_artifacts/

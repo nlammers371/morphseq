@@ -1,0 +1,12 @@
+{
+  "threshold_level": "32%",
+  "experiment_id": "20250305",
+  "embryo_id": "20250305_E03_e01",
+  "actual_cv": "32.9%",
+  "video_id": "20250305_E03",
+  "threshold_interpretation": {
+    "would_be_flagged_27pct": true,
+    "would_be_flagged_32pct": true,
+    "flagging_level": "high_priority"
+  }
+}

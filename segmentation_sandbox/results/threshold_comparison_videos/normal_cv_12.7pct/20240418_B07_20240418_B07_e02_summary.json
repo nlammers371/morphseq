@@ -1,0 +1,20 @@
+{
+  "category": "normal",
+  "cv_value": 0.12717542233782894,
+  "cv_percentage": "12.7%",
+  "experiment_id": "20240418",
+  "video_id": "20240418_B07",
+  "embryo_id": "20240418_B07_e02",
+  "mean_area": 72945.60869565218,
+  "frame_count": 46,
+  "area_range": [
+    57960.0,
+    86313.0
+  ],
+  "video_path": "results/threshold_comparison_videos/normal_cv_12.7pct/20240418_B07_20240418_B07_e02_cv_12.7pct.mp4",
+  "threshold_analysis": {
+    "current_15pct": "not_flagged",
+    "recommended_27pct": "not_flagged",
+    "strict_32pct": "not_flagged"
+  }
+}

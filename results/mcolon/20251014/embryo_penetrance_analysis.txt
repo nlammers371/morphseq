@@ -1,0 +1,107 @@
+
+Title: Embryo-Level Predictive Analysis for Phenotypic Penetrance
+Date: 2025-10-14
+
+------------------------------------------------------------
+OVERVIEW
+------------------------------------------------------------
+This document outlines strategies to identify which embryos are most or least informative in
+predictive genotype classification tasks using VAE latent embeddings. The goal is to quantify
+penetrance and heterogeneity among embryos, determining how consistently each embryo expresses
+a morphological phenotype over developmental time.
+
+------------------------------------------------------------
+1. CONCEPTUAL FRAMEWORK
+------------------------------------------------------------
+- Each embryo contributes a trajectory of latent embeddings over developmental time.
+- Classifiers trained on these embeddings measure how separable genotypes are at each time bin.
+- Variation in per-embryo separability corresponds to phenotypic penetrance.
+
+------------------------------------------------------------
+2. EMBRYO-LEVEL INFORMATIVENESS
+------------------------------------------------------------
+A. Out-of-Fold Prediction Scores
+   - From embryo-wise cross-validation, extract per-embryo predicted probabilities.
+   - Compute per-embryo metrics:
+     * log-loss
+     * classification accuracy
+     * distance from decision boundary (|p - 0.5|)
+   - Embryos with low margins are ambiguous (potentially non-penetrant).
+
+B. Leave-One-Embryo-Out (LOEO) Influence
+   - Remove one embryo, retrain classifier, recompute AUROC.
+   - ΔAUROC = AUROC(all) - AUROC(without embryo)
+   - Negative ΔAUROC → embryo decreases performance (uninformative or atypical).
+   - Positive ΔAUROC → embryo strengthens class separation (strong phenotype).
+
+------------------------------------------------------------
+3. MORPHOLOGICAL DIVERGENCE ANALYSIS
+------------------------------------------------------------
+A. Mahalanobis Distance
+   - Compute distance of each mutant embryo's latent vector from the wild-type centroid.
+   - Large distances indicate strong morphological divergence.
+
+B. Clustering Within Mutants
+   - Cluster mutant embeddings (e.g., KMeans, HDBSCAN) to find subphenotypic groups.
+   - Evaluate classifier confidence and margins per cluster to quantify subtype penetrance.
+
+------------------------------------------------------------
+4. TEMPORAL PENETRANCE MODELING
+------------------------------------------------------------
+A. Functional or Mixed-Effects Logistic Regression
+   - Model time-dependent genotype separability with random embryo effects.
+   - Random effect variance quantifies embryo-level heterogeneity.
+
+B. Gaussian Process Classifier
+   - Smooth classifier over developmental time.
+   - Provides uncertainty estimates per embryo × time.
+
+C. Ensemble Models per Bin
+   - Train separate models per time bin; track per-embryo prediction probability trajectory.
+
+------------------------------------------------------------
+5. PENETRANCE METRICS
+------------------------------------------------------------
+| Metric | Description | Interpretation |
+|---------|--------------|----------------|
+| Mean prediction margin | |p - 0.5| | Classifier confidence per embryo |
+| Influence ΔAUROC | AUROC difference when embryo removed | Informativeness |
+| Mahalanobis distance | Distance to WT centroid | Morphological divergence |
+| Temporal consistency | Fraction of bins correctly classified | Stability of phenotype |
+
+------------------------------------------------------------
+6. VISUALIZATION IDEAS
+------------------------------------------------------------
+- Plot per-embryo prediction probability vs. time.
+- UMAP of latent space colored by prediction margin.
+- Heatmap of classifier coefficients (latent dimension × time bin).
+- Clustering of mutant embryos to visualize phenotypic subtypes.
+
+------------------------------------------------------------
+7. MODEL FAMILIES FOR PENETRANCE ANALYSIS
+------------------------------------------------------------
+| Model | Pros | Use Case |
+|--------|------|----------|
+| Logistic Regression | Interpretable, robust | Baseline classification |
+| Linear SVM | Margin-based, stable | High-dimensional latent space |
+| Random Forest / XGBoost | Nonlinear patterns | Strong separation with few samples |
+| Gaussian Process Classifier | Temporal smoothness | Time-resolved penetrance |
+| Mixed-Effects Logistic Regression | Random embryo effects | Quantify heterogeneity |
+| Bayesian Logistic Regression | Posterior uncertainty | Per-embryo penetrance probabilities |
+
+------------------------------------------------------------
+8. BIOLOGICAL INTERPRETATION
+------------------------------------------------------------
+- High-confidence embryos → fully penetrant phenotype.
+- Ambiguous embryos → incomplete or delayed penetrance.
+- Multiple clusters → phenotypic subtypes or branching outcomes.
+- Stable temporal predictions → consistent phenotypic expression.
+- Variable or noisy predictions → gradual or mosaic phenotype expression.
+
+------------------------------------------------------------
+SUMMARY
+------------------------------------------------------------
+Embryo-level predictive analysis bridges the classifier’s performance metrics to biological
+variability. By quantifying how each embryo contributes to genotype separability over time,
+one can empirically measure penetrance, identify subphenotypes, and discover temporal patterns
+of morphological divergence in latent space.

@@ -1,0 +1,18 @@
+Comparison: Homo_vs_WT (cep290_homozygous vs cep290_wildtype)
+Data: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20251229_cep290_phenotype_extraction/final_data/embryo_data_with_labels.csv
+Bin: 88.0–92.0 hpf (time_bin=88)
+Per-embryo samples: cep290_homozygous=113, cep290_wildtype=16
+
+Within-bin time skew:
+  mean_time cep290_homozygous=89.941, cep290_wildtype=89.994
+  Cohen's d = -0.075, Cliff's delta = 0.011
+
+Curvature distribution:
+  curvature_mean cep290_homozygous=0.07217, cep290_wildtype=0.0182
+  Cohen's d = 1.283, Cliff's delta = 0.804
+
+Stratified permutation AUROC (labels shuffled within time strata):
+  time_only (stratified perm): AUROC=0.352, p=0.7861 (null n=200)
+  curvature_only (stratified perm): AUROC=0.892, p=0.004975 (null n=200)
+  curvature_plus_time (stratified perm): AUROC=0.845, p=0.004975 (null n=200)
+  n_obs_only (stratified perm): AUROC=0.491, p=0.3831 (null n=200)

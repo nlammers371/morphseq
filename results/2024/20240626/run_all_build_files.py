@@ -1,4 +1,4 @@
-from src.build.build03A_process_embryos_main_par import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
+from src.build.build03A_process_images import build_well_metadata_master, segment_wells, compile_embryo_stats, extract_embryo_snips
 import multiprocessing
 import multiprocessing
 from src.build._Archive.build02A_adjust_ff_contrast import adjust_contrast_wrapper

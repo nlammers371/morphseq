@@ -1,0 +1,858 @@
+Cool. I’m going to do the “tight file skeleton” pass now: **module headers, constants, function signatures, schema validation helper, and null wrappers**. This is meant to be copy-pasteable into your repo and then you fill in kernels/plots incrementally.
+
+Below is a **suggested directory tree + code skeletons** for the *new* Stage 2 pieces and the lightweight resampling wrapper.
+
+---
+
+## Proposed file tree (new/changed)
+
+```text
+src/analyze/
+  classification/
+    __init__.py
+    misclassification_pipeline.py
+    misclassification_io.py              # schema + metadata loading + guards
+    misclassification_metrics.py
+    misclassification_null.py
+    misclassification_flagging.py
+    misclassification_viz.py
+  utils/
+    resampling/
+      lightweight_numpy_resampling.py
+      __init__.py
+```
+
+Optional but recommended:
+
+* keep IO/validation separate (`misclassification_io.py`) so pipeline reads like a script, not a compliance manual.
+
+---
+
+## `src/analyze/utils/resampling/lightweight_numpy_resampling.py`
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable
+
+import numpy as np
+
+
+REQUIRED_SUMMARY_KEYS = {
+    "stat_name",
+    "exceed_count",
+    "null_mean",
+    "null_std",
+    "obs_stat",
+    "pval",
+    "z_score",
+}
+
+
+@dataclass(frozen=True)
+class LiteRun:
+    """
+    Minimal, provenance-carrying container for lightweight numpy resampling tests.
+
+    - `spec` should be JSON-serializable.
+    - `summary` must contain REQUIRED_SUMMARY_KEYS.
+    - `samples` is optional and usually None (large).
+    """
+    test_name: str
+    n_iters: int
+    seed: int
+    spec: dict
+    summary: dict
+    samples: Any = None
+    metadata: dict | None = None
+
+
+def _validate_summary(summary: dict) -> None:
+    missing = REQUIRED_SUMMARY_KEYS - set(summary.keys())
+    if missing:
+        raise ValueError(f"LiteRun.summary missing required keys: {sorted(missing)}")
+
+    # Shape/dtype sanity (lightweight, but catches common mistakes early)
+    for k in ("exceed_count", "null_mean", "null_std", "obs_stat", "pval", "z_score"):
+        if not isinstance(summary[k], np.ndarray):
+            raise TypeError(f"LiteRun.summary['{k}'] must be np.ndarray, got {type(summary[k])}")
+
+    n = len(summary["obs_stat"])
+    for k in ("exceed_count", "null_mean", "null_std", "pval", "z_score"):
+        if len(summary[k]) != n:
+            raise ValueError(f"LiteRun.summary['{k}'] length {len(summary[k])} != obs_stat length {n}")
+
+
+def run_lite(
+    *,
+    test_name: str,
+    n_iters: int,
+    seed: int,
+    spec: dict,
+    kernel: Callable[[np.random.Generator, int], dict | tuple[dict, Any]],
+    collect_samples: bool = False,
+    metadata: dict | None = None,
+) -> LiteRun:
+    """
+    Standardized wrapper for lightweight NumPy resampling tests.
+
+    kernel(rng, n_iters) must perform ALL iterations (vectorized or loop)
+    and return either:
+      - summary dict
+      - (summary dict, samples)
+
+    kernel MUST:
+      - call only rng.* (never np.random.*)
+      - not spawn its own SeedSequence
+    """
+    if n_iters <= 0:
+        raise ValueError(f"n_iters must be positive; got {n_iters}")
+
+    ss = np.random.SeedSequence(seed)
+    rng = np.random.default_rng(ss)
+
+    out = kernel(rng, n_iters)
+    if isinstance(out, tuple):
+        summary, samples = out
+    else:
+        summary, samples = out, None
+
+    if collect_samples and samples is None:
+        raise ValueError("collect_samples=True requires kernel to return (summary, samples)")
+
+    _validate_summary(summary)
+
+    return LiteRun(
+        test_name=test_name,
+        n_iters=n_iters,
+        seed=seed,
+        spec=spec,
+        summary=summary,
+        samples=samples if collect_samples else None,
+        metadata=metadata or {},
+    )
+```
+
+---
+
+## `src/analyze/classification/misclassification_io.py`
+
+```python
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+
+@dataclass(frozen=True)
+class Stage1Metadata:
+    class_labels: list[str]
+    time_bin_definition: list[int] | list[float]
+    time_bin_center_formula: str
+    time_bin_edges_sha256: str
+    seed: int
+    n_permutations: int
+    git_commit: str
+    timestamp: str
+    schema_version: str
+
+
+def load_stage1_metadata(input_dir: Path) -> Stage1Metadata:
+    p = input_dir / "null" / "null_metadata.json"
+    if not p.exists():
+        raise FileNotFoundError(f"Missing Stage 1 metadata: {p}")
+
+    meta = json.loads(p.read_text())
+    # Required keys (fail loudly)
+    required = {
+        "class_labels",
+        "time_bin_definition",
+        "time_bin_center_formula",
+        "time_bin_edges_sha256",
+        "seed",
+        "n_permutations",
+        "git_commit",
+        "timestamp",
+        "schema_version",
+    }
+    missing = required - set(meta.keys())
+    if missing:
+        raise ValueError(f"Stage 1 metadata missing keys: {sorted(missing)}")
+
+    return Stage1Metadata(
+        class_labels=list(meta["class_labels"]),
+        time_bin_definition=list(meta["time_bin_definition"]),
+        time_bin_center_formula=str(meta["time_bin_center_formula"]),
+        time_bin_edges_sha256=str(meta["time_bin_edges_sha256"]),
+        seed=int(meta["seed"]),
+        n_permutations=int(meta["n_permutations"]),
+        git_commit=str(meta["git_commit"]),
+        timestamp=str(meta["timestamp"]),
+        schema_version=str(meta["schema_version"]),
+    )
+
+
+def load_embryo_predictions(input_dir: Path) -> pd.DataFrame:
+    p = input_dir / "embryo_predictions_augmented.parquet"
+    if not p.exists():
+        raise FileNotFoundError(f"Missing Stage 1 embryo predictions: {p}")
+    return pd.read_parquet(p)
+
+
+def validate_stage2_inputs(
+    df: pd.DataFrame,
+    *,
+    class_labels: list[str],
+    require_strict_time_order_within_embryo: bool = True,
+) -> None:
+    """
+    Stage 2 entrypoint validation. Fail loudly on any schema mismatch.
+    """
+    required_cols = {
+        "embryo_id",
+        "time_bin",
+        "time_bin_center",
+        "true_class",
+        "pred_class",
+        "p_true",
+        "p_pred",
+    }
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+    # pred_proba_{c} existence
+    for c in class_labels:
+        col = f"pred_proba_{c}"
+        if col not in df.columns:
+            raise ValueError(f"Missing required probability column: {col}")
+
+    # NA guards
+    critical_no_na = ["embryo_id", "time_bin", "true_class", "pred_class"]
+    for col in critical_no_na:
+        if df[col].isna().any():
+            raise ValueError(f"Column '{col}' contains NA values")
+
+    # dtype-ish checks (subdtype)
+    if not pd.api.types.is_integer_dtype(df["time_bin"]):
+        raise ValueError(f"time_bin must be integer dtype; got {df['time_bin'].dtype}")
+    if not pd.api.types.is_numeric_dtype(df["time_bin_center"]):
+        raise ValueError(f"time_bin_center must be numeric dtype; got {df['time_bin_center'].dtype}")
+    if not pd.api.types.is_numeric_dtype(df["p_true"]):
+        raise ValueError(f"p_true must be numeric dtype; got {df['p_true'].dtype}")
+    if not pd.api.types.is_numeric_dtype(df["p_pred"]):
+        raise ValueError(f"p_pred must be numeric dtype; got {df['p_pred'].dtype}")
+
+    # label vocab guards
+    bad_true = set(df["true_class"].unique()) - set(class_labels)
+    bad_pred = set(df["pred_class"].unique()) - set(class_labels)
+    if bad_true:
+        raise ValueError(f"true_class contains labels not in class_labels: {sorted(bad_true)}")
+    if bad_pred:
+        raise ValueError(f"pred_class contains labels not in class_labels: {sorted(bad_pred)}")
+
+    # prob sanity (assert-like)
+    prob_cols = [f"pred_proba_{c}" for c in class_labels] + ["p_true", "p_pred"]
+    for col in prob_cols:
+        x = df[col].to_numpy()
+        if np.any(np.isnan(x)):
+            # allow NaN for p_true/p_pred if your Stage 1 can emit it, but then you should decide.
+            # For now: fail loudly, because Stage 2 depends on these.
+            raise ValueError(f"Probability column '{col}' contains NaN")
+        if np.any((x < -1e-6) | (x > 1 + 1e-6)):
+            mn, mx = float(np.min(x)), float(np.max(x))
+            raise ValueError(f"Probability column '{col}' out of [0,1] (tol); min={mn:.3g}, max={mx:.3g}")
+
+    # time order within embryo
+    if require_strict_time_order_within_embryo:
+        g = df[["embryo_id", "time_bin"]].sort_values(["embryo_id", "time_bin"])
+        # duplicates within embryo?
+        dup = g.duplicated(subset=["embryo_id", "time_bin"]).any()
+        if dup:
+            raise ValueError("Found duplicate (embryo_id, time_bin) rows; streak/rolling requires unique bins.")
+        # strict increasing is equivalent to "sorted and no duplicates" under integer bins
+        # but still guard original ordering drift: ensure each embryo's bins are strictly increasing after sort
+        # (already true by construction). This is mainly the duplicate guard.
+```
+
+---
+
+## `src/analyze/classification/misclassification_metrics.py`
+
+```python
+from __future__ import annotations
+
+from typing import Tuple
+
+import numpy as np
+import pandas as pd
+
+
+def _longest_run_true(x: np.ndarray) -> int:
+    """Longest consecutive run of True in a 1D boolean array."""
+    if x.size == 0:
+        return 0
+    max_streak = 0
+    cur = 0
+    for v in x:
+        if v:
+            cur += 1
+            if cur > max_streak:
+                max_streak = cur
+        else:
+            cur = 0
+    return int(max_streak)
+
+
+def compute_per_embryo_metrics(
+    embryo_predictions: pd.DataFrame,
+    *,
+    embryo_id_col: str = "embryo_id",
+    time_bin_col: str = "time_bin",
+    pred_col: str = "pred_class",
+    true_col: str = "true_class",
+    p_true_col: str = "p_true",
+    p_pred_col: str = "p_pred",
+    allow_mode_true_class: bool = False,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Returns:
+      per_embryo_df, baseline_ct_df, baseline_c_df
+
+    Contract:
+      - is_wrong is derived internally as (pred_class != true_class)
+      - baseline_wrong_rate is ROW-weighted
+    """
+    df = embryo_predictions.copy()
+
+    # Derived correctness
+    df["_is_wrong"] = (df[pred_col] != df[true_col]).astype(np.int8)
+
+    # Baselines (ROW-weighted)
+    baseline_ct = (
+        df.groupby([true_col, time_bin_col], sort=True)["_is_wrong"]
+        .mean()
+        .reset_index()
+        .rename(columns={true_col: "true_class", time_bin_col: "time_bin", "_is_wrong": "baseline_wrong_rate"})
+    )
+    baseline_c = (
+        df.groupby(true_col, sort=True)["_is_wrong"]
+        .mean()
+        .reset_index()
+        .rename(columns={true_col: "true_class", "_is_wrong": "baseline_wrong_rate_class"})
+    )
+
+    # Sorting for sequence features
+    df = df.sort_values([embryo_id_col, time_bin_col], kind="mergesort")
+
+    # Embryo idx codes for later bincount-based null
+    df["_embryo_idx"] = pd.Categorical(df[embryo_id_col]).codes
+    # Guard: no -1 codes
+    if (df["_embryo_idx"] < 0).any():
+        raise ValueError("Unexpected -1 embryo_idx codes")
+
+    # True class per embryo (guard or mode)
+    true_per_embryo = df.groupby(embryo_id_col)[true_col].nunique()
+    multi = true_per_embryo[true_per_embryo > 1]
+    if len(multi) > 0:
+        if not allow_mode_true_class:
+            raise ValueError(
+                f"Embryos with >1 true_class detected (n={len(multi)}). "
+                "Set allow_mode_true_class=True to take mode."
+            )
+        # mode fallback
+        # (you can emit warnings.warn here; leaving clean for skeleton)
+    true_mode = df.groupby(embryo_id_col)[true_col].agg(lambda s: s.mode().iloc[0])
+
+    # Per-embryo aggregations
+    rows = []
+    # lookup for expected_wrong_rate by join later
+    baseline_ct_keyed = baseline_ct.set_index(["true_class", "time_bin"])["baseline_wrong_rate"]
+
+    for embryo_id, g in df.groupby(embryo_id_col, sort=False):
+        true_class = true_mode.loc[embryo_id]
+        embryo_idx = int(g["_embryo_idx"].iloc[0])
+        n_windows = int(len(g))
+        is_wrong = g["_is_wrong"].to_numpy(dtype=bool)
+
+        n_wrong = int(is_wrong.sum())
+        wrong_rate = float(n_wrong / n_windows) if n_windows > 0 else 0.0
+
+        longest_wrong_streak = _longest_run_true(is_wrong)
+        longest_correct_streak = _longest_run_true(~is_wrong)
+
+        preds = g[pred_col].to_numpy()
+        flip_rate = float(np.mean(preds[1:] != preds[:-1])) if len(preds) > 1 else 0.0
+
+        p_true = g[p_true_col].to_numpy(dtype=float)
+        mean_p_true = float(np.mean(p_true)) if n_windows > 0 else np.nan
+        min_p_true = float(np.min(p_true)) if n_windows > 0 else np.nan
+
+        p_pred = g[p_pred_col].to_numpy(dtype=float)
+
+        # margin on wrong-only bins
+        if n_wrong > 0:
+            margins = (p_true - p_pred)[is_wrong]
+            mean_margin = float(np.mean(margins)) if margins.size else np.nan
+            wrong_preds = preds[is_wrong]
+            # top confused
+            vc = pd.Series(wrong_preds).value_counts()
+            top_confused_as = str(vc.index[0])
+            top_confused_frac = float(vc.iloc[0] / n_wrong)
+            n_class_switches = int(pd.Series(wrong_preds).nunique())
+        else:
+            mean_margin = np.nan
+            top_confused_as = ""
+            top_confused_frac = 0.0
+            n_class_switches = 0
+
+        # expected_wrong_rate: average baseline(true_class, time_bin_t) over this embryo's observed bins
+        tbs = g[time_bin_col].to_numpy()
+        exp_vals = []
+        for tb in tbs:
+            exp_vals.append(float(baseline_ct_keyed.loc[(true_class, int(tb))]))
+        expected_wrong_rate = float(np.mean(exp_vals)) if exp_vals else np.nan
+
+        baseline_wrong_rate_class = float(
+            baseline_c.set_index("true_class").loc[true_class, "baseline_wrong_rate_class"]
+        )
+
+        rows.append(
+            dict(
+                embryo_id=str(embryo_id),
+                true_class=str(true_class),
+                embryo_idx=embryo_idx,
+                n_windows=n_windows,
+                n_wrong=n_wrong,
+                wrong_rate=wrong_rate,
+                longest_wrong_streak=longest_wrong_streak,
+                longest_correct_streak=longest_correct_streak,
+                flip_rate=flip_rate,
+                mean_p_true=mean_p_true,
+                min_p_true=min_p_true,
+                mean_margin=mean_margin,
+                top_confused_as=top_confused_as,
+                top_confused_frac=top_confused_frac,
+                n_class_switches=n_class_switches,
+                expected_wrong_rate=expected_wrong_rate,
+                baseline_wrong_rate_class=baseline_wrong_rate_class,
+            )
+        )
+
+    per_embryo = pd.DataFrame(rows).sort_values("embryo_idx").reset_index(drop=True)
+
+    # idx alignment guards
+    if not per_embryo["embryo_idx"].is_monotonic_increasing:
+        raise ValueError("per_embryo_metrics must be sorted by embryo_idx")
+    if not (per_embryo["embryo_idx"].to_numpy() == np.arange(len(per_embryo))).all():
+        raise ValueError("per_embryo_metrics embryo_idx must be 0..n-1 with no gaps")
+
+    return per_embryo, baseline_ct, baseline_c
+```
+
+---
+
+## `src/analyze/classification/misclassification_null.py`
+
+```python
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from analyze.utils.resampling.lightweight_numpy_resampling import LiteRun, run_lite
+
+
+WRONG_RATE_SPEC = {"type": "permute_labels", "within": "time_bin", "label": "pred_class", "derived": "is_wrong_perm"}
+STREAK_SPEC = {"type": "simulate", "dist": "bernoulli", "p": "baseline_wrong_rate(true_class,time_bin)", "gaps": "observed_only"}
+TOP_CONFUSED_SPEC = {"type": "simulate", "dist": "multinomial", "probs": "pooled_q_C_excluding_self"}
+
+
+def null_test_wrong_rate(
+    *,
+    embryo_predictions: pd.DataFrame,
+    per_embryo_metrics: pd.DataFrame,
+    class_labels: list[str],
+    n_permutations: int = 1_000,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, LiteRun]:
+    """
+    Permute pred_class within time_bin; keep true_class fixed; derive is_wrong_perm each iteration.
+    Returns updated per_embryo_metrics and the LiteRun for provenance/audit.
+    """
+    df_sorted = embryo_predictions.sort_values("time_bin").copy()
+
+    pred_codes = pd.Categorical(df_sorted["pred_class"], categories=class_labels).codes.astype(np.int16)
+    true_codes = pd.Categorical(df_sorted["true_class"], categories=class_labels).codes.astype(np.int16)
+    if (pred_codes < 0).any():
+        raise ValueError("pred_class contains labels not in class_labels")
+    if (true_codes < 0).any():
+        raise ValueError("true_class contains labels not in class_labels")
+
+    embryo_idx_arr = df_sorted["embryo_idx"].to_numpy()
+    n_embryos = len(per_embryo_metrics)
+
+    # alignment guards
+    if not per_embryo_metrics["embryo_idx"].is_monotonic_increasing:
+        raise ValueError("per_embryo_metrics must be sorted by embryo_idx")
+    if not (per_embryo_metrics["embryo_idx"].to_numpy() == np.arange(n_embryos)).all():
+        raise ValueError("per_embryo_metrics embryo_idx must be 0..n-1 with no gaps")
+
+    n_windows_arr = per_embryo_metrics["n_windows"].to_numpy(dtype=float)
+    obs_wrong_rate = per_embryo_metrics["wrong_rate"].to_numpy(dtype=float)
+
+    # slices per time_bin in the sorted array
+    bin_slices: dict[int, tuple[int, int]] = {}
+    pos = 0
+    for tb, grp in df_sorted.groupby("time_bin", sort=True):
+        n = len(grp)
+        bin_slices[int(tb)] = (pos, pos + n)
+        pos += n
+
+    def kernel(rng: np.random.Generator, n_iters: int) -> dict[str, Any]:
+        exceed = np.zeros(n_embryos, dtype=np.int64)
+        null_sum = np.zeros(n_embryos, dtype=np.float64)
+        null_sum_sq = np.zeros(n_embryos, dtype=np.float64)
+
+        pred_perm = pred_codes.copy()
+
+        for _ in range(n_iters):
+            np.copyto(pred_perm, pred_codes)
+            for tb in sorted(bin_slices):
+                start, stop = bin_slices[tb]
+                pred_perm[start:stop] = rng.permutation(pred_perm[start:stop])
+
+            is_wrong_perm = (pred_perm != true_codes).astype(np.int8)
+
+            wrong_count = np.bincount(
+                embryo_idx_arr,
+                weights=is_wrong_perm.astype(np.int32),
+                minlength=n_embryos,
+            ).astype(np.float64)
+
+            wr = wrong_count / n_windows_arr
+            exceed += (wr >= obs_wrong_rate)
+            null_sum += wr
+            null_sum_sq += wr ** 2
+
+        null_mean = null_sum / n_iters
+        null_var = null_sum_sq / n_iters - null_mean ** 2
+        null_std = np.sqrt(np.maximum(null_var, 0.0))
+        pval = (exceed + 1) / (n_iters + 1)
+        z = (obs_wrong_rate - null_mean) / (null_std + 1e-9)
+
+        return dict(
+            stat_name="wrong_rate",
+            exceed_count=exceed,
+            null_mean=null_mean,
+            null_std=null_std,
+            obs_stat=obs_wrong_rate,
+            pval=pval,
+            z_score=z,
+        )
+
+    run = run_lite(
+        test_name="misclassification_wrong_rate",
+        n_iters=n_permutations,
+        seed=random_state,
+        spec=WRONG_RATE_SPEC,
+        kernel=kernel,
+        collect_samples=False,
+        metadata={"class_labels": class_labels},
+    )
+
+    out = per_embryo_metrics.copy()
+    out["wrong_rate_null_mean"] = run.summary["null_mean"]
+    out["wrong_rate_null_std"] = run.summary["null_std"]
+    out["wrong_rate_z"] = run.summary["z_score"]
+    out["wrong_rate_exceed_count"] = run.summary["exceed_count"]
+    out["pval_wrong_rate"] = run.summary["pval"]
+    return out, run
+
+
+# Streak + top-confused skeletons: signatures + run_lite wrapper,
+# but leave kernel internals to implement next.
+def null_test_streak(
+    *,
+    per_embryo_metrics: pd.DataFrame,
+    baseline_ct_df: pd.DataFrame,
+    embryo_time_bins: pd.DataFrame,   # columns: embryo_id, time_bin
+    n_sim: int = 10_000,
+    random_state: int = 42,
+    p_clip: tuple[float, float] = (1e-6, 1 - 1e-6),
+) -> tuple[pd.DataFrame, LiteRun]:
+    raise NotImplementedError
+
+
+def null_test_top_confused_frac(
+    *,
+    per_embryo_metrics: pd.DataFrame,
+    embryo_predictions: pd.DataFrame,
+    class_labels: list[str],
+    n_sim: int = 10_000,
+    random_state: int = 42,
+    require_n_wrong_min: int = 3,
+    loo_min_class_size: int = 10,
+) -> tuple[pd.DataFrame, LiteRun]:
+    raise NotImplementedError
+```
+
+---
+
+## `src/analyze/classification/misclassification_flagging.py`
+
+```python
+from __future__ import annotations
+
+import pandas as pd
+
+
+def flag_consistently_misclassified(
+    per_embryo_metrics: pd.DataFrame,
+    *,
+    q_val_threshold: float = 0.05,
+    wrong_rate_z_threshold: float = 2.0,
+    wrong_rate_delta_threshold: float = 0.20,
+    top_confused_frac_threshold: float = 0.80,
+    require_n_windows_min: int = 3,
+    require_n_wrong_min: int = 3,
+) -> pd.DataFrame:
+    df = per_embryo_metrics.copy()
+
+    df["too_few_windows"] = df["n_windows"] < require_n_windows_min
+    df["too_few_wrong_for_confusion_test"] = df["n_wrong"] < require_n_wrong_min
+
+    # Expect these columns to exist by now (pipeline order)
+    # qvals are added after BH
+    reasons_code = []
+    reasons_label = []
+
+    code_to_label = {
+        "A": f"qval_wrong_rate<{q_val_threshold}",
+        "B": f"qval_streak<{q_val_threshold}",
+        "C": f"wrong_rate_z>{wrong_rate_z_threshold}",
+        "D": f"wrong_rate_delta>{wrong_rate_delta_threshold}",
+        "E": f"top_confused_frac>{top_confused_frac_threshold}&qval_top_confused<{q_val_threshold}",
+    }
+
+    is_flagged = []
+    codes_list = []
+    labels_list = []
+
+    for _, r in df.iterrows():
+        codes = []
+
+        if "qval_wrong_rate" in df.columns and r.get("qval_wrong_rate", 1.0) < q_val_threshold:
+            codes.append("A")
+        if "qval_streak" in df.columns and r.get("qval_streak", 1.0) < q_val_threshold:
+            codes.append("B")
+        if (not r["too_few_windows"]) and ("wrong_rate_z" in df.columns) and (r.get("wrong_rate_z", -1e9) > wrong_rate_z_threshold):
+            codes.append("C")
+        if (not r["too_few_windows"]) and ((r["wrong_rate"] - r["expected_wrong_rate"]) > wrong_rate_delta_threshold):
+            codes.append("D")
+
+        # top-confused rule expects these columns if test run
+        if (
+            ("top_confused_frac" in df.columns)
+            and (r.get("top_confused_frac", 0.0) > top_confused_frac_threshold)
+            and (r.get("qval_top_confused_frac", 1.0) < q_val_threshold)
+            and (not r["too_few_wrong_for_confusion_test"])
+            and (not bool(r.get("top_confused_test_skipped", False)))
+        ):
+            codes.append("E")
+
+        is_flagged.append(len(codes) > 0)
+        codes_list.append(codes)
+        labels_list.append([code_to_label[c] for c in codes])
+
+    df["is_flagged"] = is_flagged
+    df["flag_reason_codes"] = codes_list
+    df["flag_reason_labels"] = labels_list
+
+    return df
+
+
+def compute_confusion_enrichment(*args, **kwargs):
+    raise NotImplementedError
+
+
+def compute_time_localization(*args, **kwargs):
+    raise NotImplementedError
+```
+
+---
+
+## `src/analyze/classification/misclassification_pipeline.py`
+
+```python
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from analyze.classification.misclassification_io import (
+    load_embryo_predictions,
+    load_stage1_metadata,
+    validate_stage2_inputs,
+)
+from analyze.classification.misclassification_metrics import compute_per_embryo_metrics
+from analyze.classification.misclassification_null import (
+    null_test_wrong_rate,
+    # null_test_streak,
+    # null_test_top_confused_frac,
+    WRONG_RATE_SPEC,
+    STREAK_SPEC,
+    TOP_CONFUSED_SPEC,
+)
+from analyze.classification.misclassification_flagging import flag_consistently_misclassified
+
+
+def _bh_fdr(pvals: np.ndarray) -> np.ndarray:
+    """
+    Prefer scipy.stats.false_discovery_control when available.
+    """
+    try:
+        from scipy.stats import false_discovery_control as _bh
+        return _bh(pvals)
+    except Exception:
+        try:
+            from statsmodels.stats.multitest import fdrcorrection
+            return fdrcorrection(pvals, alpha=0.05, method="indep")[1]
+        except Exception as e:
+            raise ImportError("Need SciPy>=1.11 or statsmodels for BH-FDR") from e
+
+
+def run_misclassification_pipeline(
+    *,
+    input_dir: Path,
+    output_dir: Path,
+    config: dict[str, Any],
+) -> dict[str, pd.DataFrame]:
+    """
+    Stage 2 orchestrator. Pure consumer of Stage 1 artifacts.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "tables").mkdir(exist_ok=True)
+    (output_dir / "plots").mkdir(exist_ok=True)
+
+    meta1 = load_stage1_metadata(input_dir)
+    df = load_embryo_predictions(input_dir)
+
+    validate_stage2_inputs(df, class_labels=meta1.class_labels)
+
+    # Metrics
+    per_embryo, baseline_ct, baseline_c = compute_per_embryo_metrics(
+        df, allow_mode_true_class=bool(config.get("allow_mode_true_class", False))
+    )
+
+    # Wrong-rate null
+    per_embryo, run_wrong = null_test_wrong_rate(
+        embryo_predictions=df,
+        per_embryo_metrics=per_embryo,
+        class_labels=meta1.class_labels,
+        n_permutations=int(config.get("n_permutations", 1000)),
+        random_state=int(config.get("random_state", 42)),
+    )
+
+    # Placeholder for streak / top-confused (implement next)
+    # per_embryo, run_streak = null_test_streak(...)
+    # per_embryo, run_top = null_test_top_confused_frac(...)
+
+    # BH-FDR per test
+    per_embryo["qval_wrong_rate"] = _bh_fdr(per_embryo["pval_wrong_rate"].to_numpy(dtype=float))
+
+    # Flagging
+    flagged_df = flag_consistently_misclassified(
+        per_embryo,
+        q_val_threshold=float(config.get("q_val_threshold", 0.05)),
+        wrong_rate_z_threshold=float(config.get("wrong_rate_z_threshold", 2.0)),
+        wrong_rate_delta_threshold=float(config.get("wrong_rate_delta_threshold", 0.20)),
+        top_confused_frac_threshold=float(config.get("top_confused_frac_threshold", 0.80)),
+        require_n_windows_min=int(config.get("require_n_windows_min", 3)),
+        require_n_wrong_min=int(config.get("require_n_wrong_min", 3)),
+    )
+
+    flagged_only = flagged_df[flagged_df["is_flagged"]].copy()
+
+    # Write tables
+    per_embryo.to_csv(output_dir / "tables" / "per_embryo_metrics.csv", index=False)
+    baseline_ct.to_csv(output_dir / "tables" / "baseline_wrong_rate_by_class_time.csv", index=False)
+    baseline_c.to_csv(output_dir / "tables" / "baseline_wrong_rate_by_class.csv", index=False)
+    flagged_df.to_csv(output_dir / "tables" / "per_embryo_with_flags.csv", index=False)
+    flagged_only.to_csv(output_dir / "tables" / "flagged_embryos.csv", index=False)
+
+    # Metadata (Stage 2)
+    stage2_meta = dict(
+        null_specs=dict(
+            wrong_rate=WRONG_RATE_SPEC,
+            streak=STREAK_SPEC,
+            top_confused=TOP_CONFUSED_SPEC,
+        ),
+        n_permutations=int(config.get("n_permutations", 1000)),
+        n_sim=int(config.get("n_sim", 10000)),
+        random_state=int(config.get("random_state", 42)),
+        class_labels_source="metadata",
+        class_labels=meta1.class_labels,
+        require_n_windows_min=int(config.get("require_n_windows_min", 3)),
+        require_n_wrong_min=int(config.get("require_n_wrong_min", 3)),
+        q_val_threshold=float(config.get("q_val_threshold", 0.05)),
+        wrong_rate_z_threshold=float(config.get("wrong_rate_z_threshold", 2.0)),
+        wrong_rate_delta_threshold=float(config.get("wrong_rate_delta_threshold", 0.20)),
+        top_confused_frac_threshold=float(config.get("top_confused_frac_threshold", 0.80)),
+        loo_min_class_size=int(config.get("loo_min_class_size", 10)),
+        git_commit=str(config.get("git_commit", "")),
+        timestamp=str(config.get("timestamp", "")),
+        schema_version="misclassification_v1",
+        stage1_schema_version=meta1.schema_version,
+    )
+    (output_dir / "metadata.json").write_text(json.dumps(stage2_meta, indent=2, sort_keys=True))
+
+    return {
+        "per_embryo_metrics": per_embryo,
+        "baseline_ct_df": baseline_ct,
+        "baseline_c_df": baseline_c,
+        "flagged_embryos": flagged_only,
+        "per_embryo_with_flags": flagged_df,
+    }
+```
+
+---
+
+## `src/analyze/classification/__init__.py` (new exports)
+
+```python
+from __future__ import annotations
+
+# Stage 2
+from .misclassification_pipeline import run_misclassification_pipeline
+
+__all__ = [
+    "run_misclassification_pipeline",
+]
+```
+
+---
+
+### What this gives you right now
+
+* A **hard Stage 2 “front door”** (`validate_stage2_inputs`)
+* A **complete per-embryo metrics** implementation (minus tiny preference tweaks)
+* A **complete wrong-rate null** wired through `run_lite` and returning `LiteRun`
+* A pipeline that **writes tables + metadata** and is ready to accept streak/top-confused next
+
+If you want, I can do the next concrete chunk in the same style: implement
+
+1. `_vectorized_longest_run(matrix)` for streak null, and
+2. the full `null_test_streak()` kernel (loop embryos, vectorize over n_sim),
+3. plus `null_test_top_confused_frac()` with LOO pooling and audit metadata.

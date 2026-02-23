@@ -1,0 +1,7 @@
+# Placeholder for YX1 test data images
+#
+# This directory should contain:
+# - test_yx1_001_A06_t0000.tif through test_yx1_001_A06_t0009.tif (BF + fluorescence channels)
+# - test_yx1_001_B04_t0000.tif through test_yx1_001_B04_t0009.tif (BF + fluorescence channels)
+#
+# See ../../../README.md for extraction instructions

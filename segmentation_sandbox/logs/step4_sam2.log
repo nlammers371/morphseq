@@ -1,0 +1,886 @@
+🎬 SAM2 Video Processing Pipeline
+==================================================
+📋 Config: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/configs/pipeline_config.yaml
+📊 Metadata: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/experiment_metadata.json
+🎯 Annotations: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/detections/gdino_detections.json
+💾 Output: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+🎭 Target prompt: 'individual embryo'
+📦 Format: rle
+🖥️  Device: cuda
+🔬 Processing entities: ['20250612_30hpf_ctrl_atf6']
+
+🔧 Loading SAM2 configuration...
+🎬 Initializing GroundedSamAnnotations...
+🎬 Initializing GroundedSamAnnotations...
+   Target prompt: 'individual embryo'
+   Segmentation format: rle
+   Output file: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+📚 Loading components...
+✅ Components loaded successfully
+📝 Initialized new results structure
+✅ GroundedSamAnnotations initialized successfully
+🔧 Loading SAM2 model...
+🔧 Loading SAM2 model...
+ℹ️ Using SAM2 model root from config: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/models/sam2/sam2
+✅ SAM2 model loaded on GPU
+✅ SAM2 model loaded successfully
+🎯 Found 92 videos to process
+📹 Videos:
+   - 20250612_30hpf_ctrl_atf6_F11: 1 images
+   - 20250612_30hpf_ctrl_atf6_A05: 1 images
+   - 20250612_30hpf_ctrl_atf6_F09: 1 images
+   - 20250612_30hpf_ctrl_atf6_G03: 1 images
+   - 20250612_30hpf_ctrl_atf6_D12: 1 images
+   ... and 87 more videos
+
+🔍 Entity cross-reference:
+   GroundedDINO videos: 92
+   SAM2 processed videos: 0
+   Missing videos: 92
+🎯 Processing 92 videos for SAM2 segmentation
+
+📹 Processing video 1/92: 20250612_30hpf_ctrl_atf6_G05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G05: 'dict' object has no attribute 'index'
+
+📹 Processing video 2/92: 20250612_30hpf_ctrl_atf6_H06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H06
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H06: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H06 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H06: 'dict' object has no attribute 'index'
+
+📹 Processing video 3/92: 20250612_30hpf_ctrl_atf6_A12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A12: 'dict' object has no attribute 'index'
+
+📹 Processing video 4/92: 20250612_30hpf_ctrl_atf6_A11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A11: 'dict' object has no attribute 'index'
+
+📹 Processing video 5/92: 20250612_30hpf_ctrl_atf6_E07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E07: 'dict' object has no attribute 'index'
+
+📹 Processing video 6/92: 20250612_30hpf_ctrl_atf6_E11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E11: 'dict' object has no attribute 'index'
+
+📹 Processing video 7/92: 20250612_30hpf_ctrl_atf6_C12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C12: 'dict' object has no attribute 'index'
+
+📹 Processing video 8/92: 20250612_30hpf_ctrl_atf6_B01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B01: 'dict' object has no attribute 'index'
+
+📹 Processing video 9/92: 20250612_30hpf_ctrl_atf6_D01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D01: 'dict' object has no attribute 'index'
+
+📹 Processing video 10/92: 20250612_30hpf_ctrl_atf6_E01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E01: 'dict' object has no attribute 'index'
+
+📹 Processing video 11/92: 20250612_30hpf_ctrl_atf6_C08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C08: 'dict' object has no attribute 'index'
+
+📹 Processing video 12/92: 20250612_30hpf_ctrl_atf6_D12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D12: 'dict' object has no attribute 'index'
+
+📹 Processing video 13/92: 20250612_30hpf_ctrl_atf6_H11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H11: 'dict' object has no attribute 'index'
+
+📹 Processing video 14/92: 20250612_30hpf_ctrl_atf6_G03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G03: 'dict' object has no attribute 'index'
+
+📹 Processing video 15/92: 20250612_30hpf_ctrl_atf6_A02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A02: 'dict' object has no attribute 'index'
+
+📹 Processing video 16/92: 20250612_30hpf_ctrl_atf6_F04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F04: 'dict' object has no attribute 'index'
+
+📹 Processing video 17/92: 20250612_30hpf_ctrl_atf6_B04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B04: 'dict' object has no attribute 'index'
+
+📹 Processing video 18/92: 20250612_30hpf_ctrl_atf6_H03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H03: 'dict' object has no attribute 'index'
+
+📹 Processing video 19/92: 20250612_30hpf_ctrl_atf6_G11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G11: 'dict' object has no attribute 'index'
+
+📹 Processing video 20/92: 20250612_30hpf_ctrl_atf6_G12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G12: 'dict' object has no attribute 'index'
+
+📹 Processing video 21/92: 20250612_30hpf_ctrl_atf6_G04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G04: 'dict' object has no attribute 'index'
+
+📹 Processing video 22/92: 20250612_30hpf_ctrl_atf6_F11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F11: 'dict' object has no attribute 'index'
+
+📹 Processing video 23/92: 20250612_30hpf_ctrl_atf6_A06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A06
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A06: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A06 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A06: 'dict' object has no attribute 'index'
+
+📹 Processing video 24/92: 20250612_30hpf_ctrl_atf6_C01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C01: 'dict' object has no attribute 'index'
+
+📹 Processing video 25/92: 20250612_30hpf_ctrl_atf6_D05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D05: 'dict' object has no attribute 'index'
+
+📹 Processing video 26/92: 20250612_30hpf_ctrl_atf6_D07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D07: 'dict' object has no attribute 'index'
+
+📹 Processing video 27/92: 20250612_30hpf_ctrl_atf6_B02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B02: 'dict' object has no attribute 'index'
+
+📹 Processing video 28/92: 20250612_30hpf_ctrl_atf6_G01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G01: 'dict' object has no attribute 'index'
+
+📹 Processing video 29/92: 20250612_30hpf_ctrl_atf6_C11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C11: 'dict' object has no attribute 'index'
+
+📹 Processing video 30/92: 20250612_30hpf_ctrl_atf6_E08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E08: 'dict' object has no attribute 'index'
+
+📹 Processing video 31/92: 20250612_30hpf_ctrl_atf6_H10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H10: 'dict' object has no attribute 'index'
+
+📹 Processing video 32/92: 20250612_30hpf_ctrl_atf6_H08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H08: 'dict' object has no attribute 'index'
+
+📹 Processing video 33/92: 20250612_30hpf_ctrl_atf6_C05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C05: 'dict' object has no attribute 'index'
+
+📹 Processing video 34/92: 20250612_30hpf_ctrl_atf6_H01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H01: 'dict' object has no attribute 'index'
+
+📹 Processing video 35/92: 20250612_30hpf_ctrl_atf6_C03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C03: 'dict' object has no attribute 'index'
+
+📹 Processing video 36/92: 20250612_30hpf_ctrl_atf6_A07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A07: 'dict' object has no attribute 'index'
+
+📹 Processing video 37/92: 20250612_30hpf_ctrl_atf6_G02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G02: 'dict' object has no attribute 'index'
+
+📹 Processing video 38/92: 20250612_30hpf_ctrl_atf6_A04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A04: 'dict' object has no attribute 'index'
+
+📹 Processing video 39/92: 20250612_30hpf_ctrl_atf6_B09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B09: 'dict' object has no attribute 'index'
+
+📹 Processing video 40/92: 20250612_30hpf_ctrl_atf6_H05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H05: 'dict' object has no attribute 'index'
+
+📹 Processing video 41/92: 20250612_30hpf_ctrl_atf6_A03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A03: 'dict' object has no attribute 'index'
+
+📹 Processing video 42/92: 20250612_30hpf_ctrl_atf6_E02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E02: 'dict' object has no attribute 'index'
+
+📹 Processing video 43/92: 20250612_30hpf_ctrl_atf6_D03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D03: 'dict' object has no attribute 'index'
+
+📹 Processing video 44/92: 20250612_30hpf_ctrl_atf6_F09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F09: 'dict' object has no attribute 'index'
+
+📹 Processing video 45/92: 20250612_30hpf_ctrl_atf6_D10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D10: 'dict' object has no attribute 'index'
+
+📹 Processing video 46/92: 20250612_30hpf_ctrl_atf6_F03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F03: 'dict' object has no attribute 'index'
+
+📹 Processing video 47/92: 20250612_30hpf_ctrl_atf6_F12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F12: 'dict' object has no attribute 'index'
+
+📹 Processing video 48/92: 20250612_30hpf_ctrl_atf6_C10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C10: 'dict' object has no attribute 'index'
+
+📹 Processing video 49/92: 20250612_30hpf_ctrl_atf6_E12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E12: 'dict' object has no attribute 'index'
+
+📹 Processing video 50/92: 20250612_30hpf_ctrl_atf6_C02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C02: 'dict' object has no attribute 'index'
+
+📹 Processing video 51/92: 20250612_30hpf_ctrl_atf6_D02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D02: 'dict' object has no attribute 'index'
+
+📹 Processing video 52/92: 20250612_30hpf_ctrl_atf6_F07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F07: 'dict' object has no attribute 'index'
+
+📹 Processing video 53/92: 20250612_30hpf_ctrl_atf6_C04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C04: 'dict' object has no attribute 'index'
+
+📹 Processing video 54/92: 20250612_30hpf_ctrl_atf6_E03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E03: 'dict' object has no attribute 'index'
+
+📹 Processing video 55/92: 20250612_30hpf_ctrl_atf6_D09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D09: 'dict' object has no attribute 'index'
+
+📹 Processing video 56/92: 20250612_30hpf_ctrl_atf6_B05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B05: 'dict' object has no attribute 'index'
+
+📹 Processing video 57/92: 20250612_30hpf_ctrl_atf6_H07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H07: 'dict' object has no attribute 'index'
+
+📹 Processing video 58/92: 20250612_30hpf_ctrl_atf6_E10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E10: 'dict' object has no attribute 'index'
+
+📹 Processing video 59/92: 20250612_30hpf_ctrl_atf6_B12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B12: 'dict' object has no attribute 'index'
+
+📹 Processing video 60/92: 20250612_30hpf_ctrl_atf6_A01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A01: 'dict' object has no attribute 'index'
+
+📹 Processing video 61/92: 20250612_30hpf_ctrl_atf6_C09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_C09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_C09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_C09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_C09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_C09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_C09: 'dict' object has no attribute 'index'
+
+📹 Processing video 62/92: 20250612_30hpf_ctrl_atf6_B03
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B03
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B03
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B03
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B03: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B03 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B03: 'dict' object has no attribute 'index'
+
+📹 Processing video 63/92: 20250612_30hpf_ctrl_atf6_H12
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H12
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H12
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H12
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H12: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H12 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H12: 'dict' object has no attribute 'index'
+
+📹 Processing video 64/92: 20250612_30hpf_ctrl_atf6_B07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B07: 'dict' object has no attribute 'index'
+
+📹 Processing video 65/92: 20250612_30hpf_ctrl_atf6_F02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F02: 'dict' object has no attribute 'index'
+
+📹 Processing video 66/92: 20250612_30hpf_ctrl_atf6_A05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A05: 'dict' object has no attribute 'index'
+
+📹 Processing video 67/92: 20250612_30hpf_ctrl_atf6_B11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B11: 'dict' object has no attribute 'index'
+
+📹 Processing video 68/92: 20250612_30hpf_ctrl_atf6_E04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E04: 'dict' object has no attribute 'index'
+
+📹 Processing video 69/92: 20250612_30hpf_ctrl_atf6_G10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G10: 'dict' object has no attribute 'index'
+
+📹 Processing video 70/92: 20250612_30hpf_ctrl_atf6_B08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B08: 'dict' object has no attribute 'index'
+
+📹 Processing video 71/92: 20250612_30hpf_ctrl_atf6_H02
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H02
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H02
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H02
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H02: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H02 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H02: 'dict' object has no attribute 'index'
+
+📹 Processing video 72/92: 20250612_30hpf_ctrl_atf6_F01
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F01
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F01
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F01
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F01: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F01 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F01: 'dict' object has no attribute 'index'
+
+📹 Processing video 73/92: 20250612_30hpf_ctrl_atf6_G08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G08: 'dict' object has no attribute 'index'
+
+📹 Processing video 74/92: 20250612_30hpf_ctrl_atf6_B10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_B10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_B10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_B10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_B10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_B10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_B10: 'dict' object has no attribute 'index'
+
+📹 Processing video 75/92: 20250612_30hpf_ctrl_atf6_E05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E05: 'dict' object has no attribute 'index'
+
+📹 Processing video 76/92: 20250612_30hpf_ctrl_atf6_G06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G06
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G06: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G06 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G06: 'dict' object has no attribute 'index'
+
+📹 Processing video 77/92: 20250612_30hpf_ctrl_atf6_D11
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D11
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D11
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D11
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D11: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D11 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D11: 'dict' object has no attribute 'index'
+
+📹 Processing video 78/92: 20250612_30hpf_ctrl_atf6_E06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_E06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_E06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_E06
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_E06: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_E06 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_E06: 'dict' object has no attribute 'index'
+
+📹 Processing video 79/92: 20250612_30hpf_ctrl_atf6_A10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A10: 'dict' object has no attribute 'index'
+
+📹 Processing video 80/92: 20250612_30hpf_ctrl_atf6_A08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A08: 'dict' object has no attribute 'index'
+
+📹 Processing video 81/92: 20250612_30hpf_ctrl_atf6_F06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F06
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F06: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F06 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F06: 'dict' object has no attribute 'index'
+
+📹 Processing video 82/92: 20250612_30hpf_ctrl_atf6_F05
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F05
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F05
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F05
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F05: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F05 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F05: 'dict' object has no attribute 'index'
+
+📹 Processing video 83/92: 20250612_30hpf_ctrl_atf6_G09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G09: 'dict' object has no attribute 'index'
+
+📹 Processing video 84/92: 20250612_30hpf_ctrl_atf6_F10
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F10
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F10
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F10
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F10: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F10 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F10: 'dict' object has no attribute 'index'
+
+📹 Processing video 85/92: 20250612_30hpf_ctrl_atf6_D06
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D06
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D06
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D06
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D06: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D06 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D06: 'dict' object has no attribute 'index'
+
+📹 Processing video 86/92: 20250612_30hpf_ctrl_atf6_F08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_F08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_F08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_F08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_F08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_F08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_F08: 'dict' object has no attribute 'index'
+
+📹 Processing video 87/92: 20250612_30hpf_ctrl_atf6_H04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H04: 'dict' object has no attribute 'index'
+
+📹 Processing video 88/92: 20250612_30hpf_ctrl_atf6_A09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_A09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_A09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_A09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_A09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_A09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_A09: 'dict' object has no attribute 'index'
+
+📹 Processing video 89/92: 20250612_30hpf_ctrl_atf6_H09
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_H09
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_H09
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_H09
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_H09: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_H09 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_H09: 'dict' object has no attribute 'index'
+
+📹 Processing video 90/92: 20250612_30hpf_ctrl_atf6_D08
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D08
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D08
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D08
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D08: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D08 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D08: 'dict' object has no attribute 'index'
+
+📹 Processing video 91/92: 20250612_30hpf_ctrl_atf6_D04
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_D04
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_D04
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_D04
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_D04: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_D04 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_D04: 'dict' object has no attribute 'index'
+
+📹 Processing video 92/92: 20250612_30hpf_ctrl_atf6_G07
+🎬 Processing video: 20250612_30hpf_ctrl_atf6_G07
+🎬 Processing single video: 20250612_30hpf_ctrl_atf6_G07
+📁 Video directory: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/raw_data_organized/20250612_30hpf_ctrl_atf6/images/20250612_30hpf_ctrl_atf6_G07
+🖼️ Total frames: 1
+❌ Error processing video 20250612_30hpf_ctrl_atf6_G07: 'dict' object has no attribute 'index'
+❌ Video 20250612_30hpf_ctrl_atf6_G07 processing failed: 'dict' object has no attribute 'index'
+❌ Error processing 20250612_30hpf_ctrl_atf6_G07: 'dict' object has no attribute 'index'
+ℹ️ Hierarchy validation disabled
+📋 Entity tracker updated: {'experiments': 1, 'videos': 92, 'images': 0, 'embryos': 0, 'snips': 0}
+💾 SAM2 results saved to /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+
+✅ Processing complete: {'processed': 0, 'errors': 92, 'total': 92}
+
+==================================================
+✅ SAM2 Video Processing Complete!
+⏱️  Processing time: 0:00:00.089085
+📊 Videos processed: 0
+❌ Errors: 92
+💾 Output saved to: /net/trapnell/vol1/home/mdcolon/proj/morphseq/segmentation_sandbox/data/segmentation/grounded_sam_segmentations.json
+
+📈 Final Statistics:
+   🧪 Experiments: 1
+   🖼️  Images: 0
+   🎭 Snips: 0
+   📦 Format: rle

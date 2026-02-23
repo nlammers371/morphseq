@@ -1,0 +1,81 @@
+################################################################################
+# mdcolon Results Directory (.gitignore)
+#
+# This .gitignore applies ONLY to results/mcolon/
+# Does NOT impact nlmaers or other users' results.
+#
+# Strategy: BLACKLIST approach
+# - Allow source code and documentation by default
+# - Explicitly deny large/binary files
+# - Safer for tracking Python scripts and notebooks
+################################################################################
+
+# ============================================================================
+# LARGE/BINARY FILES (IGNORE)
+# ============================================================================
+# NumPy arrays
+**/*.npy
+
+# Pickled objects
+**/*.pkl
+**/*.pickle
+
+# PyTorch models and checkpoints
+**/*.pt
+**/*.pth
+**/*.ckpt
+
+# HDF5 files
+**/*.h5
+**/*.hdf5
+
+# NetCDF files (ArviZ/PyMC model cache)
+**/*.nc
+
+# Images and media (typically outputs, not source)
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.bmp
+**/*.tiff
+**/*.svg
+**/*.pdf
+**/*.mp4
+**/*.avi
+**/*.mov
+
+# HTML outputs (plotly, jupyter exports)
+**/*.html
+
+# Tabular and metadata artifacts (generated analysis outputs)
+**/*.csv
+**/*.tsv
+**/*.json
+
+# Avoid accidental package scaffolding from experiment scratch dirs
+**/__init__.py
+
+# Logs
+**/*.log
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+
+# Jupyter checkpoints
+**/.ipynb_checkpoints/
+
+# Large data directories (add specific ones as needed)
+**/output/figures/
+**/output/results/*.npy
+**/output/results/*.pkl
+
+# ============================================================================
+# EXCEPTIONS (ALLOW despite patterns above)
+# ============================================================================
+# Allow files in key_results/ directories
+!**/key_results/**

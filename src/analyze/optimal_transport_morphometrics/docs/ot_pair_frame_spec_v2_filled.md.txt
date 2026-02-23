@@ -1,0 +1,385 @@
+# OT Pipeline Specification: The Pair-Frame Architecture (v2, filled-in)
+
+**Goal:** An Optimal Transport (OT) pipeline that (i) handles source/target masks with *vastly different sizes* correctly, (ii) preserves mass exactly under downsampling, and (iii) supports future GPU batching (bucketing) **without rewriting the core logic**.
+
+This specification formalizes **Option A**: the OT solver operates on a **work grid**, while all saved/debug outputs are rasterized back to the **canonical grid**.
+
+---
+
+## 1. Core Concept: The Pair Frame
+
+For any OT comparison, we do **not** solve on “Mask A’s grid” or “Mask B’s grid.” We solve on a **Shared Pair Frame** defined by a **pair-specific canonical crop** that contains *both* objects.
+
+- **Principle:** Source and target densities are embedded into a single shared coordinate container large enough to hold both.
+- **Scope:** A new `GridTransform` is created for **every** OT pair comparison. Transforms are never shared across pairs unless explicitly forced (e.g., controlled benchmarking).
+- **Scientific validity:** This places a tiny embryo and a huge embryo on the same “stage” without warping/rescaling either object; OT computes transport within a common domain.
+
+---
+
+## 2. The Source of Truth: `GridTransform`
+
+We define a single (preferably immutable) class that owns all coordinate mapping logic and metadata for a *specific OT comparison*.
+
+### 2.1 Factory Method: `from_pair()`
+
+This method guarantees that both measures are in the same coordinate frame **before** the solver runs.
+
+```python
+from dataclasses import dataclass
+from typing import Literal, Optional
+
+@dataclass(frozen=True)
+class BoxYX:
+    # Half-open slices: [y0, y1), [x0, x1)
+    y0: int
+    y1: int
+    x0: int
+    x1: int
+
+    @property
+    def h(self) -> int:
+        return self.y1 - self.y0
+
+    @property
+    def w(self) -> int:
+        return self.x1 - self.x0
+
+
+@dataclass(frozen=True)
+class GridTransform:
+    # --- Geometry / frames ---
+    canon_shape_hw: tuple[int, int]          # (Hc, Wc) full canvas
+    pair_crop_box_yx: BoxYX                  # canonical crop used for this OT run
+    downsample_factor: int                   # s (integer >= 1)
+    work_shape_hw: tuple[int, int]           # (Hw, Ww) grid passed to solver
+
+    # --- Bucketing / padding (work-space) ---
+    # If bucketing is enabled, the solver sees a bucket-sized array.
+    # work_valid_box_yx indicates where the real (downsampled) crop lives inside that bucket.
+    work_valid_box_yx: Optional[BoxYX]       # in work coordinates, half-open
+    work_pad_offsets_yx: tuple[int, int]     # (dy, dx) offset of valid region in bucket (0,0 if none)
+
+    # --- Physical units (canonical is authoritative) ---
+    px_size_um: float                        # canonical pixel side length in µm
+
+    @property
+    def px_area_um2(self) -> float:
+        return self.px_size_um ** 2
+
+    @property
+    def work_px_size_um(self) -> float:
+        return self.downsample_factor * self.px_size_um
+
+    @property
+    def work_px_area_um2(self) -> float:
+        return (self.downsample_factor ** 2) * self.px_area_um2
+
+    @classmethod
+    def from_pair(
+        cls,
+        mask_a,  # canonical-space mask/density, shape (Hc, Wc)
+        mask_b,  # canonical-space mask/density, shape (Hc, Wc)
+        s: int,
+        pad: int = 16,
+        crop_policy: Literal["union", "fixed", "bucketed"] = "union",
+        override_pair_bbox: Optional[BoxYX] = None,
+        bucket_shapes: Optional[list[tuple[int, int]]] = None,  # list of (Hb, Wb) in WORK pixels
+        bucket_mode: Literal["next_larger", "nearest"] = "next_larger",
+        px_size_um: float = 8.0,
+    ) -> "GridTransform":
+        """
+        Computes a pair-specific shared frame and returns a GridTransform.
+
+        Steps (canonical space unless noted):
+        1) Compute bbox_a and bbox_b in canonical coords (tight nonzero bounding boxes).
+        2) Compute union_bbox = union(bbox_a, bbox_b), then expand by pad (clamp to canvas).
+        3) Apply crop policy:
+           - 'union': pad-to-divisible in CANONICAL space so (h,w) divisible by s (zeros are implicit outside masks).
+           - 'fixed': require override_pair_bbox; use it (after clamping), then pad-to-divisible if needed.
+           - 'bucketed': (a) do 'union' (including pad-to-divisible) to get a canonical crop;
+                        (b) compute the implied work shape (Hw, Ww);
+                        (c) choose a bucket shape (Hb, Wb) in WORK pixels and pad in WORK space to that shape.
+        4) Return GridTransform with:
+           - pair_crop_box_yx in canonical space
+           - work_shape_hw the array shape passed to solver (bucket shape if bucketed)
+           - work_valid_box_yx and work_pad_offsets_yx describing where real data lives in bucket (if used).
+        """
+        raise NotImplementedError
+```
+
+> **Important:** `bucket_shapes` are specified in **work-pixel units** (after downsampling). This enables GPU batching on a small set of fixed tensor shapes.
+
+---
+
+## 3. Mass & Unit Conventions (Strict)
+
+To prevent ambiguity and accidental unit drift, we adhere to **one** explicit convention.
+
+### 3.1 Mass definition (discrete mass per canonical pixel)
+
+- Let `rho_canon[y, x] ≥ 0` be the canonical density map for a mask.
+- **Convention:** `rho_canon` values represent **discrete mass per canonical pixel** (not “mass per µm²”).
+- **Total mass (pixel-mass units):**  
+  \[
+  M = \sum_{y,x} \rho_{\text{canon}}[y,x]
+  \]
+- **Physical area (if mass corresponds to occupied area/pigment coverage):**  
+  \[
+  \text{Area}_{\mu m^2} = M \cdot (\text{px\_area\_um2})
+  \]
+  where `px_area_um2 = px_size_um^2`.
+
+### 3.2 Downsampling rule: sum pooling (mass-preserving)
+
+Let `s = downsample_factor`. After cropping to the pair crop box, downsample via **sum pooling** over `s×s` blocks:
+
+\[
+\rho_{\text{work}}[i,j] = \sum_{u=0}^{s-1}\sum_{v=0}^{s-1} \rho_{\text{crop}}[is+u, js+v]
+\]
+
+- **Invariant:**  
+  \[
+  \sum_{i,j} \rho_{\text{work}}[i,j] = \sum_{y,x} \rho_{\text{crop}}[y,x]
+  \]
+  (up to floating point error).
+- **Rationale:** avoids aliasing/flicker (vs striding) and preserves total mass exactly.
+
+### 3.3 Solver normalization (optional but recommended)
+
+Optionally normalize each measure before solving to stabilize comparisons across embryos/timepoints:
+
+- `M_s = sum(rho_work_source)`, `M_t = sum(rho_work_target)`
+- Provide normalized weights to the solver, e.g. `rho_work / M` (so totals are 1.0).
+- Store `M_s`, `M_t` in results metadata to recover physical totals later.
+
+This does **not** change coordinate geometry; it only rescales mass units.
+
+---
+
+## 4. Workflow: Step-by-Step
+
+### Step A: Preprocessing (Shared Crop → Work Grid)
+
+**Inputs:** canonical-space masks/densities `mask_a`, `mask_b` on a common canonical canvas `(Hc, Wc)`.
+
+1) **Compute pair frame (`GridTransform`)**
+   - Compute tight bboxes for A and B in canonical space.
+   - Define `pair_crop_box_yx` as union(bboxA, bboxB) + `pad`, clamped to canvas.
+   - Apply `crop_policy`:
+     - `union`: **pad-to-divisible** in canonical space so crop `h,w` divisible by `s`
+     - `fixed`: use `override_pair_bbox` (then pad-to-divisible if needed)
+     - `bucketed`: union + pad-to-divisible, then **bucket in work space** (see below)
+
+2) **Crop both masks with the same canonical crop**
+   - `crop_a = mask_a[y0:y1, x0:x1]`
+   - `crop_b = mask_b[y0:y1, x0:x1]`
+
+3) **Pad inside the crop if needed (canonical space, union/fixed)**
+   - If the crop `h,w` are not divisible by `s`, extend the crop box (preferred) or pad the cropped arrays with zeros.
+   - **This spec uses pad-to-divisible** (zero padding) with a documented rule (e.g., extend `y1`/`x1` when possible, otherwise shift inward).
+
+4) **Downsample to the work grid**
+   - `rho_work_a = sum_pool(crop_a, block=(s,s))`
+   - `rho_work_b = sum_pool(crop_b, block=(s,s))`
+   - If using `bucketed`, additionally pad in **work space** to the chosen bucket shape:
+     - Let the true downsampled shape be `(Hw, Ww)`.
+     - Choose bucket `(Hb, Wb)` from `bucket_shapes` by `bucket_mode`.
+     - Create bucket arrays of zeros `(Hb, Wb)` and insert the valid data region at `work_pad_offsets_yx = (dy, dx)`.
+     - Set `work_valid_box_yx = BoxYX(dy, dy+Hw, dx, dx+Ww)`.
+
+**Result of Step A:** Two work-grid density maps of identical shape `transform.work_shape_hw` ready for the solver.
+
+---
+
+### Step B: The Solver (Work Grid Only)
+
+The solver consumes:
+- supports/weights derived from `rho_work_a` and `rho_work_b`
+- all coordinates in **work-pixel units**
+
+**Metric / cost:**
+- Costs are computed using work-grid coordinates (e.g., squared Euclidean in work pixels).
+- **We do not rescale coordinates to canonical pixels before solving.** This preserves solver invariance and avoids retuning regularization due to metric scaling.
+
+**Output:** Coupling and/or derived work-grid maps (examples):
+- `mass_created_work` shape `(Hw_solved, Ww_solved)` = `transform.work_shape_hw`
+- `mass_destroyed_work` shape `(Hw_solved, Ww_solved)`
+- `velocity_work_px` shape `(Hw_solved, Ww_solved, 2)` in **work pixels per frame**
+
+> If bucketing is used, solver outputs are bucket-shaped; interpretation is restricted to `work_valid_box_yx`.
+
+---
+
+### Step C: Output Rasterization (Work → Canonical)
+
+All saved/debug outputs are canonical-shaped arrays `(Hc, Wc)` so they overlay directly on original data.
+
+#### C.1 Mass maps (created/destroyed)
+
+**Units:** mass maps remain in **discrete mass per canonical pixel** after rasterization.
+
+Rasterization rule (mass-conserving uniform splat):
+- For each work pixel `(yw, xw)` in the **valid work region**:
+  - Determine its canonical block:
+    - canonical top-left = `(y0 + (yw - dy)*s, x0 + (xw - dx)*s)` where `(dy,dx)=work_pad_offsets_yx`
+    - block is `s×s` canonical pixels
+  - Add `mass_work[yw,xw] / (s^2)` to every canonical pixel in that block.
+
+This preserves:
+- `sum(mass_canon_crop) == sum(mass_work_valid)` (up to float error).
+
+#### C.2 Velocity fields
+
+Velocity conversion (recommended for interpretability):
+- Convert to physical units **before** storing on canonical grid:
+  \[
+  v_{\mu m/frame} = v_{work\_px/frame} \cdot (work\_px\_size\_um)
+  \]
+- Then splat (uniform) into each `s×s` canonical block.
+- Store `velocity_field` in canonical shape with units **µm/frame**.
+
+---
+
+## 5. Storage & Results Container
+
+```python
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass
+class TransportResult:
+    # 1) Data products (Canonical Frame)
+    mass_created: np.ndarray        # (Hc, Wc), units: mass per canonical pixel
+    mass_destroyed: np.ndarray      # (Hc, Wc), units: mass per canonical pixel
+    velocity_field: np.ndarray      # (Hc, Wc, 2), units: µm/frame
+
+    # 2) Context / provenance
+    transform: GridTransform
+    M_source: float                 # total source mass in pixel-mass units (before optional normalization)
+    M_target: float                 # total target mass in pixel-mass units
+
+    # 3) Scalar metrics (explicit units!)
+    total_transport_cost_work_px2: float  # cost computed in work-pixel^2 units (if applicable)
+    total_transport_cost_um2: float       # same cost converted by (work_px_size_um^2) if desired
+    total_mass_moved: float              # pixel-mass units
+
+    # 4) Solver params
+    epsilon: float
+    lambda_unbalanced: float
+```
+
+> **Note:** If you choose to store only one cost field, name it with units (e.g., `total_transport_cost_um2`) to avoid ambiguity.
+
+---
+
+## 6. Implementation Checklist (“The Golden Tests”)
+
+These assertions must run in debug mode (or CI) to catch bugs early.
+
+### 6.1 Pair bbox containment
+```python
+# The pair crop must contain both individual bboxes (after padding/clamping rules)
+assert pair_bbox.contains(bbox_a)
+assert pair_bbox.contains(bbox_b)
+```
+
+### 6.2 Mass conservation (downsampling)
+For each input:
+```python
+# crop_a is the canonical crop used for this run (after any pad-to-divisible)
+# rho_work_a is the sum-pooled downsampled density (before any bucket padding)
+assert np.isclose(rho_work_a.sum(), crop_a.sum(), rtol=1e-6, atol=1e-6)
+```
+
+### 6.3 Shape consistency
+```python
+assert work_map_a.shape == transform.work_shape_hw
+assert work_map_b.shape == transform.work_shape_hw
+```
+If bucketing is enabled, ensure valid region is inside bucket:
+```python
+vy0, vy1, vx0, vx1 = (transform.work_valid_box_yx.y0,
+                      transform.work_valid_box_yx.y1,
+                      transform.work_valid_box_yx.x0,
+                      transform.work_valid_box_yx.x1)
+Hb, Wb = transform.work_shape_hw
+assert 0 <= vy0 < vy1 <= Hb
+assert 0 <= vx0 < vx1 <= Wb
+```
+
+### 6.4 Accounting identity (unbalanced OT)
+Let:
+- `M_s = sum(source_work_valid)`
+- `M_t = sum(target_work_valid)`
+- `T = transported_mass`
+- `C = created_mass`
+- `D = destroyed_mass`
+
+Then (within tolerance):
+```python
+assert np.isclose(T + D, M_s, rtol=1e-5, atol=1e-6)
+assert np.isclose(T + C, M_t, rtol=1e-5, atol=1e-6)
+```
+
+### 6.5 Rasterization sanity (mass)
+```python
+restored = transform.rasterize_to_canon(rho_work_a)  # uniform splat into canonical crop
+assert np.isclose(restored.sum(), rho_work_a.sum(), rtol=1e-6, atol=1e-6)
+```
+
+Optional center-of-mass proximity (tolerant, not strict IoU):
+```python
+# Acceptable deviation: on the order of one work pixel in physical units
+# (because pooling loses sub-block position)
+assert com_distance_um(restored, crop_a) <= transform.work_px_size_um
+```
+
+---
+
+## 7. Future-Proofing: GPU & Batching (Bucketing)
+
+This design supports future GPU throughput improvements via bucketing while preserving Pair-Frame semantics.
+
+- **Bucketing-ready:** `crop_policy="bucketed"` pads *work-space* tensors to a small set of fixed shapes (e.g., 64×128, 128×256) so many OT problems can be batched on GPU.
+- **Core solver logic unchanged:** The solver still receives work-grid arrays and work-grid coordinates. Only `GridTransform.from_pair()` changes how it pads and how it records `work_valid_box_yx` and `work_pad_offsets_yx`.
+- **Correctness:** Padding is always zeros (no mass). Reporting/rasterization can restrict to `work_valid_box_yx` so padded regions do not leak into downstream analyses or overlays.
+
+---
+
+## Appendix A: Mapping Formulas (Canonical ↔ Work)
+
+Let:
+- canonical crop box = `[y0:y1, x0:x1)` in canonical coords
+- downsample factor = `s`
+- bucket pad offsets = `(dy, dx)` in work coords (0,0 if none)
+
+### A.1 Canonical → local crop coords
+- `y_crop = y_canon - y0`
+- `x_crop = x_canon - x0`
+
+### A.2 Crop coords → work coords (before bucket padding)
+- `y_work0 = y_crop // s`
+- `x_work0 = x_crop // s`
+
+### A.3 Work coords (bucketed) → canonical block
+Given a work pixel `(yw, xw)` in the bucket array:
+- local-work coords within valid region:
+  - `y_valid = yw - dy`
+  - `x_valid = xw - dx`
+- canonical block top-left:
+  - `y_block0 = y0 + y_valid * s`
+  - `x_block0 = x0 + x_valid * s`
+- canonical block:
+  - `y ∈ [y_block0, y_block0 + s)`
+  - `x ∈ [x_block0, x_block0 + s)`
+
+Uniform splat:
+- add `value_work[yw,xw] / (s^2)` to each pixel in the block.
+
+---
+
+## Appendix B: What This Spec Does *Not* Do
+
+- It does not attempt to track individual melanocytes; it preserves **mass distribution** at a chosen work resolution.
+- It does not warp one embryo to match another; it only embeds them into a shared frame.
+- It does not enforce that couplings match those computed on the full canonical grid; rather, it ensures a consistent and efficient compute grid, and consistent canonical outputs.

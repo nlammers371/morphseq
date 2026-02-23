@@ -1,0 +1,9 @@
+comparison,metric,statistic,p_value,test,n1,n2
+All Genotypes (ANOVA),arc_length_ratio,117.21248706999087,1.380023240846104e-49,ANOVA,,
+WT vs Het,arc_length_ratio,-7.027495903976683,3.884159720002832e-12,t-test,502.0,501.0
+WT vs Homo,arc_length_ratio,-11.46742584176943,1.2446613025620728e-29,t-test,502.0,1763.0
+Het vs Homo,arc_length_ratio,-10.182047660986226,7.723646462503877e-24,t-test,501.0,1763.0
+All Genotypes (ANOVA),normalized_baseline_deviation,541.8462244551964,2.946861271704335e-199,ANOVA,,
+WT vs Het,normalized_baseline_deviation,-6.0595424074976325,1.9304118534505983e-09,t-test,502.0,501.0
+WT vs Homo,normalized_baseline_deviation,-26.675734959430752,1.5015320176716079e-136,t-test,502.0,1763.0
+Het vs Homo,normalized_baseline_deviation,-21.23405940796503,2.1555420817019653e-91,t-test,501.0,1763.0

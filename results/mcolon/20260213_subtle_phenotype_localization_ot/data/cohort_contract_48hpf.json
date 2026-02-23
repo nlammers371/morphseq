@@ -1,0 +1,288 @@
+{
+  "contract_version": "1.0",
+  "description": "Locked cohort contract for subtle phenotype localization pilot.",
+  "selection_parameters": {
+    "genotype_wt": "cep290_wildtype",
+    "genotype_mutant": "cep290_homozygous",
+    "target_hpf": 48.0,
+    "tolerance_hpf": 1.25,
+    "n_ref_requested": 1,
+    "n_control_min_required": 10,
+    "n_mutant_min_required": 20,
+    "n_ref_selected": 1,
+    "n_control_selected": 10,
+    "n_mutant_selected": 20
+  },
+  "temporal_window_policy": {
+    "mode": "single_2hpf_bin",
+    "primary_window_hpf": [
+      47.0,
+      49.0
+    ],
+    "expanded_window_hpf_optional": [
+      46.0,
+      50.0
+    ],
+    "multi_frame_collapse_rule": "If expanded window is used, collapse to one row per embryo before stats using per-embryo median of each feature across frames."
+  },
+  "source_manifests": {
+    "cohort_selected_embryos_csv": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260213_stream_d_reference_embryo/output/cohort_selection/cohort_selected_embryos.csv",
+    "cohort_bin_frame_manifest_csv": "/net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260213_stream_d_reference_embryo/output/cohort_selection/cohort_bin_frame_manifest.csv"
+  },
+  "cohorts": {
+    "reference": [
+      {
+        "embryo_id": "20251212_H07_e01",
+        "frame_index": 90,
+        "set_rank": 1,
+        "matched_stage_hpf": 47.8071846890625,
+        "stage_abs_err_hpf": 0.1928153109374974,
+        "genotype": "cep290_wildtype"
+      }
+    ],
+    "control": [
+      {
+        "embryo_id": "20251112_H05_e01",
+        "frame_index": 38,
+        "set_rank": 1,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251112_F08_e01",
+        "frame_index": 38,
+        "set_rank": 2,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251112_D02_e01",
+        "frame_index": 37,
+        "set_rank": 3,
+        "matched_stage_hpf": 46.83826042993164,
+        "stage_abs_err_hpf": 1.161739570068363,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251212_B06_e01",
+        "frame_index": 90,
+        "set_rank": 4,
+        "matched_stage_hpf": 47.8071846890625,
+        "stage_abs_err_hpf": 0.1928153109374974,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251205_G08_e01",
+        "frame_index": 70,
+        "set_rank": 5,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20250512_C09_e01",
+        "frame_index": 109,
+        "set_rank": 6,
+        "matched_stage_hpf": 46.834337925585935,
+        "stage_abs_err_hpf": 1.165662074414065,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251205_G10_e01",
+        "frame_index": 70,
+        "set_rank": 7,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251212_C10_e01",
+        "frame_index": 90,
+        "set_rank": 8,
+        "matched_stage_hpf": 47.8071846890625,
+        "stage_abs_err_hpf": 0.1928153109374974,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251205_G07_e01",
+        "frame_index": 70,
+        "set_rank": 9,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_wildtype"
+      },
+      {
+        "embryo_id": "20251112_B11_e01",
+        "frame_index": 38,
+        "set_rank": 10,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_wildtype"
+      }
+    ],
+    "mutant": [
+      {
+        "embryo_id": "20251112_H12_e01",
+        "frame_index": 38,
+        "set_rank": 1,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_C01_e01",
+        "frame_index": 70,
+        "set_rank": 2,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_C12_e01",
+        "frame_index": 38,
+        "set_rank": 3,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_B09_e01",
+        "frame_index": 38,
+        "set_rank": 4,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_C09_e01",
+        "frame_index": 70,
+        "set_rank": 5,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_G09_e01",
+        "frame_index": 38,
+        "set_rank": 6,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_F11_e01",
+        "frame_index": 38,
+        "set_rank": 7,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_F01_e01",
+        "frame_index": 70,
+        "set_rank": 8,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_H08_e01",
+        "frame_index": 38,
+        "set_rank": 9,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_A04_e01",
+        "frame_index": 70,
+        "set_rank": 10,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_A10_e01",
+        "frame_index": 38,
+        "set_rank": 11,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_G02_e01",
+        "frame_index": 70,
+        "set_rank": 12,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251212_A08_e01",
+        "frame_index": 90,
+        "set_rank": 13,
+        "matched_stage_hpf": 47.8071846890625,
+        "stage_abs_err_hpf": 0.1928153109374974,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251212_F08_e01",
+        "frame_index": 88,
+        "set_rank": 14,
+        "matched_stage_hpf": 47.07962224255371,
+        "stage_abs_err_hpf": 0.920377757446289,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_C10_e01",
+        "frame_index": 70,
+        "set_rank": 15,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251212_F11_e01",
+        "frame_index": 90,
+        "set_rank": 16,
+        "matched_stage_hpf": 47.8071846890625,
+        "stage_abs_err_hpf": 0.1928153109374974,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20250512_D08_e01",
+        "frame_index": 112,
+        "set_rank": 17,
+        "matched_stage_hpf": 47.78980057587891,
+        "stage_abs_err_hpf": 0.2101994241210931,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251205_A03_e01",
+        "frame_index": 70,
+        "set_rank": 18,
+        "matched_stage_hpf": 47.62101153120118,
+        "stage_abs_err_hpf": 0.3789884687988234,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251112_D08_e01",
+        "frame_index": 38,
+        "set_rank": 19,
+        "matched_stage_hpf": 47.423855142431634,
+        "stage_abs_err_hpf": 0.5761448575683659,
+        "genotype": "cep290_homozygous"
+      },
+      {
+        "embryo_id": "20251212_E10_e01",
+        "frame_index": 90,
+        "set_rank": 20,
+        "matched_stage_hpf": 47.8071846890625,
+        "stage_abs_err_hpf": 0.1928153109374974,
+        "genotype": "cep290_homozygous"
+      }
+    ]
+  }
+}

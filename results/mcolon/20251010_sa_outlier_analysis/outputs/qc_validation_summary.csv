@@ -1,0 +1,2 @@
+experiment,k_upper,k_lower,total_embryos,flagged_embryos,pct_flagged,frames_too_large,frames_too_small,F03_caught,F06_caught,H07_caught
+20250711,1.2,0.9,93,63,67.74193548387096,187,2733,True,True,True
