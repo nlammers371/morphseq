@@ -110,7 +110,7 @@ def plot_auroc_with_null(
             auroc_df["auroc_null_mean"] - auroc_df["auroc_null_std"],
             auroc_df["auroc_null_mean"] + auroc_df["auroc_null_std"],
             color=color,
-            alpha=0.10,
+            alpha=0.25,
             linewidth=0,
         )
 
@@ -142,11 +142,12 @@ def _format_auroc_axis(ax: plt.Axes, title: str, ylim: Tuple[float, float], sig_
     ax.set_xlabel("Hours Post Fertilization (hpf)", fontsize=12)
     ax.set_ylabel("AUROC", fontsize=12)
     ax.set_title(title, fontsize=14)
-    ax.legend(loc="upper left", fontsize=9)
+    # ax.legend(loc="upper left", fontsize=9)
+    ax.legend(loc="best", fontsize=9)
     ax.set_ylim(ylim)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, alpha=0.25)
 
 
 def plot_multiple_aurocs(
