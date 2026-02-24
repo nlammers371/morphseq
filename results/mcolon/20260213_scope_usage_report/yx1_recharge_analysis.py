@@ -94,11 +94,13 @@ quarter_order = sorted(df["quarter_label"].unique(), key=lambda q: (int(q[:4]), 
 # ---------------------------------------------------------------------------
 # 2. Available hours per quarter
 # ---------------------------------------------------------------------------
+DATA_MAX_DATE = df["date"].max()
+
 def days_in_quarter(year: int, q: int) -> int:
     starts = {1: (1, 1), 2: (4, 1), 3: (7, 1), 4: (10, 1)}
     ends   = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
     start = pd.Timestamp(year=year, month=starts[q][0], day=starts[q][1])
-    end   = pd.Timestamp(year=year, month=ends[q][0],   day=ends[q][1])
+    end   = min(pd.Timestamp(year=year, month=ends[q][0], day=ends[q][1]), DATA_MAX_DATE)
     return (end - start).days + 1
 
 quarter_meta = (
@@ -301,7 +303,8 @@ year_labels = [str(y) for y in year_order]
 
 # Available hours per year
 def days_in_year(year: int) -> int:
-    return (pd.Timestamp(year=year, month=12, day=31) - pd.Timestamp(year=year, month=1, day=1)).days + 1
+    end = min(pd.Timestamp(year=year, month=12, day=31), DATA_MAX_DATE)
+    return (end - pd.Timestamp(year=year, month=1, day=1)).days + 1
 
 avail_hours_yr = {y: days_in_year(y) * SCOPE_HOURS_PER_DAY for y in year_order}
 
