@@ -156,6 +156,11 @@ def prepare_working_grid_pair(
         raise ValueError("Empty masks are not supported by working-grid preparation (cannot compute pair bbox).")
 
     canonical_um_per_px = float(src.grid.um_per_px)
+
+    # Use pre-computed bboxes if available (skip redundant pixel scan)
+    bbox_src = src.content_bbox_yx if src.content_bbox_yx is not None else None
+    bbox_tgt = tgt.content_bbox_yx if tgt.content_bbox_yx is not None else None
+
     pair_frame = create_pair_frame_geometry(
         canon_mask_src,
         canon_mask_tgt,
@@ -163,6 +168,8 @@ def prepare_working_grid_pair(
         padding_px=int(cfg.padding_px),
         px_size_um=canonical_um_per_px,
         crop_policy=str(cfg.crop_policy),
+        bbox_a=bbox_src,
+        bbox_b=bbox_tgt,
     )
 
     bbox = pair_frame.pair_crop_box_yx

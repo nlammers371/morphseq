@@ -9,6 +9,7 @@ Public surface:
 """
 
 from .types import (
+    BoxYX,
     CanonicalFrameResult,
     CanonicalGrid,
     CanonicalImageResult,
@@ -17,3 +18,4 @@ from .types import (
     RegisterResult,
 )
 from .transforms import GridTransform, TransformChain
+from .grids.canonical import to_canonical_grid_mask_batch

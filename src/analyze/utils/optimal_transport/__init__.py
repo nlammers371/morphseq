@@ -34,6 +34,12 @@ from analyze.utils.optimal_transport.multiscale_sampling import (
 from analyze.utils.optimal_transport.transport_maps import compute_transport_maps, compute_cost_maps
 from analyze.utils.optimal_transport.metrics import summarize_metrics, compute_transport_metrics
 from analyze.utils.optimal_transport.batch import BatchItem, solve_working_grid_batch
+from analyze.utils.optimal_transport.shared_grid import (
+    SharedGridGeometry,
+    SharedWorkingGrid,
+    prepare_shared_working_grid,
+    make_working_grid_pair_from_shared,
+)
 
 __all__ = [
     # Config and data structures
@@ -77,6 +83,11 @@ __all__ = [
     # Metrics
     "summarize_metrics",
     "compute_transport_metrics",
+    # Shared grid
+    "SharedGridGeometry",
+    "SharedWorkingGrid",
+    "prepare_shared_working_grid",
+    "make_working_grid_pair_from_shared",
 ]
 
 

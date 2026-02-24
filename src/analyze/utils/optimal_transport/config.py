@@ -14,27 +14,8 @@ try:
 except Exception:  # pragma: no cover - scipy optional in some envs
     Coupling = np.ndarray
 
-
-@dataclass(frozen=True)
-class BoxYX:
-    """Half-open bounding box [y0, y1) × [x0, x1) in pixel coordinates."""
-    y0: int
-    y1: int
-    x0: int
-    x1: int
-
-    @property
-    def h(self) -> int:
-        return self.y1 - self.y0
-
-    @property
-    def w(self) -> int:
-        return self.x1 - self.x0
-
-    def contains(self, other: "BoxYX") -> bool:
-        """Check if this box contains another box."""
-        return (self.y0 <= other.y0 and self.y1 >= other.y1 and
-                self.x0 <= other.x0 and self.x1 >= other.x1)
+# BoxYX canonical definition lives in coord.types; re-export for backwards compat.
+from analyze.utils.coord.types import BoxYX  # noqa: F401
 
 
 @dataclass(frozen=True)
@@ -68,6 +49,18 @@ class PairFrameGeometry:
     # Bucketing (future, currently unused in MVP)
     work_valid_box_yx: Optional[BoxYX] = None
     work_pad_offsets_yx: tuple[int, int] = (0, 0)
+
+    @classmethod
+    def from_shared(cls, geom: "SharedGridGeometry") -> "PairFrameGeometry":
+        """Construct from a SharedGridGeometry (lossless mapping)."""
+        return cls(
+            canon_shape_hw=geom.canon_shape_hw,
+            pair_crop_box_yx=geom.crop_box_yx,
+            crop_pad_hw=geom.crop_pad_hw,
+            downsample_factor=geom.downsample_factor,
+            work_shape_hw=geom.work_shape_hw,
+            px_size_um=geom.canonical_um_per_px,
+        )
 
     @property
     def px_area_um2(self) -> float:

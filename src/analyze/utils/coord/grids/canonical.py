@@ -25,6 +25,7 @@ except Exception:  # pragma: no cover
 from scipy import ndimage
 
 from ..types import (
+    BoxYX,
     CanonicalFrameResult,
     CanonicalGrid,
     CanonicalImageResult,
@@ -746,7 +747,11 @@ class CanonicalGridMapper:
                 },
                 "to_canonical_grid": {"applied": False, "checks": {"assume_canonical": True}, "decisions": {}},
             }
-            return CanonicalMaskResult(mask=np.asarray(mask).astype(np.uint8), grid=self.grid, transform_chain=chain, meta=meta)
+            out_mask = np.asarray(mask).astype(np.uint8)
+            return CanonicalMaskResult(
+                mask=out_mask, grid=self.grid, transform_chain=chain, meta=meta,
+                content_bbox_yx=BoxYX.from_mask(out_mask),
+            )
 
         use_pca = self.cfg.align_mode != "none"
         use_yolk = self.cfg.align_mode == "yolk"
@@ -790,7 +795,11 @@ class CanonicalGridMapper:
             "yolk_com_yx": yolk_com,
             "align_meta": align_meta,
         }
-        return CanonicalMaskResult(mask=out_mask.astype(np.uint8), grid=self.grid, transform_chain=chain, meta=meta)
+        out_mask_u8 = out_mask.astype(np.uint8)
+        return CanonicalMaskResult(
+            mask=out_mask_u8, grid=self.grid, transform_chain=chain, meta=meta,
+            content_bbox_yx=BoxYX.from_mask(out_mask_u8),
+        )
 
 
 def to_canonical_grid_mask(
@@ -961,3 +970,25 @@ def to_canonical_grid_frame(
         meta=dict(meta_in),
     )
     return CanonicalFrameResult(frame=out_frame, grid=grid, transform_chain=chain, meta=meta_out)
+
+
+def to_canonical_grid_mask_batch(
+    masks: list[np.ndarray],
+    *,
+    um_per_px: float,
+    yolk_masks: Optional[list[Optional[np.ndarray]]] = None,
+    cfg: Optional[CanonicalGridConfig] = None,
+) -> list[CanonicalMaskResult]:
+    """Canonicalize N masks with the same config. Each result carries content_bbox_yx."""
+    cfg = cfg or CanonicalGridConfig()
+    if yolk_masks is not None and len(yolk_masks) != len(masks):
+        raise ValueError(
+            f"yolk_masks length ({len(yolk_masks)}) must match masks length ({len(masks)})"
+        )
+    results: list[CanonicalMaskResult] = []
+    for i, mask in enumerate(masks):
+        ym = yolk_masks[i] if yolk_masks is not None else None
+        results.append(
+            to_canonical_grid_mask(mask, um_per_px=um_per_px, yolk_mask=ym, cfg=cfg)
+        )
+    return results
