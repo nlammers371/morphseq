@@ -43,10 +43,10 @@ Implement in this order. Each step must be runnable and testable before moving t
 1. Data loading and fragment sampling
 2. Evaluation and visualization stack (against dummy predictions)
 3. Kernel baseline
-4. phi0-only model (Stage 1 training)
-5. Add modes with S_m = 0 (Stage 2 training)
-6. Unfreeze S_m
-7. Add regularization terms incrementally
+4. phi0-only model (Model v1)
+5. Implement closed-form solvers for c, v, R (inference module)
+6. Add orthogonal baseline flux modes (Model v2; see 3.4 in doc/model_spec.md)
+7. Add full mode learning machinery with options to (i) learn only potential    modes (Model v3), (ii) only flux modes (Model v4), or (iii) both (Model v5)
 
 ## Data Format
 

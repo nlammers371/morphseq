@@ -49,7 +49,7 @@ where:
 | $c_e \in \mathbb{R}^M$ | Mode loadings per embryo (unconstrained reals) |
 | $R_e > 0$ | Rate parameter per embryo |
 | $v_e \in \mathbb{R}^d$ | Embryo-specific local drift correction |
-| $w_e(z)$ | Spatial decay kernel for local correction (see §3.5) |
+| $w_e(z)$ | Spatial decay kernel for local correction (see §3.6) |
 
 ### 3.3 Mode Parameterization (Helmholtz)
 
@@ -62,7 +62,29 @@ Each mode contributes a drift $(-I + S_m) \nabla_z \phi_m(z)$. This admits a cle
 
 To toggle between potential-only and Helmholtz modes: simply freeze $S_m = 0$ for the potential-only variant. This should be a runtime flag, not an architectural change.
 
-### 3.4 Rate Parameters
+### 3.4 Variant: Orthogonal-to-Baseline Modes
+
+An alternative, more constrained formulation defines modes as flux fields that are orthogonal to $\nabla \phi_0$ by construction. Each mode uses the baseline potential's own gradient, rotated by an antisymmetric matrix:
+
+$$f_m(z) = S_m \, \nabla_z \phi_0(z)$$
+
+The total drift becomes:
+
+$$f(z; c_e, R_e) = R_e \left[-\beta I + \sum_m c_{e,m} \, S_m \right] \nabla_z \phi_0(z) + v_e \cdot w_e(z)$$
+
+This has several notable properties:
+
+**Exact tempo-mode separation.** The rate of developmental progression under this drift is $d\phi_0/dt = \nabla \phi_0 \cdot f = -\beta R_e \|\nabla \phi_0\|^2$, because $x^\top S x = 0$ for any antisymmetric $S$. Mode loadings have zero effect on developmental tempo — they exclusively redirect trajectories across isoclines. All tempo variation lives in $R_e$ by mathematical necessity, not regularization.
+
+**No separate mode networks.** Each mode is an antisymmetric matrix: $d(d-1)/2$ parameters (45 for $d=10$). No MLPs, no smoothness penalties, no Hessian regularization. Total mode parameters for $M=5$: 225 scalars plus the shared $\phi_0$ network. The $\mathcal{R}_1$, $\mathcal{R}_2$, $\mathcal{R}_3$ penalties are unnecessary since mode complexity is inherently bounded.
+
+**Limitations.** Modes cannot create new branching points that don't exist in $\phi_0$. They can redirect which branch a trajectory follows, and shape how it traverses a valley, but the topology of the landscape — where valleys exist and where they split — is determined entirely by $\phi_0$. This is appropriate for a developmental landscape with no attractors (no $\nabla \phi_0 = 0$), where perturbations are expected to redirect fate decisions rather than create novel fates. Mode drift is strongest in transit regions where $\|\nabla \phi_0\|$ is large, and weakest near flat regions of the landscape.
+
+**Closed-form solve.** The drift remains linear in $c$, so the closed-form ridge solve (§4.1) applies identically. The design matrix columns become $H_{t,m} = R_e \, S_m \, \nabla_z \phi_0(z_t) \, \Delta t$.
+
+This variant should be implemented alongside the full Helmholtz model as a model selection flag (e.g., `mode_type: "orthogonal" | "helmholtz" | "potential_only"`). Comparing the two directly tests whether perturbation effects in the data can be fully explained as redirections of baseline flow, or whether they require genuinely novel landscape features.
+
+### 3.5 Rate Parameters
 
 The embryo-level rate decomposes as:
 
@@ -78,7 +100,7 @@ where:
 
 $R_e$ modulates the **entire** drift (baseline + modes), not just the baseline. This reflects the assumption that temperature scales developmental rate uniformly. A key consequence: $R_e$ factors out of the least-squares solve for $c_e$, so mode loadings are invariant to developmental tempo.
 
-### 3.5 Embryo-Specific Local Drift Correction
+### 3.6 Embryo-Specific Local Drift Correction
 
 The term $v_e \cdot w_e(z)$ handles OOD trajectories that the mode basis cannot adequately represent:
 
@@ -198,7 +220,7 @@ Computed via double backward passes. Encourages smooth, broad landscape features
 
 ### 6.6 Rate Parameter Centering
 
-Mean-centering constraint on $\lambda_e$ across the training set: $\bar{\lambda} = 1$. Implemented via reparameterization (§3.4).
+Mean-centering constraint on $\lambda_e$ across the training set: $\bar{\lambda} = 1$. Implemented via reparameterization (§3.5).
 
 ---
 
@@ -362,15 +384,16 @@ The following are computed and logged at each evaluation checkpoint:
   - Per-mode average $|c_{e,m}|$ (which modes are being used?)
   - $\|S_m\|_F$ per mode (how non-conservative are the learned dynamics?)
 
-### 11.2 Three Models Always Compared
+### 11.2 Four Models Always Compared
 
-Every evaluation report shows three models side by side:
+Every evaluation report shows four models side by side:
 
 1. **Kernel baseline** — no learned dynamics, pure memorization
 2. **$\phi_0$-only** — learned baseline potential, no modes (stage 1 checkpoint)
-3. **Full model** — baseline potential + modes + local correction
+3. **Orthogonal modes** — modes as pure redirections of baseline flow ($S_m \nabla \phi_0$, §3.4)
+4. **Full Helmholtz model** — independent mode potentials with optional non-conservative dynamics
 
-This decomposition directly answers: does learning dynamics help? Do modes help beyond baseline dynamics?
+This decomposition directly answers: does learning dynamics help (1→2)? Do modes help beyond baseline dynamics (2→3)? Does allowing modes to reshape the landscape — not just redirect flow — add further value (3→4)?
 
 ---
 
@@ -405,7 +428,17 @@ This shows whether the model's uncertainty is calibrated and whether it outperfo
 
 This reveals whether the dynamical phenotype captures meaningful biological structure: do perturbation classes cluster? Are there subpopulations? Are novel perturbations placed sensibly relative to training classes?
 
-### 12.4 Uncertainty Reporting
+### 12.4 Panel 4: Mode Deflection Fields (Orthogonal Modes Variant)
+
+For the orthogonal-modes model, the lateral effect of perturbations can be visualized directly on isocline cross-sections.
+
+**Streamlines on isoclines.** Pick a developmental stage $s = \phi_0(z)$. On the level set, the baseline drift is purely normal (descending $\phi_0$), so all tangential flow comes from the modes: $\sum c_m S_m \nabla \phi_0$ projected onto the level set. Plot this as a 2D vector field (in residual PC coordinates) showing the direction and magnitude of lateral deflection. Sweep $s$ through developmental time to produce a movie of how the perturbation's redirecting effect evolves along development.
+
+**Trajectory bundle comparisons.** In the $(\phi_0, \text{PC}_1, \text{PC}_2)$ space, simulate bundles of trajectories from a shared initial region under different $c$ vectors (e.g., using class-level $c_{0,A}$ vs $c_{0,B}$). Overlay bundles in different colors. This directly shows: same starting point, different mode loadings, different valley choices. The developmental stage at which bundles separate reveals when the perturbation's effect kicks in; the direction of separation reveals which fates are promoted or suppressed.
+
+**Effective deflection potential (optional).** On each isocline, perform a Helmholtz decomposition of the tangential mode field into a gradient part and a curl part. If the gradient part dominates, extract a scalar $\psi_{\text{eff}}(z; c)$ whose level sets define "valleys" within the isocline — trajectories follow the valleys of $\psi_{\text{eff}}$ when choosing between fates. If the curl part is large, the full vector field visualization (streamlines) is necessary.
+
+### 12.5 Uncertainty Reporting
 
 High-dimensional uncertainty is reported in two complementary ways:
 
@@ -454,16 +487,17 @@ Plain PyTorch. No PyTorch Lightning initially — the non-standard forward pass 
 Implement and test in this order. Each step produces a runnable, evaluable artifact.
 
 1. **Data loading and fragment sampling.** Define the data interface: per embryo, provide trajectory tensor, experiment-level $\Delta t$, temperature $T_e$, perturbation class label. Implement the random fragment and horizon sampling (§7.2).
-2. **Evaluation and visualization stack.** Build the W&B logging, metric computation (§11), and three-panel visualization (§12) against dummy/random predictions. This infrastructure must exist before any model is trained.
+2. **Evaluation and visualization stack.** Build the W&B logging, metric computation (§11), and visualization panels (§12) against dummy/random predictions. This infrastructure must exist before any model is trained.
 3. **Kernel baseline.** Implement kernel trajectory regression (§9). Evaluate on all test tiers. This is the floor.
 4. **$\phi_0$-only model (Stage 1).** Single baseline potential, $\beta$, $D$, $R_e$. No modes. Train and evaluate. Save checkpoint — this becomes the permanent $\phi_0$-only reference.
-5. **Add modes with $S_m = 0$.** Freeze $\phi_0$. Introduce mode potentials, closed-form $[c_e; v_e]$ solve, class-level priors $c_{0,p}$. Train and evaluate (Stage 2). Compare to $\phi_0$-only and kernel baselines.
-6. **Unfreeze $S_m$.** Allow non-conservative dynamics. Compare to potential-only modes to assess whether rotational dynamics matter.
-7. **Add regularization terms incrementally.** Introduce $\mathcal{R}_1$, $\mathcal{R}_2$, $\mathcal{R}_3$ one at a time, monitoring impact on both performance and interpretability.
+5. **Orthogonal modes (§3.4).** Freeze $\phi_0$. Introduce antisymmetric matrices $S_m$ operating on $\nabla \phi_0$, closed-form $[c_e; v_e]$ solve, class-level priors $c_{0,p}$. Train and evaluate. This is the simplest mode variant and tests whether redirecting baseline flow is sufficient.
+6. **Full Helmholtz modes.** Introduce independent mode potentials $\phi_m$ with $S_m = 0$ (potential-only modes). Train and evaluate. Compare to orthogonal modes to assess whether independent landscape features add value.
+7. **Unfreeze $S_m$ on full model.** Allow non-conservative dynamics in the Helmholtz modes. Compare to potential-only modes.
+8. **Add regularization terms incrementally.** Introduce $\mathcal{R}_1$, $\mathcal{R}_2$, $\mathcal{R}_3$ one at a time (applicable to Helmholtz modes only; orthogonal modes do not require them), monitoring impact on both performance and interpretability.
 
 ### 15.3 Key Implementation Constraints
 
 - All per-embryo inference ($c_e$, $v_e$, $R_e$) must be batched and differentiable. Use `torch.linalg.solve` for the ridge systems.
-- The toggle between potential-only ($S_m = 0$) and Helmholtz modes should be a single boolean flag that freezes/unfreezes $S_m$.
+- Mode type selection should be a single config flag: `mode_type: "orthogonal" | "helmholtz" | "potential_only"`. The orthogonal variant uses $S_m \nabla \phi_0$ (no $\phi_m$ networks). The Helmholtz variant uses $(-I + S_m) \nabla \phi_m$. The potential-only variant is Helmholtz with $S_m$ frozen at zero.
 - The kernel baseline should be a standalone module sharing the same data loading and evaluation pipeline.
-- The three-model comparison (kernel, $\phi_0$-only, full) must be trivially reproducible at any point during development.
+- The four-model comparison (kernel, $\phi_0$-only, orthogonal modes, full Helmholtz) must be trivially reproducible at any point during development.
