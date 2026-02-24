@@ -250,3 +250,72 @@ class TestMakeWorkingGridPairFromShared:
         # canon masks are zero placeholders
         assert pair.src_canon_mask.sum() == 0
         assert pair.tgt_canon_mask.sum() == 0
+
+
+class TestIndexLookupAndGetPairById:
+    """Test index_of, __contains__, and get_pair_by_id."""
+
+    def _build_shared(self):
+        m_ref = _make_test_mask(y0=10, y1=40, x0=20, x1=80)
+        m_t0 = _make_test_mask(y0=15, y1=45, x0=25, x1=90)
+        m_t1 = _make_test_mask(y0=12, y1=50, x0=30, x1=100)
+        masks = [
+            _make_canonical_mask(m_ref),
+            _make_canonical_mask(m_t0),
+            _make_canonical_mask(m_t1),
+        ]
+        ids = ["ref_embryo", "tgt_0", "tgt_1"]
+        cfg = WorkingGridConfig(downsample_factor=2, padding_px=4)
+        return prepare_shared_working_grid(
+            masks, cfg, mask_ids=ids, keep_canon_masks=True
+        )
+
+    def test_index_of(self):
+        shared = self._build_shared()
+        assert shared.index_of("ref_embryo") == 0
+        assert shared.index_of("tgt_0") == 1
+        assert shared.index_of("tgt_1") == 2
+
+    def test_index_of_missing_raises_keyerror(self):
+        shared = self._build_shared()
+        with pytest.raises(KeyError, match="no_such_id"):
+            shared.index_of("no_such_id")
+
+    def test_contains(self):
+        shared = self._build_shared()
+        assert "ref_embryo" in shared
+        assert "tgt_0" in shared
+        assert "nonexistent" not in shared
+
+    def test_get_pair_by_id(self):
+        shared = self._build_shared()
+        pair = shared.get_pair_by_id("ref_embryo", "tgt_1")
+        # Should be identical to get_pair(0, 2)
+        pair_idx = shared.get_pair(0, 2)
+        np.testing.assert_array_equal(
+            pair.src_work_density, pair_idx.src_work_density
+        )
+        np.testing.assert_array_equal(
+            pair.tgt_work_density, pair_idx.tgt_work_density
+        )
+        assert pair.meta["src_mask_id"] == "ref_embryo"
+        assert pair.meta["tgt_mask_id"] == "tgt_1"
+
+    def test_get_pair_by_id_missing_raises(self):
+        shared = self._build_shared()
+        with pytest.raises(KeyError):
+            shared.get_pair_by_id("ref_embryo", "nonexistent")
+
+    def test_star_topology_ref_to_all_targets(self):
+        """Simulate the Phase 0 pattern: ref → each target."""
+        shared = self._build_shared()
+        ref_id = "ref_embryo"
+        target_ids = ["tgt_0", "tgt_1"]
+        pairs = [shared.get_pair_by_id(ref_id, tid) for tid in target_ids]
+        assert len(pairs) == 2
+        # All pairs share the same work shape
+        assert all(p.work_shape_hw == shared.work_shape_hw for p in pairs)
+        # src density is the same ref for all pairs
+        np.testing.assert_array_equal(
+            pairs[0].src_work_density, pairs[1].src_work_density
+        )

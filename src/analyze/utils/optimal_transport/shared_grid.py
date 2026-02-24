@@ -69,9 +69,39 @@ class SharedWorkingGrid:
     def n_masks(self) -> int:
         return len(self.work_densities)
 
+    # -- Index lookup --------------------------------------------------
+
+    def index_of(self, mask_id: str) -> int:
+        """Return the integer index of *mask_id*.  Raises KeyError if absent."""
+        try:
+            return self.mask_ids.index(mask_id)
+        except ValueError:
+            raise KeyError(
+                f"mask_id {mask_id!r} not in SharedWorkingGrid "
+                f"(available: {self.mask_ids})"
+            )
+
+    def __contains__(self, mask_id: str) -> bool:
+        return mask_id in self.mask_ids
+
+    # -- Pair helpers --------------------------------------------------
+
     def get_pair(self, src_idx: int, tgt_idx: int) -> WorkingGridPair:
-        """Convenience: build a WorkingGridPair from two indices."""
+        """Build a WorkingGridPair from two integer indices."""
         return make_working_grid_pair_from_shared(self, src_idx, tgt_idx)
+
+    def get_pair_by_id(
+        self, src_id: str, tgt_id: str
+    ) -> WorkingGridPair:
+        """Build a WorkingGridPair from two mask_id strings.
+
+        Example
+        -------
+        >>> shared = prepare_shared_working_grid(masks, cfg,
+        ...     mask_ids=["ref", "tgt_0", "tgt_1", "tgt_2"])
+        >>> pair = shared.get_pair_by_id("ref", "tgt_1")
+        """
+        return self.get_pair(self.index_of(src_id), self.index_of(tgt_id))
 
 
 def prepare_shared_working_grid(
