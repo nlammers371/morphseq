@@ -155,8 +155,8 @@ def _project(
 
 
 def load_trajectories(
-    experiment_ids: Sequence[str],
-    build_dir: str | Path,
+    experiment_ids: Optional[Sequence[str]] = None,
+    build_dir: str | Path = "",
     n_components: int = 10,
     scale: bool = True,
     min_trajectory_length: int = 3,
@@ -166,6 +166,8 @@ def load_trajectories(
 
     Args:
         experiment_ids: Experiment identifiers (filename stems without prefix).
+            If None, loads all df03_final_output_with_latents_*.csv files
+            found in build_dir.
         build_dir: Path to directory containing df03_final_output_with_latents_*.csv files.
         n_components: Number of PCA components (default 10 per model spec).
         scale: Whether to standardize features before PCA.
@@ -176,6 +178,19 @@ def load_trajectories(
         TrajectoryDataset containing all valid embryo trajectories.
     """
     build_dir = Path(build_dir)
+
+    # -- 0. Auto-discover experiment IDs if not provided ---------------------
+    if experiment_ids is None:
+        prefix = "df03_final_output_with_latents_"
+        suffix = ".csv"
+        experiment_ids = sorted(
+            p.stem[len(prefix):]
+            for p in build_dir.glob(f"{prefix}*{suffix}")
+        )
+        if verbose:
+            print(f"  Auto-discovered {len(experiment_ids)} experiments in {build_dir}")
+        if not experiment_ids:
+            raise ValueError(f"No df03_final_output_with_latents_*.csv files found in {build_dir}")
 
     # -- 1. Load and concatenate CSVs ----------------------------------------
     frames: List[pd.DataFrame] = []
