@@ -321,27 +321,114 @@ This provides a richer phenotypic vocabulary than raw trajectory distances.
 
 ---
 
-## 9. Baseline: Kernel Trajectory Regression
+## 9. Baselines (Non-Parametric)
 
-### 9.1 Method
+Two non-parametric baselines of increasing sophistication. Both share the same evaluation pipeline as the learned models.
 
-Given a query fragment $z_{t_0:t_n}$, compute distances to all training trajectories over the overlapping time window:
+### 9.1 Simple Kernel Regression
 
-$$d_i = \frac{1}{|T_{\text{overlap}}|} \sum_{t \in T_{\text{overlap}}} \| z_t^{\text{query}} - z_t^{(i)} \|^2$$
+The simplest possible baseline. Given a query point $\hat{z}(t)$, find nearby training trajectory points, look at where they went, and report the weighted distribution of outcomes.
 
-Convert to weights via Gaussian kernel:
+**Method.** Compute the distance from $\hat{z}(t)$ to every point $z_s^{(i)}$ across all training trajectories. Weight by a Gaussian kernel:
 
-$$w_i = \exp\left( -d_i / 2\sigma^2 \right)$$
+$$w_{i,s} = \exp\left(-\frac{\|z_s^{(i)} - \hat{z}(t)\|^2}{2\sigma^2}\right)$$
 
-The forward prediction at horizon $\tau$ is the weighted empirical distribution of training trajectory positions at time $t_n + \tau$.
+The prediction at horizon $\tau$ (in hours) is the weighted distribution of training positions at $\Delta_s = \text{round}(\tau / \Delta t_i)$ frames past each matched point. For each training point $z_s^{(i)}$, if $z_{s + \Delta_s}^{(i)}$ exists, it contributes to the prediction with weight $w_{i,s}$. Points whose trajectories terminate before $s + \Delta_s$ are dropped.
 
-### 9.2 Properties
+**Outputs.** The predictive distribution is a weighted point cloud. The mean prediction is the weighted centroid. Uncertainty is the weighted covariance.
 
-- Returns a full predictive distribution (weighted point cloud).
-- Degrades gracefully to kernel density regression on initial state for single-snapshot queries.
-- One tuning parameter: kernel bandwidth $\sigma$ (cross-validate on held-out trajectories).
-- No modeling assumptions. Hard to beat in data-rich, within-distribution regimes.
-- Fails for novel perturbations with no nearby training trajectories.
+**Properties.** Dead simple to implement (one function, one hyperparameter). Makes no assumptions about direction, speed, or trajectory structure. Handles single-snapshot queries. Fails for novel perturbations, degrades at long horizons (references drop out), and cannot handle bifurcations — it will smear probability across branches. This is the floor against which all other approaches are measured.
+
+**Hyperparameters.** One: kernel bandwidth $\sigma$ (cross-validate on held-out trajectories).
+
+---
+
+### 9.2 Branching Particle Filter Baseline
+
+A more sophisticated non-parametric baseline that follows matched reference trajectories forward, dynamically recruits new references, and preserves multimodal predictions through bifurcations.
+
+#### 9.2.1 Reference Selection
+
+Given a query point $\hat{z}(t)$ (the latest observed point):
+
+**Step 1: Spatial filtering.** For each training trajectory, keep only points within radius $R$ of $\hat{z}(t)$. Discard any trajectory with fewer than $N$ points within $R$.
+
+**Step 2: Local linear fit.** For each surviving trajectory, fit a linear trend through its points within $R$ (including the point closest to $\hat{z}(t)$). This yields a midpoint $p_i$ and direction vector $v_i$ per reference.
+
+**Step 3: Fit the query window.** Fit a linear trend through the query context window (the last $W$ observed points up to and including $\hat{z}(t)$). This yields a query midpoint $p_q$ and direction vector $v_q$.
+
+**Step 4: Weighting.** Combine spatial proximity and directional alignment into a single weight:
+
+$$w_i = \exp\left(-\frac{\|p_i - p_q\|^2}{2\sigma_{\text{pos}}^2}\right) \cdot \left(\frac{v_i \cdot v_q}{\|v_i\| \|v_q\|}\right)^\alpha_+$$
+
+where $(\cdot)_+$ denotes clamping negative dot products to zero (opposite-direction trajectories get zero weight) and $\alpha$ controls directional sensitivity.
+
+**Step 5: Anchor assignment.** For each reference trajectory $i$, identify its point closest to $\hat{z}(t)$ as the anchor $t^{(i)}_{\text{anchor}}$.
+
+**Step 6: Speed ratio.** Compute average speeds in units of latent-space-distance per hour. For the query:
+
+$$\bar{v}_{\text{query}} = \frac{1}{W-1} \sum_{j=0}^{W-2} \frac{\|z_{j+1} - z_j\|}{\Delta t_{\text{query}}}$$
+
+For reference $i$, over its points within $R$:
+
+$$\bar{v}_i = \frac{1}{|P_i|-1} \sum_{t \in P_i} \frac{\|z_{t+1}^{(i)} - z_t^{(i)}\|}{\Delta t_i}$$
+
+The speed ratio $\rho_i = \bar{v}_{\text{query}} / \bar{v}_i$ is dimensionless. This matches **developmental progress** (same latent distance covered) rather than real time elapsed, so a slow reference gets stretched to keep pace with a fast query.
+
+#### 9.2.2 Forward Prediction
+
+**Time stepping.** The algorithm advances in query-time steps: each step is $\Delta t_{\text{query}}$ hours. At step $k$, each active reference $i$ is at position $z_i^{(k)}$, which is the point $\rho_i \cdot k \cdot \Delta t_{\text{query}} / \Delta t_i$ frames past its anchor in reference $i$'s own timeline. Interpolate between frames when this is non-integer.
+
+**Example.** Query at 5-minute intervals developing at speed 2.0 (latent units/hr). Reference at 10-minute intervals developing at speed 1.0. $\rho_i = 2$. Per query step (5 min), advance reference by $2 \times 5/10 = 1$ frame. The reference is slower and more coarsely sampled — both factors are accounted for.
+
+**Initialization.** The active particle set is $\{(w_i, \text{traj}_i, t^{(i)}_{\text{anchor}}, \rho_i)\}$ from the selection step.
+
+**Predictive distribution at step $k$.** The weighted cloud of active particle positions:
+
+$$p(\hat{z}(t + k\Delta t_{\text{query}})) \approx \sum_i w_i^{(k)} \, \delta\left(z - z_i^{(k)}\right)$$
+
+**Particle death.** When reference trajectory $i$ runs out of observed points, remove it from the active set and renormalize remaining weights. This naturally increases uncertainty at long horizons.
+
+**Particle recruitment.** At each step, each active reference $i$ at position $z_i^{(k)}$ can recruit new training trajectories. A new trajectory $j$ is eligible if it has a point within radius $R$ of $z_i^{(k)}$ and extends further into the future. Its inherited weight is:
+
+$$w_j^{\text{new}} = w_i^{(k)} \cdot \exp\left(-\frac{\|z_j - z_i^{(k)}\|^2}{2\sigma^2}\right)$$
+
+If the same new trajectory $j$ is recruited by multiple active references, sum the inherited weights. Speed ratios for recruited trajectories are computed from their local velocity near the recruitment point relative to the recruiting reference's local velocity. This is how the reference set evolves — dying references are replaced by locally recruited successors, and new trajectories that begin midway through the prediction horizon are incorporated as they appear.
+
+**Branch preservation.** Recruitment is local to each reference, not relative to any global centroid. At a bifurcation, references on branch A recruit near branch A; references on branch B recruit near branch B. The two branches maintain independent weight pools with no crosstalk. The predictive distribution is naturally multimodal.
+
+**Particle cap.** If the active set exceeds $N_{\text{max}}$ particles at any step, keep only the top $N_{\text{max}}$ by weight and renormalize. For a first pass, pure top-$N$ pruning by weight is sufficient. Branches with substantial weight naturally retain particles.
+
+**Underflow prevention.** Periodically renormalize all active weights to sum to 1. This does not affect the relative weighting structure.
+
+#### 9.2.3 Prediction Outputs
+
+- **Mean prediction** at horizon $k$: weighted centroid of the particle cloud (useful for metrics, but misleading near bifurcations).
+- **Full predictive distribution**: the weighted point cloud itself. Compare to the dynamical model's SDE-sampled distribution via earth mover's distance.
+- **Uncertainty**: weighted covariance of the particle cloud. Large eigenvalues flag bifurcation regions.
+- **Multimodality detection**: cluster the particle cloud (e.g., by splitting on the first principal component of the weighted covariance); if two clusters have substantial weight, the prediction is bimodal.
+
+#### 9.2.4 Hyperparameters
+
+| Hyperparameter | Description | Suggested Starting Point |
+|----------------|-------------|--------------------------|
+| $R$ | Spatial filter radius | Scale of typical trajectory spacing |
+| $N$ | Minimum points within $R$ per reference | 3–5 |
+| $W$ | Query context window length (points) | 5–11 |
+| $\sigma_{\text{pos}}$ | Positional kernel bandwidth | Cross-validate |
+| $\alpha$ | Directional alignment exponent | 2–4 |
+| $\sigma$ | Recruitment kernel bandwidth | Same as $\sigma_{\text{pos}}$ initially |
+| $N_{\text{max}}$ | Maximum active particles | 200–500 |
+
+#### 9.2.5 Properties
+
+- Returns a full multimodal predictive distribution (weighted point cloud).
+- Handles bifurcations naturally — branches maintain independent reference pools.
+- Handles fragmented reference trajectories — dying references are replaced by local recruitment; new trajectories entering the prediction region are incorporated.
+- Handles rate variation across embryos and experiments via per-reference speed ratios matched on developmental progress.
+- No index alignment, no notion of developmental stage, no arc-length parameterization.
+- No modeling assumptions. Degrades gracefully: in sparse regions, few references are recruited and uncertainty is wide; in dense regions, many references provide tight predictions.
+- Fails for novel perturbations with no nearby training trajectories (by design — this is where the dynamical model should win).
 
 ---
 
@@ -384,16 +471,17 @@ The following are computed and logged at each evaluation checkpoint:
   - Per-mode average $|c_{e,m}|$ (which modes are being used?)
   - $\|S_m\|_F$ per mode (how non-conservative are the learned dynamics?)
 
-### 11.2 Four Models Always Compared
+### 11.2 Five Models Always Compared
 
-Every evaluation report shows four models side by side:
+Every evaluation report shows five models in order of increasing complexity:
 
-1. **Kernel baseline** — no learned dynamics, pure memorization
-2. **$\phi_0$-only** — learned baseline potential, no modes (stage 1 checkpoint)
-3. **Orthogonal modes** — modes as pure redirections of baseline flow ($S_m \nabla \phi_0$, §3.4)
-4. **Full Helmholtz model** — independent mode potentials with optional non-conservative dynamics
+1. **Simple kernel regression** — nearest-point lookup, single $\sigma$ (§9.1)
+2. **Branching particle filter** — direction-aware matching, local recruitment, multimodal predictions (§9.2)
+3. **$\phi_0$-only** — learned baseline potential, no modes (stage 1 checkpoint)
+4. **Orthogonal modes** — modes as pure redirections of baseline flow ($S_m \nabla \phi_0$, §3.4)
+5. **Full Helmholtz model** — independent mode potentials with optional non-conservative dynamics (three sub-variants: potential-only with $S_m=0$, Helmholtz with learned $S_m$, and pure potential with separate $\phi_m$)
 
-This decomposition directly answers: does learning dynamics help (1→2)? Do modes help beyond baseline dynamics (2→3)? Does allowing modes to reshape the landscape — not just redirect flow — add further value (3→4)?
+This hierarchy answers a sequence of questions: does direction-aware matching help beyond naive proximity (1→2)? Does learning dynamics help beyond non-parametric methods (2→3)? Do modes help beyond baseline dynamics (3→4)? Does allowing modes to reshape the landscape add value beyond redirecting flow (4→5)?
 
 ---
 
@@ -488,16 +576,17 @@ Implement and test in this order. Each step produces a runnable, evaluable artif
 
 1. **Data loading and fragment sampling.** Define the data interface: per embryo, provide trajectory tensor, experiment-level $\Delta t$, temperature $T_e$, perturbation class label. Implement the random fragment and horizon sampling (§7.2).
 2. **Evaluation and visualization stack.** Build the W&B logging, metric computation (§11), and visualization panels (§12) against dummy/random predictions. This infrastructure must exist before any model is trained.
-3. **Kernel baseline.** Implement kernel trajectory regression (§9). Evaluate on all test tiers. This is the floor.
-4. **$\phi_0$-only model (Stage 1).** Single baseline potential, $\beta$, $D$, $R_e$. No modes. Train and evaluate. Save checkpoint — this becomes the permanent $\phi_0$-only reference.
-5. **Orthogonal modes (§3.4).** Freeze $\phi_0$. Introduce antisymmetric matrices $S_m$ operating on $\nabla \phi_0$, closed-form $[c_e; v_e]$ solve, class-level priors $c_{0,p}$. Train and evaluate. This is the simplest mode variant and tests whether redirecting baseline flow is sufficient.
-6. **Full Helmholtz modes.** Introduce independent mode potentials $\phi_m$ with $S_m = 0$ (potential-only modes). Train and evaluate. Compare to orthogonal modes to assess whether independent landscape features add value.
-7. **Unfreeze $S_m$ on full model.** Allow non-conservative dynamics in the Helmholtz modes. Compare to potential-only modes.
-8. **Add regularization terms incrementally.** Introduce $\mathcal{R}_1$, $\mathcal{R}_2$, $\mathcal{R}_3$ one at a time (applicable to Helmholtz modes only; orthogonal modes do not require them), monitoring impact on both performance and interpretability.
+3. **Simple kernel regression (§9.1).** Nearest-point lookup baseline. One hyperparameter. Implement in an afternoon. This is the absolute floor.
+4. **Branching particle filter (§9.2).** Direction-aware matching, local recruitment, multimodal predictions. More complex but substantially more powerful. Implement in layers: first get selection and single-shot prediction working (follow references forward, no recruitment), then add recruitment logic.
+5. **$\phi_0$-only model (Stage 1).** Single baseline potential, $\beta$, $D$, $R_e$. No modes. Train and evaluate. Save checkpoint — this becomes the permanent $\phi_0$-only reference.
+6. **Orthogonal modes (§3.4).** Freeze $\phi_0$. Introduce antisymmetric matrices $S_m$ operating on $\nabla \phi_0$, closed-form $[c_e; v_e]$ solve, class-level priors $c_{0,p}$. Train and evaluate. This is the simplest mode variant and tests whether redirecting baseline flow is sufficient.
+7. **Full Helmholtz modes.** Introduce independent mode potentials $\phi_m$ with $S_m = 0$ (potential-only modes). Train and evaluate. Compare to orthogonal modes to assess whether independent landscape features add value.
+8. **Unfreeze $S_m$ on full model.** Allow non-conservative dynamics in the Helmholtz modes. Compare to potential-only modes.
+9. **Add regularization terms incrementally.** Introduce $\mathcal{R}_1$, $\mathcal{R}_2$, $\mathcal{R}_3$ one at a time (applicable to Helmholtz modes only; orthogonal modes do not require them), monitoring impact on both performance and interpretability.
 
 ### 15.3 Key Implementation Constraints
 
 - All per-embryo inference ($c_e$, $v_e$, $R_e$) must be batched and differentiable. Use `torch.linalg.solve` for the ridge systems.
 - Mode type selection should be a single config flag: `mode_type: "orthogonal" | "helmholtz" | "potential_only"`. The orthogonal variant uses $S_m \nabla \phi_0$ (no $\phi_m$ networks). The Helmholtz variant uses $(-I + S_m) \nabla \phi_m$. The potential-only variant is Helmholtz with $S_m$ frozen at zero.
-- The kernel baseline should be a standalone module sharing the same data loading and evaluation pipeline.
-- The four-model comparison (kernel, $\phi_0$-only, orthogonal modes, full Helmholtz) must be trivially reproducible at any point during development.
+- The kernel baselines (simple and particle filter) should be standalone modules sharing the same data loading and evaluation pipeline.
+- The five-model comparison (simple kernel, particle filter, $\phi_0$-only, orthogonal modes, full Helmholtz) must be trivially reproducible at any point during development.
