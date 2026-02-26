@@ -107,8 +107,16 @@ def _detect_z_mu_b_cols(df: pd.DataFrame) -> List[str]:
     return cols
 
 
-def _compute_experiment_delta_t(df: pd.DataFrame) -> Dict[str, float]:
-    """Compute median inter-frame Δt per experiment from relative_time_s."""
+def _compute_experiment_delta_t(
+    df: pd.DataFrame,
+    dt_min: float = 720.0,
+    dt_max: float = 5.0 * 3600.0,
+) -> Dict[str, float]:
+    """Compute consensus inter-frame Δt per experiment from relative_time_s.
+
+    Only inter-frame intervals within [dt_min, dt_max] are used for the
+    consensus estimate, excluding outlier gaps from dropped frames.
+    """
     dt_by_exp: Dict[str, float] = {}
     for exp_id, exp_df in df.groupby("experiment_id"):
         all_diffs = []
@@ -116,8 +124,53 @@ def _compute_experiment_delta_t(df: pd.DataFrame) -> Dict[str, float]:
             times = emb_df.sort_values("frame_index")["relative_time_s"].values
             if len(times) > 1:
                 all_diffs.extend(np.diff(times).tolist())
-        dt_by_exp[exp_id] = float(np.median(all_diffs)) if all_diffs else np.nan
+        if all_diffs:
+            diffs_arr = np.array(all_diffs)
+            valid = (diffs_arr >= dt_min) & (diffs_arr <= dt_max)
+            dt_by_exp[exp_id] = float(np.median(diffs_arr[valid])) if valid.any() else float(np.median(diffs_arr))
+        else:
+            dt_by_exp[exp_id] = np.nan
     return dt_by_exp
+
+
+def _repair_timestamps(
+    times: np.ndarray,
+    consensus_dt: float,
+    dt_min: float = 720.0,
+    dt_max: float = 5.0 * 3600.0,
+) -> np.ndarray:
+    """Repair outlier inter-frame intervals by interpolating with consensus Δt.
+
+    For each inter-frame gap outside [dt_min, dt_max], replace the timestamp
+    of the later frame (and all subsequent frames) by advancing from the
+    previous frame at consensus_dt per frame step.
+
+    Args:
+        times: (T,) monotonic timestamps in seconds.
+        consensus_dt: Experiment-level consensus Δt.
+        dt_min: Minimum plausible inter-frame interval.
+        dt_max: Maximum plausible inter-frame interval.
+
+    Returns:
+        (T,) repaired timestamps.
+    """
+    if len(times) < 2 or np.isnan(consensus_dt):
+        return times
+
+    times = times.copy()
+    diffs = np.diff(times)
+    bad = (diffs < dt_min) | (diffs > dt_max)
+
+    if not bad.any():
+        return times
+
+    # Walk forward, replacing bad gaps with consensus_dt
+    for i in np.where(bad)[0]:
+        offset = times[i] + consensus_dt - times[i + 1]
+        # Shift this frame and all subsequent frames
+        times[i + 1:] += offset
+
+    return times
 
 
 def _fit_pca(
@@ -244,11 +297,12 @@ def load_trajectories(
         for eid, dt in dt_by_exp.items():
             print(f"  Experiment {eid}: median Δt = {dt:.1f}s")
 
-    # -- 6. Group by embryo and build trajectories ---------------------------
+    # -- 6. Group by (experiment, embryo) and build trajectories --------------
     trajectories: List[EmbryoTrajectory] = []
-    grouped = df.groupby("embryo_id")
+    grouped = df.groupby(["experiment_id", "embryo_id"])
 
-    for embryo_id, grp in grouped:
+    n_repaired = 0
+    for (exp_id, embryo_id), grp in grouped:
         grp_sorted = grp.sort_values("frame_index")
         idx = grp_sorted.index
         n_frames = len(grp_sorted)
@@ -256,13 +310,17 @@ def load_trajectories(
         if n_frames < min_trajectory_length:
             continue
 
-        exp_id = grp_sorted["experiment_id"].iloc[0]
+        raw_times = grp_sorted["relative_time_s"].values.astype(np.float64)
+        consensus_dt = dt_by_exp.get(exp_id, np.nan)
+        repaired_times = _repair_timestamps(raw_times, consensus_dt)
+        if not np.array_equal(raw_times, repaired_times):
+            n_repaired += 1
 
         trajectories.append(EmbryoTrajectory(
             embryo_id=embryo_id,
             trajectory=X_pc[df.index.get_indexer(idx)],
-            time_seconds=grp_sorted["relative_time_s"].values.astype(np.float64),
-            delta_t=dt_by_exp.get(exp_id, np.nan),
+            time_seconds=repaired_times,
+            delta_t=consensus_dt,
             temperature=float(grp_sorted["temperature"].iloc[0])
                 if "temperature" in grp_sorted.columns
                 else np.nan,
@@ -273,6 +331,8 @@ def load_trajectories(
     if verbose:
         print(f"  Built {len(trajectories)} trajectories "
               f"(dropped {len(grouped) - len(trajectories)} with <{min_trajectory_length} frames)")
+        if n_repaired > 0:
+            print(f"  Repaired timestamps in {n_repaired} trajectories (outlier gaps replaced with consensus Δt)")
         lengths = [len(t.trajectory) for t in trajectories]
         print(f"  Trajectory lengths: min={min(lengths)}, median={int(np.median(lengths))}, max={max(lengths)}")
 
