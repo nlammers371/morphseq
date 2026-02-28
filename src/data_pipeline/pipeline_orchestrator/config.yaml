@@ -135,3 +135,40 @@ segmentation_and_tracking:
     # Render overlays for a specific mask_type (default: the run's mask_type).
     # Typical: "embryo"
     render_mask_type: null
+
+# Phase 4 snip processing settings (embryo crops from Phase 3 masks).
+snip_processing:
+  enabled: true
+  # Which Phase 3 mask_type to use for snips.
+  mask_type: "embryo"
+
+  # Output snip geometry (legacy-aligned defaults; override as needed).
+  target_pixel_size_um: 7.8
+  output_shape_hw: [576, 256]
+  blend_radius_um: 75.0
+
+  # Save raw, un-augmented crops for debugging/provenance.
+  save_raw_crops: true
+
+  # Optional yolk masks for yolk-at-top orientation.
+  yolk_mask:
+    enabled: true
+
+  # Background noise stats for augmentation.
+  background_stats:
+    mode: "estimate"   # "estimate" or "fixed"
+    estimate:
+      n_samples: 100
+      seed: 309
+    fixed:
+      mean: 128.0
+      std: 30.0
+    # Locked v1 definition: computed on the source stitched frame where embryo_mask == 0.
+    definition: "full_frame_outside_embryo"
+
+  # Incremental behavior.
+  overwrite: false
+  skip_existing: true
+
+  # Build `processed_snips/{exp}/views/` symlink browse tree at merge time.
+  write_views: true

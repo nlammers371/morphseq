@@ -28,6 +28,7 @@ def process_single_snip(
     target_pixel_size_um: float,
     background_mean: float,
     background_std: float,
+    blend_radius_um: float = 75.0,
     save_raw_crops: bool = True,
     raw_crops_dir: Optional[Path] = None,
     processed_dir: Optional[Path] = None,
@@ -116,7 +117,7 @@ def process_single_snip(
         mask_cropped,
         background_mean,
         background_std,
-        blend_radius_um=30.0,
+        blend_radius_um=float(blend_radius_um),
         pixel_size_um=target_pixel_size_um,
     )
 

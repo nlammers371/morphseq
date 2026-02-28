@@ -14,6 +14,7 @@ Outputs live under:
 - `data_pipeline_output/experiment_metadata/<experiment>/...`
 - `data_pipeline_output/built_image_data/<experiment>/stitched_ff_images/...`
 - `data_pipeline_output/segmentation_and_tracking/<experiment>/...`
+- `data_pipeline_output/processed_snips/<experiment>/...`
 
 ## Quickstart
 Run full smoke pipeline:
@@ -36,6 +37,19 @@ Where to look:
 - Merged experiment contracts: `data_pipeline_output/segmentation_and_tracking/<experiment>/contracts/`
 - Per-well shards: `data_pipeline_output/segmentation_and_tracking/<experiment>/per_well/<experiment>_<well>/`
 - Browse overlay videos: `data_pipeline_output/segmentation_and_tracking/<experiment>/views/videos/overlays/embryo_mask/`
+
+Run Phase 4 snip_processing (after Phase 3 segmentation_and_tracking):
+
+```bash
+snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
+  data_pipeline_output/processed_snips/20240418/contracts/.snip_manifest.validated \
+  --cores 4
+```
+
+Where to look:
+- Per-well processed snips: `data_pipeline_output/processed_snips/<experiment>/per_well/<well_id>/processed/`
+- Merged snip manifest: `data_pipeline_output/processed_snips/<experiment>/contracts/snip_manifest.parquet`
+- Browse view (symlinks): `data_pipeline_output/processed_snips/<experiment>/views/processed/`
 
 Regenerate stitched frames only:
 
@@ -116,3 +130,13 @@ Useful knobs:
 - `qc_overlay.render.scale`: scale output video/frames (e.g. `3.0`)
 - `qc_overlay.render.label_font_scale`, `qc_overlay.render.label_thickness`: embryo label text
 - `qc_overlay.render.banner_font_scale`, `qc_overlay.render.banner_thickness`: image_id banner text
+
+## Snip Processing Configuration (Phase 4)
+Snip processing is configured under `snip_processing` in `src/data_pipeline/pipeline_orchestrator/config.yaml`.
+
+Common knobs:
+- `snip_processing.mask_type`: which mask head to process (default: `embryo`)
+- `snip_processing.target_pixel_size_um`, `snip_processing.output_shape_hw`
+- `snip_processing.save_raw_crops`: whether to write `raw_crops/{snip_id}.tif`
+- `snip_processing.yolk_mask.enabled`: optionally look for yolk masks for rotation pivot
+- `snip_processing.background_stats`: `fixed` or deterministic `estimate`

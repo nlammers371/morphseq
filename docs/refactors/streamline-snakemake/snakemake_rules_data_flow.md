@@ -1,10 +1,10 @@
 # MorphSeq Snakemake Rules and Data Flow
 
-**Status:** Phase 1-3 Wired; Phase 4+ Planned (refactor)
+**Status:** Phase 1-4 Wired; Phase 5+ Planned (refactor)
 **Audience:** Scientists and developers wiring/maintaining the pipeline
 **Last Updated:** 2026-02-28
 
-**Note:** Phase 1-3 rules are implemented in `src/data_pipeline/pipeline_orchestrator/` (including `rules/segmentation_and_tracking.smk`). Downstream phases are still being migrated/wired.
+**Note:** Phase 1-4 rules are implemented in `src/data_pipeline/pipeline_orchestrator/` (including `rules/segmentation_and_tracking.smk` and `rules/snip_processing.smk`). Downstream phases are still being migrated/wired.
 
 ## 2026-02-10 - Addendum, highlighting what we need to change in the original doc
 This addendum only updates ingest/handoff interpretation. Existing downstream rule logic remains unchanged.
@@ -844,110 +844,70 @@ rule build_frame_manifest:
 
 ## Phase 4: Snip Processing
 
-**Note:** Snips are **processed** embryo crops, not just extracted. Processing includes: crop + rotation + noise augmentation + CLAHE equalization + Gaussian blending for training data quality.
+**Implemented:** Phase 4 is wired into Snakemake as **per-well shards + experiment merge + validation**.
 
-**Current Implementation:** `src/build/build03A_process_images.py` lines 257-414 (export_embryo_snips function)
+Snips are **processed** embryo crops, not just extracted. Processing includes:
+- crop (from `segmentation_tracking.csv`)
+- rotation (PCA-based; optionally yolk-guided if yolk mask exists)
+- noise augmentation + CLAHE + Gaussian blending (training-quality normalization)
 
----
-
-### `rule extract_snips`
-**Input:**
-- `segmentation/{exp}/segmentation_tracking.csv` [VALIDATED]
-- `built_image_data/{exp}/stitched_ff_images/`
-
-**Output:**
-- `processed_snips/{exp}/raw_crops/{snip_id}.tif` (unprocessed crops)
-
-**Module:**
-- `snip_processing/extraction.py`
-
-**Purpose:**
-- Crop embryo regions using SAM2 masks + bounding boxes from segmentation_tracking.csv
-- No rotation or augmentation applied
-- Save as raw TIF files for subsequent processing
-- Useful for debugging and provenance (can inspect pre-processing crops)
-
-**Key point:** Creates raw crops only. All processing (crop + rotation + augmentation) happens in next rule.
+Code lives under:
+- `src/data_pipeline/snip_processing/`
+- Snakemake rules: `src/data_pipeline/pipeline_orchestrator/rules/snip_processing.smk`
 
 ---
 
-### `rule process_snips`
+### `rule snip_processing_well`
 **Input:**
-- `processed_snips/{exp}/raw_crops/{snip_id}.tif`
-- `segmentation/{exp}/segmentation_tracking.csv` [needed for mask_rle data]
+- `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
+- `segmentation_and_tracking/{exp}/per_well/{well_id}/contracts/segmentation_tracking.csv` [VALIDATED]
 
 **Output:**
-- `processed_snips/{exp}/processed/{snip_id}.jpg` (fully processed)
+- `processed_snips/{exp}/per_well/{well_id}/contracts/.snip_processing.validated`
+
+**Writes (per well):**
+- `processed_snips/{exp}/per_well/{well_id}/processed/{snip_id}.jpg`
+- `processed_snips/{exp}/per_well/{well_id}/raw_crops/{snip_id}.tif` (optional; controlled by config)
+- `processed_snips/{exp}/per_well/{well_id}/contracts/snip_manifest.{parquet,csv}`
 
 **Module:**
-- `snip_processing/rotation.py` (PCA-based orientation)
-- `snip_processing/augmentation.py` (noise + CLAHE + blending)
+- Runner: `data_pipeline.snip_processing.pipelines.snip_processing:run_snip_processing_well`
+- Core ops: `snip_processing/process_snips.py`, `snip_processing/rotation.py`, `snip_processing/augmentation.py`, `snip_processing/extraction.py`
 
-**Purpose:**
-- Apply crop + PCA-based rotation for standardized orientation
-- Add Gaussian noise to background regions (training data augmentation)
-- Apply CLAHE histogram equalization (contrast enhancement)
-- Gaussian blending at edges (smooth transitions)
-- Save as JPEGs with snip_id naming
-
-**Key processing steps (from build03A lines 367-384):**
-1. Crop to bounding box region
-2. PCA rotation using mask contour (angle stored for manifest)
-3. CLAHE equalization (clipLimit=2.0, tileGridSize=(8,8))
-4. Gaussian noise addition to background (mean=0, std=10)
-5. Gaussian blur blending at edges (sigma=3)
-
-**Key point:** Only saves processed JPEGs. Manifest generation happens separately to allow validation without reprocessing.
+**Locked v1 background definition (deterministic):**
+- background pixels = full-frame pixels where embryo mask == 0
+- sampling is deterministic (sorted rows + seeded RNG)
 
 ---
 
-### `rule generate_snip_manifest`
+### `rule merge_snip_manifests`
 **Input:**
-- `processed_snips/{exp}/processed/` (directory of processed snips)
-- `segmentation/{exp}/segmentation_tracking.csv` [VALIDATED]
+- all per-well `.snip_processing.validated` sentinels for the experiment
 
-**Output:**
-- `processed_snips/{exp}/snip_manifest.csv` [VALIDATED]
+**Output (merged):**
+- `processed_snips/{exp}/contracts/snip_manifest.parquet`
+- `processed_snips/{exp}/contracts/snip_manifest.csv`
+
+**Extra (browse view, symlink-only, disposable):**
+- `processed_snips/{exp}/views/wells/{well_slug} -> ../per_well/{well_id}`
+- `processed_snips/{exp}/views/processed/{well_slug} -> ../per_well/{well_id}/processed`
+- `processed_snips/{exp}/views/raw_crops/{well_slug} -> ../per_well/{well_id}/raw_crops` (if present)
 
 **Module:**
-- `snip_processing/manifest_generation.py`
-- Schema: `REQUIRED_COLUMNS_SNIP_MANIFEST`
+- `data_pipeline.snip_processing.pipelines.merge_snip_manifests`
 
-**Purpose:**
-- Scan processed_snips/ directory to inventory all processed JPEGs
-- Join with segmentation_tracking.csv to get experiment_id, well_id, embryo_id, time_int
-- Validate completeness (all expected snips present, no missing files)
-- Add file metadata (file size, dimensions, processing timestamp)
-- Validate schema and write snip_manifest.csv [VALIDATED]
+---
 
-**Required manifest columns:**
-```python
-REQUIRED_COLUMNS_SNIP_MANIFEST = [
-    'snip_id',
-    'experiment_id',
-    'well_id',
-    'embryo_id',
-    'time_int',
-    'raw_crop_path',          # Path to raw crop TIF
-    'processed_snip_path',    # Path to processed JPEG
-    'file_size_bytes',        # Validate files exist and are non-empty
-    'image_width_px',         # Actual snip dimensions
-    'image_height_px',
-    'processing_timestamp',   # When processing occurred
-]
-```
+### `rule validate_snip_manifest`
+**Input:**
+- merged `processed_snips/{exp}/contracts/snip_manifest.csv`
 
-**Output structure:**
-```
-processed_snips/{exp}/
-├── raw_crops/
-│   └── {snip_id}.tif         # Unprocessed crops (for debugging)
-├── processed/
-│   └── {snip_id}.jpg         # Fully processed (crop + rotate + augment)
-└── snip_manifest.csv         # [VALIDATED] - Authoritative snip inventory
-```
+**Output:**
+- `processed_snips/{exp}/contracts/.snip_manifest.validated`
 
-**Key point:** Separate manifest generation allows validation without reprocessing. Can regenerate manifest to add new columns or verify file integrity.
+**Schema:**
+- `src/data_pipeline/schemas/snip_processing.py` (`REQUIRED_COLUMNS_SNIP_MANIFEST`)
+- Nullable columns are explicitly allowed (e.g. `yolk_mask_path`, `raw_crop_path`) and validity is enforced via `is_valid` + `error_message`.
 
 ---
 
@@ -1287,7 +1247,7 @@ Embeddings run only on snips that pass QC (`use_embryo_flag == True`). We stage 
 
 ### `rule prepare_embedding_manifest`
 **Input:**
-- `processed_snips/{exp}/processed/` (final JPEG crops)
+- `processed_snips/{exp}/contracts/snip_manifest.parquet` (authoritative inventory of processed snips + paths)
 - `quality_control/{exp}/use_embryo_flags.csv` `[VALIDATED]`
 
 **Output:**

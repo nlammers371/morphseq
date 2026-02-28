@@ -1,10 +1,10 @@
 # MorphSeq Pipeline: Data Output Structure
 
-**Status:** Phase 1-3 Implemented; Phase 4+ Planned (refactor)
+**Status:** Phase 1-4 Implemented; Phase 5+ Planned (refactor)
 **Audience:** Scientists and developers
 **Last Updated:** 2026-02-28
 
-**Note:** Phase 1-3 outputs and paths in this doc reflect the current implementation (`segmentation_and_tracking/`). Downstream phases may still contain legacy outputs/paths until wired.
+**Note:** Phase 1-4 outputs and paths in this doc reflect the current implementation (`segmentation_and_tracking/` and `processed_snips/`). Downstream phases may still contain legacy outputs/paths until wired.
 
 ## 2026-02-10 - Addendum, highlighting what we need to change in the original doc
 This addendum is additive only. The original output structure remains valid.
@@ -96,9 +96,23 @@ The old `experiment_image_manifest.json` is deprecated and removed.
 │
 ├── processed_snips/
 │   └── {experiment_id}/
-│       ├── raw_crops/
-│       ├── processed/
-│       └── snip_manifest.csv
+│       ├── per_well/
+│       │   └── {well_id}/
+│       │       ├── contracts/
+│       │       │   ├── snip_manifest.parquet
+│       │       │   ├── snip_manifest.csv
+│       │       │   └── .snip_processing.validated
+│       │       ├── processed/{snip_id}.jpg
+│       │       ├── raw_crops/{snip_id}.tif            # optional (config: snip_processing.save_raw_crops)
+│       │       └── artifacts/background_stats.json     # optional (for debugging/provenance)
+│       ├── contracts/
+│       │   ├── snip_manifest.parquet
+│       │   ├── snip_manifest.csv
+│       │   └── .snip_manifest.validated
+│       └── views/                                     # symlink-only browse view (DISPOSABLE)
+│           ├── wells/{well_slug} -> ../per_well/{well_id}
+│           ├── processed/{well_slug} -> ../per_well/{well_id}/processed
+│           └── raw_crops/{well_slug} -> ../per_well/{well_id}/raw_crops
 │
 ├── computed_features/
 │   └── {experiment_id}/
@@ -215,7 +229,8 @@ Files marked as validated enforce schema and non-null rules:
 - Post-segmentation:
   - `segmentation_and_tracking/{exp}/contracts/segmentation_tracking.csv`
   - `segmentation_and_tracking/{exp}/contracts/.segmentation_tracking.validated`
-  - `snip_manifest.csv`
+  - `processed_snips/{exp}/contracts/snip_manifest.csv`
+  - `processed_snips/{exp}/contracts/.snip_manifest.validated`
   - `consolidated_snip_features.csv`
   - `consolidated_qc_flags.csv`
   - embedding outputs

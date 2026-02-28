@@ -678,15 +678,20 @@ Shared utilities for all segmentation methods:
 **Purpose:** Extract and align embryo crops ahead of feature/QC stages
 
 **Core operations:**
-- **extraction.py**: Crop embryo regions with padding using SAM2 masks
-- **rotation.py**: PCA-based alignment to standard orientation
+- **extraction.py**: Crop embryo regions with padding using SAM2 masks (used by `process_snips.py`)
+- **rotation.py**: PCA-based alignment to standard orientation (optionally yolk-guided if yolk mask is available)
 - **augmentation.py**: CLAHE, background noise injection, and edge blending for model-ready crops
-- **manifest_generation.py**: Scan processed snips, attach metadata, and write schema-validated manifest
+- **process_snips.py**: Per-snip end-to-end processing (crop + rotate + augment) + optional raw crop export
+- **pipelines/snip_processing.py**: Per-well runner (writes shards + sentinel)
+- **pipelines/merge_snip_manifests.py**: Experiment-level merge + `views/` symlink browse layer
+- **pipelines/validate_snip_manifest.py**: Schema + key validation and `.snip_manifest.validated` sentinel
 
 **snip_id management:**
-- `snip_id` is assigned during extraction using `segmentation_tracking.csv`
-- Format: `{embryo_id}_s{frame:04d}` (e.g., `embryo_001_s0005`)
-- Manifest resides in `processed_snips/{experiment_id}/snip_manifest.csv` (schema-backed) combining raw + processed paths
+- `snip_id` is assigned during Phase 3 segmentation/tracking and carried forward in `segmentation_tracking.csv`
+- Format (current): `{well_id}_embryo_{embryo_index}_f{frame:04d}` (e.g., `20240418_A01_embryo_0_f0000`)
+- Manifest resides in:
+  - `processed_snips/{experiment_id}/per_well/{well_id}/contracts/snip_manifest.parquet` (per-well shards)
+  - `processed_snips/{experiment_id}/contracts/snip_manifest.parquet` (merged experiment contract)
 
 ---
 
@@ -1065,11 +1070,22 @@ segmentation/{exp}/
 ### **Snip Processing** (Phase 4 outputs)
 ```
 processed_snips/{exp}/
-├── raw_crops/                                    # Unprocessed TIF crops (pre-rotation)
-│   └── {snip_id}.tif
-├── processed/                                    # Fully processed JPEGs (rotation + CLAHE + noise)
-│   └── {snip_id}.jpg
-└── snip_manifest.csv [VALIDATED]                 # Authoritative snip inventory (paths, rotation, timestamps)
+├── per_well/{well_id}/                            # per-well shard (REAL files; Snakemake-safe)
+│   ├── contracts/
+│   │   ├── snip_manifest.parquet
+│   │   ├── snip_manifest.csv
+│   │   └── .snip_processing.validated
+│   ├── processed/{snip_id}.jpg                    # processed snip (crop + rotate + augment)
+│   ├── raw_crops/{snip_id}.tif                    # optional (if save_raw_crops=true)
+│   └── artifacts/background_stats.json            # optional (debug/provenance)
+├── contracts/                                     # merged experiment contracts (REAL)
+│   ├── snip_manifest.parquet
+│   ├── snip_manifest.csv
+│   └── .snip_manifest.validated
+└── views/                                         # symlink-only browse view (DISPOSABLE)
+    ├── wells/{well_slug} -> ../per_well/{well_id}
+    ├── processed/{well_slug} -> ../per_well/{well_id}/processed
+    └── raw_crops/{well_slug} -> ../per_well/{well_id}/raw_crops
 ```
 
 ### **Feature Extraction** (Phase 5 outputs)

@@ -131,6 +131,29 @@ def cmd_segmentation_and_tracking(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_snip_processing(args: argparse.Namespace) -> None:
+    from data_pipeline.snip_processing.pipelines.snip_processing import run_snip_processing_well
+
+    cfg = yaml.safe_load(Path(args.config_yaml).read_text()) or {}
+
+    output_root = Path(args.output_root)
+    exp = str(args.experiment)
+    well = str(args.well_id)
+
+    frame_manifest_csv = Path(args.frame_manifest_csv)
+    segmentation_tracking_csv = Path(args.segmentation_tracking_csv)
+
+    run_snip_processing_well(
+        output_root=output_root,
+        experiment_id=exp,
+        well_id=well,
+        frame_manifest_csv=frame_manifest_csv,
+        segmentation_tracking_csv=segmentation_tracking_csv,
+        pipeline_config=cfg,
+        verbose=_parse_bool(args.verbose),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -201,6 +224,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_sat.add_argument("--run-id", default=None)
     p_sat.add_argument("--verbose", default="false")
     p_sat.set_defaults(func=cmd_segmentation_and_tracking)
+
+    p_snip = sub.add_parser("snip-processing")
+    p_snip.add_argument("--experiment", required=True)
+    p_snip.add_argument("--well-id", required=True)
+    p_snip.add_argument("--output-root", type=Path, required=True)
+    p_snip.add_argument("--frame-manifest-csv", type=Path, required=True)
+    p_snip.add_argument("--segmentation-tracking-csv", type=Path, required=True)
+    p_snip.add_argument("--config-yaml", type=Path, required=True)
+    p_snip.add_argument("--verbose", default="false")
+    p_snip.set_defaults(func=cmd_snip_processing)
 
     return parser
 
