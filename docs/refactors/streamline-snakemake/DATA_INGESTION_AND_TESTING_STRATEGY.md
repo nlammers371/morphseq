@@ -213,12 +213,16 @@ data_pipeline_output/                           # NEW PIPELINE OUTPUT ROOT
 │       └── stitched_ff_images/
 │           └── {well_index}/{channel_id}/{image_id}.tif
 │
-├── segmentation/                               # PHASE 3 OUTPUTS (pipeline writes)
+├── segmentation_and_tracking/                  # PHASE 3 OUTPUTS (implemented)
 │   └── {experiment_id}/
-│       ├── segmentation_tracking.csv [VALIDATED]
-│       ├── mask_images/
-│       │   └── {image_id}_masks.png
-│       └── unet_masks/ (stubbed for MVP)
+│       ├── per_well/{experiment_id}_{well_slug}/
+│       │   ├── contracts/segmentation_tracking.csv
+│       │   ├── contracts/.segment_and_track.validated
+│       │   ├── masks/embryo_mask/{snip_id}_mask.png
+│       │   └── artifacts/overlays/embryo_mask/{well_slug}_embryo_mask_overlay.mp4
+│       ├── contracts/segmentation_tracking.csv [VALIDATED]
+│       ├── contracts/.segmentation_tracking.validated
+│       └── views/                              # SYMLINKS ONLY (disposable browse view)
 │
 ├── processed_snips/                            # PHASE 4 OUTPUTS (pipeline writes)
 │   └── {experiment_id}/

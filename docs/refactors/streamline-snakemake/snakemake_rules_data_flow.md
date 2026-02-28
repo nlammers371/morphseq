@@ -1,10 +1,10 @@
 # MorphSeq Snakemake Rules and Data Flow
 
-**Status:** Target Rules + Data Flow Spec (refactor)
+**Status:** Phase 1-3 Wired; Phase 4+ Planned (refactor)
 **Audience:** Scientists and developers wiring/maintaining the pipeline
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-28
 
-**Note:** This describes the intended refactor end-state; the repo may still contain legacy paths (for example `experiment_image_manifest.json`) until the implementation is complete.
+**Note:** Phase 1-3 rules are implemented in `src/data_pipeline/pipeline_orchestrator/` (including `rules/segmentation_and_tracking.smk`). Downstream phases are still being migrated/wired.
 
 ## 2026-02-10 - Addendum, highlighting what we need to change in the original doc
 This addendum only updates ingest/handoff interpretation. Existing downstream rule logic remains unchanged.
@@ -458,111 +458,83 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 
 **Purpose:**
 - Join stitched image index + scope metadata + plate metadata into canonical frame-level table
-- Sort frames by time_int per (experiment_id, well_id, channel_id)
-- Assign contiguous `frame_index`
+- Preserve and validate `frame_index` (canonical) and `time_int` (compatibility alias)
 - Single source of truth for frame inventory consumed by segmentation
 
 **Key point:** This is where channel normalization is validated. All downstream rules use normalized channel names from this manifest.
 
 ---
 
-## Phase 3: Segmentation (SAM2 Pipeline)
+## Phase 3: Segmentation + Tracking (`segmentation_and_tracking`)
 
-**Note:** Processing happens **per-well** basis using `frame_manifest.csv` to get per-well frame lists.
+**Note:** Phase 3 runs **per-well** using `frame_manifest.csv` as the canonical frame table. It emits per-well shards first (Snakemake-safe), then merges to experiment-level contracts and creates a `views/` symlink gallery for easy browsing.
+
+Implementation lives under:
+- `src/data_pipeline/segmentation_and_tracking/` (runner, ingestors, normalizers, merge/validate, overlays)
+- Model loading is self-contained under `src/data_pipeline/models/`
+- Core SAM2 mechanics are reused from `src/data_pipeline/segmentation/grounded_sam2/` (propagation + frame organization)
 
 ---
 
-### `rule gdino_detection`
+### `rule segment_and_track_well`
 **Input:**
-- `built_image_data/{exp}/stitched_ff_images/`
 - `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
 
-**Output:**
-- `segmentation/{exp}/gdino_detections.json` (per-well)
+**Output (per-well shard sentinel):**
+- `segmentation_and_tracking/{exp}/per_well/{well_id}/contracts/.segment_and_track.validated`
 
 **Module:**
-- `segmentation/grounded_sam2/gdino_detection.py`
+- CLI: `"$PYTHON" -m data_pipeline.pipeline_orchestrator.tasks segmentation-and-tracking`
+- Runner: `data_pipeline.segmentation_and_tracking.pipelines.segmentation_and_tracking`
 
-**Purpose:**
-- Run GroundingDINO on **all frames** in the well
-- Detect embryos (count, bounding boxes)
-- Determine **seed frame** (good quality frame with clear embryo detection)
-- Generate bounding boxes to prompt SAM2
-
-**Key point:** Runs on ALL frames to assess embryo presence/count and select best seed frame. Uses manifest to get per-well frame lists.
-
----
-
-### `rule sam2_segmentation_and_tracking`
-**Input:**
-- `gdino_detections.json` (seed frame bboxes)
-- `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
-- `built_image_data/{exp}/stitched_ff_images/`
-
-**Output:**
-- `segmentation/{exp}/sam2_raw_output.json` (nested: video/embryo/frame structure)
-
-**Modules:**
-- `segmentation/grounded_sam2/propagation.py` (main entry point)
-- `segmentation/grounded_sam2/frame_organization_for_sam2.py` (utility functions - NOT a separate rule)
-
-**Purpose:**
-- Track embryos across time using SAM2 video propagation
-- Uses seed frame bboxes from GroundingDINO as prompts
-- **Custom bidirectional propagation:** backward + forward from seed frame to accommodate SAM2's strict ordering requirements
-- **Internal workflow:**
-  1. `frame_organization_for_sam2.py` creates temp directory with SAM2-compatible frame ordering
-  2. Runs bidirectional propagation (backward from seed, then forward from seed)
-  3. Cleans up temp directory
-  4. Outputs nested JSON with tracking results
-
-**Key point:** `organize_frames_for_sam2` is a utility function called internally, NOT a separate Snakemake rule.
+**What it does:**
+1. GroundingDINO detections per frame (parquet contract)
+2. Seed selection (parquet contract)
+3. SAM2 native bidirectional propagation from seed (no legacy two-pass)
+4. Export binary PNG masks per head (today: `embryo_mask`)
+5. Emit contracts:
+   - `contracts/frame_detections.parquet`
+   - `contracts/seed_selection.parquet`
+   - `contracts/embryo_track_instances.parquet`
+   - `contracts/embryo_mask_rle.parquet`
+   - `contracts/segmentation_tracking.csv`
+6. Optional visualization artifacts:
+   - `artifacts/overlays/{mask_head}/{well_slug}_{mask_head}_overlay.mp4`
+   - `artifacts/overlays/{mask_head}/frames/{image_id}_{mask_head}_overlay.jpg`
 
 ---
 
-### `rule export_sam2_masks`
+### `rule merge_segmentation_and_tracking_contracts`
 **Input:**
-- `segmentation/{exp}/sam2_raw_output.json`
+- All per-well sentinels:
+  - `segmentation_and_tracking/{exp}/per_well/{well_id}/contracts/.segment_and_track.validated`
 
-**Output:**
-- `segmentation/{exp}/mask_images/{image_id}_masks.png` (integer-labeled PNGs)
+**Output (merged contracts):**
+- `segmentation_and_tracking/{exp}/contracts/frame_detections.parquet`
+- `segmentation_and_tracking/{exp}/contracts/seed_selection.parquet`
+- `segmentation_and_tracking/{exp}/contracts/embryo_track_instances.parquet`
+- `segmentation_and_tracking/{exp}/contracts/embryo_mask_rle.parquet`
+- `segmentation_and_tracking/{exp}/contracts/segmentation_tracking.csv`
+
+**Also writes (symlink-only browse view):**
+- `segmentation_and_tracking/{exp}/views/` (relative symlinks into `per_well/`)
 
 **Module:**
-- `segmentation/grounded_sam2/mask_export.py`
+- `data_pipeline.segmentation_and_tracking.pipelines.merge_segmentation_and_tracking_contracts`
 
-**Purpose:**
-- Export masks as integer-labeled PNG images for visualization/QC
-- Each embryo gets a unique integer label
-- Useful for debugging, visual inspection, and downstream QC
+**Key point:** Merge is **sentinel-gated** so partial wells are not merged or shown in `views/`.
 
 ---
 
-### `rule flatten_sam2_to_csv`
+### `rule validate_segmentation_and_tracking`
 **Input:**
-- `segmentation/{exp}/sam2_raw_output.json`
-- `experiment_metadata/{exp}/scope_metadata_mapped.csv` (to inject well_id, experiment_id, calibration)
+- `segmentation_and_tracking/{exp}/contracts/segmentation_tracking.csv`
 
 **Output:**
-- `segmentation/{exp}/segmentation_tracking.csv` [VALIDATED]
+- `segmentation_and_tracking/{exp}/contracts/.segmentation_tracking.validated`
 
 **Module:**
-- `segmentation/grounded_sam2/csv_formatter.py`
-- Schema: `REQUIRED_COLUMNS_SEGMENTATION_TRACKING`
-
-**Purpose:**
-- Flatten nested JSON → row-per-mask CSV
-- Add critical columns:
-  - `mask_rle` (compressed mask string)
-  - `well_id` (from metadata join)
-  - `experiment_id` (from metadata join)
-  - `is_seed_frame` (boolean flag)
-  - `source_image_path` (original stitched image)
-  - `exported_mask_path` (PNG mask path)
-- Validate against schema (column existence + non-empty checks)
-
-**Key point:** This is the authoritative segmentation output consumed by all downstream steps (snip processing, features, QC).
-
----
+- `data_pipeline.segmentation_and_tracking.pipelines.validate_segmentation_and_tracking`
 
 ## Phase 3b: UNet Auxiliary Masks
 

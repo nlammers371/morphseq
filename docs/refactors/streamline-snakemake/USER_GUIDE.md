@@ -6,10 +6,14 @@
 - `scope_and_plate_metadata.csv`: merged scope + plate metadata
 - `stitched_image_index.csv`: materialized frame paths and provenance
 - `frame_manifest.csv`: analysis-ready frame table
+- Phase 3 segmentation + tracking (per experiment):
+  - `segmentation_and_tracking/<experiment>/contracts/segmentation_tracking.csv` (merged contract)
+  - `segmentation_and_tracking/<experiment>/views/` (symlink-only browse view: videos/frames/masks)
 
 Outputs live under:
 - `data_pipeline_output/experiment_metadata/<experiment>/...`
 - `data_pipeline_output/built_image_data/<experiment>/stitched_ff_images/...`
+- `data_pipeline_output/segmentation_and_tracking/<experiment>/...`
 
 ## Quickstart
 Run full smoke pipeline:
@@ -19,6 +23,19 @@ snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
   /net/trapnell/vol1/home/mdcolon/proj/morphseq-docs/data_pipeline_output/experiment_metadata/20240509_24hpf/.frame_manifest.validated \
   --cores 4
 ```
+
+Run Phase 3 segmentation_and_tracking (after frame contracts):
+
+```bash
+snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
+  data_pipeline_output/segmentation_and_tracking/20240418/contracts/.segmentation_tracking.validated \
+  --cores 4
+```
+
+Where to look:
+- Merged experiment contracts: `data_pipeline_output/segmentation_and_tracking/<experiment>/contracts/`
+- Per-well shards: `data_pipeline_output/segmentation_and_tracking/<experiment>/per_well/<experiment>_<well>/`
+- Browse overlay videos: `data_pipeline_output/segmentation_and_tracking/<experiment>/views/videos/overlays/embryo_mask/`
 
 Regenerate stitched frames only:
 
@@ -90,3 +107,12 @@ print(df[(df.well_index=="B04") & (df.channel_id=="BF")][[
 ]].to_string(index=False))
 PY
 ```
+
+## Overlay Video Configuration (Phase 3)
+Overlay rendering is configured under `segmentation_and_tracking.qc_overlay` in
+`src/data_pipeline/pipeline_orchestrator/config.yaml`.
+
+Useful knobs:
+- `qc_overlay.render.scale`: scale output video/frames (e.g. `3.0`)
+- `qc_overlay.render.label_font_scale`, `qc_overlay.render.label_thickness`: embryo label text
+- `qc_overlay.render.banner_font_scale`, `qc_overlay.render.banner_thickness`: image_id banner text

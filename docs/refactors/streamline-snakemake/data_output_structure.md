@@ -1,10 +1,10 @@
 # MorphSeq Pipeline: Data Output Structure
 
-**Status:** Target Output Spec (refactor)
+**Status:** Phase 1-3 Implemented; Phase 4+ Planned (refactor)
 **Audience:** Scientists and developers
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-28
 
-**Note:** This is the intended end-state output layout for the refactor; the repo may still contain legacy outputs until the implementation is complete.
+**Note:** Phase 1-3 outputs and paths in this doc reflect the current implementation (`segmentation_and_tracking/`). Downstream phases may still contain legacy outputs/paths until wired.
 
 ## 2026-02-10 - Addendum, highlighting what we need to change in the original doc
 This addendum is additive only. The original output structure remains valid.
@@ -65,13 +65,34 @@ The old `experiment_image_manifest.json` is deprecated and removed.
 │       └── stitched_ff_images/
 │           └── {well_index}/{channel_id}/{image_id}.tif
 │
-├── segmentation/
+├── segmentation_and_tracking/                 # PHASE 3 OUTPUTS (implemented)
 │   └── {experiment_id}/
-│       ├── gdino_detections.json
-│       ├── sam2_raw_output.json
-│       ├── segmentation_tracking.csv
-│       ├── mask_images/
-│       └── unet_masks/
+│       ├── per_well/
+│       │   └── {experiment_id}_{well_slug}/   # per-well shard (REAL files)
+│       │       ├── contracts/
+│       │       │   ├── frame_detections.parquet
+│       │       │   ├── seed_selection.parquet
+│       │       │   ├── embryo_track_instances.parquet
+│       │       │   ├── embryo_mask_rle.parquet
+│       │       │   ├── segmentation_tracking.csv
+│       │       │   └── .segment_and_track.validated
+│       │       ├── masks/
+│       │       │   └── embryo_mask/{snip_id}_mask.png
+│       │       └── artifacts/                 # optional/heavy (REAL or symlinks)
+│       │           ├── raw_frames/{image_id}.jpg
+│       │           ├── sam2_frames/00000.jpg
+│       │           └── overlays/embryo_mask/{well_slug}_embryo_mask_overlay.mp4
+│       ├── contracts/                          # merged experiment contracts (REAL)
+│       │   ├── frame_detections.parquet
+│       │   ├── seed_selection.parquet
+│       │   ├── embryo_track_instances.parquet
+│       │   ├── embryo_mask_rle.parquet
+│       │   ├── segmentation_tracking.csv
+│       │   └── .segmentation_tracking.validated
+│       └── views/                              # symlink-only browse view (DISPOSABLE)
+│           ├── wells/{well_slug} -> ../per_well/{experiment_id}_{well_slug}
+│           ├── masks/embryo_mask/{well_slug} -> ../../per_well/.../masks/embryo_mask
+│           └── videos/overlays/embryo_mask/{well_slug}_embryo_mask_overlay.mp4 -> ../../per_well/.../artifacts/overlays/embryo_mask/...
 │
 ├── processed_snips/
 │   └── {experiment_id}/
@@ -192,7 +213,8 @@ Files marked as validated enforce schema and non-null rules:
   - `stitched_image_index.csv`
   - `frame_manifest.csv`
 - Post-segmentation:
-  - `segmentation_tracking.csv`
+  - `segmentation_and_tracking/{exp}/contracts/segmentation_tracking.csv`
+  - `segmentation_and_tracking/{exp}/contracts/.segmentation_tracking.validated`
   - `snip_manifest.csv`
   - `consolidated_snip_features.csv`
   - `consolidated_qc_flags.csv`

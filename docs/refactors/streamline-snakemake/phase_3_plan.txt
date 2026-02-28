@@ -380,25 +380,39 @@
 
  Output layout (per-well shards)
 
- {output_dir}/segmentation/{experiment}/per_well/{well}/
-     frame_detections.parquet
-     seed_selection.parquet
-     embryo_track_instances.parquet
-     embryo_mask_rle.parquet
-     segmentation_tracking.csv
-     masks/                          # exported PNGs
-     .segment_and_track.validated    # per-well validation
- sentinel
+ {output_dir}/segmentation_and_tracking/{experiment}/per_well/{well}/
+     contracts/                      # REAL (downstream reads)
+         frame_detections.parquet
+         seed_selection.parquet
+         embryo_track_instances.parquet
+         embryo_mask_rle.parquet
+         segmentation_tracking.csv
+         .segment_and_track.validated
+     masks/                          # REAL (PNG exports by head)
+         embryo_mask/{snip_id}_mask.png
+     artifacts/                      # OPTIONAL/heavy (copy or symlink)
+         raw_frames/{image_id}.jpg
+         sam2_frames/00000.jpg ...
+         overlays/embryo_mask/{well_slug}_embryo_mask_overlay.mp4
+         overlays/embryo_mask/frames/{image_id}_embryo_mask_overlay.jpg (optional)
 
  Experiment-level merged outputs (from merge rule)
 
- {output_dir}/segmentation/{experiment}/contracts/
+ {output_dir}/segmentation_and_tracking/{experiment}/contracts/
      frame_detections.parquet
      seed_selection.parquet
      embryo_track_instances.parquet
      embryo_mask_rle.parquet
      segmentation_tracking.csv
      .segmentation_tracking.validated
+
+ Experiment-level browse view (symlink-only, disposable)
+
+ {output_dir}/segmentation_and_tracking/{experiment}/views/
+     wells/{well_slug} -> ../per_well/{well}
+     masks/embryo_mask/{well_slug} -> ../../per_well/.../masks/embryo_mask
+     videos/overlays/embryo_mask/{well_slug}_embryo_mask_overlay.mp4 -> ../../per_well/.../artifacts/overlays/embryo_mask/...
+     frames/overlays/embryo_mask/{well_slug} -> ../../per_well/.../artifacts/overlays/embryo_mask/frames (if enabled)
 
  Runner flow
 
@@ -476,16 +490,16 @@
 
  Three rules: shard, merge, validate
 
- rule segment_and_track:
+ rule segment_and_track_well:
      # Per {experiment}/{well}
      input: validated frame_manifest
-     output: per_well/{well}/.segment_and_track.validated
+     output: per_well/{well}/contracts/.segment_and_track.validated
      resources: gpu=1
 
- rule merge_segmentation_contracts:
+ rule merge_segmentation_and_tracking_contracts:
      # Per {experiment} — concat all per-well shards into
  experiment-level
-     input: expand(per_well/{well}/.segment_and_track.validated
+     input: expand(per_well/{well}/contracts/.segment_and_track.validated
  for well in wells)
      output:
          contracts/frame_detections.parquet
@@ -494,7 +508,7 @@
          contracts/embryo_mask_rle.parquet
          contracts/segmentation_tracking.csv
 
- rule validate_segmentation_tracking:
+ rule validate_segmentation_and_tracking:
      # Per {experiment} — validates merged experiment-level
  contracts
      input: contracts/segmentation_tracking.csv
@@ -513,11 +527,33 @@
  segmentation:
    detector_backend: "groundingdino"
    tracker_backend: "sam2"
-   tracking_mode: "native_bidirectional"
+
+ segmentation_and_tracking:
+   channel_id: "BF"
    device: "cuda"
-   gdino_config: "/path/to/GroundingDINO_SwinT_OGC.py"
-   gdino_weights: "/path/to/groundingdino_swint_ogc.pth"
-   gdino_release: ""                      # -> "unknown"
+   models_root: "models"
+   groundingdino_repo: "GroundingDINO"
+   groundingdino_config: "groundingdino/config/GroundingDINO_SwinT_OGC.py"
+   groundingdino_weights: "/path/to/groundingdino_weights.pth"
+   groundingdino_release: "unknown"
+   sam2_models_root: "sam2"
+   sam2_config: "configs/sam2.1/sam2.1_hiera_l.yaml"
+   sam2_checkpoint: "checkpoints/sam2.1_hiera_large.pt"
+   mask_type: "embryo"
+   raw_frames:
+     enabled: true
+     mode: "symlink"
+     write_sam2_seq_dir: true
+   qc_overlay:
+     enabled: true
+     write_video: true
+     write_frames: false
+     render:
+       scale: 1.0
+       label_font_scale: 0.8
+       label_thickness: 2
+       banner_font_scale: 1.0
+       banner_thickness: 2
    sam2_config: "/path/to/sam2_hiera_l.yaml"
    sam2_checkpoint: "/path/to/sam2_hiera_large.pt"
    sam2_release: ""                       # -> "unknown"
