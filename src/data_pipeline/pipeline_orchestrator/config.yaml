@@ -58,3 +58,70 @@ overwrite_all: false
 overwrite_materialize_stitched_images: null
 overwrite_steps:
   materialize_stitched_images: false
+
+# Phase 3 segmentation backend settings (not yet wired in Snakefile targets).
+segmentation:
+  detector_backend: "groundingdino"      # future: "detectron2"
+  tracker_backend: "sam2"                # future: "sam3"
+
+# Phase 3 segmentation_and_tracking settings (paths resolved relative to data_root unless absolute).
+segmentation_and_tracking:
+  channel_id: "BF"
+  device: "cpu"
+
+  # Single root directory for model repos/assets (relative to data_root unless absolute).
+  models_root: "models"
+
+  # GroundingDINO
+  groundingdino_repo: "GroundingDINO"
+  groundingdino_model_name: "SwinT_OGC"
+  # If you are using a fine-tuned GroundingDINO checkpoint, set this to something
+  # stable and human-readable (e.g. a run name / date) so it shows up in provenance.
+  groundingdino_release: "finetune_run_nick_masks_20250308"
+  groundingdino_config: "groundingdino/config/GroundingDINO_SwinT_OGC.py"
+  # Fine-tuned checkpoint used by legacy `run_morphseq_pipeline` SAM2 wrapper.
+  # Can be absolute (recommended) or relative to `models_root`.
+  groundingdino_weights: "/net/trapnell/vol1/home/mdcolon/proj/image_segmentation/Open-GroundingDino/finetune_output/finetune_output_run_nick_masks_20250308/checkpoint_best_regular.pth"
+
+  # SAM2
+  sam2_models_root: "sam2"
+  sam2_model_name: "hiera_large"
+  sam2_release: "unknown"
+  sam2_config: "configs/sam2.1/sam2.1_hiera_l.yaml"
+  sam2_checkpoint: "checkpoints/sam2.1_hiera_large.pt"
+
+  # Detection thresholds
+  text_prompt: "individual embryo"
+  box_threshold: 0.35
+  text_threshold: 0.25
+  confidence_threshold: 0.45
+  iou_threshold: 0.5
+  min_detections: 1
+  mask_type: "embryo"
+  max_frames: 5
+
+  # Persist inputs for debugging / future reuse.
+  raw_frames:
+    enabled: true
+    # "symlink" avoids duplicating large stitched images; "copy" makes a self-contained snapshot.
+    mode: "symlink"
+    # Also write a sequentially named directory (00000.jpg, 00001.jpg, ...) for SAM2 predictors.
+    write_sam2_seq_dir: true
+
+  # Optional raw (no masks) QC video.
+  raw_video:
+    enabled: false
+    fps: 10
+    codec: "mp4v"
+    write_video: true
+    write_frames: false
+
+  qc_overlay:
+    enabled: true
+    alpha: 0.45
+    fps: 10
+    write_frames: true
+    write_video: true
+    # Render overlays for a specific mask_type (default: the run's mask_type).
+    # Typical: "embryo"
+    render_mask_type: null

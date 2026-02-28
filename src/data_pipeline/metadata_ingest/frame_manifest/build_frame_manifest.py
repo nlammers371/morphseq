@@ -1,4 +1,4 @@
-"""Build frame_manifest.csv from stitched index and scope+plate metadata."""
+"""Build frame_manifest.csv from stitched index and scope/plate metadata."""
 
 from __future__ import annotations
 
@@ -55,10 +55,77 @@ def _canonicalize_scope_and_plate(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _canonicalize_plate_metadata(df: pd.DataFrame) -> pd.DataFrame:
+    if "temperature" not in df.columns and "temperature_c" in df.columns:
+        df["temperature"] = df["temperature_c"]
+
+    if "embryos_per_well" not in df.columns:
+        if "embryos" in df.columns:
+            df["embryos_per_well"] = df["embryos"]
+        else:
+            df["embryos_per_well"] = 1
+
+    defaults = {
+        "treatment": "control",
+        "medium": "EM",
+        "temperature": 28.5,
+        "start_age_hpf": 24.0,
+        "embryos_per_well": 1,
+    }
+    for col, default in defaults.items():
+        if col not in df.columns:
+            df[col] = default
+            continue
+        df[col] = df[col].replace(r"^\s*$", np.nan, regex=True).fillna(default)
+
+    return df
+
+
+def _load_scope_and_plate(
+    scope_and_plate_csv: Path | None,
+    scope_metadata_csv: Path | None,
+    plate_metadata_csv: Path | None,
+) -> pd.DataFrame:
+    if scope_and_plate_csv is not None:
+        return _canonicalize_scope_and_plate(pd.read_csv(scope_and_plate_csv))
+
+    if scope_metadata_csv is None or plate_metadata_csv is None:
+        raise ValueError(
+            "Either --scope-and-plate-csv OR both --scope-metadata-csv and --plate-metadata-csv must be provided."
+        )
+
+    scope_df = _with_frame_columns(pd.read_csv(scope_metadata_csv))
+    plate_df = _canonicalize_plate_metadata(pd.read_csv(plate_metadata_csv))
+
+    merged_df = scope_df.merge(
+        plate_df,
+        on=["experiment_id", "well_index"],
+        how="left",
+        validate="many_to_one",
+        suffixes=("", "_plate"),
+    )
+
+    if "well_id_plate" in merged_df.columns:
+        merged_df = merged_df.drop(columns=["well_id_plate"])
+
+    unmatched = merged_df["genotype"].isna()
+    if unmatched.any():
+        unmatched_wells = merged_df.loc[unmatched, "well_id"].unique()
+        raise ValueError(
+            f"Found {int(unmatched.sum())} scope metadata rows with no matching plate data. "
+            f"Unmatched well_ids: {list(unmatched_wells)[:10]}"
+        )
+
+    return _canonicalize_scope_and_plate(merged_df)
+
+
 def build_frame_manifest(
     stitched_index_csv: Path,
-    scope_and_plate_csv: Path,
+    scope_and_plate_csv: Path | None,
     output_csv: Path,
+    *,
+    scope_metadata_csv: Path | None = None,
+    plate_metadata_csv: Path | None = None,
 ) -> pd.DataFrame:
     """Build and validate frame manifest table."""
     stitched_df = add_elapsed_time_columns(
@@ -66,7 +133,11 @@ def build_frame_manifest(
         group_cols=["experiment_id", "well_id", "channel_id"],
     )
     stitched_df = add_frame_interval_unit_columns(stitched_df)
-    scope_df = _canonicalize_scope_and_plate(pd.read_csv(scope_and_plate_csv))
+    scope_df = _load_scope_and_plate(
+        scope_and_plate_csv=scope_and_plate_csv,
+        scope_metadata_csv=scope_metadata_csv,
+        plate_metadata_csv=plate_metadata_csv,
+    )
 
     join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
 
@@ -155,14 +226,35 @@ def build_frame_manifest(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stitched-index-csv", type=Path, required=True)
-    parser.add_argument("--scope-and-plate-csv", type=Path, required=True)
+    parser.add_argument("--scope-and-plate-csv", type=Path, required=False)
+    parser.add_argument("--scope-metadata-csv", type=Path, required=False)
+    parser.add_argument("--plate-metadata-csv", type=Path, required=False)
     parser.add_argument("--output-csv", type=Path, required=True)
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.scope_and_plate_csv is not None:
+        if args.scope_metadata_csv is not None or args.plate_metadata_csv is not None:
+            parser.error(
+                "Provide either --scope-and-plate-csv OR --scope-metadata-csv/--plate-metadata-csv, not both."
+            )
+    else:
+        if args.scope_metadata_csv is None or args.plate_metadata_csv is None:
+            parser.error(
+                "When --scope-and-plate-csv is omitted, both --scope-metadata-csv and --plate-metadata-csv are required."
+            )
+
+    return args
 
 
 def main() -> None:
     args = _parse_args()
-    build_frame_manifest(args.stitched_index_csv, args.scope_and_plate_csv, args.output_csv)
+    build_frame_manifest(
+        stitched_index_csv=args.stitched_index_csv,
+        scope_and_plate_csv=args.scope_and_plate_csv,
+        scope_metadata_csv=args.scope_metadata_csv,
+        plate_metadata_csv=args.plate_metadata_csv,
+        output_csv=args.output_csv,
+    )
 
 
 if __name__ == "__main__":

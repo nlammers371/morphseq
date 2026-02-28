@@ -54,8 +54,11 @@ import warnings
 import cv2
 import numpy as np
 import torch
+from PIL import Image
 
 warnings.filterwarnings("ignore")
+
+from data_pipeline.models.groundingdino import load_groundingdino_model as _load_groundingdino_model
 
 
 def load_groundingdino_model(
@@ -92,21 +95,21 @@ def load_groundingdino_model(
     if not weights_path.exists():
         raise FileNotFoundError(f"Weights file not found: {weights_path}")
 
-    try:
-        from groundingdino.util.inference import load_model
-    except ImportError:
-        raise ImportError(
-            "GroundingDINO not installed. "
-            "Install from: https://github.com/IDEA-Research/GroundingDINO"
-        )
-
-    model = load_model(str(config_path), str(weights_path), device=device)
-    return model
+    # Support loading from a repo checkout (no pip install required). We infer the repo root
+    # from the config path's typical location under `groundingdino/config/...`.
+    repo_dir = config_path.parent.parent.parent
+    return _load_groundingdino_model(
+        repo_dir=repo_dir,
+        config_path=config_path,
+        weights_path=weights_path,
+        device=device,
+    )
 
 
 def detect_embryos(
     model: "torch.nn.Module",
     image_path: Path,
+    device: str = "cuda",
     text_prompt: str = "individual embryo",
     box_threshold: float = 0.35,
     text_threshold: float = 0.25
@@ -152,9 +155,13 @@ def detect_embryos(
     except ImportError:
         raise ImportError("GroundingDINO utilities not available")
 
-    # Load and transform image
+    # Load and transform image.
+    # GroundingDINO's transforms expect a PIL image (uses `.size` as (w, h)).
     image_source = cv2.imread(str(image_path))
+    if image_source is None:
+        raise ValueError(f"Failed to read image: {image_path}")
     image_source = cv2.cvtColor(image_source, cv2.COLOR_BGR2RGB)
+    image_pil = Image.fromarray(image_source)
 
     transform = T.Compose([
         T.RandomResize([800], max_size=1333),
@@ -162,7 +169,7 @@ def detect_embryos(
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
 
-    image_transformed, _ = transform(image_source, None)
+    image_transformed, _ = transform(image_pil, None)
 
     # Run detection
     boxes, logits, phrases = predict(
@@ -170,14 +177,22 @@ def detect_embryos(
         image=image_transformed,
         caption=text_prompt,
         box_threshold=box_threshold,
-        text_threshold=text_threshold
+        text_threshold=text_threshold,
+        device=str(device),
     )
 
     # Convert to standard format
     detections = []
     for box, confidence, phrase in zip(boxes, logits, phrases):
+        # `groundingdino.util.inference.predict` returns boxes in (cx, cy, w, h)
+        # normalized to [0, 1]. Convert to (x_min, y_min, x_max, y_max) normalized.
+        cx, cy, bw, bh = [float(v) for v in box.cpu().numpy().tolist()]
+        x0 = max(0.0, min(1.0, cx - (bw / 2.0)))
+        y0 = max(0.0, min(1.0, cy - (bh / 2.0)))
+        x1 = max(0.0, min(1.0, cx + (bw / 2.0)))
+        y1 = max(0.0, min(1.0, cy + (bh / 2.0)))
         detections.append({
-            "box_xyxy": box.cpu().numpy().tolist(),
+            "box_xyxy": [x0, y0, x1, y1],
             "confidence": float(confidence.cpu().numpy()),
             "phrase": phrase
         })

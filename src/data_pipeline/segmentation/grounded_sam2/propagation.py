@@ -62,6 +62,8 @@ import cv2
 import numpy as np
 import torch
 
+from data_pipeline.models.sam2 import load_sam2_video_predictor
+
 
 def load_sam2_model(
     config_path: str,
@@ -97,21 +99,15 @@ def load_sam2_model(
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    try:
-        from sam2.build_sam import build_sam2_video_predictor
-    except ImportError:
-        raise ImportError(
-            "SAM2 not installed. "
-            "Install from: https://github.com/facebookresearch/segment-anything-2"
-        )
-
-    predictor = build_sam2_video_predictor(
-        str(config_path),
-        str(checkpoint_path),
-        device=device
+    # Support loading from a repo checkout under the pipeline models root.
+    # We infer the models root from the config path's typical location under `sam2/configs/...`.
+    sam2_models_root = config_path.parent.parent.parent
+    return load_sam2_video_predictor(
+        sam2_models_root=sam2_models_root,
+        config_path=config_path,
+        checkpoint_path=checkpoint_path,
+        device=device,
     )
-
-    return predictor
 
 
 def propagate_forward(
@@ -190,78 +186,80 @@ def propagate_forward(
 
 def propagate_bidirectional(
     predictor: "torch.nn.Module",
-    forward_dir: Path,
-    backward_dir: Optional[Path],
+    frame_dir: Path,
     seed_boxes: np.ndarray,
     seed_frame_idx: int,
     embryo_ids: Optional[List[str]] = None,
-    verbose: bool = False
+    verbose: bool = False,
+    max_frame_num_to_track: Optional[int] = None,
 ) -> Dict[int, Dict[str, Any]]:
     """
-    Propagate masks in both temporal directions from seed frame.
+    Propagate in both directions from one seed frame using one SAM2 inference state.
 
-    Args:
-        predictor: SAM2 video predictor
-        forward_dir: Directory with frames from seed to end
-        backward_dir: Directory with reversed frames from 0 to seed (or None)
-        seed_boxes: Numpy array of seed bounding boxes
-        seed_frame_idx: Original index of seed frame
-        embryo_ids: Optional list of embryo IDs
-        verbose: Enable verbose output
-
-    Returns:
-        Dict mapping frame indices to results (merged forward + backward)
-
-    Example:
-        >>> results = propagate_bidirectional(
-        ...     predictor,
-        ...     Path("/tmp/fwd"),
-        ...     Path("/tmp/bwd"),
-        ...     seed_boxes,
-        ...     seed_frame_idx=10
-        ... )
-        >>> list(results.keys())  # Contains frames 0-20 if 20 total frames
-        [0, 1, 2, ..., 19, 20]
+    This uses SAM2's native API:
+    `propagate_in_video(inference_state, start_frame_idx=..., reverse=...)`
     """
-    # Forward propagation (seed to end)
-    forward_results = propagate_forward(
-        predictor=predictor,
-        frame_dir=forward_dir,
-        seed_boxes=seed_boxes,
-        seed_frame_idx=seed_frame_idx,
-        embryo_ids=embryo_ids,
-        verbose=verbose
-    )
+    if not frame_dir.exists():
+        raise FileNotFoundError(f"Frame directory not found: {frame_dir}")
+    if seed_frame_idx < 0:
+        raise ValueError(f"seed_frame_idx must be >= 0, got {seed_frame_idx}")
 
-    # If no backward directory, return forward only
-    if backward_dir is None or seed_frame_idx == 0:
+    inference_state = predictor.init_state(video_path=str(frame_dir))
+
+    if embryo_ids is None:
+        embryo_ids = [f"embryo_{i}" for i in range(len(seed_boxes))]
+
+    # Seed once on the true seed frame in the full frame sequence.
+    for embryo_idx, box in enumerate(seed_boxes):
+        predictor.add_new_points_or_box(
+            inference_state=inference_state,
+            frame_idx=seed_frame_idx,
+            obj_id=embryo_idx,
+            box=box,
+        )
+
+    forward_results: Dict[int, Dict[str, Any]] = {}
+    for frame_idx, obj_ids, mask_logits in predictor.propagate_in_video(
+        inference_state,
+        start_frame_idx=seed_frame_idx,
+        max_frame_num_to_track=max_frame_num_to_track,
+        reverse=False,
+    ):
+        frame_results = decode_sam2_masks(
+            obj_ids=obj_ids,
+            mask_logits=mask_logits,
+            embryo_ids=embryo_ids,
+        )
+        forward_results[frame_idx] = frame_results
+        if verbose and frame_idx % 10 == 0:
+            print(f"[fwd] Processed frame {frame_idx} ({len(frame_results)} embryos)")
+
+    if seed_frame_idx == 0:
         return forward_results
 
-    # Backward propagation (seed to start, reversed)
-    backward_raw = propagate_forward(
-        predictor=predictor,
-        frame_dir=backward_dir,
-        seed_boxes=seed_boxes,
-        seed_frame_idx=0,  # Temporary starting point
-        embryo_ids=embryo_ids,
-        verbose=verbose
-    )
+    backward_results: Dict[int, Dict[str, Any]] = {}
+    for frame_idx, obj_ids, mask_logits in predictor.propagate_in_video(
+        inference_state,
+        start_frame_idx=seed_frame_idx,
+        max_frame_num_to_track=max_frame_num_to_track,
+        reverse=True,
+    ):
+        frame_results = decode_sam2_masks(
+            obj_ids=obj_ids,
+            mask_logits=mask_logits,
+            embryo_ids=embryo_ids,
+        )
+        backward_results[frame_idx] = frame_results
+        if verbose and frame_idx % 10 == 0:
+            print(f"[bwd] Processed frame {frame_idx} ({len(frame_results)} embryos)")
 
-    # Remap backward indices (seed_idx - offset)
-    backward_results = {}
-    for sam2_idx, frame_data in backward_raw.items():
-        original_idx = seed_frame_idx - sam2_idx
-        backward_results[original_idx] = frame_data
-
-    # Merge: prefer forward results for overlapping frames
-    merged = {**backward_results, **forward_results}
-
-    return merged
+    # Prefer forward when both passes produce the same frame index.
+    return {**backward_results, **forward_results}
 
 
 def decode_sam2_masks(
-    obj_ids: torch.Tensor,
-    mask_logits: torch.Tensor,
+    obj_ids: Any,
+    mask_logits: Any,
     embryo_ids: List[str]
 ) -> Dict[str, Any]:
     """
@@ -293,16 +291,32 @@ def decode_sam2_masks(
     """
     results = {}
 
-    # Convert to numpy for processing
-    obj_ids_np = obj_ids.cpu().numpy()
-    mask_logits_np = mask_logits.cpu().numpy()
+    # Convert to numpy for processing (SAM2 may return lists or tensors depending on version).
+    if hasattr(obj_ids, "cpu"):
+        obj_ids_np = obj_ids.cpu().numpy()
+    else:
+        obj_ids_np = np.asarray(obj_ids)
+
+    if hasattr(mask_logits, "cpu"):
+        mask_logits_np = mask_logits.cpu().numpy()
+    else:
+        mask_logits_np = np.asarray(mask_logits)
 
     for obj_idx, obj_id in enumerate(obj_ids_np):
         # Get embryo ID
         embryo_id = embryo_ids[obj_id] if obj_id < len(embryo_ids) else f"embryo_{obj_id}"
 
-        # Get mask logits for this object
-        mask_logit = mask_logits_np[obj_idx]
+        # Get mask logits for this object.
+        # SAM2 versions vary: (N, H, W) or (N, 1, H, W). Normalize to (H, W).
+        mask_logit = np.asarray(mask_logits_np[obj_idx])
+        if mask_logit.ndim == 3 and mask_logit.shape[0] == 1:
+            mask_logit = mask_logit[0]
+        elif mask_logit.ndim == 3 and mask_logit.shape[-1] == 1:
+            mask_logit = mask_logit[..., 0]
+        else:
+            mask_logit = np.squeeze(mask_logit)
+        if mask_logit.ndim != 2:
+            raise ValueError(f"Unexpected SAM2 mask_logit shape for obj={obj_id}: {mask_logit.shape}")
 
         # Threshold to binary mask (> 0)
         binary_mask = (mask_logit > 0).astype(np.uint8)
@@ -380,16 +394,44 @@ def encode_mask_to_rle(mask: np.ndarray) -> Dict[str, Any]:
     except ImportError:
         raise ImportError("pycocotools required for RLE encoding. Install with: pip install pycocotools")
 
-    # Ensure correct format
-    mask = np.asfortranarray(mask.astype(np.uint8))
+    mask_arr = np.asarray(mask)
+    # SAM2 may hand us (1, H, W) or (H, W, 1). Canonicalize to (H, W).
+    if mask_arr.ndim == 3 and mask_arr.shape[0] == 1:
+        mask_arr = mask_arr[0]
+    elif mask_arr.ndim == 3 and mask_arr.shape[-1] == 1:
+        mask_arr = mask_arr[..., 0]
+    else:
+        mask_arr = np.squeeze(mask_arr)
+    if mask_arr.ndim != 2:
+        raise ValueError(f"Mask must be 2D for RLE encoding, got shape={mask_arr.shape}")
 
-    # Encode
-    rle = mask_utils.encode(mask)
+    # Ensure binary uint8 + Fortran order for pycocotools.
+    mask_arr = (mask_arr > 0).astype(np.uint8)
+    mask_arr = np.asfortranarray(mask_arr)
 
-    # Convert bytes to string for JSON serialization
-    rle['counts'] = rle['counts'].decode('utf-8')
+    rle = mask_utils.encode(mask_arr)
+    # pycocotools returns a list when given an HxWxN array; be defensive anyway.
+    if isinstance(rle, list):
+        if len(rle) != 1:
+            raise ValueError(f"Expected single RLE dict, got list of len={len(rle)}")
+        rle = rle[0]
 
-    return rle
+    counts = rle.get("counts")
+    if isinstance(counts, bytes):
+        counts_str = counts.decode("utf-8")
+    elif isinstance(counts, str):
+        counts_str = counts
+    else:
+        raise TypeError(f"Unexpected RLE counts type: {type(counts)!r}")
+
+    size = rle.get("size")
+    if size is None or len(size) != 2:
+        raise ValueError(f"Unexpected RLE size: {size!r}")
+
+    return {
+        "counts": counts_str,
+        "size": [int(size[0]), int(size[1])],
+    }
 
 
 def save_propagation_results(

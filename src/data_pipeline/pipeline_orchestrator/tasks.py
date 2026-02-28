@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import yaml
 from pathlib import Path
 
 from data_pipeline.metadata_ingest.plate.plate_processing import process_plate_layout
@@ -13,6 +14,7 @@ from data_pipeline.metadata_ingest.mapping.series_well_mapper_yx1 import map_ser
 from data_pipeline.metadata_ingest.mapping.apply_series_mapping import apply_series_mapping
 from data_pipeline.metadata_ingest.mapping.align_scope_plate import align_scope_and_plate_metadata
 from data_pipeline.metadata_ingest.stitched_index.materialize_stitched_images import materialize_stitched_images
+from data_pipeline.segmentation_and_tracking.pipelines.segmentation_and_tracking import run_segmentation_and_tracking
 
 
 def _parse_bool(value: str | bool) -> bool:
@@ -115,6 +117,20 @@ def cmd_materialize_stitched(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_segmentation_and_tracking(args: argparse.Namespace) -> None:
+    cfg = yaml.safe_load(Path(args.config_yaml).read_text()) or {}
+    run_segmentation_and_tracking(
+        frame_manifest_csv=args.frame_manifest_csv,
+        experiment_id=args.experiment,
+        well_id=args.well_id,
+        output_root=args.output_root,
+        pipeline_config=cfg,
+        device=args.device,
+        run_id=args.run_id,
+        verbose=_parse_bool(args.verbose),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -174,6 +190,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_mat.add_argument("--overwrite", default="false")
     p_mat.add_argument("--done-flag", type=Path, required=False)
     p_mat.set_defaults(func=cmd_materialize_stitched)
+
+    p_sat = sub.add_parser("segmentation-and-tracking")
+    p_sat.add_argument("--frame-manifest-csv", type=Path, required=True)
+    p_sat.add_argument("--experiment", required=True)
+    p_sat.add_argument("--well-id", required=True)
+    p_sat.add_argument("--output-root", type=Path, required=True)
+    p_sat.add_argument("--config-yaml", type=Path, required=True)
+    p_sat.add_argument("--device", default="cuda")
+    p_sat.add_argument("--run-id", default=None)
+    p_sat.add_argument("--verbose", default="false")
+    p_sat.set_defaults(func=cmd_segmentation_and_tracking)
 
     return parser
 

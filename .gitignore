@@ -101,6 +101,7 @@ test_data/**/*.png
 
 morphseq_playground/
 data_pipeline_output/
+.snakemake/
 
 # Ignore log directories
 logs/

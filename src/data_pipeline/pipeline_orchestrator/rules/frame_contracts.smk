@@ -95,7 +95,8 @@ rule build_frame_manifest:
     input:
         stitched_index_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv",
         stitched_index_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".stitched_image_index.validated",
-        scope_and_plate_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_and_plate_metadata.csv"
+        scope_metadata_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
+        plate_metadata_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv"
     output:
         frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv"
     params:
@@ -105,7 +106,8 @@ rule build_frame_manifest:
         (
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.frame_manifest.build_frame_manifest '
             '--stitched-index-csv "{input.stitched_index_csv}" '
-            '--scope-and-plate-csv "{input.scope_and_plate_csv}" '
+            '--scope-metadata-csv "{input.scope_metadata_csv}" '
+            '--plate-metadata-csv "{input.plate_metadata_csv}" '
             '--output-csv "{output.frame_manifest_csv}"'
         )
 

@@ -71,3 +71,10 @@ rule frame_contracts_complete:
 
 include: "rules/metadata_alignment.smk"
 include: "rules/frame_contracts.smk"
+include: "rules/segmentation_and_tracking.smk"
+
+
+rule segmentation_and_tracking_complete:
+    """Run Phase 3 segmentation_and_tracking for all configured experiments (GPU + models required)."""
+    input:
+        expand(DATA_ROOT / "segmentation_and_tracking" / "{exp}" / "contracts" / ".segmentation_tracking.validated", exp=EXPERIMENTS)
