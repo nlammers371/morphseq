@@ -122,6 +122,16 @@ segmentation_and_tracking:
     fps: 10
     write_frames: true
     write_video: true
+    render:
+      # Scale the final overlay output (video + frames) for easier viewing.
+      # 1.0 = native resolution, 3.0 = 3x larger.
+      scale: 1.0
+      # Per-embryo label text (e.g. "embryo_0") style.
+      label_font_scale: 0.8
+      label_thickness: 2
+      # Top banner (image_id) style.
+      banner_font_scale: 1.0
+      banner_thickness: 2
     # Render overlays for a specific mask_type (default: the run's mask_type).
     # Typical: "embryo"
     render_mask_type: null

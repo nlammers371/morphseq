@@ -340,6 +340,12 @@ def run_segmentation_and_tracking(
         qc_video_cfg.FPS = int(overlay_cfg.get("fps", 10))
         qc_video_cfg.WRITE_FRAMES = bool(overlay_cfg.get("write_frames", True))
         qc_video_cfg.WRITE_VIDEO = bool(overlay_cfg.get("write_video", True))
+        render_cfg = (overlay_cfg.get("render") or {})
+        qc_video_cfg.OUTPUT_SCALE = float(render_cfg.get("scale", 1.0))
+        qc_video_cfg.LABEL_FONT_SCALE = float(render_cfg.get("label_font_scale", 0.8))
+        qc_video_cfg.LABEL_THICKNESS = int(render_cfg.get("label_thickness", 2))
+        qc_video_cfg.BANNER_FONT_SCALE = float(render_cfg.get("banner_font_scale", 1.0))
+        qc_video_cfg.BANNER_THICKNESS = int(render_cfg.get("banner_thickness", 2))
         try:
             render_overlays_from_segmentation_tracking(
                 segmentation_tracking_csv,

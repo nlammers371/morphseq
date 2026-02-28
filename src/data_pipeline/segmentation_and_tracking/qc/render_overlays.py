@@ -24,6 +24,7 @@ def _color_for_key(key: str) -> tuple[int, int, int]:
 
 
 def _draw_label(frame: np.ndarray, text: str, x: int, y: int) -> None:
+    # Caller controls scale/thickness; defaults are set below via cfg.
     cv2.putText(
         frame,
         text,
@@ -34,6 +35,19 @@ def _draw_label(frame: np.ndarray, text: str, x: int, y: int) -> None:
         2,
         cv2.LINE_AA,
     )
+
+def _draw_label_cfg(frame: np.ndarray, text: str, x: int, y: int, *, scale: float, thickness: int) -> None:
+    cv2.putText(
+        frame,
+        text,
+        (int(x), int(y)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        float(scale),
+        (255, 255, 255),
+        int(thickness),
+        cv2.LINE_AA,
+    )
+
 
 def _draw_top_banner(frame: np.ndarray, text: str) -> None:
     """Draw a readable top banner label (image_id) for QC videos."""
@@ -55,6 +69,27 @@ def _draw_top_banner(frame: np.ndarray, text: str) -> None:
     overlay = frame.copy()
     cv2.rectangle(overlay, (x0, y0), (x1, y1), (0, 0, 0), -1)
     # alpha blend rectangle for readability
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, dst=frame)
+    cv2.putText(frame, text, (x, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+
+def _draw_top_banner_cfg(frame: np.ndarray, text: str, *, scale: float, thickness: int) -> None:
+    if frame is None or frame.size == 0:
+        return
+    x, y = 16, 36
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = float(scale)
+    thickness = int(thickness)
+    (tw, th), baseline = cv2.getTextSize(text, font, scale, thickness)
+    pad = 8
+    x0, y0 = x - pad, y - th - pad
+    x1, y1 = x + tw + pad, y + baseline + pad
+    x0 = max(0, x0)
+    y0 = max(0, y0)
+    x1 = min(frame.shape[1] - 1, x1)
+    y1 = min(frame.shape[0] - 1, y1)
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x0, y0), (x1, y1), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, dst=frame)
     cv2.putText(frame, text, (x, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
 
@@ -108,6 +143,12 @@ def render_overlays_from_segmentation_tracking(
     # Ensure deterministic order.
     df = df.sort_values(["frame_index", "image_id", "embryo_id"]).reset_index(drop=True)
 
+    out_scale = float(getattr(cfg, "OUTPUT_SCALE", 1.0))
+    label_scale = float(getattr(cfg, "LABEL_FONT_SCALE", getattr(cfg, "FONT_SCALE", 0.8)))
+    label_thickness = int(getattr(cfg, "LABEL_THICKNESS", getattr(cfg, "FONT_THICKNESS", 2)))
+    banner_scale = float(getattr(cfg, "BANNER_FONT_SCALE", 1.0))
+    banner_thickness = int(getattr(cfg, "BANNER_THICKNESS", 2))
+
     writer = None
     video_path = out_dir / str(out_name)
 
@@ -150,10 +191,21 @@ def render_overlays_from_segmentation_tracking(
             y2 = int(round(float(row.get("bbox_y_max", 0.0))))
             if x2 > x1 and y2 > y1:
                 cv2.rectangle(overlay, (x1, y1), (x2, y2), tuple(int(c) for c in color), 2)
-                _draw_label(overlay, emb, x1 + 4, max(20, y1 - 8))
+                _draw_label_cfg(overlay, emb, x1 + 4, max(20, y1 - 8), scale=label_scale, thickness=label_thickness)
 
         # Add image_id to the top of the frame so QC videos are easy to follow.
-        _draw_top_banner(overlay, str(image_id))
+        _draw_top_banner_cfg(overlay, str(image_id), scale=banner_scale, thickness=banner_thickness)
+
+        # Optional output up-scaling for easier viewing.
+        if out_scale != 1.0:
+            if out_scale <= 0:
+                raise ValueError(f"OUTPUT_SCALE must be > 0, got {out_scale}")
+            h0, w0 = overlay.shape[:2]
+            overlay = cv2.resize(
+                overlay,
+                (int(round(w0 * out_scale)), int(round(h0 * out_scale))),
+                interpolation=cv2.INTER_LINEAR,
+            )
 
         out_frame_path = frames_dir / f"{image_id}{suffix}.jpg"
         if bool(getattr(cfg, "WRITE_FRAMES", True)):
