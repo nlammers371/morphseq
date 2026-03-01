@@ -38,6 +38,7 @@ def normalize_frame_detections(
                     "image_id": str(image_id),
                     "frame_index": int(d.frame_index),
                     "detection_index": int(idx),
+                    "detection_instance_id": f"{str(image_id)}_det{int(idx):03d}",
                     "box_x_min_abs": float(x0),
                     "box_y_min_abs": float(y0),
                     "box_x_max_abs": float(x1),
@@ -59,4 +60,3 @@ def normalize_frame_detections(
     validate_schema(df, REQUIRED_COLUMNS_FRAME_DETECTIONS, stage_name="frame_detections")
     require_unique(df, UNIQUE_KEY_FRAME_DETECTIONS, stage_name="frame_detections")
     return df
-

@@ -297,6 +297,8 @@ def run_segmentation_and_tracking(
         image_id_by_frame_index=image_id_by_frame_index,
         seed_frame_index=int(seed.seed_frame_index),
         seed_image_id=str(seed.seed_image_id),
+        well_id=str(canonical_well_id),
+        channel_id=str(channel_id),
     )
     trk_ctx.stamp(raw_tracks)
     tracks_df = normalize_track_instances(
@@ -314,12 +316,16 @@ def run_segmentation_and_tracking(
         source_image_path_by_image_id=source_image_path_by_image_id,
         exported_mask_dir=mask_head_dir,
         exported_mask_rel_prefix=exported_mask_rel_prefix,
-        experiment_id=str(experiment_id),
-        well_id=str(canonical_well_id),
         mask_type=mask_type,
     )
     trk_ctx.stamp(raw_masks)
-    masks_df = normalize_mask_rle(raw_masks, experiment_id=experiment_id, well_id=canonical_well_id, video_id=video_id)
+    masks_df = normalize_mask_rle(
+        raw_masks,
+        experiment_id=experiment_id,
+        well_id=canonical_well_id,
+        video_id=video_id,
+        channel_id=str(channel_id),
+    )
     masks_df.to_parquet(contracts_dir / "embryo_mask_rle.parquet", index=False)
 
     final_df = build_segmentation_tracking_contract(masks_df, well_index=well_index)

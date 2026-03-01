@@ -17,14 +17,16 @@ def normalize_mask_rle(
     experiment_id: str,
     well_id: str,
     video_id: str,
+    channel_id: str,
 ) -> pd.DataFrame:
     validate_provenance(masks, stage_name="mask_rle")
-    well_slug = str(well_id).split("_")[-1]
     rows = []
     for m in masks:
         x0, y0, x1, y1 = [float(v) for v in (m.bbox_xyxy_abs or [0, 0, 0, 0])]
-        # snip_id is a human-facing identifier; keep it stable even if well_id is experiment-qualified.
-        snip_id = f"{experiment_id}_{well_slug}_{m.embryo_id}_f{int(m.frame_index):04d}"
+        snip_id = f"{str(m.embryo_id)}_{str(channel_id)}_f{int(m.frame_index):04d}"
+        instance_id = str(m.embryo_local_id or "")
+        if not instance_id:
+            instance_id = str(m.embryo_id)
         rows.append(
             {
                 "experiment_id": str(experiment_id),
@@ -32,6 +34,9 @@ def normalize_mask_rle(
                 "well_id": str(well_id),
                 "image_id": str(m.image_id),
                 "embryo_id": str(m.embryo_id),
+                "embryo_local_id": str(m.embryo_local_id),
+                "channel_id": str(channel_id),
+                "instance_id": instance_id,
                 "snip_id": str(snip_id),
                 "frame_index": int(m.frame_index),
                 "mask_type": str(m.mask_type),

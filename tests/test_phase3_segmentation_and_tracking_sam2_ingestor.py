@@ -30,6 +30,8 @@ def test_tracks_to_raw_masks_encodes_rle_and_exports_png(tmp_path: Path) -> None
         image_id_by_frame_index=image_id_by_frame_index,
         seed_frame_index=0,
         seed_image_id="exp_A01_BF_f0000",
+        well_id="exp_A01",
+        channel_id="BF",
     )
     assert len(tracks) == 1
 
@@ -39,13 +41,10 @@ def test_tracks_to_raw_masks_encodes_rle_and_exports_png(tmp_path: Path) -> None
         source_image_path_by_image_id={"exp_A01_BF_f0000": "built_image_data/exp/.../f0000.jpg"},
         exported_mask_dir=exported_mask_dir,
         exported_mask_rel_prefix="segmentation_and_tracking/exp/per_well/A01",
-        experiment_id="exp",
-        well_id="A01",
         mask_type="embryo",
     )
     assert len(masks) == 1
     m = masks[0]
     assert m.mask_type == "embryo"
     assert "counts" in m.mask_rle and "size" in m.mask_rle
-    assert (exported_mask_dir / "exp_A01_embryo_0_f0000_mask.png").exists()
-
+    assert (exported_mask_dir / "exp_A01_embryo_0_BF_f0000_mask.png").exists()

@@ -22,7 +22,7 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
     well = f"{exp}_A01"
 
     image_id = f"{well}_BF_f0000"
-    snip_id = f"{exp}_A01_embryo_0_f0000"
+    snip_id = f"{well}_embryo_0_BF_f0000"
 
     source_rel = f"built_image_data/{exp}/stitched_ff_images/A01/BF/{image_id}.jpg"
     mask_rel = f"segmentation_and_tracking/{exp}/per_well/{well}/masks/embryo_mask/{snip_id}_mask.png"
@@ -109,4 +109,3 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
     # Processed snip should exist for this smoke test.
     processed_rel = str(df.loc[0, "processed_snip_path"])
     assert (output_root / processed_rel).exists()
-

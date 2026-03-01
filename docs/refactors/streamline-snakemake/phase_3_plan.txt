@@ -111,6 +111,8 @@
      frame_index: int
      image_id: str
      embryo_id: str
+     embryo_local_id: str = ""            # tracker-native ID (backend/debug)
+     channel_id: str = ""                # e.g. "BF" (future: fluorescence channels)
      mask: Any                            # np.ndarray (H,W)
  binary — freed after RLE
      bbox_xyxy_abs: list[float]           # absolute pixel float
@@ -129,6 +131,8 @@
      frame_index: int
      image_id: str
      embryo_id: str
+     embryo_local_id: str = ""            # tracker-native ID (backend/debug)
+     channel_id: str = ""                # e.g. "BF"
      mask_type: str                       # "sam" | "yolk" |
  "focus" | etc.
      mask_rle: dict[str, Any]             # {"counts": str,
@@ -216,6 +220,7 @@
      "experiment_id", "well_id", "video_id", "image_id",
      "frame_index",
      "detection_index",
+     "detection_instance_id",             # stable per-image id: "{image_id}_det{idx:03d}"
      "box_x_min_abs", "box_y_min_abs", "box_x_max_abs",
  "box_y_max_abs",
      "detection_confidence",
@@ -242,6 +247,7 @@
  REQUIRED_COLUMNS_TRACK_INSTANCES = [
      "experiment_id", "video_id", "well_id", "well_index",
      "image_id", "embryo_id", "frame_index",
+     "embryo_local_id", "channel_id", "instance_id",
      "bbox_x_min", "bbox_y_min", "bbox_x_max", "bbox_y_max",
      "area_px", "mask_confidence",
      "centroid_x_px", "centroid_y_px",
@@ -256,6 +262,7 @@
  REQUIRED_COLUMNS_MASK_RLE = [
      "experiment_id", "video_id", "well_id",
      "image_id", "embryo_id", "snip_id", "frame_index",
+     "embryo_local_id", "channel_id", "instance_id",
      "mask_type",                        # "sam" | "yolk" |
  "focus" | etc.
      "mask_rle", "area_px",

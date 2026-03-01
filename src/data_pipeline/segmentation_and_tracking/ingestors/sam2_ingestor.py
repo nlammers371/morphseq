@@ -16,6 +16,8 @@ def ingest_propagation(
     image_id_by_frame_index: dict[int, str],
     seed_frame_index: int,
     seed_image_id: str,
+    well_id: str,
+    channel_id: str,
 ) -> list[RawTrack]:
     tracks: list[RawTrack] = []
     for frame_index, frame_data in results.items():
@@ -27,11 +29,15 @@ def ingest_propagation(
             bbox = [float(x) for x in emb.get("bbox", [0, 0, 0, 0])]
             area = float(emb.get("area", 0.0))
             conf = float(emb.get("confidence", 0.0))
+            embryo_local_id = str(embryo_id)
+            embryo_global_id = f"{str(well_id)}_{embryo_local_id}"
             tracks.append(
                 RawTrack(
                     frame_index=int(frame_index),
                     image_id=str(image_id),
-                    embryo_id=str(embryo_id),
+                    embryo_id=str(embryo_global_id),
+                    embryo_local_id=str(embryo_local_id),
+                    channel_id=str(channel_id),
                     mask=mask,
                     bbox_xyxy_abs=bbox,
                     area_px=area,
@@ -55,14 +61,11 @@ def tracks_to_raw_masks(
     source_image_path_by_image_id: dict[str, str],
     exported_mask_dir: Path,
     exported_mask_rel_prefix: str,
-    experiment_id: str,
-    well_id: str,
     mask_type: str = "sam",
 ) -> list[RawMask]:
     exported_mask_dir = Path(exported_mask_dir)
     exported_mask_dir.mkdir(parents=True, exist_ok=True)
 
-    well_slug = str(well_id).split("_")[-1]
     mask_head = f"{mask_type}_mask"
     masks: list[RawMask] = []
     for t in tracks:
@@ -79,8 +82,7 @@ def tracks_to_raw_masks(
         bbox = [float(x) for x in t.bbox_xyxy_abs]
         source_image_path = str(source_image_path_by_image_id.get(t.image_id, ""))
 
-        # Keep snip_id stable even if well_id is experiment-qualified.
-        snip_id = f"{experiment_id}_{well_slug}_{t.embryo_id}_f{int(t.frame_index):04d}"
+        snip_id = f"{str(t.embryo_id)}_{str(t.channel_id)}_f{int(t.frame_index):04d}"
         exported_rel = f"{exported_mask_rel_prefix}/{mask_head}/{snip_id}_mask.png"
         exported_abs = exported_mask_dir / f"{snip_id}_mask.png"
 
@@ -96,6 +98,8 @@ def tracks_to_raw_masks(
                 frame_index=int(t.frame_index),
                 image_id=str(t.image_id),
                 embryo_id=str(t.embryo_id),
+                embryo_local_id=str(t.embryo_local_id),
+                channel_id=str(t.channel_id),
                 mask_type=str(mask_type),
                 mask_rle=rle,
                 area_px=float(t.area_px),

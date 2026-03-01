@@ -31,6 +31,9 @@ def normalize_track_instances(
     for t in tracks:
         x0, y0, x1, y1 = [float(v) for v in (t.bbox_xyxy_abs or [0, 0, 0, 0])]
         cx, cy = _centroid_from_bbox([x0, y0, x1, y1])
+        instance_id = str(t.embryo_local_id or "")
+        if not instance_id:
+            instance_id = str(t.embryo_id)
         rows.append(
             {
                 "experiment_id": str(experiment_id),
@@ -39,6 +42,9 @@ def normalize_track_instances(
                 "well_index": int(well_index),
                 "image_id": str(t.image_id),
                 "embryo_id": str(t.embryo_id),
+                "embryo_local_id": str(t.embryo_local_id),
+                "channel_id": str(t.channel_id),
+                "instance_id": instance_id,
                 "frame_index": int(t.frame_index),
                 "bbox_x_min": float(x0),
                 "bbox_y_min": float(y0),
@@ -62,4 +68,3 @@ def normalize_track_instances(
     validate_schema(df, REQUIRED_COLUMNS_TRACK_INSTANCES, stage_name="track_instances")
     require_unique(df, UNIQUE_KEY_TRACK_INSTANCES, stage_name="track_instances")
     return df
-

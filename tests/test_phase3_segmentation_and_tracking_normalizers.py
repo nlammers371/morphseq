@@ -88,6 +88,8 @@ def test_normalize_tracks_and_masks_round_trip(tmp_path: Path) -> None:
         frame_index=0,
         image_id="exp_A01_BF_f0000",
         embryo_id="embryo_0",
+        embryo_local_id="embryo_0",
+        channel_id="BF",
         mask=None,
         bbox_xyxy_abs=[1, 2, 3, 4],
         area_px=10,
@@ -106,6 +108,8 @@ def test_normalize_tracks_and_masks_round_trip(tmp_path: Path) -> None:
         frame_index=0,
         image_id="exp_A01_BF_f0000",
         embryo_id="embryo_0",
+        embryo_local_id="embryo_0",
+        channel_id="BF",
         mask_type="sam",
         mask_rle={"counts": "abc", "size": [5, 5]},
         area_px=10,
@@ -121,6 +125,6 @@ def test_normalize_tracks_and_masks_round_trip(tmp_path: Path) -> None:
         model_release="unknown",
         run_id="r1",
     )
-    masks_df = normalize_mask_rle([m], experiment_id="exp", well_id="A01", video_id="exp_A01")
+    masks_df = normalize_mask_rle([m], experiment_id="exp", well_id="A01", video_id="exp_A01", channel_id="BF")
     assert len(masks_df) == 1
     assert masks_df.loc[0, "mask_type"] == "sam"

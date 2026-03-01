@@ -141,7 +141,12 @@ def render_overlays_from_segmentation_tracking(
         suffix = f"_{mask_type}_mask_overlay" if mask_type is not None else ""
 
     # Ensure deterministic order.
-    df = df.sort_values(["frame_index", "image_id", "embryo_id"]).reset_index(drop=True)
+    sort_cols = ["frame_index", "image_id"]
+    if "embryo_local_id" in df.columns:
+        sort_cols.append("embryo_local_id")
+    else:
+        sort_cols.append("embryo_id")
+    df = df.sort_values(sort_cols).reset_index(drop=True)
 
     out_scale = float(getattr(cfg, "OUTPUT_SCALE", 1.0))
     label_scale = float(getattr(cfg, "LABEL_FONT_SCALE", getattr(cfg, "FONT_SCALE", 0.8)))
@@ -167,7 +172,11 @@ def render_overlays_from_segmentation_tracking(
 
         alpha = float(getattr(cfg, "MASK_ALPHA", 0.45))
         for _, row in g.iterrows():
-            emb = str(row["embryo_id"])
+            # Prefer a short tracker-local ID for overlay readability.
+            if "embryo_local_id" in row and pd.notna(row["embryo_local_id"]):
+                emb = str(row["embryo_local_id"])
+            else:
+                emb = str(row["embryo_id"])
             mask_rel = str(row["exported_mask_path"])
             mask_path = _resolve(output_root, mask_rel)
             mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)

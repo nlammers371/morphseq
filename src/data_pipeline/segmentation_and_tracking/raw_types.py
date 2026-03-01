@@ -40,6 +40,10 @@ class RawTrack:
     bbox_xyxy_abs: list[float]
     area_px: float
     confidence: float
+
+    # Tracker-native ID (backend/debug). Optional because not all trackers expose this.
+    embryo_local_id: str = ""
+    channel_id: str = ""
     is_seed_frame: bool = False
     propagation_direction: str | None = None
 
@@ -64,6 +68,10 @@ class RawMask:
     centroid_x_px: float
     centroid_y_px: float
     confidence: float
+
+    # Tracker-native ID (backend/debug). Optional because not all trackers expose this.
+    embryo_local_id: str = ""
+    channel_id: str = ""
     is_seed_frame: bool = False
     exported_mask_path: str = ""
     source_image_path: str = ""
@@ -91,4 +99,3 @@ class SeedSelection:
     selected_detection_indices: list[int]
     detector_backend: str = ""
     run_id: str = ""
-
