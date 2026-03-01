@@ -199,6 +199,10 @@ PHASE 3+
 - Build one canonical frame-level table for segmentation and downstream logic.
 - Join scope calibration/timing with plate annotations and stitched paths.
 
+**Note:** `metadata_ingest/frame_manifest/build_frame_manifest.py` also supports an alternative input:
+- `--scope-and-plate-csv experiment_metadata/{exp}/scope_and_plate_metadata.csv`
+If you want the plate join to happen in Phase 1 (and keep Phase 2 strictly image/contract assembly).
+
 ---
 
 ### `rule validate_frame_manifest`
@@ -273,10 +277,10 @@ Uniqueness key for both:
 
 - `channel_id`: normalized channel (`BF`, `GFP`, etc.)
 - `channel_name_raw`: microscope-native channel label
-- `image_id`: `{well_id}_{channel_id}_t{frame_index:04d}`
+- `image_id`: `{well_id}_{channel_id}_f{frame_index:04d}`
 
 Frame semantics:
-- `time_int` = acquisition ordering key
+- `time_int` = acquisition ordering key (to be deprecate) 
 - `frame_index` = contiguous 0-based index after sorting by `time_int` per `(experiment_id, well_id, channel_id)`
 
 ---
@@ -1302,10 +1306,10 @@ src/data_pipeline/schemas/
 ├── __init__.py
 ├── channel_normalization.py          # Channel name mappings
 ├── plate_metadata.py
-├── scope_metadata_raw.py             # RENAMED from scope_metadata.py
-├── scope_metadata_mapped.py          # RENAMED from scope_and_plate_metadata.py
-├── stitched_image_index.py           # NEW
-├── frame_manifest.py                 # NEW (replaces deprecated image_manifest.py)
+├── scope_metadata.py                 # Scope-derived contracts (raw + mapped outputs share this schema)
+├── scope_and_plate_metadata.py       # Scope rows enriched with plate-level annotations
+├── stitched_image_index.py
+├── frame_manifest.py                 # Canonical frame contract consumed by segmentation
 ├── segmentation.py
 ├── snip_processing.py
 ├── features.py
@@ -1317,6 +1321,8 @@ src/data_pipeline/schemas/
 ```
 src/data_pipeline/
 ├── metadata_ingest/
+│   ├── plate/
+│   │   └── plate_processing.py
 │   ├── scope/
 │   │   ├── yx1/
 │   │   │   ├── extract_scope_metadata.py
@@ -1324,8 +1330,9 @@ src/data_pipeline/
 │   │   ├── keyence/
 │   │   │   ├── extract_scope_metadata.py
 │   │   │   └── map_series_to_wells.py
-│   │   └── shared/
-│   │       └── apply_series_mapping.py
+│   │   └── shared/apply_series_mapping.py
+│   ├── mapping/
+│   │   └── align_scope_plate.py
 │   └── frame_manifest/
 │       └── build_frame_manifest.py
 ├── image_building/
@@ -1337,22 +1344,16 @@ src/data_pipeline/
 │   └── handoff/
 │       ├── io.py
 │       └── validate_stitched_index.py
+├── segmentation_and_tracking/        # Phase 3 (implemented)
 ├── snip_processing/
 │   ├── extraction.py
 │   ├── rotation.py
 │   ├── augmentation.py
-│   └── manifest_generation.py
-├── feature_extraction/
-│   ├── mask_geometry_metrics.py
-│   ├── pose_kinematics_metrics.py
-│   ├── fraction_alive.py
-│   ├── stage_inference.py
-│   └── consolidate_features.py
-└── embeddings/
-    ├── prepare_manifest.py
-    ├── inference.py
-    ├── subprocess_wrapper.py
-    └── file_validation.py
+│   ├── process_snips.py
+│   └── pipelines/                    # Phase 4 (implemented)
+│       ├── snip_processing.py
+│       ├── merge_snip_manifests.py
+│       └── validate_snip_manifest.py
 ```
 
 ### **New Data Outputs**
@@ -1361,31 +1362,20 @@ experiment_metadata/{exp}/
 ├── plate_metadata.csv [VALIDATED]
 ├── scope_metadata_raw.csv [VALIDATED]
 ├── scope_metadata_mapped.csv [VALIDATED]
+├── scope_and_plate_metadata.csv [VALIDATED]
 ├── stitched_image_index.csv [VALIDATED]
 └── frame_manifest.csv [VALIDATED]  # Single tabular manifest per experiment
 
 
-segmentation/{exp}/
-├── gdino_detections.json
-├── sam2_raw_output.json
-├── segmentation_tracking.csv [VALIDATED]
-└── mask_images/
+segmentation_and_tracking/{exp}/
+├── contracts/segmentation_tracking.csv [VALIDATED]
+├── per_well/{well_id}/...                        # shards + masks + artifacts
+└── views/                                        # symlink-only browse view
 
 processed_snips/{exp}/
-├── raw_crops/{snip_id}.tif
-├── processed/{snip_id}.jpg
-└── snip_manifest.csv [VALIDATED]
-
-computed_features/{exp}/
-├── mask_geometry_metrics.csv
-├── pose_kinematics_metrics.csv
-├── fraction_alive.csv
-├── stage_predictions.csv
-└── consolidated_snip_features.csv [VALIDATED]
-
-latent_embeddings/{model_name}/
-├── {experiment_id}_embedding_manifest.csv [VALIDATED]
-└── {experiment_id}_latents.csv [VALIDATED]
+├── contracts/snip_manifest.parquet [VALIDATED]
+├── per_well/{well_id}/processed/{snip_id}.jpg
+└── views/processed/                              # symlink-only browse view
 ```
 
 ### **Key Changes from Original Plan**
@@ -1395,6 +1385,7 @@ latent_embeddings/{model_name}/
 4. ✅ **Self-documenting image_ids:** `_BF_t0000` instead of `_ch00_t0000`
 5. ✅ **Provenance preserved:** `channel_name_raw` + `microscope_channel_index` track original values
 6. ✅ **Single tabular manifest:** `frame_manifest.csv` (flat CSV; replaces nested JSON)
+7. ✅ **Phase 4 wired:** `processed_snips/{exp}/` uses per-well shards + merge + `.snip_manifest.validated`
 
 ---
 
