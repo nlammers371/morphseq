@@ -59,7 +59,6 @@ def cmd_map_series(args: argparse.Namespace) -> None:
         nd2_files = sorted(args.raw_images_dir.glob("*.nd2"))
         nd2_path = nd2_files[0] if nd2_files else None
         map_series_to_wells_yx1(
-            plate_metadata_csv=args.plate_csv,
             scope_metadata_csv=args.scope_csv,
             output_mapping_csv=args.output_mapping_csv,
             output_provenance_json=args.output_provenance_json,
@@ -67,14 +66,19 @@ def cmd_map_series(args: argparse.Namespace) -> None:
             use_xy_reference=True,
             ref_xy_csv=args.ref_xy_csv,
             max_distance_um=args.max_distance_um,
+            allow_unmapped_wells=_parse_bool(args.allow_unmapped_wells),
+            row_y_tol_um=float(args.row_y_tol_um),
+            col_x_tol_um=float(args.col_x_tol_um),
+            dx_cv_tol=float(args.dx_cv_tol),
+            dy_cv_tol=float(args.dy_cv_tol),
         )
     elif args.microscope == "Keyence":
         map_series_to_wells_keyence(
             raw_data_dir=args.raw_images_parent,
-            plate_metadata_csv=args.plate_csv,
             scope_metadata_csv=args.scope_csv,
             output_mapping_csv=args.output_mapping_csv,
             output_provenance_json=args.output_provenance_json,
+            experiment_id=str(args.experiment),
         )
     else:
         raise ValueError(f"Unsupported microscope: {args.microscope}")
@@ -174,13 +178,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_map = sub.add_parser("map-series")
     p_map.add_argument("--experiment", required=True)
     p_map.add_argument("--microscope", choices=["YX1", "Keyence"], required=True)
-    p_map.add_argument("--plate-csv", type=Path, required=True)
+    # Deprecated: plate metadata should not be required for physical series mapping.
+    p_map.add_argument("--plate-csv", type=Path, required=False, default=None)
     p_map.add_argument("--scope-csv", type=Path, required=True)
     p_map.add_argument("--raw-images-dir", type=Path, required=True)
     p_map.add_argument("--output-mapping-csv", type=Path, required=True)
     p_map.add_argument("--output-provenance-json", type=Path, required=True)
     p_map.add_argument("--ref-xy-csv", type=Path, default=None)
     p_map.add_argument("--max-distance-um", type=float, default=4500.0)
+    p_map.add_argument("--allow-unmapped-wells", default="false")
+    p_map.add_argument("--row-y-tol-um", type=float, default=1200.0)
+    p_map.add_argument("--col-x-tol-um", type=float, default=1200.0)
+    p_map.add_argument("--dx-cv-tol", type=float, default=0.15)
+    p_map.add_argument("--dy-cv-tol", type=float, default=0.15)
     p_map.set_defaults(func=cmd_map_series)
 
     p_apply = sub.add_parser("apply-series")

@@ -232,7 +232,6 @@ def _map_positions_to_wells_by_xy(
 
 
 def map_series_to_wells_yx1(
-    plate_metadata_csv: Path,
     scope_metadata_csv: Path,
     output_mapping_csv: Path,
     output_provenance_json: Path,
@@ -240,23 +239,27 @@ def map_series_to_wells_yx1(
     use_xy_reference: bool = True,
     ref_xy_csv: Path = None,
     max_distance_um: float = 4500.0,
+    allow_unmapped_wells: bool = False,
+    row_y_tol_um: float = 1200.0,
+    col_x_tol_um: float = 1200.0,
+    dx_cv_tol: float = 0.15,
+    dy_cv_tol: float = 0.15,
 ) -> pd.DataFrame:
     """
-    Map YX1 ND2 series numbers to well positions.
+    Map YX1 ND2 series numbers to well positions (plate-free).
 
-    Mapping priority (XY-based is DEFAULT):
-    1. XY-based reference matching (if use_xy_reference=True, reference file exists, and ND2 path provided)
-    2. Explicit mapping from plate metadata series_number_map
-    3. Implicit positional mapping (fallback)
+    Mapping priority:
+    1. XY-based reference matching (if enabled, reference exists, and ND2 path provided)
+    2. If allow_unmapped_wells=true, fall back to non-canonical S00-style well IDs
 
     Args:
-        plate_metadata_csv: Path to plate metadata CSV
         scope_metadata_csv: Path to scope metadata CSV
         output_mapping_csv: Path to output mapping CSV
         output_provenance_json: Path to output provenance JSON
         nd2_path: Path to ND2 file for XY extraction (optional, required for XY-based mapping)
         use_xy_reference: Enable XY-based reference mapping (default True)
         ref_xy_csv: Path to custom reference XY coordinates CSV (optional)
+        allow_unmapped_wells: If true, allow fallback to S00-style well IDs when XY mapping is unavailable.
 
     Returns:
         DataFrame with series-to-well mapping
@@ -264,10 +267,7 @@ def map_series_to_wells_yx1(
     log.info("Mapping YX1 series to wells")
 
     # Load metadata
-    plate_df = pd.read_csv(plate_metadata_csv)
     scope_df = pd.read_csv(scope_metadata_csv)
-
-    log.info(f"Loaded plate metadata: {len(plate_df)} rows")
     log.info(f"Loaded scope metadata: {len(scope_df)} rows")
 
     series_map = None
@@ -278,6 +278,19 @@ def map_series_to_wells_yx1(
     if use_xy_reference and nd2_path is not None:
         ref_coordinates = _load_reference_xy_coordinates(ref_xy_csv)
         if ref_coordinates is not None:
+            # Validate the reference grid to catch subtle drift early.
+            from data_pipeline.metadata_ingest.mapping.validate_xy_reference_grid import (
+                validate_xy_reference_grid_df,
+            )
+
+            validate_xy_reference_grid_df(
+                ref_coordinates,
+                row_y_tol_um=float(row_y_tol_um),
+                col_x_tol_um=float(col_x_tol_um),
+                dx_cv_tol=float(dx_cv_tol),
+                dy_cv_tol=float(dy_cv_tol),
+            )
+
             # Extract positions from ND2
             nd2_positions = extract_nd2_stage_positions(nd2_path)
 
@@ -296,16 +309,23 @@ def map_series_to_wells_yx1(
             else:
                 log.warning("XY reference mapping produced no results, falling back to other methods")
 
-    # Fall back to explicit mapping from plate metadata
     if series_map is None:
-        series_map = _parse_series_number_map(plate_df)
-        if series_map:
-            mapping_method = "explicit"
+        if not allow_unmapped_wells:
+            raise ValueError(
+                "YX1 physical well mapping unavailable (no usable XY reference mapping). "
+                "Provide a valid XY reference file + ND2 path, or set allow_unmapped_wells=true to proceed with S00-style well IDs."
+            )
 
-    # Fall back to implicit positional mapping
-    if series_map is None:
-        series_map = _build_implicit_mapping(scope_df, plate_df)
-        mapping_method = "implicit_positional"
+        raw_series = sorted(set(scope_df["well_index"].astype(str).unique().tolist()))
+        series_map = {}
+        for raw in raw_series:
+            try:
+                raw_int = int(raw)
+            except Exception:
+                continue
+            series_num = raw_int + 1
+            series_map[series_num] = f"S{raw_int:02d}"
+        mapping_method = "unmapped_override"
 
     log.info(f"Using {mapping_method} mapping method")
     log.info(f"Mapped {len(series_map)} series")
@@ -330,11 +350,17 @@ def map_series_to_wells_yx1(
     provenance = {
         'mapping_method': mapping_method,
         'total_series': len(series_map),
-        'source_plate_metadata': str(plate_metadata_csv),
         'source_scope_metadata': str(scope_metadata_csv),
         'nd2_path': str(nd2_path) if nd2_path else None,
         'ref_xy_csv': str(ref_xy_csv) if ref_xy_csv else str(DEFAULT_REF_XY_PATH),
         'max_distance_um': float(max_distance_um),
+        'allow_unmapped_wells': bool(allow_unmapped_wells),
+        'xy_validator': {
+            'row_y_tol_um': float(row_y_tol_um),
+            'col_x_tol_um': float(col_x_tol_um),
+            'dx_cv_tol': float(dx_cv_tol),
+            'dy_cv_tol': float(dy_cv_tol),
+        },
         'mapping_summary': {
             'min_series': int(min(series_map.keys())),
             'max_series': int(max(series_map.keys())),

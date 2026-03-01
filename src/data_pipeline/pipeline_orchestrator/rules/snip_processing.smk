@@ -42,7 +42,8 @@ rule merge_snip_manifests:
     input:
         per_well_validated=lambda wc: expand(
             DATA_ROOT / "processed_snips" / wc.experiment / "per_well" / "{well_id}" / "contracts" / ".snip_processing.validated",
-            well_id=selected_wells_for_experiment(wc.experiment),
+            # Snip processing shards are keyed by experiment-qualified well_id (e.g. 20240418_A01).
+            well_id=selected_well_ids_for_experiment(wc.experiment),
         )
     output:
         manifest_parquet=DATA_ROOT / "processed_snips" / "{experiment}" / "contracts" / "snip_manifest.parquet",
@@ -74,4 +75,3 @@ rule validate_snip_manifest:
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.snip_processing.pipelines.validate_snip_manifest '
             '--input "{input.manifest_csv}" --output-flag "{output.validated_flag}"'
         )
-

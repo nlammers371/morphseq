@@ -113,26 +113,26 @@ def _count_positions_per_well(well_path: Path) -> int:
 
 def map_series_to_wells_keyence(
     raw_data_dir: Path,
-    plate_metadata_csv: Path,
     scope_metadata_csv: Path,
     output_mapping_csv: Path,
-    output_provenance_json: Path
+    output_provenance_json: Path,
+    experiment_id: str,
 ) -> pd.DataFrame:
     """
-    Map Keyence series to wells.
+    Map Keyence series to wells (plate-free).
 
     For Keyence microscopes, the mapping strategy is:
     1. Discover well directories (XY## or W0##)
     2. Count positions per well (P* subdirs or single position)
     3. Assign sequential series numbers
-    4. Cross-reference with plate metadata to validate wells
+    4. Cross-reference with scope metadata to flag missing wells
 
     Args:
         raw_data_dir: Root directory containing raw Keyence data
-        plate_metadata_csv: Path to validated plate_metadata.csv
         scope_metadata_csv: Path to validated scope_metadata.csv
         output_mapping_csv: Path to write series_well_mapping.csv
         output_provenance_json: Path to write mapping_provenance.json
+        experiment_id: Experiment identifier (used for composing well_id)
 
     Returns:
         DataFrame with series-to-well mapping
@@ -141,12 +141,6 @@ def map_series_to_wells_keyence(
         FileNotFoundError: If required files not found
         ValueError: If mapping fails validation
     """
-    # Load plate metadata to get experiment_id and valid wells
-    plate_df = pd.read_csv(plate_metadata_csv)
-    if 'experiment_id' not in plate_df.columns:
-        raise ValueError("plate_metadata.csv missing 'experiment_id' column")
-
-    experiment_id = plate_df['experiment_id'].iloc[0]
     log.info(f"Mapping Keyence series to wells for {experiment_id}")
 
     # Load scope metadata to cross-reference
@@ -172,12 +166,7 @@ def map_series_to_wells_keyence(
         for pos_idx in range(n_positions):
             series_number += 1
 
-            # Check if this well exists in plate metadata
-            plate_has_well = well_index in plate_df['well_index'].values
             scope_has_well = well_index in scope_df['well_index'].values
-
-            if not plate_has_well:
-                warnings.append(f"Well {well_index}: Not found in plate metadata")
 
             if not scope_has_well:
                 warnings.append(f"Well {well_index}: Not found in scope metadata")
@@ -227,7 +216,6 @@ def map_series_to_wells_keyence(
         },
         'warnings': warnings if warnings else None,
         'source_files': {
-            'plate_metadata': str(plate_metadata_csv),
             'scope_metadata': str(scope_metadata_csv),
         },
     }

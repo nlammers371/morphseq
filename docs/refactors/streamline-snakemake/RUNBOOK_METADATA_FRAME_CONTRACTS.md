@@ -41,14 +41,19 @@ snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile -j 4 all
 Per experiment under `data_pipeline_output/experiment_metadata/{experiment}/`:
 
 - `plate_metadata.csv`
+- `.plate_metadata.validated`
 - `scope_metadata_raw.csv`
 - `series_well_mapping.csv`
+- `.physical_well_mapping.validated`
+- `physical_well_mapping_diagnostics.json`
 - `scope_metadata_mapped.csv`
 - `scope_and_plate_metadata.csv`
 - `stitched_image_index.csv`
 - `.stitched_image_index.validated`
 - `frame_manifest.csv`
 - `.frame_manifest.validated`
+
+Note: `frame_manifest.csv` is a plate-free physical frame inventory (scope + stitched paths). Plate annotations are joined later on demand.
 
 Stitched images are written to:
 
@@ -78,5 +83,6 @@ PYTHONPATH=src "$PYTHON" -m pytest tests/test_phase1_phase2_smoke_scope.py -q
    - confirm `{experiment}_well_metadata.xlsx` exists in `data_pipeline_output/inputs/plate_metadata/`.
 2. YX1 mapping failures:
    - verify `metadata_alignment.yx1_mapping.ref_xy_csv` points to an existing coordinate reference CSV.
+   - if you need to proceed without canonical A01-style mapping (not recommended), set `metadata_alignment.allow_unmapped_wells: true` (will produce S00-style well IDs).
 3. Missing stitched files in validators:
    - re-run `materialize_stitched_images` and inspect `stitched_image_index.csv` paths.

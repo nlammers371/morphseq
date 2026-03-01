@@ -28,10 +28,18 @@ inputs:
 
 # Metadata-alignment settings
 metadata_alignment:
+  # Default: require a validated physical well mapping (YX1 XY reference / Keyence directory structure).
+  # If true, allow fallback to non-canonical S00-style well IDs when physical mapping is unavailable.
+  allow_unmapped_wells: false
   yx1_mapping:
     method: "xy_reference"
     ref_xy_csv: "/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground/metadata/YX1_nd2_ref_plate_xy_coordinates.csv"
     max_distance_um: 4500.0
+    # XY reference grid validator tolerances (um, unitless CV).
+    row_y_tol_um: 1200.0
+    col_x_tol_um: 1200.0
+    dx_cv_tol: 0.15
+    dy_cv_tol: 0.15
 
 # Frame-contract settings
 frame_contracts:

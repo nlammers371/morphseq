@@ -23,12 +23,6 @@ REQUIRED_COLUMNS_FRAME_MANIFEST = [
     "image_width_px",
     "image_height_px",
     "objective_magnification",
-    "genotype",
-    "treatment",
-    "medium",
-    "temperature",
-    "start_age_hpf",
-    "embryos_per_well",
 ]
 
 UNIQUE_KEY_FRAME_MANIFEST = [

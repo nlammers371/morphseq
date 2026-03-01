@@ -64,7 +64,7 @@ def compute_stage_predictions_batch(
     tracking_df: pd.DataFrame,
     start_age_col: str = 'start_age_hpf',
     time_col: str = 'time_s',
-    temp_col: str = 'temperature_c',
+    temp_col: str = 'temperature',
 ) -> pd.DataFrame:
     """
     Compute stage predictions for batch of snips.

@@ -23,7 +23,13 @@ def _build_series_lookup(mapping_df: pd.DataFrame) -> dict[int, str]:
     return lookup
 
 
-def _resolve_mapped_well(scope_well_index: str, series_lookup: dict[int, str], known_wells: set[str]) -> str:
+def _resolve_mapped_well(
+    scope_well_index: str,
+    series_lookup: dict[int, str],
+    known_wells: set[str],
+    *,
+    prefer_zero_based: bool,
+) -> str:
     # If scope is already mapped to plate-like well names (e.g. A04), keep it.
     if scope_well_index in known_wells:
         return scope_well_index
@@ -34,7 +40,17 @@ def _resolve_mapped_well(scope_well_index: str, series_lookup: dict[int, str], k
     except (TypeError, ValueError):
         return scope_well_index
 
-    return series_lookup.get(scope_idx_int + 1, series_lookup.get(scope_idx_int, scope_well_index))
+    if prefer_zero_based:
+        if (scope_idx_int + 1) in series_lookup:
+            return series_lookup[scope_idx_int + 1]
+        return scope_well_index
+
+    # Prefer 1-based mapping, but allow 0-based scopes as a fallback.
+    if scope_idx_int in series_lookup:
+        return series_lookup[scope_idx_int]
+    if (scope_idx_int + 1) in series_lookup:
+        return series_lookup[scope_idx_int + 1]
+    return scope_well_index
 
 
 def apply_series_mapping(
@@ -56,8 +72,10 @@ def apply_series_mapping(
 
     mapped_df = scope_df.copy()
     mapped_df["well_index_raw"] = mapped_df["well_index"].astype(str)
+    raw_ints = pd.to_numeric(mapped_df["well_index_raw"], errors="coerce").dropna().astype(int).tolist()
+    prefer_zero_based = (0 in set(raw_ints))
     mapped_df["well_index"] = mapped_df["well_index_raw"].map(
-        lambda raw: _resolve_mapped_well(str(raw), series_lookup, known_wells)
+        lambda raw: _resolve_mapped_well(str(raw), series_lookup, known_wells, prefer_zero_based=prefer_zero_based)
     )
 
     mapped_df["well_id"] = f"{experiment_id}_" + mapped_df["well_index"].astype(str)

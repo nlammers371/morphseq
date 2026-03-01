@@ -20,6 +20,7 @@ def _sat_channel() -> str:
 
 rule segment_and_track_well:
     input:
+        physical_mapping_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".physical_well_mapping.validated",
         frame_manifest_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
         frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv",
     output:
@@ -53,7 +54,7 @@ rule merge_segmentation_and_tracking_contracts:
     input:
         per_well_validated=lambda wc: expand(
             DATA_ROOT / "segmentation_and_tracking" / wc.experiment / "per_well" / "{well_id}" / "contracts" / ".segment_and_track.validated",
-            well_id=selected_wells_for_experiment(wc.experiment),
+            well_id=selected_well_ids_for_experiment(wc.experiment),
         )
     output:
         frame_detections=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "contracts" / "frame_detections.parquet",

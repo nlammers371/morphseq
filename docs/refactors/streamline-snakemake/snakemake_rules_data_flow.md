@@ -1,6 +1,6 @@
 # MorphSeq Snakemake Rules and Data Flow
 
-**Status:** Phase 1-4 Wired; Phase 5+ Planned (refactor)
+**Status:** Phase 1-5 Wired; Phase 6+ Planned (refactor)
 **Audience:** Scientists and developers wiring/maintaining the pipeline
 **Last Updated:** 2026-02-28
 
@@ -24,20 +24,21 @@ Rule-level clarifications:
    - required `micrometers_per_pixel`
 
 ## TL;DR
-Use this sequence for pre-segmentation data flow:
+Use this sequence for pre-segmentation data flow (plate-free):
 
-1. Plate metadata ingest
-2. Scope metadata ingest (YX1/Keyence)
-3. Scope-specific series mapping
-4. Apply mapping
+1. Scope metadata ingest (YX1/Keyence)
+2. Physical series->well mapping (plate-free)
+3. Validate physical mapping (gates Phase 3 by default)
+4. Apply mapping (produces canonical `well_id`/`image_id`)
 5. Scope-specific stitched image materialization + emit `stitched_image_index.csv`
 6. Validate stitched index
 7. Build `frame_manifest.csv` from:
    - `scope_metadata_mapped.csv`
    - `stitched_image_index.csv`
-   - `plate_metadata.csv`
 
-Downstream segmentation consumes `frame_manifest.csv`.
+Downstream segmentation consumes `frame_manifest.csv` and does not require plate metadata.
+
+Plate metadata is a separate, editable enrichment stream. It is only required for biology-aware steps (e.g. Phase 5 stage predictions).
 
 The old `experiment_image_manifest.json` flow is deprecated and removed.
 
@@ -50,6 +51,7 @@ PHASE 1: METADATA
   normalize_plate_metadata
   extract_scope_metadata_yx1 | extract_scope_metadata_keyence
   map_series_to_wells_yx1 | map_series_to_wells_keyence
+  validate_physical_well_mapping
   apply_series_mapping_yx1 | apply_series_mapping_keyence
 
 PHASE 2: IMAGES + FRAME CONTRACT
@@ -59,6 +61,9 @@ PHASE 2: IMAGES + FRAME CONTRACT
 
 PHASE 3+
   segmentation_and_downstream (consumes frame_manifest.csv)
+
+PHASE 5
+  stage_predictions (requires plate_metadata validated)
 ```
 
 ---
@@ -103,7 +108,6 @@ PHASE 3+
 ### `rule map_series_to_wells_yx1`
 ### `rule map_series_to_wells_keyence`
 **Input**
-- `plate_metadata.csv`
 - `scope_metadata_raw.csv`
 - (and raw Keyence path for Keyence mapping)
 
@@ -116,8 +120,22 @@ PHASE 3+
 - `metadata_ingest/scope/keyence/map_series_to_wells.py`
 
 **Purpose**
-- Resolve microscope series/position IDs into plate well IDs.
+- Resolve microscope series/position IDs into well IDs using physical signals (plate-free).
 - Keep logic scope-specific.
+
+---
+
+### `rule validate_physical_well_mapping`
+**Input**
+- `scope_metadata_raw.csv`
+- `series_well_mapping.csv`
+
+**Output**
+- `.physical_well_mapping.validated`
+- `physical_well_mapping_diagnostics.json`
+
+**Purpose**
+- Gate Phase 3 by ensuring wells are mapped to canonical A01-style IDs (unless an explicit override is enabled).
 
 ---
 
@@ -451,7 +469,6 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 **Input:**
 - `experiment_metadata/{exp}/stitched_image_index.csv` [VALIDATED]
 - `experiment_metadata/{exp}/scope_metadata_mapped.csv` [VALIDATED]
-- `experiment_metadata/{exp}/plate_metadata.csv` [VALIDATED]
 
 **Output:**
 - `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
@@ -461,7 +478,7 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 - Schema: `schemas/frame_manifest.py` (REQUIRED_COLUMNS_FRAME_MANIFEST)
 
 **Purpose:**
-- Join stitched image index + scope metadata + plate metadata into canonical frame-level table
+- Join stitched image index + scope metadata into canonical plate-free frame-level table
 - Preserve and validate `frame_index` (canonical) and `time_int` (compatibility alias)
 - Single source of truth for frame inventory consumed by segmentation
 
@@ -483,6 +500,7 @@ Implementation lives under:
 ### `rule segment_and_track_well`
 **Input:**
 - `experiment_metadata/{exp}/frame_manifest.csv` [VALIDATED]
+- `experiment_metadata/{exp}/.physical_well_mapping.validated`
 
 **Output (per-well shard sentinel):**
 - `segmentation_and_tracking/{exp}/per_well/{well_id}/contracts/.segment_and_track.validated`
@@ -800,13 +818,12 @@ rule build_frame_manifest:
     input:
         - experiment_metadata/{exp}/stitched_image_index.csv [VALIDATED]
         - experiment_metadata/{exp}/scope_metadata_mapped.csv [VALIDATED]
-        - experiment_metadata/{exp}/plate_metadata.csv [VALIDATED]
     output:
         - experiment_metadata/{exp}/frame_manifest.csv [VALIDATED]
 
     # Module: metadata_ingest/frame_manifest/build_frame_manifest.py
     # 1. Read scope_metadata_mapped.csv (includes normalized channel info from preprocessing)
-    # 2. Join with stitched_image_index.csv and plate_metadata.csv
+    # 2. Join with stitched_image_index.csv (plate-free physical frame manifest)
     # 3. Sort frames by time_int per (experiment_id, well_id, channel_id)
     # 4. Assign contiguous frame_index
     # 5. Validate against schema (REQUIRED_COLUMNS_FRAME_MANIFEST)
@@ -832,7 +849,7 @@ rule build_frame_manifest:
 2. Frame Manifest Generation (shared validation)
    └─ metadata_ingest/frame_manifest/build_frame_manifest.py
       ├─ Read scope_metadata_mapped.csv (includes normalized channel info from preprocessing)
-      ├─ Join with stitched_image_index.csv + plate_metadata.csv
+      ├─ Join with stitched_image_index.csv (plate-free)
       ├─ Validate channels using schemas/frame_manifest.py
       │  ├─ Check BF channel_id present (BRIGHTFIELD_CHANNELS)
       │  ├─ Check all channel_id values in VALID_CHANNEL_NAMES

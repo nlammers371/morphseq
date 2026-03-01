@@ -44,6 +44,17 @@ def microscope_for_experiment(experiment: str) -> str:
 def selected_wells_for_experiment(experiment: str) -> list[str]:
     return get_selected_wells(config, experiment)
 
+def selected_well_ids_for_experiment(experiment: str) -> list[str]:
+    """Return experiment-qualified well_ids (e.g. 20240418_A01) for per-well sharded stages."""
+    out: list[str] = []
+    for w in selected_wells_for_experiment(experiment):
+        w = str(w)
+        if w.startswith(f"{experiment}_"):
+            out.append(w)
+        else:
+            out.append(f"{experiment}_{w}")
+    return out
+
 
 print(f"Project root: {PROJECT_ROOT}")
 print(f"Data root: {DATA_ROOT}")
@@ -73,6 +84,7 @@ include: "rules/metadata_alignment.smk"
 include: "rules/frame_contracts.smk"
 include: "rules/segmentation_and_tracking.smk"
 include: "rules/snip_processing.smk"
+include: "rules/stage_predictions.smk"
 
 
 rule segmentation_and_tracking_complete:
@@ -85,3 +97,9 @@ rule snip_processing_complete:
     """Run Phase 4 snip_processing for all configured experiments."""
     input:
         expand(DATA_ROOT / "processed_snips" / "{exp}" / "contracts" / ".snip_manifest.validated", exp=EXPERIMENTS)
+
+
+rule stage_predictions_complete:
+    """Run Phase 5 stage_predictions for all configured experiments (requires plate metadata)."""
+    input:
+        expand(DATA_ROOT / "computed_features" / "{exp}" / "contracts" / ".stage_predictions.validated", exp=EXPERIMENTS)

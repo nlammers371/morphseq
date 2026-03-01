@@ -26,6 +26,7 @@ VALID_CHANNEL_NAMES = [
     'BF',      # Brightfield
     'GFP',     # Green fluorescent protein
     'RFP',     # Red fluorescent protein
+    'BFP',     # Blue fluorescent protein
     'CFP',     # Cyan fluorescent protein
     'YFP',     # Yellow fluorescent protein
 ]

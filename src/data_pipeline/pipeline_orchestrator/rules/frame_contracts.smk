@@ -95,8 +95,7 @@ rule build_frame_manifest:
     input:
         stitched_index_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv",
         stitched_index_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".stitched_image_index.validated",
-        scope_metadata_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
-        plate_metadata_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv"
+        scope_metadata_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv"
     output:
         frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv"
     params:
@@ -107,7 +106,6 @@ rule build_frame_manifest:
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.frame_manifest.build_frame_manifest '
             '--stitched-index-csv "{input.stitched_index_csv}" '
             '--scope-metadata-csv "{input.scope_metadata_csv}" '
-            '--plate-metadata-csv "{input.plate_metadata_csv}" '
             '--output-csv "{output.frame_manifest_csv}"'
         )
 
@@ -124,4 +122,25 @@ rule validate_frame_manifest:
         (
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.frame_manifest.validate_frame_manifest '
             '--input-csv "{input.frame_manifest_csv}" --output-flag "{output.validation_flag}"'
+        )
+
+
+# Optional convenience join for notebooks/debugging (plate fields duplicated onto per-frame rows).
+rule attach_plate_annotations_to_frames:
+    input:
+        frame_manifest_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+        frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv",
+        plate_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".plate_metadata.validated",
+        plate_metadata_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv"
+    output:
+        annotated_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest_with_plate_annotations.csv",
+        annotated_flag=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest_with_plate_annotations.validated"
+    params:
+        python=PYTHON_EXE,
+        pythonpath=SRC_ROOT
+    shell:
+        (
+            'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.frame_manifest.attach_plate_annotations '
+            '--frame-manifest-csv "{input.frame_manifest_csv}" --plate-metadata-csv "{input.plate_metadata_csv}" '
+            '--output-csv "{output.annotated_csv}" --output-flag "{output.annotated_flag}"'
         )

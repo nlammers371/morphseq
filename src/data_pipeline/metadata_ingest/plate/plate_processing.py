@@ -182,7 +182,7 @@ def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     - well → well_index
     - experiment_date → experiment_id
     - chem_perturbation → treatment
-    - temperature → temperature_c
+    - temperature fields are normalized to the canonical `temperature` column
 
     Args:
         df: Raw DataFrame from input file
