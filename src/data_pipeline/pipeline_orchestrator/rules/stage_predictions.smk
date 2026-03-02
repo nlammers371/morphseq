@@ -1,4 +1,4 @@
-"""Phase 5 rules: stage_predictions per-well shards + experiment merge + validation."""
+"""stage_predictions rules: per-well shards + experiment merge + validation."""
 
 
 rule compute_stage_predictions_well:
@@ -62,4 +62,3 @@ rule validate_stage_predictions:
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.feature_extraction.pipelines.validate_stage_predictions '
             '--input "{input.merged_parquet}" --output-flag "{output.validated_flag}"'
         )
-

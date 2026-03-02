@@ -279,7 +279,7 @@ def map_series_to_wells_yx1(
         ref_coordinates = _load_reference_xy_coordinates(ref_xy_csv)
         if ref_coordinates is not None:
             # Validate the reference grid to catch subtle drift early.
-            from data_pipeline.metadata_ingest.mapping.validate_xy_reference_grid import (
+            from data_pipeline.metadata_ingest.scope.yx1.validate_xy_reference_grid import (
                 validate_xy_reference_grid_df,
             )
 

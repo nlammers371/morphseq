@@ -1,4 +1,4 @@
-"""Phase 3 rules: segmentation_and_tracking per-well shards + experiment merge + validation."""
+"""segmentation_and_tracking rules: per-well shards + experiment merge + validation."""
 
 
 def _as_bool(value) -> bool:
@@ -18,9 +18,13 @@ def _sat_channel() -> str:
     return str(config.get("segmentation_and_tracking", {}).get("channel_id", "BF"))
 
 
+def _scope_dir(experiment: str):
+    return EXPERIMENT_METADATA_DIR / experiment / "scope" / microscope_for_experiment(experiment).lower()
+
+
 rule segment_and_track_well:
     input:
-        physical_mapping_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".physical_well_mapping.validated",
+        physical_mapping_validated=lambda wc: _scope_dir(wc.experiment) / ".physical_well_mapping.validated",
         frame_manifest_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
         frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv",
     output:

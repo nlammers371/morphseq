@@ -1,6 +1,6 @@
-"""Validate physical (plate-free) well mapping before Phase 3.
+"""Validate physical (plate-free) series->well mapping.
 
-This validator exists to prevent silently generating Phase 3/4 artifacts under the
+This validator exists to prevent silently generating downstream artifacts under the
 wrong well IDs. It checks that `series_well_mapping.csv` can fully map the scope
 rows to `well_index` values, and that those `well_index` values are canonical
 (A01-style) unless an explicit override is enabled.
@@ -122,7 +122,7 @@ def validate_physical_well_mapping(
             raise ValueError(
                 "Physical well mapping appears incomplete (raw scope wells not mapped). "
                 f"Unmapped preview: {unmapped[:10]}. "
-                "Fix mapping inputs (YX1 XY reference / Keyence layout) or set metadata_alignment.allow_unmapped_wells=true."
+                "Fix mapping inputs (YX1 XY reference / Keyence layout) or set scope_ingest.allow_unmapped_wells=true."
             )
 
     # Ensure scope wells map to unique well_index values (otherwise Phase 3 would write collisions).
@@ -148,7 +148,7 @@ def validate_physical_well_mapping(
         raise ValueError(
             "Mapped well_index values are not canonical A01-style. "
             f"Bad well_index preview: {preview}. "
-            "If you truly want to proceed with non-canonical IDs, set metadata_alignment.allow_unmapped_wells=true and use S00-style IDs."
+            "If you truly want to proceed with non-canonical IDs, set scope_ingest.allow_unmapped_wells=true and use S00-style IDs."
         )
 
     diagnostics = {

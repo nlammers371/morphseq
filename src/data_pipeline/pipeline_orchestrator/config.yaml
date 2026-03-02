@@ -26,8 +26,8 @@ inputs:
   plate_metadata_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/well_metadata"
   raw_image_data_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/raw_image_data"
 
-# Metadata-alignment settings
-metadata_alignment:
+# Scope ingestion settings (microscope extraction + plate-free physical well mapping)
+scope_ingest:
   # Default: require a validated physical well mapping (YX1 XY reference / Keyence directory structure).
   # If true, allow fallback to non-canonical S00-style well IDs when physical mapping is unavailable.
   allow_unmapped_wells: false
@@ -67,12 +67,12 @@ overwrite_materialize_stitched_images: null
 overwrite_steps:
   materialize_stitched_images: false
 
-# Phase 3 segmentation backend settings (not yet wired in Snakefile targets).
+# Segmentation backend settings (detector + tracker backends).
 segmentation:
   detector_backend: "groundingdino"      # future: "detectron2"
   tracker_backend: "sam2"                # future: "sam3"
 
-# Phase 3 segmentation_and_tracking settings (paths resolved relative to data_root unless absolute).
+# segmentation_and_tracking settings (paths resolved relative to data_root unless absolute).
 segmentation_and_tracking:
   channel_id: "BF"
   device: "cpu"
@@ -144,7 +144,7 @@ segmentation_and_tracking:
     # Typical: "embryo"
     render_mask_type: null
 
-# Phase 4 snip processing settings (embryo crops from Phase 3 masks).
+# snip_processing settings (embryo crops from segmentation_and_tracking masks).
 snip_processing:
   enabled: true
   # Which Phase 3 mask_type to use for snips.

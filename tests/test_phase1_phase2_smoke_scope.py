@@ -37,7 +37,9 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     metadata_dir = repo_root / "data_pipeline_output" / "experiment_metadata" / experiment
 
-    scope_mapped = metadata_dir / "scope_metadata_mapped.csv"
+    microscopes = get_experiment_microscopes({})
+    scope_dir = metadata_dir / "scope" / microscopes[experiment].lower()
+    scope_mapped = scope_dir / "scope_metadata_mapped.csv"
     stitched_index = metadata_dir / "stitched_image_index.csv"
     frame_manifest = metadata_dir / "frame_manifest.csv"
 

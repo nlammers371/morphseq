@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from data_pipeline.metadata_ingest.mapping.validate_xy_reference_grid import (
+from data_pipeline.metadata_ingest.scope.yx1.validate_xy_reference_grid import (
     validate_xy_reference_grid_df,
 )
 
@@ -48,4 +48,3 @@ def test_validate_xy_reference_grid_fails_on_row_y_inconsistency() -> None:
         assert "row y spread exceeds tolerance" in str(e)
     else:
         raise AssertionError("Expected validator to raise ValueError")
-

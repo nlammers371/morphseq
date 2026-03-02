@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from data_pipeline.metadata_ingest.mapping.validate_physical_well_mapping import (
+from data_pipeline.metadata_ingest.scope.shared.validate_physical_well_mapping import (
     validate_physical_well_mapping,
 )
 
@@ -58,4 +58,3 @@ def test_validate_physical_well_mapping_fails_for_incomplete_mapping(tmp_path) -
         assert "Physical well mapping appears incomplete" in str(e)
     else:
         raise AssertionError("Expected validator to raise ValueError")
-

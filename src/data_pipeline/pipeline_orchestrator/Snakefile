@@ -68,8 +68,8 @@ rule all:
         expand(EXPERIMENT_METADATA_DIR / "{exp}" / ".frame_manifest.validated", exp=EXPERIMENTS)
 
 
-rule metadata_alignment_complete:
-    """Run metadata alignment for all configured experiments."""
+rule scope_ingest_complete:
+    """Run scope ingestion (microscope extraction + physical well mapping) for all configured experiments."""
     input:
         expand(EXPERIMENT_METADATA_DIR / "{exp}" / "scope_and_plate_metadata.csv", exp=EXPERIMENTS)
 
@@ -80,7 +80,7 @@ rule frame_contracts_complete:
         expand(EXPERIMENT_METADATA_DIR / "{exp}" / ".frame_manifest.validated", exp=EXPERIMENTS)
 
 
-include: "rules/metadata_alignment.smk"
+include: "rules/scope_ingest.smk"
 include: "rules/frame_contracts.smk"
 include: "rules/segmentation_and_tracking.smk"
 include: "rules/snip_processing.smk"
@@ -88,18 +88,18 @@ include: "rules/stage_predictions.smk"
 
 
 rule segmentation_and_tracking_complete:
-    """Run Phase 3 segmentation_and_tracking for all configured experiments (GPU + models required)."""
+    """Run segmentation_and_tracking for all configured experiments (GPU + models required)."""
     input:
         expand(DATA_ROOT / "segmentation_and_tracking" / "{exp}" / "contracts" / ".segmentation_tracking.validated", exp=EXPERIMENTS)
 
 
 rule snip_processing_complete:
-    """Run Phase 4 snip_processing for all configured experiments."""
+    """Run snip_processing for all configured experiments."""
     input:
         expand(DATA_ROOT / "processed_snips" / "{exp}" / "contracts" / ".snip_manifest.validated", exp=EXPERIMENTS)
 
 
 rule stage_predictions_complete:
-    """Run Phase 5 stage_predictions for all configured experiments (requires plate metadata)."""
+    """Run stage_predictions for all configured experiments (requires plate metadata)."""
     input:
         expand(DATA_ROOT / "computed_features" / "{exp}" / "contracts" / ".stage_predictions.validated", exp=EXPERIMENTS)

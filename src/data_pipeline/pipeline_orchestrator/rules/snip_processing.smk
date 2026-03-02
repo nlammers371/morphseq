@@ -1,4 +1,4 @@
-"""Phase 4 rules: snip_processing per-well shards + experiment merge + validation."""
+"""snip_processing rules: per-well shards + experiment merge + validation."""
 
 
 def _as_bool(value) -> bool:
