@@ -69,6 +69,12 @@ def _plot_proportions_impl(
     output_path: Optional[Path] = None,
     title: Optional[str] = None,
     show_counts: bool = True,
+    legend_loc: str = 'outside',
+    show_panel_border: bool = False,
+    panel_border_color: str = 'black',
+    panel_border_width: float = 1.0,
+    bar_edgecolor: str = 'white',
+    bar_edgewidth: float = 0.5,
 ) -> plt.Figure:
     """
     Plot proportion breakdown with faceted grid structure.
@@ -164,7 +170,7 @@ def _plot_proportions_impl(
                     color = color_palette.get(val, STANDARD_PALETTE[0])
 
                     ax.bar(x_positions[i], height, width=bar_width,
-                           color=color, edgecolor='white', linewidth=0.5)
+                           color=color, edgecolor=bar_edgecolor, linewidth=bar_edgewidth)
 
                     # Add count annotation if requested
                     if show_counts and counts.get(val, 0) > 0:
@@ -177,8 +183,8 @@ def _plot_proportions_impl(
                     if r_idx == 0 and c_idx == 0:
                         legend_handles.append(plt.Rectangle((0, 0), 1, 1,
                                                            facecolor=color,
-                                                           edgecolor='white',
-                                                           linewidth=0.5))
+                                                           edgecolor=bar_edgecolor,
+                                                           linewidth=bar_edgewidth))
                         legend_labels.append(val)
 
                 # Y-axis limits for grouped mode
@@ -194,14 +200,14 @@ def _plot_proportions_impl(
                     if height > 0:
                         color = color_palette.get(val, STANDARD_PALETTE[0])
                         ax.bar(0, height, bottom=bottom, width=bar_width,
-                              color=color, edgecolor='white', linewidth=0.5)
+                              color=color, edgecolor=bar_edgecolor, linewidth=bar_edgewidth)
 
                         # Track for legend (only once)
                         if r_idx == 0 and c_idx == 0 and val not in legend_labels:
                             legend_handles.append(plt.Rectangle((0, 0), 1, 1,
                                                                facecolor=color,
-                                                               edgecolor='white',
-                                                               linewidth=0.5))
+                                                               edgecolor=bar_edgecolor,
+                                                               linewidth=bar_edgewidth))
                             legend_labels.append(val)
 
                         bottom += height
@@ -235,25 +241,42 @@ def _plot_proportions_impl(
             ax.grid(True, axis='y', alpha=0.3, linestyle='-', linewidth=0.5, color='lightgray')
             ax.set_axisbelow(True)
 
-            # Clean up spines - keep bottom for baseline
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['bottom'].set_visible(True)
-            ax.spines['bottom'].set_linewidth(0.5)
-            ax.spines['bottom'].set_color('gray')
+            if show_panel_border:
+                for spine in ax.spines.values():
+                    spine.set_visible(True)
+                    spine.set_linewidth(float(panel_border_width))
+                    spine.set_color(panel_border_color)
+            else:
+                # Clean up spines - keep bottom for baseline
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['bottom'].set_visible(True)
+                ax.spines['bottom'].set_linewidth(0.5)
+                ax.spines['bottom'].set_color('gray')
 
     # Add single legend for all panels
     if legend_handles:
-        fig.legend(
-            legend_handles, legend_labels,
-            loc='center right',
-            bbox_to_anchor=(0.98, 0.5),
-            fontsize=9,
-            frameon=True,
-            framealpha=0.9,
-            title=color_by_grouping,
-            title_fontsize=10,
-        )
+        if legend_loc == 'outside':
+            fig.legend(
+                legend_handles, legend_labels,
+                loc='center left',
+                bbox_to_anchor=(1.01, 0.5),
+                fontsize=9,
+                frameon=True,
+                framealpha=0.9,
+                title=color_by_grouping,
+                title_fontsize=10,
+            )
+        else:
+            fig.legend(
+                legend_handles, legend_labels,
+                loc=legend_loc,
+                fontsize=9,
+                frameon=True,
+                framealpha=0.9,
+                title=color_by_grouping,
+                title_fontsize=10,
+            )
 
     # Title
     if title:
@@ -267,7 +290,8 @@ def _plot_proportions_impl(
         default_title = f'{color_by_grouping} Distribution {" ".join(parts)}'
         fig.suptitle(default_title, fontsize=12, fontweight='bold')
 
-    plt.tight_layout(rect=[0, 0, 0.82, 0.96])
+    tight_rect = [0, 0, 0.82, 0.96] if legend_loc != 'outside' else [0, 0, 1, 0.96]
+    plt.tight_layout(rect=tight_rect)
 
     if output_path:
         output_path = Path(output_path)
@@ -293,6 +317,12 @@ def plot_proportions(
     output_path: Optional[Path] = None,
     title: Optional[str] = None,
     show_counts: bool = True,
+    legend_loc: str = 'outside',
+    show_panel_border: bool = False,
+    panel_border_color: str = 'black',
+    panel_border_width: float = 1.0,
+    bar_edgecolor: str = 'white',
+    bar_edgewidth: float = 0.5,
 ) -> plt.Figure:
     """
     Proportion plotting with faceted grid:
@@ -315,6 +345,12 @@ def plot_proportions(
         output_path=output_path,
         title=title,
         show_counts=show_counts,
+        legend_loc=legend_loc,
+        show_panel_border=show_panel_border,
+        panel_border_color=panel_border_color,
+        panel_border_width=panel_border_width,
+        bar_edgecolor=bar_edgecolor,
+        bar_edgewidth=bar_edgewidth,
     )
 
 

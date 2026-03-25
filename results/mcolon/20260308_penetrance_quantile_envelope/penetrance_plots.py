@@ -388,6 +388,7 @@ def plot_penetrance_curves(
     group_col: str = "group",
     colors: dict | None = None,
     group_order=None,
+    x_label: str | None = None,
     y_label: str = "Penetrance",
     curve_mode: str = "raw",
     curve_frac: float | None = None,
@@ -395,7 +396,16 @@ def plot_penetrance_curves(
     show_band: bool = True,
     show_line: bool = True,
     show_points: bool = True,
+    show_legend: bool = True,
+    legend_loc: str = "upper left",
+    legend_bbox_to_anchor=(1.01, 1.0),
+    legend_fontsize: int = 9,
     smooth_se: bool = True,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    tick_labelsize: int = 10,
+    label_fontsize: int = 12,
+    title_fontsize: int = 14,
     ax=None,
     title: str = "",
     figsize=(12, 8),
@@ -472,11 +482,25 @@ def plot_penetrance_curves(
                 alpha=0.18,
             )
 
-    ax.set_xlabel(x_col, fontsize=12)
-    ax.set_ylabel(y_label, fontsize=12)
-    ax.set_title(title or "Penetrance by category over time", fontsize=14, fontweight="bold")
-    ax.set_ylim(0, 1.03)
-    ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=9)
+    ax.set_xlabel(x_label or x_col, fontsize=label_fontsize)
+    ax.set_ylabel(y_label, fontsize=label_fontsize)
+    ax.set_title(title or "Penetrance by category over time", fontsize=title_fontsize, fontweight="bold")
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+    elif np.nanmax(df[y_col].to_numpy(dtype=float)) <= 1.5:
+        ax.set_ylim(0, 1.03)
+    else:
+        ax.set_ylim(0, 103)
+    ax.tick_params(axis="both", labelsize=tick_labelsize)
+    if show_legend:
+        ax.legend(
+            bbox_to_anchor=legend_bbox_to_anchor,
+            loc=legend_loc,
+            fontsize=legend_fontsize,
+            framealpha=0.9,
+        )
     _style_ax(ax)
     fig.tight_layout()
     return fig, ax
@@ -623,6 +647,7 @@ def plot_scatter_and_penetrance(
     show_envelope: bool = True,
     envelope_lower_col: str = "smoothed_low",
     envelope_upper_col: str = "smoothed_high",
+    envelope_supported_only: bool = True,
     upper_only: bool = False,
     show_penetrant_markers: bool = True,
     vline_hpf=None,
@@ -679,6 +704,10 @@ def plot_scatter_and_penetrance(
     colors : dict group → hex, or None
     show_envelope : bool
         Draw the WT envelope band and dashed bounds on each top panel.
+    envelope_supported_only : bool
+        If True, only draw bins marked ``supported``. If False, draw any bins
+        with finite envelope values, allowing the smoothed envelope to continue
+        through unsupported regions.
     upper_only : bool
         If True, only the upper bound line is drawn (lower bound suppressed).
         Use when penetrance is one-directional (e.g. deviation metrics where
@@ -720,11 +749,15 @@ def plot_scatter_and_penetrance(
         squeeze=False,
     )
 
-    # Pre-build envelope lookup (supported bins only)
-    sup_mask = df_env["supported"].values.astype(bool)
-    env_x = df_env.loc[sup_mask, bin_col].values.astype(float)
-    env_low = df_env.loc[sup_mask, envelope_lower_col].values
-    env_high = df_env.loc[sup_mask, envelope_upper_col].values
+    if envelope_supported_only:
+        env_mask = df_env["supported"].values.astype(bool)
+    else:
+        env_mask = np.isfinite(df_env[envelope_upper_col].to_numpy(dtype=float))
+        if not upper_only:
+            env_mask &= np.isfinite(df_env[envelope_lower_col].to_numpy(dtype=float))
+    env_x = df_env.loc[env_mask, bin_col].values.astype(float)
+    env_low = df_env.loc[env_mask, envelope_lower_col].values
+    env_high = df_env.loc[env_mask, envelope_upper_col].values
     resolved = _resolve_colors(group_order, colors)
 
     for ci, group in enumerate(group_order):

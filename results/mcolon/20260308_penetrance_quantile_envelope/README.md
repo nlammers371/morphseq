@@ -126,6 +126,26 @@ conda run -n segmentation_grounded_sam --no-capture-output python \
 - Presentation figures: `results/mcolon/20260308_penetrance_quantile_envelope/outputs/figures/presentation/`
 - Diagnostic figures: `results/mcolon/20260308_penetrance_quantile_envelope/outputs/figures/diagnostics/`
 
+### Spawn-only transition story outputs
+There is now an additional presentation branch for the talk narrative:
+- filter to `24–120 hpf`
+- filter to CEP290 spawn rows using `pair == "cep290_spawn"` with future-proof fallback for missing / `"none"`
+- recompute the embryo-level WT envelope and penetrance calls on that filtered subset
+- restrict the story figures to `cep290_homozygous`
+- focus on `Low_to_High`, `High_to_Low`, and a pooled `Transition_Combined` group
+
+Story figure directory:
+- `results/mcolon/20260308_penetrance_quantile_envelope/outputs/figures/presentation/spawn_24_120_transition_story/`
+
+Story outputs are split into:
+- main sequential overlays on a single penetrance axis (`01` → `03`)
+- `supplemental/` for extra singles, legend variants, and the X-mark scatter view
+
+Story tables:
+- `wt_threshold_summary_embryo_spawn_24_120.csv`
+- `embryo_bin_classification_spawn_24_120.csv`
+- `category_penetrance_by_time_embryo_spawn_24_120_homo_transition_story_pct.csv`
+
 Key presentation outputs:
 - `penetrance_curves_by_category_embryo_smoothed.png`
 - `penetrance_curves_by_category_embryo__band_only.png`

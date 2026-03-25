@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -541,6 +542,12 @@ def run_multiclass_classification_test(
     verbose: bool = True,
 ) -> Dict[str, Any]:
     """Run multiclass OvR AUROC-based comparison for explicitly provided groups."""
+    warnings.warn(
+        "run_multiclass_classification_test() is deprecated. "
+        "Use run_classification() from analyze.classification instead.",
+        FutureWarning,
+        stacklevel=2,
+    )
     class_labels = list(groups.keys())
     n_classes = len(class_labels)
     if n_classes < 2:
@@ -662,6 +669,12 @@ def run_classification_test(
     null_save_mode: str = "summary",
 ) -> MulticlassOVRResults:
     """Run flexible group comparison tests and return a consolidated result object."""
+    warnings.warn(
+        "run_classification_test() is deprecated. "
+        "Use run_classification() from analyze.classification instead.",
+        FutureWarning,
+        stacklevel=2,
+    )
     if null_save_mode not in {"summary", "full"}:
         raise ValueError("null_save_mode must be one of {'summary','full'}")
 

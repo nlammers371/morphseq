@@ -5,6 +5,7 @@ from .classification import (
     plot_multiple_aurocs,
 )
 from .auroc_over_time import plot_aurocs_over_time
+from .confusion import plot_confusion
 from .misclassification import (
     plot_confusion_profile,
     plot_embryo_deep_dive,
@@ -26,6 +27,7 @@ __all__ = [
     "plot_multiclass_ovr_aurocs",
     "plot_multiple_aurocs",
     "plot_aurocs_over_time",
+    "plot_confusion",
     "plot_confusion_profile",
     "plot_embryo_deep_dive",
     "plot_flagged_embryo_gallery",

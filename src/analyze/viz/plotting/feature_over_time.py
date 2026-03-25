@@ -59,11 +59,12 @@ def _plot_features_over_time_subplot(
     legend_tracker: Set[str],
     *,
     show_individual: bool = True,
+    show_trend: bool = True,
     show_error_band: bool = False,
     error_type: str = 'iqr',
     trend_statistic: str = 'median',
     trend_smooth_sigma: float = 1.5,
-    trend_linestyle: str = 'solid',
+    trend_linestyle: str = 'dotted',
     bin_width: float = 0.5,
     smooth_method: Optional[str] = 'gaussian',
     smooth_params: Optional[Dict] = None,
@@ -143,11 +144,11 @@ def _plot_features_over_time_subplot(
             all_times, all_metrics, bin_width,
             statistic=trend_statistic, smooth_sigma=trend_smooth_sigma,
         )
-        if trend_t is not None and len(trend_t) > 0:
+        if show_trend and trend_t is not None and len(trend_t) > 0:
             mpl_ls, _ = resolve_linestyle(trend_linestyle)
             traces.append(TraceData(
                 x=np.array(trend_t), y=np.array(trend_v),
-                style=TraceStyle(color=color, alpha=1.0, width=2.2, linestyle=mpl_ls, zorder=5),
+                style=TraceStyle(color=color, alpha=1.0, width=3.5, linestyle=mpl_ls, zorder=5),
                 label=label,
                 legend_group=legend_key,
                 show_legend=show_legend,
@@ -175,11 +176,12 @@ def plot_feature_over_time(
     layout: Optional[FacetSpec] = None,
     # Display
     show_individual: bool = True,
+    show_trend: bool = True,
     show_error_band: bool = False,
     error_type: str = 'iqr',
     trend_statistic: str = 'median',
     trend_smooth_sigma: float = 1.5,
-    trend_linestyle: str = 'solid',  # 'solid', 'dashed', 'dotted' (or '-', '--', ':')
+    trend_linestyle: str = 'dotted',  # 'solid', 'dashed', 'dotted' (or '-', '--', ':')
     bin_width: float = 0.5,
     smooth_method: Optional[str] = 'gaussian',
     smooth_params: Optional[Dict] = None,
@@ -195,6 +197,9 @@ def plot_feature_over_time(
     repeat_ylabels: bool = False,
     repeat_xticklabels: bool = True,
     repeat_yticklabels: bool = True,
+    # Legend placement: any matplotlib loc string (e.g. 'upper right', 'lower left'),
+    # or 'outside' to place the legend to the right of the axes.
+    legend_loc: str = 'upper right',
     # Manual axis limits (blanket applied to all subplots)
     xlim: Optional[Tuple[float, float]] = None,
     ylim: Optional[Tuple[float, float]] = None,
@@ -280,6 +285,7 @@ def plot_feature_over_time(
     style.repeat_ylabels = bool(repeat_ylabels)
     style.repeat_xticklabels = bool(repeat_xticklabels)
     style.repeat_yticklabels = bool(repeat_yticklabels)
+    style.legend_loc = legend_loc
 
     # Handle multi-feature: if features is a list, treat each as a row facet (no fake column)
     if isinstance(features, (list, tuple)):
@@ -329,6 +335,7 @@ def plot_feature_over_time(
             subplot_key=subplot_key,
             legend_tracker=legend_tracker,
             show_individual=show_individual,
+            show_trend=show_trend,
             show_error_band=show_error_band,
             error_type=error_type,
             trend_statistic=trend_statistic,

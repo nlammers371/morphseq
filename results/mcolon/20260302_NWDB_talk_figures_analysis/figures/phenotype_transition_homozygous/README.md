@@ -10,7 +10,11 @@ Organized outputs for the homozygous-background phenotype transition sequence.
 ### Layout
 - `20s/`: four curvature MP4s spanning `24` to `120` HPF over `20` seconds
 - `15s/`: the same four MP4s over `15` seconds
-- `static_plots/`: unfaded static transition plots and trace-only PNGs
+- `static_plots/`: canonical presentation PNGs using the legacy phenotype-overlay static export style
+
+### Source of truth
+- Presentation stills come from `static_plots/`
+- `background_unfaded_*.png` files inside `15s/` and `20s/` are video helper/debug exports, not the reference slide style
 
 ### Numbering
 - `01`: homozygous background + `Low_to_High`

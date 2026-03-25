@@ -24,14 +24,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from _nwdb_transition_plot_style import (
-    PLOT_FIGSIZE_IN,
-    PLOT_DPI,
-    apply_transition_rcparams,
-    style_transition_figure,
-)
-
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
+LEGACY_FIGSIZE_IN = (5.0, 4.5)
+LEGACY_DPI = 100
+LEGACY_TICK_LABELSIZE = 15
+LEGACY_AXIS_LABELSIZE = 17
 
 PHENOTYPE_COLORS = {
     "High_to_Low": "#E76FA2",
@@ -64,6 +61,24 @@ class ComboSpec:
     order: int
     suffix: str
     overlays: tuple[OverlaySpec, ...]
+
+
+@dataclass(frozen=True)
+class SummaryPlotSpec:
+    order: int
+    suffix: str
+    phenotypes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SummaryRenderVariant:
+    order_offset: int
+    suffix_tag: str
+    bin_width: float
+    trend_smooth_sigma: float
+    show_individual: bool
+    show_trend: bool
+    show_error_band: bool
 
 
 OVERLAYS = {
@@ -112,6 +127,36 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--t-max", type=float, default=120.0, help="Maximum HPF to include.")
     p.add_argument("--ylim", default="0,1", help="Y limits as 'low,high'.")
     p.add_argument("--smooth-sigma", type=float, default=2.0, help="Trace smoothing sigma.")
+    p.add_argument(
+        "--summary-bin-width",
+        type=float,
+        default=3.0,
+        help="Bin width for phenotype summary error-bar plots.",
+    )
+    p.add_argument(
+        "--summary-trend-statistic",
+        default="median",
+        choices=["mean", "median"],
+        help="Central tendency for phenotype summary error-bar plots.",
+    )
+    p.add_argument(
+        "--summary-error-type",
+        default="iqr",
+        choices=["sd", "se", "iqr", "mad"],
+        help="Error metric for phenotype summary error-bar plots.",
+    )
+    p.add_argument(
+        "--summary-trend-smooth-sigma",
+        type=float,
+        default=1.5,
+        help="Gaussian smoothing sigma for dashed phenotype summary trends.",
+    )
+    p.add_argument(
+        "--summary-trend-linestyle",
+        default="dashed",
+        choices=["solid", "dashed", "dotted", "-", "--", ":"],
+        help="Linestyle for phenotype summary trend curves.",
+    )
     return p.parse_args()
 
 
@@ -185,7 +230,7 @@ def _overlay_xy(trace_df: pd.DataFrame, smooth_sigma: float) -> tuple[np.ndarray
 
 
 def _save_plot(fig: plt.Figure, path: Path) -> None:
-    fig.savefig(path, dpi=PLOT_DPI)
+    fig.savefig(path, bbox_inches="tight", dpi=LEGACY_DPI)
     plt.close(fig)
 
 
@@ -219,10 +264,19 @@ def _render_combo_plot(
     out_path: Path,
     ylim: tuple[float, float],
     smooth_sigma: float,
+    show_trend: bool = True,
 ) -> None:
     from analyze.viz.plotting.feature_over_time import plot_feature_over_time
 
-    apply_transition_rcparams()
+    plt.rcParams.update(
+        {
+            "figure.dpi": LEGACY_DPI,
+            "savefig.dpi": LEGACY_DPI,
+            "xtick.labelsize": LEGACY_TICK_LABELSIZE,
+            "ytick.labelsize": LEGACY_TICK_LABELSIZE,
+            "axes.labelsize": LEGACY_AXIS_LABELSIZE,
+        }
+    )
     fig = plot_feature_over_time(
         bg_df,
         features="curvature",
@@ -231,22 +285,32 @@ def _render_combo_plot(
         color_by=bg_spec.color_by,
         color_lookup=bg_spec.color_lookup,
         show_individual=True,
-        show_trend=True,
+        show_trend=bool(show_trend),
         show_error_band=False,
         backend="matplotlib",
         ylim=ylim,
     )
-    style_transition_figure(fig)
     ax = fig.axes[0]
+    ax.set_xlabel("Hours post fertilization")
+    ax.set_ylabel("Curvature")
     leg = ax.get_legend()
     if leg is not None:
-        leg.remove()
+        ax.legend(
+            handles=leg.legend_handles,
+            labels=[t.get_text() for t in leg.get_texts()],
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1.0),
+            bbox_transform=ax.transAxes,
+            fontsize=leg.get_texts()[0].get_fontsize() if leg.get_texts() else 12,
+            frameon=True,
+            framealpha=0.9,
+        )
     _draw_overlays(ax, combo_overlays, overlay_frames, smooth_sigma)
     _save_plot(fig, out_path)
 
 
 def _trace_only_plot(
-    overlay: OverlaySpec,
+    overlays: tuple[OverlaySpec, ...],
     overlay_frames: dict[str, pd.DataFrame],
     out_path: Path,
     t_min: float,
@@ -254,17 +318,88 @@ def _trace_only_plot(
     ylim: tuple[float, float],
     smooth_sigma: float,
 ) -> None:
-    xs, ys = _overlay_xy(overlay_frames[overlay.key], smooth_sigma)
-    apply_transition_rcparams()
-    fig, ax = plt.subplots(figsize=PLOT_FIGSIZE_IN, dpi=PLOT_DPI)
-    style_transition_figure(fig)
+    plt.rcParams.update(
+        {
+            "figure.dpi": LEGACY_DPI,
+            "savefig.dpi": LEGACY_DPI,
+            "xtick.labelsize": LEGACY_TICK_LABELSIZE,
+            "ytick.labelsize": LEGACY_TICK_LABELSIZE,
+            "axes.labelsize": LEGACY_AXIS_LABELSIZE,
+        }
+    )
+    fig, ax = plt.subplots(figsize=LEGACY_FIGSIZE_IN, dpi=LEGACY_DPI)
     ax.set_xlim(float(t_min), float(t_max))
     ax.set_ylim(*ylim)
-    ax.set_xlabel("Predicted stage (HPF)")
+    ax.set_xlabel("Hours post fertilization")
     ax.set_ylabel("Curvature")
     ax.grid(alpha=0.15, linewidth=0.7)
-    line = ax.plot(xs, ys, color=overlay.color_hex, linewidth=3.0, solid_capstyle="round")[0]
-    line.set_path_effects([pe.Stroke(linewidth=4.8, foreground="white"), pe.Normal()])
+    for overlay in overlays:
+        xs, ys = _overlay_xy(overlay_frames[overlay.key], smooth_sigma)
+        if xs.size == 0:
+            continue
+        line = ax.plot(xs, ys, color=overlay.color_hex, linewidth=3.0, solid_capstyle="round")[0]
+        line.set_path_effects([pe.Stroke(linewidth=4.8, foreground="white"), pe.Normal()])
+    _save_plot(fig, out_path)
+
+
+def _summary_plot(
+    phenotype_frames: dict[str, pd.DataFrame],
+    phenotypes: tuple[str, ...],
+    out_path: Path,
+    t_min: float,
+    t_max: float,
+    ylim: tuple[float, float],
+    *,
+    bin_width: float,
+    trend_statistic: str,
+    trend_smooth_sigma: float,
+    trend_linestyle: str,
+    show_individual: bool,
+    show_trend: bool,
+    show_error_band: bool,
+    error_type: str,
+) -> None:
+    from analyze.viz.plotting.feature_over_time import plot_feature_over_time
+
+    plt.rcParams.update(
+        {
+            "figure.dpi": LEGACY_DPI,
+            "savefig.dpi": LEGACY_DPI,
+            "xtick.labelsize": LEGACY_TICK_LABELSIZE,
+            "ytick.labelsize": LEGACY_TICK_LABELSIZE,
+            "axes.labelsize": LEGACY_AXIS_LABELSIZE,
+        }
+    )
+    plot_df = pd.concat([phenotype_frames[p] for p in phenotypes if p in phenotype_frames], ignore_index=True)
+    fig = plot_feature_over_time(
+        plot_df,
+        features="curvature",
+        time_col="predicted_stage_hpf",
+        id_col="embryo_id",
+        color_by="cluster_categories",
+        color_lookup={p: PHENOTYPE_COLORS[p] for p in phenotypes},
+        show_individual=bool(show_individual),
+        show_trend=bool(show_trend),
+        show_error_band=bool(show_error_band),
+        trend_statistic=str(trend_statistic),
+        trend_smooth_sigma=float(trend_smooth_sigma),
+        trend_linestyle=str(trend_linestyle),
+        bin_width=float(bin_width),
+        error_type=str(error_type),
+        backend="matplotlib",
+        xlim=(float(t_min), float(t_max)),
+        ylim=ylim,
+        legend_loc="outside",
+    )
+    fig.set_size_inches(*LEGACY_FIGSIZE_IN, forward=True)
+    for ax in fig.axes:
+        ax.set_xlabel("Hours post fertilization")
+        ax.set_ylabel("Curvature")
+        leg = ax.get_legend()
+        if leg is not None:
+            leg.remove()
+    for leg in list(fig.legends):
+        leg.remove()
     _save_plot(fig, out_path)
 
 
@@ -301,6 +436,11 @@ def main() -> None:
         if feat_df.empty:
             raise RuntimeError(f"No rows found in {args.t_min}-{args.t_max} HPF for {overlay.embryo_id}")
         overlay_frames[overlay.key] = feat_df
+
+    phenotype_frames = {
+        phenotype: df[df["cluster_categories"].astype(str) == phenotype].copy().sort_values("predicted_stage_hpf")
+        for phenotype in ("High_to_Low", "Low_to_High")
+    }
 
     backgrounds = (
         BackgroundSpec(
@@ -387,14 +527,14 @@ def main() -> None:
 
         if bg_spec.key == "homozygous":
             manual_sequences = (
-                ("06A", "homozygous_bg__red_then_cyan_then_magenta__step_a__red_only", (OVERLAYS["homozygous_reference"],)),
-                ("06B", "homozygous_bg__red_then_cyan_then_magenta__step_b__red_plus_cyan", (OVERLAYS["homozygous_reference"], OVERLAYS["low_to_high"])),
-                ("06C", "homozygous_bg__red_then_cyan_then_magenta__step_c__red_plus_cyan_plus_magenta", (OVERLAYS["homozygous_reference"], OVERLAYS["low_to_high"], OVERLAYS["high_to_low"])),
-                ("06D", "homozygous_bg__red_then_magenta_then_cyan__step_a__red_only", (OVERLAYS["homozygous_reference"],)),
-                ("06E", "homozygous_bg__red_then_magenta_then_cyan__step_b__red_plus_magenta", (OVERLAYS["homozygous_reference"], OVERLAYS["high_to_low"])),
-                ("06F", "homozygous_bg__red_then_magenta_then_cyan__step_c__red_plus_magenta_plus_cyan", (OVERLAYS["homozygous_reference"], OVERLAYS["high_to_low"], OVERLAYS["low_to_high"])),
+                ("06A", "homozygous_bg__red_then_cyan_then_magenta__step_a__red_only", (OVERLAYS["homozygous_reference"],), True),
+                ("06B", "homozygous_bg__red_then_cyan_then_magenta__step_b__red_plus_cyan", (OVERLAYS["homozygous_reference"], OVERLAYS["low_to_high"]), True),
+                ("06C", "homozygous_bg__red_then_cyan_then_magenta__step_c__red_plus_cyan_plus_magenta", (OVERLAYS["homozygous_reference"], OVERLAYS["low_to_high"], OVERLAYS["high_to_low"]), False),
+                ("06D", "homozygous_bg__red_then_magenta_then_cyan__step_a__red_only", (OVERLAYS["homozygous_reference"],), False),
+                ("06E", "homozygous_bg__red_then_magenta_then_cyan__step_b__red_plus_magenta", (OVERLAYS["homozygous_reference"], OVERLAYS["high_to_low"]), False),
+                ("06F", "homozygous_bg__red_then_magenta_then_cyan__step_c__red_plus_magenta_plus_cyan", (OVERLAYS["homozygous_reference"], OVERLAYS["high_to_low"], OVERLAYS["low_to_high"]), True),
             )
-            for prefix, suffix, overlays in manual_sequences:
+            for prefix, suffix, overlays, show_trend in manual_sequences:
                 out_path = out_dir / f"{prefix}_{suffix}.png"
                 _render_combo_plot(
                     bg_df=bg_df,
@@ -404,13 +544,14 @@ def main() -> None:
                     out_path=out_path,
                     ylim=ylim,
                     smooth_sigma=float(args.smooth_sigma),
+                    show_trend=show_trend,
                 )
                 print(f"  Saved: {out_path.name}")
 
     for order, overlay in enumerate(OVERLAYS.values(), start=7):
         out_path = out_dir / f"{order:02d}_trace_only_{overlay.label}__{overlay.embryo_id}.png"
         _trace_only_plot(
-            overlay=overlay,
+            overlays=(overlay,),
             overlay_frames=overlay_frames,
             out_path=out_path,
             t_min=float(args.t_min),
@@ -419,6 +560,145 @@ def main() -> None:
             smooth_sigma=float(args.smooth_sigma),
         )
         print(f"Saved: {out_path.name}")
+
+    trace_only_sequences = (
+        (
+            "09A",
+            (
+                "trace_only_progression__red_only__"
+                f"{OVERLAYS['homozygous_reference'].embryo_id}"
+            ),
+            (OVERLAYS["homozygous_reference"],),
+        ),
+        (
+            "09B",
+            (
+                "trace_only_progression__red_plus_cyan_plus_magenta__"
+                f"{OVERLAYS['homozygous_reference'].embryo_id}__"
+                f"{OVERLAYS['low_to_high'].embryo_id}__"
+                f"{OVERLAYS['high_to_low'].embryo_id}"
+            ),
+            (OVERLAYS["homozygous_reference"], OVERLAYS["low_to_high"], OVERLAYS["high_to_low"]),
+        ),
+    )
+    for prefix, suffix, overlays in trace_only_sequences:
+        out_path = out_dir / f"{prefix}_{suffix}.png"
+        _trace_only_plot(
+            overlays=overlays,
+            overlay_frames=overlay_frames,
+            out_path=out_path,
+            t_min=float(args.t_min),
+            t_max=float(args.t_max),
+            ylim=ylim,
+            smooth_sigma=float(args.smooth_sigma),
+        )
+        print(f"Saved: {out_path.name}")
+
+    summary_specs = (
+        SummaryPlotSpec(order=10, suffix="summary_error_band__High_to_Low", phenotypes=("High_to_Low",)),
+        SummaryPlotSpec(order=11, suffix="summary_error_band__Low_to_High", phenotypes=("Low_to_High",)),
+        SummaryPlotSpec(
+            order=12,
+            suffix="summary_error_band__High_to_Low__Low_to_High_overlay",
+            phenotypes=("High_to_Low", "Low_to_High"),
+        ),
+    )
+    summary_variants = (
+        SummaryRenderVariant(
+            order_offset=0,
+            suffix_tag="",
+            bin_width=float(args.summary_bin_width),
+            trend_smooth_sigma=float(args.summary_trend_smooth_sigma),
+            show_individual=False,
+            show_trend=True,
+            show_error_band=True,
+        ),
+        SummaryRenderVariant(
+            order_offset=3,
+            suffix_tag="__less_smoothing",
+            bin_width=2.0,
+            trend_smooth_sigma=1.0,
+            show_individual=False,
+            show_trend=True,
+            show_error_band=True,
+        ),
+        SummaryRenderVariant(
+            order_offset=6,
+            suffix_tag="__minimal_smoothing",
+            bin_width=1.5,
+            trend_smooth_sigma=0.75,
+            show_individual=False,
+            show_trend=True,
+            show_error_band=True,
+        ),
+        SummaryRenderVariant(
+            order_offset=9,
+            suffix_tag="__line_only",
+            bin_width=float(args.summary_bin_width),
+            trend_smooth_sigma=float(args.summary_trend_smooth_sigma),
+            show_individual=False,
+            show_trend=True,
+            show_error_band=False,
+        ),
+        SummaryRenderVariant(
+            order_offset=12,
+            suffix_tag="__less_smoothing__line_only",
+            bin_width=2.0,
+            trend_smooth_sigma=1.0,
+            show_individual=False,
+            show_trend=True,
+            show_error_band=False,
+        ),
+        SummaryRenderVariant(
+            order_offset=15,
+            suffix_tag="__minimal_smoothing__line_only",
+            bin_width=1.5,
+            trend_smooth_sigma=0.75,
+            show_individual=False,
+            show_trend=True,
+            show_error_band=False,
+        ),
+        SummaryRenderVariant(
+            order_offset=18,
+            suffix_tag="__individual_plus_trend",
+            bin_width=float(args.summary_bin_width),
+            trend_smooth_sigma=float(args.summary_trend_smooth_sigma),
+            show_individual=True,
+            show_trend=True,
+            show_error_band=False,
+        ),
+        SummaryRenderVariant(
+            order_offset=21,
+            suffix_tag="__individual_only",
+            bin_width=float(args.summary_bin_width),
+            trend_smooth_sigma=float(args.summary_trend_smooth_sigma),
+            show_individual=True,
+            show_trend=False,
+            show_error_band=False,
+        ),
+    )
+    for variant in summary_variants:
+        for spec in summary_specs:
+            out_order = spec.order + variant.order_offset
+            out_suffix = f"{spec.suffix}{variant.suffix_tag}"
+            out_path = out_dir / f"{out_order:02d}_{out_suffix}.png"
+            _summary_plot(
+                phenotype_frames=phenotype_frames,
+                phenotypes=spec.phenotypes,
+                out_path=out_path,
+                t_min=float(args.t_min),
+                t_max=float(args.t_max),
+                ylim=ylim,
+                bin_width=float(variant.bin_width),
+                trend_statistic=str(args.summary_trend_statistic),
+                trend_smooth_sigma=float(variant.trend_smooth_sigma),
+                trend_linestyle=str(args.summary_trend_linestyle),
+                show_individual=bool(variant.show_individual),
+                show_trend=bool(variant.show_trend),
+                show_error_band=bool(variant.show_error_band),
+                error_type=str(args.summary_error_type),
+            )
+            print(f"Saved: {out_path.name}")
 
 
 if __name__ == "__main__":

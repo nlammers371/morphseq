@@ -32,6 +32,7 @@ EMBRYO_COL = "embryo_id"
 GENOTYPE_COL = "genotype"
 CATEGORY_COL = "cluster_categories"
 SUBCATEGORY_COL = "cluster_subcategories"
+PAIR_COL = "pair"
 
 # ============================================================================
 # Genotypes
@@ -39,6 +40,7 @@ SUBCATEGORY_COL = "cluster_subcategories"
 
 WT_GENOTYPE = "cep290_wildtype"
 HET_GENOTYPE = "cep290_heterozygous"
+HOMO_GENOTYPE = "cep290_homozygous"
 
 # ============================================================================
 # Envelope Parameters
@@ -144,6 +146,22 @@ GENOTYPE_COLORS = {
     "cep290_homozygous": "#d62728",
 }
 
+# Spawn-only 24-120 hpf phenotype-story figures.
+# The combined-transition green is an assumption until a user-specified hex
+# is provided explicitly in chat.
+STORY_TIME_MIN_HPF = 24.0
+STORY_TIME_MAX_HPF = 120.0
+SPAWN_PAIR_VALUE = "cep290_spawn"
+SPAWN_PAIR_FALLBACK_VALUES = {"none", ""}
+STORY_OUTPUT_SUBDIR = "spawn_24_120_transition_story"
+STORY_CATEGORIES = ["Low_to_High", "High_to_Low"]
+STORY_COMBINED_GROUP = "Transition_Combined"
+STORY_COLORS = {
+    "Low_to_High": CATEGORY_COLORS["Low_to_High"],
+    "High_to_Low": CATEGORY_COLORS["High_to_Low"],
+    "Transition_Combined": "#7FC97F",
+}
+
 # ============================================================================
 # Plotting Parameters
 # ============================================================================
@@ -154,5 +172,11 @@ FIGSIZE_CURVES = (12, 8)
 FIGSIZE_HEATMAP = (14, 6)
 FIGSIZE_DIAGNOSTIC = (14, 8)
 FIGSIZE_BARS = (10, 6)
+FIGSIZE_STORY_CURVES = (12, 8)
 
 DPI = 150
+
+STORY_LABEL_FONTSIZE = 20
+STORY_TICK_FONTSIZE = 16
+STORY_TITLE_FONTSIZE = 22
+STORY_LEGEND_FONTSIZE = 16

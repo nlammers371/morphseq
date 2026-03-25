@@ -20,7 +20,7 @@ ALT_DATA_ROOT="${REPO_ROOT%/morphseq}/morphseq-docs/morphseq_playground"
 # Allow override via qsub `-v DATA_ROOT=...`.
 DATA_ROOT="${DATA_ROOT:-${REPO_ROOT}/morphseq_playground}"
 # EXPERIMENTS="all"
-EXPERIMENTS="20260210,20260208,20260219,20260206" #"20250305,20230531,20230525,20230615" #"20250711,20250519"
+EXPERIMENTS=" 20260319, 20260320,20260213,20260304, 20260306,20260228" #"20250305,20230531,20230525,20230615" #"20250711,20250519"
 ACTION="${ACTION:-e2e}"     # default to e2e, but can be overridden with -v ACTION=build03
 DRY_RUN="0"                 # set to 1 to enable --dry-run
 FORCE_OVERWRITE="0"         # set to 1 to enable --force (regenerates FF files AND reruns steps)
@@ -137,6 +137,6 @@ echo "[morphseq] Done."
 #   src/run_morphseq_pipeline/run_experiment_manager_qsub.sh
 
 
-# qsub -t 1-4 -tc 3 src/run_morphseq_pipeline/run_experiment_manager_qsub.sh
+# qsub -t 1-6 -tc 3 src/run_morphseq_pipeline/run_experiment_manager_qsub.sh
 
 # qsub src/run_morphseq_pipeline/run_experiment_manager_qsub.sh

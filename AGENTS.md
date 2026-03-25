@@ -6,16 +6,9 @@
 ## Python And Conda
 - Do not run `conda activate` in commands.
 - Do not use bare `python`, `python3`, `pip`, or `pip3`.
-- Always use these absolute executables:
-  - `PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python`
-  - `PIP=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/pip`
+- Use `conda run -n segmentation_grounded_sam --no-capture-output` to run commands in the correct environment.
 - Run Python scripts with:
-  - `"$PYTHON" path/to/script.py`
+  - `conda run -n segmentation_grounded_sam --no-capture-output python path/to/script.py`
 - Run module commands with:
-  - `"$PYTHON" -m <module> ...`
-- Install packages with:
-  - `"$PIP" install ...`
-
-## Sanity Check Before Python Work
-- Confirm interpreter path before running substantial Python tasks:
-  - `"$PYTHON" -c 'import sys; print(sys.executable)'`
+  - `conda run -n segmentation_grounded_sam --no-capture-output python -m <module> ...`
+- Do not install packages. All dependencies are already installed.

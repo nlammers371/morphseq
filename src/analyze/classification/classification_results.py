@@ -58,6 +58,13 @@ class ClassificationResults:
         run_metadata: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
         source_dir: Optional[PathLike] = None,
     ) -> None:
+        import warnings
+        warnings.warn(
+            "ClassificationResults is deprecated. "
+            "Use ClassificationAnalysis from analyze.classification instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         self._source_dir: Optional[Path] = Path(source_dir).resolve() if source_dir is not None else None
         self._run_metadata: Dict[str, Dict[str, Dict[str, Any]]] = dict(run_metadata or {})
 

@@ -17,6 +17,7 @@ from config import (
     LOESS_FRAC_OVERRIDE,
     METRIC_NAME,
     METRIC_NONNEG,
+    PAIR_COL,
     QUANTILE_HIGH,
     QUANTILE_LOW,
     ROBUST_SMOOTHING_MIN_POINTS,
@@ -37,7 +38,7 @@ def aggregate_embryo_bins(df: pd.DataFrame, agg: str = EMBRYO_BIN_AGG) -> pd.Dat
         raise ValueError(f"agg must be 'median' or 'mean', got {agg!r}")
 
     meta_cols = [
-        c for c in [GENOTYPE_COL, CATEGORY_COL, "cluster_subcategories", "experiment_id", "experiment_date"]
+        c for c in [GENOTYPE_COL, CATEGORY_COL, "cluster_subcategories", "experiment_id", "experiment_date", PAIR_COL]
         if c in df.columns
     ]
     group_cols = [EMBRYO_COL, "time_bin"]

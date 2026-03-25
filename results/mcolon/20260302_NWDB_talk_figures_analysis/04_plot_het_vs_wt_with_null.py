@@ -31,13 +31,14 @@ def main() -> None:
 
     sys.path.insert(0, str(here))
     from _plot_nwdb_genotype_classification_utils import (
+        SIG_THRESHOLD,
         apply_nwdb_axis_overrides,
         apply_nwdb_legend,
         save_figure,
     )
 
     comparisons = ("cep290_heterozygous", "cep290_wildtype")
-    sig_threshold = 0.1
+    sig_threshold = SIG_THRESHOLD
 
     feature_sets = {
         "curvature": {

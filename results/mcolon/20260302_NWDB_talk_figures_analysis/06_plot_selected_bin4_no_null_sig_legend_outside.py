@@ -40,11 +40,16 @@ def _plot_one(
     from analyze.viz.styling.color_mapping_config import GENOTYPE_SUFFIX_COLORS
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _plot_nwdb_genotype_classification_utils import apply_nwdb_axis_overrides, apply_nwdb_legend, save_figure
+    from _plot_nwdb_genotype_classification_utils import (
+        SIG_THRESHOLD,
+        apply_nwdb_axis_overrides,
+        apply_nwdb_legend,
+        save_figure,
+    )
 
     res = MulticlassOVRResults.from_dir(res_dir)
 
-    sig_threshold = 0.1
+    sig_threshold = SIG_THRESHOLD
     curves = [
         (("cep290_heterozygous", "cep290_wildtype"), "Het vs WT", GENOTYPE_SUFFIX_COLORS["heterozygous"]),
         (("cep290_homozygous", "cep290_wildtype"), "Homo vs WT", GENOTYPE_SUFFIX_COLORS["homozygous"]),
@@ -118,4 +123,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

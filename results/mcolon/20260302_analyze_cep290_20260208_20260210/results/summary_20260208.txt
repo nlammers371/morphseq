@@ -1,0 +1,28 @@
+experiment_ids: ['20260208']
+experiment_label: 20260208
+total_rows: 12772
+total_embryo_ids: 81
+
+genotype_raw_proportions:
+- cep290_heterozygous: n=31, proportion=0.382716, percent=38.27
+- cep290_unkown: n=28, proportion=0.345679, percent=34.57
+- cep290_wildtype: n=15, proportion=0.185185, percent=18.52
+- cep290_homozygous: n=7, proportion=0.086420, percent=8.64
+
+wildtype_vs_mutant_raw_proportions:
+- mutant: n=66, proportion=0.814815, percent=81.48
+- cep290_wildtype: n=15, proportion=0.185185, percent=18.52
+
+classification_top_hits_one_vs_all:
+- [curvature] cep290_unkown vs rest: max_auroc=0.594, min_pval=0.0099
+- [curvature] cep290_heterozygous vs rest: max_auroc=0.579, min_pval=0.0198
+- [curvature] cep290_wildtype vs rest: max_auroc=0.633, min_pval=0.0396
+- [curvature] cep290_homozygous vs rest: max_auroc=0.714, min_pval=0.0495
+- [length] cep290_homozygous vs rest: max_auroc=0.729, min_pval=0.0099
+
+classification_top_hits_each_vs_wildtype:
+- [curvature] cep290_homozygous vs cep290_wildtype: max_auroc=0.906, min_pval=0.0198
+- [curvature] cep290_heterozygous vs cep290_wildtype: max_auroc=0.749, min_pval=0.0198
+- [curvature] cep290_unkown vs cep290_wildtype: max_auroc=0.703, min_pval=0.0495
+- [length] cep290_homozygous vs cep290_wildtype: max_auroc=0.778, min_pval=0.0198
+- [length] cep290_heterozygous vs cep290_wildtype: max_auroc=0.774, min_pval=0.0396

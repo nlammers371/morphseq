@@ -7,6 +7,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+SIG_THRESHOLD = 0.01
+
 
 def apply_nwdb_axis_overrides(ax: plt.Axes) -> None:
     ax.set_xlim((24.0, 120.0))
