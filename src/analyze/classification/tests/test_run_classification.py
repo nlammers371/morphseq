@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import analyze.classification.engine.loop as loop_module
+from analyze.classification.engine.loop import _bin_and_aggregate, _build_binary_labels
 from analyze.classification.run_classification import run_classification
 
 
@@ -59,6 +61,48 @@ def test_all_vs_rest():
     }
     assert result.feature_sets == ["emb"]
     assert len(result.comparison_ids) == 3  # A vs rest, B vs rest, C vs rest
+
+
+def test_all_vs_rest_sparse_bin_retains_valid_classes():
+    rows = []
+    for cls_idx, cls in enumerate(["A", "B", "C"]):
+        for emb_i in range(3):
+            embryo_id = f"{cls}_e{emb_i}"
+            rows.append({
+                "embryo_id": embryo_id,
+                "genotype": cls,
+                "predicted_stage_hpf": 24.0,
+                "z_mu_b_0": float(cls_idx * 3.0 + emb_i * 0.1),
+            })
+            if cls != "C" or emb_i == 0:
+                rows.append({
+                    "embryo_id": embryo_id,
+                    "genotype": cls,
+                    "predicted_stage_hpf": 28.0,
+                    "z_mu_b_0": float(cls_idx * 3.0 + 1.5 + emb_i * 0.1),
+                })
+
+    df = pd.DataFrame(rows)
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        features={"emb": ["z_mu_b_0"]},
+        bin_width=4.0,
+        n_permutations=4,
+        n_jobs=1,
+        verbose=False,
+        save_multiclass_predictions=True,
+    )
+
+    late_scores = result.scores[result.scores["time_bin"] == 28].copy()
+    assert set(late_scores["positive_label"]) == {"A", "B"}
+    assert "C" not in late_scores["positive_label"].values
+    assert late_scores.groupby(["feature_set", "comparison_id", "time_bin"]).size().max() == 1
+
+    mc = result.layers["multiclass_predictions"]
+    assert set(mc["time_bin"].unique()) == {24}
 
 
 def test_explicit_pair():
@@ -136,6 +180,187 @@ def test_multi_feature():
     # Each feature set should have same number of time bins
     counts = result.scores.groupby("feature_set").size()
     assert len(counts.unique()) == 1
+
+
+def test_binary_parallel_outputs_match_serial():
+    df = _make_df(n_classes=2, n_embryos=4, n_times=3, n_features=2)
+    serial = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        positive="A",
+        negative="B",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=False,
+    )
+    parallel = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        positive="A",
+        negative="B",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=4,
+        verbose=False,
+    )
+
+    serial_scores = serial.scores.sort_values(
+        ["feature_set", "comparison_id", "time_bin_center"]
+    ).reset_index(drop=True)
+    parallel_scores = parallel.scores.sort_values(
+        ["feature_set", "comparison_id", "time_bin_center"]
+    ).reset_index(drop=True)
+    pd.testing.assert_frame_equal(serial_scores, parallel_scores)
+
+
+def test_binary_loop_clamps_workers_and_forces_inner_serial(monkeypatch):
+    df = _make_df(n_classes=2, n_embryos=4, n_times=3, n_features=1)
+    labeled = _build_binary_labels(
+        df,
+        class_col="genotype",
+        comparison=type(
+            "RC",
+            (),
+            {
+                "positive_members": ["A"],
+                "negative_members": ["B"],
+            },
+        )(),
+    )
+    df_binned = _bin_and_aggregate(
+        labeled,
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        feature_cols=["z_mu_b_0"],
+        bin_width=4.0,
+    )
+
+    observed = {"parallel_n_jobs": None, "inner_n_jobs": [], "time_bins": []}
+
+    class FakeParallel:
+        def __init__(self, n_jobs):
+            observed["parallel_n_jobs"] = n_jobs
+
+        def __call__(self, tasks):
+            return [task() for task in tasks]
+
+    def fake_delayed(func):
+        def wrapper(*args, **kwargs):
+            return lambda: func(*args, **kwargs)
+        return wrapper
+
+    def fake_score_binary_ovr_bin(**kwargs):
+        observed["inner_n_jobs"].append(kwargs["n_jobs"])
+        observed["time_bins"].append(kwargs["time_bin"])
+        return {
+            "time_bin": kwargs["time_bin"],
+            "time_bin_center": float(kwargs["time_bin"]) + kwargs["bin_width"] / 2.0,
+            "bin_width": kwargs["bin_width"],
+            "auroc_obs": 0.75,
+            "pval": 0.25,
+            "n_positive": 4,
+            "n_negative": 4,
+            "auroc_null_mean": 0.5,
+            "auroc_null_std": 0.1,
+            "n_permutations": kwargs["n_permutations"],
+            "_null_array": np.array([0.5]),
+            "_confusion_matrix": np.array([[1, 0], [0, 1]]),
+            "_predictions": [],
+        }
+
+    monkeypatch.setattr(loop_module, "Parallel", FakeParallel)
+    monkeypatch.setattr(loop_module, "delayed", fake_delayed)
+    monkeypatch.setattr(loop_module, "joblib_effective_n_jobs", lambda n_jobs: n_jobs)
+    monkeypatch.setattr(loop_module, "_score_binary_ovr_bin", fake_score_binary_ovr_bin)
+
+    results = loop_module._run_binary_classification_loop(
+        df_binned=df_binned,
+        feature_cols=["z_mu_b_0"],
+        id_col="embryo_id",
+        bin_width=4.0,
+        n_splits=3,
+        n_permutations=4,
+        n_jobs=8,
+        random_state=42,
+        verbose=False,
+    )
+
+    assert observed["parallel_n_jobs"] == 3
+    assert observed["inner_n_jobs"] == [1, 1, 1]
+    assert observed["time_bins"] == [24, 28, 32]
+    assert [entry["time_bin"] for entry in results] == [24, 28, 32]
+
+
+def test_binary_loop_single_bin_falls_back_to_serial(monkeypatch):
+    df = _make_df(n_classes=2, n_embryos=4, n_times=1, n_features=1)
+    labeled = _build_binary_labels(
+        df,
+        class_col="genotype",
+        comparison=type(
+            "RC",
+            (),
+            {
+                "positive_members": ["A"],
+                "negative_members": ["B"],
+            },
+        )(),
+    )
+    df_binned = _bin_and_aggregate(
+        labeled,
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        feature_cols=["z_mu_b_0"],
+        bin_width=4.0,
+    )
+
+    calls = {"parallel_called": False, "inner_n_jobs": []}
+
+    def fail_parallel(*args, **kwargs):
+        calls["parallel_called"] = True
+        raise AssertionError("Parallel should not be used for a single-bin job")
+
+    def fake_score_binary_ovr_bin(**kwargs):
+        calls["inner_n_jobs"].append(kwargs["n_jobs"])
+        return {
+            "time_bin": kwargs["time_bin"],
+            "time_bin_center": float(kwargs["time_bin"]) + kwargs["bin_width"] / 2.0,
+            "bin_width": kwargs["bin_width"],
+            "auroc_obs": 0.75,
+            "pval": 0.25,
+            "n_positive": 4,
+            "n_negative": 4,
+            "auroc_null_mean": 0.5,
+            "auroc_null_std": 0.1,
+            "n_permutations": kwargs["n_permutations"],
+            "_null_array": np.array([0.5]),
+            "_confusion_matrix": np.array([[1, 0], [0, 1]]),
+            "_predictions": [],
+        }
+
+    monkeypatch.setattr(loop_module, "Parallel", fail_parallel)
+    monkeypatch.setattr(loop_module, "joblib_effective_n_jobs", lambda n_jobs: n_jobs)
+    monkeypatch.setattr(loop_module, "_score_binary_ovr_bin", fake_score_binary_ovr_bin)
+
+    results = loop_module._run_binary_classification_loop(
+        df_binned=df_binned,
+        feature_cols=["z_mu_b_0"],
+        id_col="embryo_id",
+        bin_width=4.0,
+        n_splits=3,
+        n_permutations=4,
+        n_jobs=8,
+        random_state=42,
+        verbose=False,
+    )
+
+    assert calls["parallel_called"] is False
+    assert calls["inner_n_jobs"] == [1]
+    assert [entry["time_bin"] for entry in results] == [24]
 
 
 # ---------------------------------------------------------------------------

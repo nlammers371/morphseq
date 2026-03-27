@@ -18,6 +18,13 @@ import analyze.utils.resampling as resample
 
 from .comparison_resolution import ComparisonGroup, ResolvedComparison
 
+try:
+    from joblib import Parallel, delayed, effective_n_jobs as joblib_effective_n_jobs
+except ImportError:
+    Parallel = None
+    delayed = None
+    joblib_effective_n_jobs = None
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -243,6 +250,112 @@ def _permutation_test_ovr(
 # ---------------------------------------------------------------------------
 
 
+def _score_binary_ovr_bin(
+    *,
+    X: np.ndarray,
+    y_binary: np.ndarray,
+    id_col: str,
+    bin_width: float,
+    n_splits: int,
+    n_permutations: int,
+    n_jobs: int,
+    random_state: int,
+    bin_index: int,
+    time_bin: int,
+    embryo_ids: np.ndarray | None = None,
+    positive_label: str | None = None,
+    require_positive_min_samples: int | None = None,
+    verbose: bool,
+) -> dict[str, Any] | None:
+    """Score one binary comparison within a single time bin."""
+    n_positive = int(np.sum(y_binary == 1))
+    n_negative = int(np.sum(y_binary == 0))
+
+    label_text = f" for {positive_label}" if positive_label else ""
+    if n_positive == 0 or n_negative == 0:
+        if verbose:
+            print(f"    Bin {time_bin}{label_text}: skipped (n_pos={n_positive}, n_neg={n_negative})")
+        return None
+
+    if require_positive_min_samples is not None and n_positive < require_positive_min_samples:
+        if verbose:
+            print(
+                f"    Bin {time_bin}{label_text}: skipped "
+                f"(n_pos={n_positive} < {require_positive_min_samples})"
+            )
+        return None
+
+    min_count = min(n_positive, n_negative)
+    n_splits_actual = min(n_splits, min_count)
+    if n_splits_actual < 2:
+        if verbose:
+            print(f"    Bin {time_bin}{label_text}: skipped (min_count={min_count} < 2)")
+        return None
+
+    clf = _make_logistic_classifier(n_classes=2, random_state=random_state)
+    cv = StratifiedKFold(n_splits=n_splits_actual, shuffle=True, random_state=random_state)
+
+    try:
+        probs = cross_val_predict(clf, X, y_binary, cv=cv, method="predict_proba")
+        auroc_obs = float(roc_auc_score(y_binary, probs[:, 1]))
+    except Exception as exc:
+        if verbose:
+            print(f"    Bin {time_bin}{label_text}: error — {exc}")
+        return None
+
+    null_aurocs = _permutation_test_binary(
+        X=X,
+        y_binary=y_binary,
+        n_permutations=n_permutations,
+        n_splits=n_splits_actual,
+        n_jobs=n_jobs,
+        random_state=random_state,
+        bin_index=bin_index,
+        time_bin=int(time_bin),
+    )
+
+    if len(null_aurocs) == 0:
+        pval = float("nan")
+        null_mean = float("nan")
+        null_std = float("nan")
+    else:
+        exceed_count = int(np.sum(null_aurocs >= auroc_obs))
+        pval = float((exceed_count + 1) / (len(null_aurocs) + 1))
+        null_mean = float(np.mean(null_aurocs))
+        null_std = float(np.std(null_aurocs))
+
+    y_pred = (probs[:, 1] >= 0.5).astype(int)
+    cm = confusion_matrix(y_binary, y_pred, labels=[0, 1])
+
+    predictions = []
+    if embryo_ids is not None:
+        for row_idx in range(len(y_binary)):
+            predictions.append({
+                id_col: str(embryo_ids[row_idx]),
+                "time_bin_center": float(time_bin) + bin_width / 2.0,
+                "y_true": int(y_binary[row_idx]),
+                "p_pos": float(probs[row_idx, 1]),
+                "y_pred": int(y_pred[row_idx]),
+                "is_correct": bool(y_binary[row_idx] == y_pred[row_idx]),
+            })
+
+    return {
+        "time_bin": int(time_bin),
+        "time_bin_center": float(time_bin) + bin_width / 2.0,
+        "bin_width": float(bin_width),
+        "auroc_obs": auroc_obs,
+        "pval": pval,
+        "n_positive": n_positive,
+        "n_negative": n_negative,
+        "auroc_null_mean": null_mean,
+        "auroc_null_std": null_std,
+        "n_permutations": len(null_aurocs),
+        "_null_array": null_aurocs,
+        "_confusion_matrix": cm,
+        "_predictions": predictions,
+    }
+
+
 def _run_binary_classification_loop(
     *,
     df_binned: pd.DataFrame,
@@ -255,96 +368,71 @@ def _run_binary_classification_loop(
     random_state: int,
     verbose: bool,
 ) -> list[dict[str, Any]]:
-    """Per-bin CV + AUROC + permutation test for a single binary comparison."""
+    """Per-bin CV + AUROC + permutation test for a single binary comparison.
+
+    Binary-path parallelism operates across time bins. Permutations within a
+    bin always run serially to avoid nested process-pool overhead on small
+    bin-level workloads.
+    """
     time_bins = sorted(df_binned["_time_bin"].unique())
-    results: list[dict[str, Any]] = []
+    requested_n_jobs = int(n_jobs)
+    requested_workers = 1
+    if requested_n_jobs == 1:
+        requested_workers = 1
+    elif joblib_effective_n_jobs is not None:
+        requested_workers = max(1, int(joblib_effective_n_jobs(requested_n_jobs)))
+    else:
+        requested_workers = max(1, requested_n_jobs)
 
-    for i, t in enumerate(time_bins):
-        sub = df_binned[df_binned["_time_bin"] == t]
-        X = sub[feature_cols].to_numpy()
-        y = sub["_y"].to_numpy().astype(int)
+    effective_bin_jobs = 1
+    if Parallel is not None and requested_workers > 1 and len(time_bins) > 1:
+        effective_bin_jobs = min(requested_workers, len(time_bins))
 
-        n_pos = int(np.sum(y == 1))
-        n_neg = int(np.sum(y == 0))
-
-        if n_pos == 0 or n_neg == 0:
-            if verbose:
-                print(f"    Bin {t}: skipped (n_pos={n_pos}, n_neg={n_neg})")
-            continue
-
-        min_count = min(n_pos, n_neg)
-        n_splits_actual = min(n_splits, min_count)
-        if n_splits_actual < 2:
-            if verbose:
-                print(f"    Bin {t}: skipped (min_count={min_count} < 2)")
-            continue
-
-        clf = _make_logistic_classifier(n_classes=2, random_state=random_state)
-        cv = StratifiedKFold(n_splits=n_splits_actual, shuffle=True, random_state=random_state)
-
-        try:
-            probs = cross_val_predict(clf, X, y, cv=cv, method="predict_proba")
-            auroc_obs = float(roc_auc_score(y, probs[:, 1]))
-        except Exception as exc:
-            if verbose:
-                print(f"    Bin {t}: error — {exc}")
-            continue
-
-        null_aurocs = _permutation_test_binary(
-            X=X, y_binary=y,
-            n_permutations=n_permutations,
-            n_splits=n_splits_actual,
-            n_jobs=n_jobs, random_state=random_state,
-            bin_index=i, time_bin=int(t),
+    if verbose:
+        print(
+            "    Binary parallelism: "
+            f"requested n_jobs={requested_n_jobs}, "
+            f"effective bin workers={effective_bin_jobs}, "
+            "inner permutation workers=1"
         )
 
-        if len(null_aurocs) == 0:
-            pval = float("nan")
-            null_mean = float("nan")
-            null_std = float("nan")
-        else:
-            exceed_count = int(np.sum(null_aurocs >= auroc_obs))
-            pval = float((exceed_count + 1) / (len(null_aurocs) + 1))
-            null_mean = float(np.mean(null_aurocs))
-            null_std = float(np.std(null_aurocs))
+    bin_tasks = []
+    for i, t in enumerate(time_bins):
+        sub = df_binned[df_binned["_time_bin"] == t]
+        bin_tasks.append(
+            {
+                "X": sub[feature_cols].to_numpy(),
+                "y_binary": sub["_y"].to_numpy().astype(int),
+                "embryo_ids": sub[id_col].astype(str).to_numpy(),
+                "id_col": id_col,
+                "bin_width": bin_width,
+                "n_splits": n_splits,
+                "n_permutations": n_permutations,
+                "n_jobs": 1,
+                "random_state": random_state,
+                "bin_index": i,
+                "time_bin": int(t),
+                "verbose": False,
+            }
+        )
 
-        # Confusion for this bin
-        y_pred = (probs[:, 1] >= 0.5).astype(int)
-        cm = confusion_matrix(y, y_pred, labels=[0, 1])
+    if effective_bin_jobs > 1:
+        raw_results = Parallel(n_jobs=effective_bin_jobs)(
+            delayed(_score_binary_ovr_bin)(**task) for task in bin_tasks
+        )
+    else:
+        raw_results = [_score_binary_ovr_bin(**task) for task in bin_tasks]
 
-        # Per-embryo predictions
-        embryo_ids = sub[id_col].to_numpy()
-        predictions = []
-        for row_idx in range(len(y)):
-            predictions.append({
-                id_col: embryo_ids[row_idx],
-                "time_bin_center": float(t) + bin_width / 2.0,
-                "y_true": int(y[row_idx]),
-                "p_pos": float(probs[row_idx, 1]),
-                "y_pred": int(y_pred[row_idx]),
-                "is_correct": bool(y[row_idx] == y_pred[row_idx]),
-            })
+    results = [entry for entry in raw_results if entry is not None]
+    results.sort(key=lambda entry: entry["time_bin"])
 
-        entry: dict[str, Any] = {
-            "time_bin": int(t),
-            "time_bin_center": float(t) + bin_width / 2.0,
-            "bin_width": float(bin_width),
-            "auroc_obs": auroc_obs,
-            "pval": pval,
-            "n_positive": n_pos,
-            "n_negative": n_neg,
-            "auroc_null_mean": null_mean,
-            "auroc_null_std": null_std,
-            "n_permutations": len(null_aurocs),
-            "_null_array": null_aurocs,
-            "_confusion_matrix": cm,
-            "_predictions": predictions,
-        }
-        results.append(entry)
-
-        if verbose:
-            sig = "*" if pval < 0.05 else ""
-            print(f"    Bin {t}: AUROC={auroc_obs:.3f}, p={pval:.3f}{sig}")
+    if verbose:
+        for entry in results:
+            sig = "*" if entry["pval"] < 0.05 else ""
+            print(
+                f"    Bin {entry['time_bin']}: "
+                f"AUROC={entry['auroc_obs']:.3f}, p={entry['pval']:.3f}{sig}"
+            )
 
     return results
 
@@ -369,6 +457,10 @@ def _run_multiclass_classification_loop(
     verbose: bool,
 ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     """Run one multiclass model per bin, extract per-class binary AUROCs.
+
+    Dense bins use the multiclass fast path. Sparse bins fall back to
+    per-class binary one-vs-rest scoring so a single under-sampled class
+    does not erase valid results for the rest of the bin.
 
     Returns
     -------
@@ -405,7 +497,45 @@ def _run_multiclass_classification_loop(
         min_count = min(class_counts[label] for label in present_classes)
         if min_count < min_samples_per_class:
             if verbose:
-                print(f"    Skipped (min class has {min_count} samples, need {min_samples_per_class})")
+                print(
+                    "    Sparse bin fallback "
+                    f"(min present class has {min_count} samples, target {min_samples_per_class})"
+                )
+
+            retained_classes = 0
+            for class_label in present_classes:
+                class_idx = label_to_int[class_label]
+                entry = _score_binary_ovr_bin(
+                    X=X,
+                    y_binary=(y == class_idx).astype(int),
+                    embryo_ids=None,
+                    id_col=id_col,
+                    bin_width=bin_width,
+                    n_splits=n_splits,
+                    n_permutations=n_permutations,
+                    n_jobs=n_jobs,
+                    random_state=random_state,
+                    bin_index=i,
+                    time_bin=int(t),
+                    positive_label=class_label,
+                    require_positive_min_samples=min_samples_per_class,
+                    verbose=verbose,
+                )
+                if entry is None:
+                    continue
+
+                ovr_results[class_label].append(entry)
+                retained_classes += 1
+
+                if verbose:
+                    sig_marker = "*" if entry["pval"] < 0.05 else ""
+                    print(
+                        f"    {class_label} vs Rest: "
+                        f"AUROC={entry['auroc_obs']:.3f}, p={entry['pval']:.3f}{sig_marker}"
+                    )
+
+            if verbose and retained_classes == 0:
+                print("    Sparse bin produced no valid one-vs-rest comparisons")
             continue
 
         clf = _make_logistic_classifier(n_classes=len(class_labels), random_state=random_state)
@@ -423,14 +553,12 @@ def _run_multiclass_classification_loop(
                 print(f"    Error: {exc}")
             continue
 
-        # Expand to full probability matrix
         probs_full = np.zeros((len(y), len(class_labels)), dtype=float)
         for class_idx, col_idx in class_index_to_col.items():
             probs_full[:, class_idx] = probs_present[:, col_idx]
 
         pred_classes = np.argmax(probs_full, axis=1)
 
-        # Per-class OvR AUROC
         for class_label in class_labels:
             class_idx = label_to_int[class_label]
             y_binary = (y == class_idx).astype(int)
@@ -475,7 +603,6 @@ def _run_multiclass_classification_loop(
                 sig_marker = "*" if pval < 0.05 else ""
                 print(f"    {class_label} vs Rest: AUROC={true_auroc:.3f}, p={pval:.3f}{sig_marker}")
 
-        # Per-embryo predictions (wide multiclass format)
         for row_idx, (eid, true_label, pred_idx) in enumerate(zip(embryo_ids, y_labels, pred_classes)):
             pred_label = int_to_label[int(pred_idx)]
             pred_record: dict[str, Any] = {
