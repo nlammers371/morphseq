@@ -18,7 +18,11 @@ from typing import Any, Dict, Optional, Union, Tuple
 import numpy as np
 import pandas as pd
 
-from analyze.viz.styling import STANDARD_PALETTE, resolve_color_lookup
+from analyze.viz.styling import (
+    STANDARD_PALETTE,
+    get_known_genotype_color,
+    resolve_color_lookup,
+)
 from analyze.viz.plotting.faceting_engine import (
     FigureData,
     SubplotData,
@@ -130,6 +134,7 @@ def plot_aurocs_over_time(
         unique_curves,
         color_lookup=color_lookup,
         palette=color_palette or STANDARD_PALETTE,
+        default_resolver=get_known_genotype_color,
         enforce_distinct=True,
         warn_on_collision=True,
     )
@@ -284,4 +289,3 @@ def plot_aurocs_over_time(
 
     fig_data = FigureData(title=title, subplots=subplots, legend_title=curve_col)
     return render(fig_data, backend=backend, facet=facet, style=style, output_path=output_path)
-

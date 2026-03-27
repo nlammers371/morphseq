@@ -11,7 +11,11 @@ import plotly.graph_objects as go
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from analyze.viz.styling import STANDARD_PALETTE, resolve_color_lookup
+from analyze.viz.styling import (
+    STANDARD_PALETTE,
+    get_known_genotype_color,
+    resolve_color_lookup,
+)
 
 
 # ==============================================================================
@@ -59,6 +63,7 @@ def _build_color_lookup(
         ordered_vals,
         color_lookup=color_palette,
         palette=STANDARD_PALETTE,
+        default_resolver=get_known_genotype_color,
         enforce_distinct=True,
         warn_on_collision=True,
     )

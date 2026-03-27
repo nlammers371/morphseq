@@ -24,6 +24,7 @@ from typing import Dict, List, Optional
 
 from analyze.viz.styling import (
     STANDARD_PALETTE,
+    get_known_genotype_color,
     normalize_color,
     resolve_color_lookup,
 )
@@ -44,6 +45,7 @@ def _make_color_lookup(values: pd.Series, palette: Optional[List[str]] = None) -
     return resolve_color_lookup(
         unique_vals,
         palette=palette or STANDARD_PALETTE,
+        default_resolver=get_known_genotype_color,
         enforce_distinct=True,
         warn_on_collision=False,
     )
@@ -111,6 +113,7 @@ def _plot_proportions_impl(
         color_palette = resolve_color_lookup(
             color_values,
             palette=[normalize_color(c) for c in color_palette],
+            default_resolver=get_known_genotype_color,
             enforce_distinct=True,
             warn_on_collision=False,
         )
@@ -119,6 +122,7 @@ def _plot_proportions_impl(
             color_values,
             color_lookup=color_palette,
             palette=STANDARD_PALETTE,
+            default_resolver=get_known_genotype_color,
             enforce_distinct=True,
             warn_on_collision=True,
         )

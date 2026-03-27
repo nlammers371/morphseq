@@ -11,7 +11,13 @@ This enables consistent styling across all genes without hardcoding.
 from typing import Dict, List, Optional
 
 from analyze.trajectory_analysis.config import MEMBERSHIP_COLORS
-from analyze.viz.styling import GENOTYPE_SUFFIX_COLORS, GENOTYPE_SUFFIX_ORDER
+from analyze.viz.styling import (
+    GENOTYPE_SUFFIX_COLORS,
+    GENOTYPE_SUFFIX_ORDER,
+    build_genotype_color_lookup,
+    extract_genotype_suffix as shared_extract_genotype_suffix,
+    get_color_for_genotype as shared_get_color_for_genotype,
+)
 
 
 def extract_genotype_suffix(genotype: str) -> str:
@@ -36,22 +42,7 @@ def extract_genotype_suffix(genotype: str) -> str:
         >>> extract_genotype_suffix('unknown_gene')
         'unknown'
     """
-    # Known suffixes to match (order matters for longest match)
-    suffix_patterns = [
-        ('crispant', ['crispant', 'crisp']),
-        ('homozygous', ['homozygous', 'homo']),
-        ('heterozygous', ['heterozygous', 'het']),
-        ('wildtype', ['wildtype', 'wt', 'wild_type', 'ab', 'wik', 'wik-ab', 'ab-wik']),
-    ]
-
-    genotype_lower = genotype.lower()
-
-    for canonical, patterns in suffix_patterns:
-        for pattern in patterns:
-            if genotype_lower.endswith(pattern):
-                return canonical
-
-    return 'unknown'
+    return shared_extract_genotype_suffix(genotype)
 
 
 def extract_genotype_prefix(genotype: str) -> str:
@@ -121,11 +112,7 @@ def get_color_for_genotype(
         >>> get_color_for_genotype('b9d2_wildtype')
         '#2E7D32'
     """
-    if suffix_colors is None:
-        suffix_colors = GENOTYPE_SUFFIX_COLORS
-
-    suffix = extract_genotype_suffix(genotype)
-    return suffix_colors.get(suffix, '#808080')  # Gray fallback for unknown
+    return shared_get_color_for_genotype(genotype, suffix_colors=suffix_colors)
 
 
 def get_membership_category_colors(categories: List[str]) -> Dict[str, str]:
@@ -196,7 +183,11 @@ def build_genotype_style_config(
         '#D32F2F'
     """
     ordered = sort_genotypes_by_suffix(genotypes, suffix_order)
-    colors = {g: get_color_for_genotype(g, suffix_colors) for g in genotypes}
+    colors = build_genotype_color_lookup(
+        genotypes,
+        enforce_distinct=True,
+        warn_on_collision=False,
+    )
 
     return {
         'order': ordered,
