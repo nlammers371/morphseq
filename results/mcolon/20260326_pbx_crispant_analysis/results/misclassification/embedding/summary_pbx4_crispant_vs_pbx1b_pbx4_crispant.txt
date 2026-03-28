@@ -1,0 +1,25 @@
+pair: pbx4_crispant vs pbx1b_pbx4_crispant
+classifier: analyze.classification.run_classification (binary path, class_weight='balanced')
+n_auc_bins: 54
+
+top_embryos_by_abs_mean_signed_margin:
+- 20260304_H09_e02 [pbx1b_pbx4_crispant]: mean_signed_margin=0.339, temporal_consistency=1.000, n_time_bins=5
+- 20260306_B05_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.296, temporal_consistency=1.000, n_time_bins=2
+- 20260304_D09_e03 [pbx1b_pbx4_crispant]: mean_signed_margin=0.212, temporal_consistency=1.000, n_time_bins=6
+- 20260304_F09_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.198, temporal_consistency=1.000, n_time_bins=2
+- 20260304_D08_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.193, temporal_consistency=1.000, n_time_bins=2
+- 20260306_H03_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.172, temporal_consistency=0.000, n_time_bins=3
+- 20260304_G08_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.168, temporal_consistency=1.000, n_time_bins=3
+- 20260306_D05_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.160, temporal_consistency=0.100, n_time_bins=20
+- 20260304_C08_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.131, temporal_consistency=0.333, n_time_bins=3
+- 20260304_E09_e02 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.128, temporal_consistency=0.000, n_time_bins=5
+- 20260304_A09_e02 [pbx1b_pbx4_crispant]: mean_signed_margin=0.120, temporal_consistency=0.818, n_time_bins=11
+- 20260306_E03_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.119, temporal_consistency=0.944, n_time_bins=18
+- 20260306_C05_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.118, temporal_consistency=0.000, n_time_bins=8
+- 20260304_C09_e03 [pbx1b_pbx4_crispant]: mean_signed_margin=0.113, temporal_consistency=0.714, n_time_bins=7
+- 20260304_E07_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.112, temporal_consistency=0.053, n_time_bins=19
+- 20260306_D03_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.110, temporal_consistency=0.143, n_time_bins=7
+- 20260306_D01_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=-0.101, temporal_consistency=0.000, n_time_bins=10
+- 20260306_B02_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.096, temporal_consistency=0.920, n_time_bins=25
+- 20260306_H02_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.096, temporal_consistency=0.933, n_time_bins=15
+- 20260306_B03_e01 [pbx1b_pbx4_crispant]: mean_signed_margin=0.092, temporal_consistency=0.815, n_time_bins=27

@@ -1,0 +1,6 @@
+❯ results/mcolon/20251014/plots/unbalanced/b9d2/embryo_trajectories_signed_margin_heterozygous_vs_homozygous.png                                                                              
+                                                                                                                                                                                              
+ the first question I have is, is the classification output that I currently have suitable for this method? Essentially, we'd be using the multi-class output. A cool plot to do for all vs   
+rest would be, for each genotype, to color each of the lines by its correct accuracy or the color. We kind of worked on this in the past here, but now I want to give it a better shot since  
+I know for a fact that PBX1B is mistaken for injection control and that PBX4 gets misclassified as PBX1B plus 4                                                                               
+  ⎿  Interrupted · What should Claude do instead?                                                                          

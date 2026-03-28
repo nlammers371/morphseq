@@ -1,0 +1,28 @@
+feature_set: curvature
+stage2_dir: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260326_pbx_crispant_analysis/results/consistent_misclassification/bin_width_2.0hpf/curvature/misclassification
+
+per_genotype_summary:
+- pbx1b_pbx4_crispant: n_embryos=67, mean_wrong_rate=0.325, n_flagged=2
+- pbx4_crispant: n_embryos=49, mean_wrong_rate=0.704, n_flagged=1
+- inj_ctrl: n_embryos=31, mean_wrong_rate=1.000, n_flagged=0
+- wik_ab: n_embryos=25, mean_wrong_rate=1.000, n_flagged=0
+- pbx1b_crispant: n_embryos=48, mean_wrong_rate=0.797, n_flagged=0
+
+top_flagged_embryos:
+- 20260304_C08_e01 [pbx1b_pbx4_crispant -> pbx4_crispant]: wrong_rate=1.000, n_wrong=3, top_confused_frac=0.667
+- 20260304_E09_e02 [pbx1b_pbx4_crispant -> pbx1b_crispant]: wrong_rate=0.750, n_wrong=3, top_confused_frac=0.667
+- 20260304_D04_e01 [pbx4_crispant -> pbx1b_pbx4_crispant]: wrong_rate=0.667, n_wrong=6, top_confused_frac=0.833
+
+confusion_enrichment_top_rows:
+- pbx4_crispant -> pbx1b_pbx4_crispant: observed_frac=0.833, expected_frac=0.698, n_flagged=5, qval=0.7899
+- pbx1b_pbx4_crispant -> pbx1b_crispant: observed_frac=0.500, expected_frac=0.354, n_flagged=3, qval=0.7899
+- pbx1b_pbx4_crispant -> pbx4_crispant: observed_frac=0.500, expected_frac=0.646, n_flagged=3, qval=0.7899
+- pbx4_crispant -> pbx1b_crispant: observed_frac=0.167, expected_frac=0.302, n_flagged=1, qval=0.7899
+- inj_ctrl -> pbx1b_crispant: observed_frac=nan, expected_frac=0.197, n_flagged=0, qval=nan
+- inj_ctrl -> pbx1b_pbx4_crispant: observed_frac=nan, expected_frac=0.456, n_flagged=0, qval=nan
+- inj_ctrl -> pbx4_crispant: observed_frac=nan, expected_frac=0.347, n_flagged=0, qval=nan
+- pbx1b_crispant -> pbx1b_pbx4_crispant: observed_frac=nan, expected_frac=0.473, n_flagged=0, qval=nan
+- pbx1b_crispant -> pbx4_crispant: observed_frac=nan, expected_frac=0.527, n_flagged=0, qval=nan
+- wik_ab -> pbx1b_crispant: observed_frac=nan, expected_frac=0.211, n_flagged=0, qval=nan
+- wik_ab -> pbx1b_pbx4_crispant: observed_frac=nan, expected_frac=0.414, n_flagged=0, qval=nan
+- wik_ab -> pbx4_crispant: observed_frac=nan, expected_frac=0.376, n_flagged=0, qval=nan
