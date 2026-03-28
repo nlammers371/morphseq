@@ -36,6 +36,14 @@ import pandas as pd
 # so this script automatically tracks any changes to the config.
 # ---------------------------------------------------------------------------
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+
+from analyze.viz.embryo_renderer import (
+    build_embryo_track,
+    build_snip_path,
+    export_embryo_video,
+    render_embryo_sequence,
+)
 
 def _default_plot_px() -> tuple[int, int]:
     """Return (width_px, height_px) matching plot_feature_over_time's default single-panel size."""
@@ -516,7 +524,7 @@ def _safe_name(s: str) -> str:
 
 
 def _snip_path(snip_root: Path, experiment_date: str, embryo_id: str, frame_index: int) -> Path:
-    return snip_root / str(experiment_date) / f"{embryo_id}_t{int(frame_index):04d}.jpg"
+    return build_snip_path(snip_root, experiment_date, embryo_id, frame_index)
 
 
 def _pick_featured_embryo(
@@ -1106,128 +1114,63 @@ def _make_embryo_video(
     """
     import cv2
 
-    embryo_id = str(featured_df["embryo_id"].iloc[0])
-    experiment_date = str(featured_df["experiment_date"].iloc[0])
-
     featured_df = featured_df.sort_values("predicted_stage_hpf").copy()
-    times = featured_df["predicted_stage_hpf"].to_numpy(dtype=float)
+    track = build_embryo_track(featured_df)
+    times = track.times_hpf
     color_bgr = _hex_to_bgr(genotype_color_hex)
-
-    # Pre-load all unique snip frames at raw size (no resize/padding)
-    print("  Pre-loading snip frames for crossfade...")
-    snip_cache: dict[int, np.ndarray] = {}
-    last_good: Optional[np.ndarray] = None
-    for _, row in featured_df.iterrows():
-        fi = int(row["frame_index"])
-        if fi in snip_cache:
-            continue
-        raw = _load_snip_frame(
-            snip_root, experiment_date, embryo_id,
-            row, last_good,
-        )
-        if raw is not None:
-            snip_cache[fi] = raw
-            last_good = raw
-
-    if not snip_cache:
-        raise RuntimeError("No snip frames could be loaded for the featured embryo.")
-
-    # Get video dimensions from the first cached frame (all snips share dimensions)
-    first_snip = next(iter(snip_cache.values()))
-    snip_h, snip_w = first_snip.shape[:2]
-    # Video codec requires even dimensions
-    vid_w = snip_w if snip_w % 2 == 0 else snip_w + 1
-    vid_h = snip_h if snip_h % 2 == 0 else snip_h + 1
-
-    frame_indices = featured_df["frame_index"].to_numpy(dtype=int)
 
     # HPF label style
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.7
     font_thickness = 2
+    print("  Rendering embryo sequence from shared embryo renderer...")
+    sequence = render_embryo_sequence(
+        track,
+        snip_root=snip_root,
+        start_hpf=float(cursor_min),
+        end_hpf=float(cursor_max),
+        fps=int(fps),
+        n_frames_out=int(n_frames_out),
+        missing_frame_bgr=(250, 250, 250),
+        pad_to_even=True,
+    )
 
-    out_times = np.linspace(float(cursor_min), float(cursor_max), int(n_frames_out))
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(str(out_mp4), fourcc, float(fps), (vid_w, vid_h))
-    if not writer.isOpened():
-        raise RuntimeError(f"Could not open VideoWriter for: {out_mp4}")
+    def _overlay_hpf_label(frame: np.ndarray, t: float) -> np.ndarray:
+        canvas = frame.copy()
+        vid_h, vid_w = canvas.shape[:2]
+        display_t = min(float(t), float(times[-1])) if times.size > 0 else float(t)
+        label = f"{display_t:.1f} hpf"
+        (tw, th), baseline = cv2.getTextSize(label, font, font_scale, font_thickness)
+        pad_y = 10
+        strip_h = th + baseline + (2 * pad_y)
+        box_alpha = 0.55
+        box_color = (235, 235, 235)
 
-    try:
-        for t in out_times:
-            t = float(t)
-            snip = None
+        text_x = (vid_w - tw) // 2
+        text_y = (strip_h + th) // 2 - baseline // 2
 
-            if times.size > 0:
-                if t <= times[0]:
-                    i_lo = i_hi = 0
-                    alpha = 0.0
-                elif t >= times[-1]:
-                    i_lo = i_hi = int(times.size - 1)
-                    alpha = 0.0
-                else:
-                    i_hi = int(np.searchsorted(times, t))
-                    i_lo = i_hi - 1
-                    dt = times[i_hi] - times[i_lo]
-                    alpha = float((t - times[i_lo]) / dt) if dt > 0 else 0.0
+        overlay = canvas.copy()
+        cv2.rectangle(overlay, (0, 0), (int(vid_w - 1), int(min(vid_h - 1, strip_h))), box_color, -1)
+        cv2.addWeighted(overlay, float(box_alpha), canvas, float(1.0 - box_alpha), 0, canvas)
 
-                fi_lo = int(frame_indices[i_lo])
-                fi_hi = int(frame_indices[i_hi])
-                img_lo = snip_cache.get(fi_lo)
-                img_hi = snip_cache.get(fi_hi)
+        _put_text_with_outline(
+            canvas,
+            label,
+            (int(text_x), int(text_y)),
+            font=font,
+            font_scale=float(font_scale),
+            fg_bgr=color_bgr,
+            thickness=int(font_thickness),
+            outline_bgr=(0, 0, 0),
+            outline_thickness=int(font_thickness) + 3,
+        )
+        return canvas
 
-                if img_lo is not None and img_hi is not None and fi_lo != fi_hi:
-                    snip = cv2.addWeighted(
-                        img_lo.astype(np.float32), 1.0 - alpha,
-                        img_hi.astype(np.float32), alpha, 0,
-                    ).astype(np.uint8)
-                elif img_lo is not None:
-                    snip = img_lo.copy()
-                elif img_hi is not None:
-                    snip = img_hi.copy()
-
-            if snip is None:
-                canvas = np.full((vid_h, vid_w, 3), 250, dtype=np.uint8)
-            else:
-                # Place snip into canvas (handles odd-dimension padding)
-                canvas = np.full((vid_h, vid_w, 3), 0, dtype=np.uint8)
-                canvas[:snip_h, :snip_w] = snip
-
-            # Overlay HPF label — freeze counter at embryo's last timepoint
-            display_t = min(t, float(times[-1])) if times.size > 0 else t
-            label = f"{display_t:.1f} hpf"
-            (tw, th), baseline = cv2.getTextSize(label, font, font_scale, font_thickness)
-            pad_y = 10
-            strip_h = th + baseline + (2 * pad_y)
-            box_alpha = 0.55
-            box_color = (235, 235, 235)  # lighter grey
-
-            text_x = (vid_w - tw) // 2
-            text_y = (strip_h + th) // 2 - baseline // 2
-
-            # Full-width translucent grey strip (matches earlier style)
-            x0, y0 = 0, 0
-            x1, y1 = int(vid_w - 1), int(min(vid_h - 1, strip_h))
-            overlay = canvas.copy()
-            cv2.rectangle(overlay, (x0, y0), (x1, y1), box_color, -1)
-            cv2.addWeighted(overlay, float(box_alpha), canvas, float(1.0 - box_alpha), 0, canvas)
-
-            _put_text_with_outline(
-                canvas,
-                label,
-                (int(text_x), int(text_y)),
-                font=font,
-                font_scale=float(font_scale),
-                fg_bgr=color_bgr,
-                thickness=int(font_thickness),
-                outline_bgr=(0, 0, 0),
-                outline_thickness=int(font_thickness) + 3,
-            )
-
-            writer.write(canvas)
-    finally:
-        writer.release()
-
-    return vid_w, vid_h
+    return export_embryo_video(
+        sequence,
+        out_mp4,
+        frame_transform=_overlay_hpf_label,
+    )
 
 
 def main() -> None:
