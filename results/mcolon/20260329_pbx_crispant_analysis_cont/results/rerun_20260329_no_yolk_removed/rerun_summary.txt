@@ -1,0 +1,19 @@
+rerun_id: rerun_20260329_no_yolk_removed
+source_experiments: 20260304,20260306
+bin_width_hpf: 2.0
+
+output_roots:
+- results_bin_root: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/results/rerun_20260329_no_yolk_removed/bin_width_2.0hpf
+- figures_bin_root: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/bin_width_2.0hpf
+- embedding_results_root: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/results/rerun_20260329_no_yolk_removed/misclassification/embedding
+- embedding_figures_root: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/misclassification/embedding
+
+notable refreshed figures:
+- /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/bin_width_2.0hpf/20260304_20260306_three_features_stacked.png
+- /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/bin_width_2.0hpf/classification/20260304_20260306_all_crispants_vs_wik_ab_heatmaps_v2.png
+- /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/bin_width_2.0hpf/classification/20260304_20260306_all_genotypes_vs_inj_ctrl_heatmaps_v2.png
+- /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/bin_width_2.0hpf/classification/20260304_20260306_wik_ab_vs_inj_ctrl_heatmaps_v2.png
+- /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/misclassification/embedding/pbx4_wildtype_like_morphology_trajectories.png
+- /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/figures/rerun_20260329_no_yolk_removed/misclassification/embedding/pairwise_auroc_heatmap_pbx_controls_embedding_all_pairs.png
+
+manifest: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260329_pbx_crispant_analysis_cont/results/rerun_20260329_no_yolk_removed/rerun_manifest.json

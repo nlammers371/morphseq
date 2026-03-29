@@ -76,7 +76,7 @@ _ensure_well_metadata_excel() {
 }
 
 # Default experiment list (used if not running as array job)
-DEFAULT_EXPERIMENTS="20260219"
+DEFAULT_EXPERIMENTS="20251207_pbx,20260213,20260223,20260224,20260304,20260306,20260319,20260320"
 
 # Tunable defaults — override by exporting the variable before invoking this script.
 # Example: RUN_SAM2=0 SAM2_WORKERS=2 EXP_LIST=20250305 bash run_build03_onwards_force.sh
@@ -88,12 +88,12 @@ DEFAULT_EXPERIMENTS="20260219"
 : "${SAM2_IOU:=0.5}"
 
 # Pipeline stage toggles (1=run, 0=skip)
-: "${RUN_METADATA_REBUILD:=1}"
+: "${RUN_METADATA_REBUILD:=0}"
 : "${RUN_BUILD02:=0}"
 : "${RUN_SAM2:=0}"
-: "${RUN_BUILD03:=1}"
+: "${RUN_BUILD03:=0}"
 : "${BUILD03_SKIP_GEOMETRY_QC:=0}"  # 0=compute full geometry QC (default), 1=fast mode (skip QC, mark all embryos usable)
-: "${RUN_BUILD04:=1}"
+: "${RUN_BUILD04:=0}"
 : "${RUN_BUILD06:=1}"
 : "${RUN_SNIP_EXPORT:=0}"
 

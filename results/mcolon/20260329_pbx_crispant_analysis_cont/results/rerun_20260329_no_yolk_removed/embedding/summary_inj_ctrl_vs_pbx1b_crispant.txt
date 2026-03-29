@@ -1,0 +1,25 @@
+pair: inj_ctrl vs pbx1b_crispant
+classifier: analyze.classification.run_classification (binary path, class_weight='balanced')
+n_auc_bins: 53
+
+top_embryos_by_abs_mean_signed_margin:
+- 20260304_C11_e02 [inj_ctrl]: mean_signed_margin=-0.393, temporal_consistency=0.000, n_time_bins=6
+- 20260304_C11_e03 [inj_ctrl]: mean_signed_margin=-0.353, temporal_consistency=0.000, n_time_bins=1
+- 20260304_E11_e03 [inj_ctrl]: mean_signed_margin=-0.201, temporal_consistency=0.000, n_time_bins=3
+- 20260304_C10_e01 [inj_ctrl]: mean_signed_margin=0.139, temporal_consistency=0.905, n_time_bins=21
+- 20260304_H10_e01 [inj_ctrl]: mean_signed_margin=0.136, temporal_consistency=0.964, n_time_bins=28
+- 20260304_B10_e01 [inj_ctrl]: mean_signed_margin=0.136, temporal_consistency=0.929, n_time_bins=28
+- 20260304_E10_e01 [inj_ctrl]: mean_signed_margin=0.127, temporal_consistency=0.958, n_time_bins=24
+- 20260304_E11_e02 [inj_ctrl]: mean_signed_margin=0.108, temporal_consistency=0.800, n_time_bins=5
+- 20260304_F10_e01 [inj_ctrl]: mean_signed_margin=-0.078, temporal_consistency=0.471, n_time_bins=17
+- 20260304_G10_e01 [inj_ctrl]: mean_signed_margin=0.070, temporal_consistency=0.750, n_time_bins=16
+- 20260304_A10_e01 [inj_ctrl]: mean_signed_margin=0.068, temporal_consistency=0.880, n_time_bins=25
+- 20260304_B11_e02 [inj_ctrl]: mean_signed_margin=-0.052, temporal_consistency=0.750, n_time_bins=4
+- 20260306_D10_e01 [inj_ctrl]: mean_signed_margin=0.050, temporal_consistency=0.840, n_time_bins=25
+- 20260306_G10_e01 [inj_ctrl]: mean_signed_margin=0.045, temporal_consistency=0.731, n_time_bins=26
+- 20260306_E10_e01 [inj_ctrl]: mean_signed_margin=0.042, temporal_consistency=0.792, n_time_bins=24
+- 20260306_H09_e01 [inj_ctrl]: mean_signed_margin=-0.036, temporal_consistency=0.364, n_time_bins=11
+- 20260304_C11_e01 [inj_ctrl]: mean_signed_margin=-0.032, temporal_consistency=0.667, n_time_bins=9
+- 20260304_E11_e01 [inj_ctrl]: mean_signed_margin=-0.028, temporal_consistency=0.250, n_time_bins=4
+- 20260306_A10_e01 [inj_ctrl]: mean_signed_margin=0.027, temporal_consistency=0.783, n_time_bins=23
+- 20260306_E11_e01 [inj_ctrl]: mean_signed_margin=0.026, temporal_consistency=0.609, n_time_bins=23
