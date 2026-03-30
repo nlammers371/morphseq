@@ -26,40 +26,30 @@ def attraction(
     E_attract = -sum_{t} sum_{i!=j} K_s(x_i(t), x_j(t)) * C_ij(t)
 
     C_ij(t) is treated as frozen (alternating update).
-
-    Parameters
-    ----------
-    positions : (N_e, T, 2)
-    mask : (N_e, T) bool
-    coherence : (N_e, N_e, T) — frozen C_ij(t) from coherence.py
-    sigma : float
-
-    Returns
-    -------
-    (energy, grad) where grad : (N_e, T, 2)
     """
     N_e, T, _ = positions.shape
     energy = 0.0
     grad = np.zeros_like(positions)
 
     for t in range(T):
-        obs = mask[:, t]
-        if obs.sum() < 2:
+        obs_idx = np.flatnonzero(mask[:, t])
+        if len(obs_idx) < 2:
             continue
-        K = gaussian_kernel(positions[:, t, :], sigma)   # (N_e, N_e)
-        C = coherence[:, :, t]                           # (N_e, N_e)
-        W = K * C                                        # (N_e, N_e)
 
-        # zero out pairs where either embryo is unobserved
-        joint = obs[:, None] * obs[None, :]
-        W *= joint
+        pos_obs = positions[obs_idx, t, :]
+        K = gaussian_kernel(pos_obs, sigma)
+        C = coherence[np.ix_(obs_idx, obs_idx, [t])][:, :, 0]
+        W = K * C
         np.fill_diagonal(W, 0.0)
 
         energy += -W.sum()
 
-        # gradient: dE/dx_i(t) = sum_j W_ij * (x_i - x_j) / sigma^2
-        diff = positions[:, t, None, :] - positions[None, :, t, :]  # (N_e, N_e, 2)
-        grad[:, t, :] += (W[:, :, None] * diff).sum(axis=1) / (sigma ** 2)
+        # Full gradient accounts for both (i,j) and (j,i) pair contributions.
+        # dE/dx_i = sum_j [W[i,j] + W[j,i]] * (x_i - x_j) / sigma^2
+        diff = pos_obs[:, None, :] - pos_obs[None, :, :]   # (n_obs, n_obs, 2)
+        W_sym = W + W.T
+        grad_obs = (W_sym[:, :, None] * diff).sum(axis=1) / (sigma ** 2)
+        grad[obs_idx, t, :] += grad_obs
 
     return energy, grad
 
@@ -73,38 +63,31 @@ def repulsion(
     """Soft-core repulsion energy and gradient.
 
     E_repel = sum_{t} sum_{i!=j} epsilon_r / (||x_i - x_j||^2 + eta)
-
-    Parameters
-    ----------
-    positions : (N_e, T, 2)
-    mask : (N_e, T) bool
-    epsilon_r : float
-    eta : float
-
-    Returns
-    -------
-    (energy, grad) where grad : (N_e, T, 2)
     """
     N_e, T, _ = positions.shape
     energy = 0.0
     grad = np.zeros_like(positions)
 
     for t in range(T):
-        obs = mask[:, t]
-        if obs.sum() < 2:
+        obs_idx = np.flatnonzero(mask[:, t])
+        if len(obs_idx) < 2:
             continue
-        diff = positions[:, t, None, :] - positions[None, :, t, :]  # (N_e, N_e, 2)
-        sq_dist = (diff ** 2).sum(axis=-1)                          # (N_e, N_e)
+
+        pos_obs = positions[obs_idx, t, :]
+        diff = pos_obs[:, None, :] - pos_obs[None, :, :]
+        sq_dist = (diff ** 2).sum(axis=-1)
         denom = sq_dist + eta
+        valid_pairs = np.ones_like(denom)
+        np.fill_diagonal(valid_pairs, 0.0)
 
-        joint = obs[:, None] * obs[None, :]
-        np.fill_diagonal(joint, 0.0)
+        energy += (epsilon_r / denom * valid_pairs).sum()
 
-        energy += (epsilon_r / denom * joint).sum()
-
-        # gradient: dE/dx_i = sum_j -2 epsilon_r * (x_i - x_j) / denom^2
-        coeff = -2.0 * epsilon_r / (denom ** 2) * joint  # (N_e, N_e)
-        grad[:, t, :] += (coeff[:, :, None] * diff).sum(axis=1)
+        # Full gradient: both (i,j) and (j,i) pair contributions.
+        # dE/dx_i = sum_j [coeff[i,j] + coeff[j,i]] * (x_i - x_j)
+        coeff = -2.0 * epsilon_r / (denom ** 2) * valid_pairs
+        coeff_sym = coeff + coeff.T
+        grad_obs = (coeff_sym[:, :, None] * diff).sum(axis=1)
+        grad[obs_idx, t, :] += grad_obs
 
     return energy, grad
 
@@ -119,40 +102,35 @@ def elasticity(
 
     E_stretch = lambda_stretch * sum_i sum_t m_i(t)*m_i(t+1) ||x_i(t+1)-x_i(t)||^2
     E_bend    = lambda_bend   * sum_i sum_t m_i(t-1)*m_i(t)*m_i(t+1) ||x_i(t+1)-2x_i(t)+x_i(t-1)||^2
-
-    Parameters
-    ----------
-    positions : (N_e, T, 2)
-    mask : (N_e, T) bool
-
-    Returns
-    -------
-    (energy, grad) where grad : (N_e, T, 2)
     """
     N_e, T, _ = positions.shape
     energy = 0.0
     grad = np.zeros_like(positions)
 
-    # stretch
     for t in range(T - 1):
-        m = (mask[:, t] * mask[:, t + 1]).astype(float)   # (N_e,)
-        delta = positions[:, t + 1, :] - positions[:, t, :]
-        sq = (delta ** 2).sum(axis=-1)                     # (N_e,)
-        energy += lambda_stretch * (m * sq).sum()
-        g = 2.0 * lambda_stretch * m[:, None] * delta
-        grad[:, t + 1, :] += g
-        grad[:, t, :]     -= g
+        valid = mask[:, t] & mask[:, t + 1]
+        if not np.any(valid):
+            continue
+        delta = positions[valid, t + 1, :] - positions[valid, t, :]
+        sq = (delta ** 2).sum(axis=-1)
+        energy += lambda_stretch * sq.sum()
+        g = 2.0 * lambda_stretch * delta
+        valid_idx = np.flatnonzero(valid)
+        grad[valid_idx, t + 1, :] += g
+        grad[valid_idx, t, :] -= g
 
-    # bend
     for t in range(1, T - 1):
-        m = (mask[:, t - 1] * mask[:, t] * mask[:, t + 1]).astype(float)
-        acc = positions[:, t + 1, :] - 2.0 * positions[:, t, :] + positions[:, t - 1, :]
+        valid = mask[:, t - 1] & mask[:, t] & mask[:, t + 1]
+        if not np.any(valid):
+            continue
+        acc = positions[valid, t + 1, :] - 2.0 * positions[valid, t, :] + positions[valid, t - 1, :]
         sq = (acc ** 2).sum(axis=-1)
-        energy += lambda_bend * (m * sq).sum()
-        g = 2.0 * lambda_bend * m[:, None] * acc
-        grad[:, t + 1, :] +=  g
-        grad[:, t, :]     += -2.0 * g
-        grad[:, t - 1, :] +=  g
+        energy += lambda_bend * sq.sum()
+        g = 2.0 * lambda_bend * acc
+        valid_idx = np.flatnonzero(valid)
+        grad[valid_idx, t + 1, :] += g
+        grad[valid_idx, t, :] += -2.0 * g
+        grad[valid_idx, t - 1, :] += g
 
     return energy, grad
 
@@ -166,22 +144,11 @@ def fidelity(
     """Fidelity anchor energy and gradient.
 
     E_fidelity = mu * sum_i sum_t m_i(t) ||x_i(t) - x0_i(t)||^2
-
-    Parameters
-    ----------
-    positions : (N_e, T, 2)
-    x0 : (N_e, T, 2) — initialization
-    mask : (N_e, T) bool
-    mu : float — current (annealed) weight
-
-    Returns
-    -------
-    (energy, grad) where grad : (N_e, T, 2)
     """
-    m = mask[:, :, None].astype(float)
-    residual = positions - x0
-    energy = mu * (m * residual ** 2).sum()
-    grad = 2.0 * mu * m * residual
+    grad = np.zeros_like(positions)
+    residual = positions[mask] - x0[mask]
+    energy = float(mu * np.sum(residual ** 2))
+    grad[mask] = 2.0 * mu * residual
     return energy, grad
 
 
@@ -197,13 +164,7 @@ def total_energy_and_grad(
     lambda_bend: float,
     mu: float,
 ) -> tuple[dict[str, float], np.ndarray]:
-    """Compute all energy terms and combined gradient.
-
-    Returns
-    -------
-    energies : dict with keys attract, repel, stretch, bend, fidelity, total
-    grad : (N_e, T, 2)
-    """
+    """Compute all energy terms and combined gradient."""
     e_att, g_att = attraction(positions, mask, coherence, sigma)
     e_rep, g_rep = repulsion(positions, mask, epsilon_r, eta)
     e_ela, g_ela = elasticity(positions, mask, lambda_stretch, lambda_bend)
