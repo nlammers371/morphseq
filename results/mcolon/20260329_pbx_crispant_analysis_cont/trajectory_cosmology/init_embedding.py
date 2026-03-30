@@ -4,16 +4,18 @@ init_embedding.py
 Produces initial 2D positions x0 from canonical feature tensors.
 
 Condensation never imports from here — it only sees x0 and mask.
+
+Functions take explicit (features, mask) arguments rather than the full
+CosmologyData, keeping the dependency surface minimal and the boundary sharp.
 """
 from __future__ import annotations
 
 import numpy as np
 
-from .schema import CosmologyData
-
 
 def aligned_umap_init(
-    data: CosmologyData,
+    features: np.ndarray,
+    mask: np.ndarray,
     n_neighbors: int = 15,
     min_dist: float = 0.1,
     alignment_regularisation: float = 1e-2,
@@ -24,21 +26,21 @@ def aligned_umap_init(
 
     Parameters
     ----------
-    data
-        Canonical CosmologyData from schema.py.
+    features : (N_e, T, K)
+    mask : (N_e, T) bool — True where embryo is observed
 
     Returns
     -------
-    x0 : (N_e, T, 2) float array
-        Initial 2D positions. NaN where mask is False.
+    x0 : (N_e, T, 2) float array — NaN where mask is False
     """
     try:
         import umap
     except ImportError:
         raise ImportError("umap-learn is required for aligned_umap_init")
 
-    N_e, T, K = data.features.shape
-    slices, relations = _build_aligned_umap_inputs(data)
+    N_e, T, K = features.shape
+    slice_indices = _slice_embryo_indices(mask)
+    slices, relations = _build_aligned_umap_inputs(features, mask, slice_indices)
 
     model = umap.AlignedUMAP(
         n_neighbors=n_neighbors,
@@ -50,18 +52,25 @@ def aligned_umap_init(
     ).fit(slices, relations=relations)
 
     x0 = np.full((N_e, T, 2), np.nan)
-    slice_embryo_indices = _slice_embryo_indices(data)
-
-    for t, (emb, idx) in enumerate(zip(model.embeddings_, slice_embryo_indices)):
+    for t, (emb, idx) in enumerate(zip(model.embeddings_, slice_indices)):
         x0[idx, t, :] = emb
 
     return x0
 
 
-def pca_init(data: CosmologyData, random_state: int = 42) -> np.ndarray:
+def pca_init(
+    features: np.ndarray,
+    mask: np.ndarray,
+    random_state: int = 42,
+) -> np.ndarray:
     """Simple PCA fallback initialization — no temporal alignment.
 
     Useful for smoke tests when umap-learn is unavailable or slow.
+
+    Parameters
+    ----------
+    features : (N_e, T, K)
+    mask : (N_e, T) bool
 
     Returns
     -------
@@ -69,48 +78,42 @@ def pca_init(data: CosmologyData, random_state: int = 42) -> np.ndarray:
     """
     from sklearn.decomposition import PCA
 
-    N_e, T, K = data.features.shape
+    N_e, T, K = features.shape
     x0 = np.full((N_e, T, 2), np.nan)
 
-    all_rows = data.features[data.mask]  # (n_obs, K)
+    all_rows = features[mask]  # (n_obs, K)
     pca = PCA(n_components=2, random_state=random_state).fit(all_rows)
 
     for t in range(T):
-        observed = data.mask[:, t]
+        observed = mask[:, t]
         if observed.sum() == 0:
             continue
-        x0[observed, t, :] = pca.transform(data.features[observed, t, :])
+        x0[observed, t, :] = pca.transform(features[observed, t, :])
 
     return x0
 
 
 def _build_aligned_umap_inputs(
-    data: CosmologyData,
+    features: np.ndarray,
+    mask: np.ndarray,
+    slice_indices: list[np.ndarray],
 ) -> tuple[list[np.ndarray], list[dict[int, int]]]:
     """Build per-time slices and consecutive-time embryo relations for AlignedUMAP."""
-    N_e, T, K = data.features.shape
-    slices = []
+    T = features.shape[1]
+    slices = [features[idx, t, :] for t, idx in enumerate(slice_indices)]
     relations = []
-    slice_embryo_indices = _slice_embryo_indices(data)
-
-    for t in range(T):
-        idx = slice_embryo_indices[t]
-        slices.append(data.features[idx, t, :])
 
     for t in range(T - 1):
-        idx_t = slice_embryo_indices[t]
-        idx_t1 = slice_embryo_indices[t + 1]
-        set_t = set(idx_t)
-        set_t1 = set(idx_t1)
-        shared = set_t & set_t1
+        idx_t = slice_indices[t]
+        idx_t1 = slice_indices[t + 1]
+        shared = set(idx_t) & set(idx_t1)
         pos_in_t = {e: i for i, e in enumerate(idx_t)}
         pos_in_t1 = {e: i for i, e in enumerate(idx_t1)}
-        rel = {pos_in_t[e]: pos_in_t1[e] for e in shared}
-        relations.append(rel)
+        relations.append({pos_in_t[e]: pos_in_t1[e] for e in shared})
 
     return slices, relations
 
 
-def _slice_embryo_indices(data: CosmologyData) -> list[np.ndarray]:
-    T = data.features.shape[1]
-    return [np.where(data.mask[:, t])[0] for t in range(T)]
+def _slice_embryo_indices(mask: np.ndarray) -> list[np.ndarray]:
+    T = mask.shape[1]
+    return [np.where(mask[:, t])[0] for t in range(T)]
