@@ -24,6 +24,7 @@ def run_dynamics(
     mask: np.ndarray,
     config: CondensationConfig,
     log_every: int = 10,
+    save_every: int | None = None,
     verbose: bool = True,
 ) -> CondensationResult:
     """Run the condensation dynamical system.
@@ -37,6 +38,10 @@ def run_dynamics(
     config : CondensationConfig
     log_every : int
         Log loss every N iterations.
+    save_every : int or None
+        Save a position snapshot every N iterations for animation.
+        None disables snapshot saving. Snapshots are stored in
+        CondensationResult.position_history as (n_saved, N_e, T, 2).
     verbose : bool
 
     Returns
@@ -46,6 +51,8 @@ def run_dynamics(
     positions = x0.copy()
     velocities = np.zeros_like(positions)
     loss_history = []
+    position_snapshots = []   # filled if save_every is set
+    snapshot_iters = []
 
     for n in range(config.max_iter):
         # --- alternating update: recompute coherence, then freeze ---
@@ -78,6 +85,10 @@ def run_dynamics(
 
         max_step = np.abs(delta_x[mask]).max() if mask.any() else 0.0
 
+        if save_every is not None and n % save_every == 0:
+            position_snapshots.append(positions.copy())
+            snapshot_iters.append(n)
+
         if n % log_every == 0:
             entry = {"iter": n, "mu": mu, **energies}
             loss_history.append(entry)
@@ -101,6 +112,8 @@ def run_dynamics(
                 loss_history=loss_history,
                 n_iter=n + 1,
                 converged=True,
+                position_history=np.stack(position_snapshots) if position_snapshots else None,
+                snapshot_iters=snapshot_iters,
             )
 
     return CondensationResult(
@@ -110,4 +123,6 @@ def run_dynamics(
         loss_history=loss_history,
         n_iter=config.max_iter,
         converged=False,
+        position_history=np.stack(position_snapshots) if position_snapshots else None,
+        snapshot_iters=snapshot_iters,
     )

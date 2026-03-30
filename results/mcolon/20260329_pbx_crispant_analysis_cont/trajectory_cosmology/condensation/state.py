@@ -84,3 +84,6 @@ class CondensationResult:
     #              "stretch": float, "bend": float, "fidelity": float, "total": float}
     n_iter: int = 0
     converged: bool = False
+    position_history: np.ndarray | None = None   # (n_saved, N_e, T, 2) or None
+    snapshot_iters: list[int] = field(default_factory=list)
+    # iteration numbers corresponding to position_history frames
