@@ -8,7 +8,7 @@ Implements the alternating self-consistent dynamics:
   2. Compute gradient of total energy
   3. Update velocities and positions (heavy-ball damping)
   4. Decay fidelity weight
-  5. Check convergence
+  5. Evaluate multi-metric stopping heuristics (via stopping.py)
 """
 from __future__ import annotations
 
@@ -16,13 +16,20 @@ import numpy as np
 
 from .coherence import compute_coherence
 from .forces import total_energy_and_grad
-from .state import CondensationConfig, CondensationResult, CondensationState
+from .state import CondensationConfig, CondensationResult
+from .stopping import (
+    StoppingConfig,
+    StoppingMonitor,
+    log_metrics,
+    reference_scale_from_positions,
+)
 
 
 def run_dynamics(
     x0: np.ndarray,
     mask: np.ndarray,
     config: CondensationConfig,
+    stopping: StoppingConfig | None = None,
     log_every: int = 10,
     save_every: int | None = None,
     verbose: bool = True,
@@ -36,8 +43,12 @@ def run_dynamics(
     mask : (N_e, T) bool
         Observation mask.
     config : CondensationConfig
+        Dynamical system hyperparameters.
+    stopping : StoppingConfig or None
+        Multi-metric stopping heuristics. Uses defaults if None.
+        Set thresholds to None to disable individual criteria.
     log_every : int
-        Log loss every N iterations.
+        Log and print diagnostics every N iterations.
     save_every : int or None
         Save a position snapshot every N iterations for animation.
         None disables snapshot saving. Snapshots are stored in
@@ -48,11 +59,21 @@ def run_dynamics(
     -------
     CondensationResult
     """
+    if stopping is None:
+        stopping = StoppingConfig()
+
     positions = x0.copy()
     velocities = np.zeros_like(positions)
-    loss_history = []
-    position_snapshots = []   # filled if save_every is set
+    metrics_history = []       # one dict per logged iteration
+    position_snapshots = []    # filled if save_every is set
     snapshot_iters = []
+
+    reference_scale = reference_scale_from_positions(x0, mask)
+    monitor = StoppingMonitor(stopping)
+
+    prev_positions = x0.copy()
+    prev_total_energy: float | None = None
+    prev_coherence: np.ndarray | None = None
 
     for n in range(config.max_iter):
         # --- alternating update: recompute coherence, then freeze ---
@@ -80,47 +101,64 @@ def run_dynamics(
 
         # heavy-ball damped update
         velocities = config.alpha * velocities - config.lr * grad
-        delta_x = velocities.copy()
-        positions = positions + delta_x
+        new_positions = positions + velocities
 
-        max_step = np.abs(delta_x[mask]).max() if mask.any() else 0.0
+        # --- stopping metrics ---
+        row = log_metrics(
+            iteration=n,
+            x_prev=positions,
+            x_curr=new_positions,
+            mask=mask,
+            reference_scale=reference_scale,
+            energy_terms=energies,
+            prev_total_energy=prev_total_energy,
+            C_prev=prev_coherence,
+            C_curr=coherence,
+        )
+        row["mu"] = mu
+        metrics_history.append(row)
+
+        positions = new_positions
 
         if save_every is not None and n % save_every == 0:
             position_snapshots.append(positions.copy())
             snapshot_iters.append(n)
 
-        if n % log_every == 0:
-            entry = {"iter": n, "mu": mu, **energies}
-            loss_history.append(entry)
-            if verbose:
-                print(
-                    f"iter {n:4d} | total={energies['total']:+.4f} "
-                    f"att={energies['attract']:+.4f} "
-                    f"rep={energies['repel']:+.4f} "
-                    f"ela={energies['elastic']:+.4f} "
-                    f"fid={energies['fidelity']:+.4f} "
-                    f"step={max_step:.5f}"
-                )
+        if n % log_every == 0 and verbose:
+            print(
+                f"iter {n:4d} | total={energies['total']:+.4f} "
+                f"att={energies['attract']:+.4f} "
+                f"rep={energies['repel']:+.4f} "
+                f"ela={energies['elastic']:+.4f} "
+                f"fid={energies['fidelity']:+.4f} "
+                f"disp_rms={row['disp_rms_rel']:.5f} "
+                f"disp_max={row['disp_max_rel']:.5f}"
+            )
 
-        if max_step < config.tol:
+        should_stop, reason = monitor.update(row)
+        if should_stop:
             if verbose:
-                print(f"Converged at iteration {n} (max_step={max_step:.2e})")
+                print(f"Stopping at iteration {n}: {reason}")
             return CondensationResult(
                 positions=positions,
                 x0=x0,
                 mask=mask,
-                loss_history=loss_history,
+                metrics_history=metrics_history,
                 n_iter=n + 1,
                 converged=True,
                 position_history=np.stack(position_snapshots) if position_snapshots else None,
                 snapshot_iters=snapshot_iters,
             )
 
+        prev_positions = positions.copy()
+        prev_total_energy = energies["total"]
+        prev_coherence = coherence
+
     return CondensationResult(
         positions=positions,
         x0=x0,
         mask=mask,
-        loss_history=loss_history,
+        metrics_history=metrics_history,
         n_iter=config.max_iter,
         converged=False,
         position_history=np.stack(position_snapshots) if position_snapshots else None,

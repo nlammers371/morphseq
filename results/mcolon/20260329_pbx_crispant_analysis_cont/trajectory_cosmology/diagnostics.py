@@ -145,6 +145,11 @@ def coherence_persistence_matrix(
     )
 
 
-def loss_curve_df(result: CondensationResult) -> pd.DataFrame:
-    """Return the loss history as a tidy DataFrame."""
-    return pd.DataFrame(result.loss_history)
+def metrics_df(result: CondensationResult) -> pd.DataFrame:
+    """Return the full per-iteration metrics log as a tidy DataFrame.
+
+    Columns include energy terms, displacement metrics, coherence drift,
+    and the reference spatial scale. Use this to inspect convergence behavior
+    and calibrate stopping thresholds.
+    """
+    return pd.DataFrame(result.metrics_history)

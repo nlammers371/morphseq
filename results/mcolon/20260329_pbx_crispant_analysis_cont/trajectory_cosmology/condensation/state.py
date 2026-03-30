@@ -79,9 +79,13 @@ class CondensationResult:
     positions: np.ndarray        # (N_e, T, 2) — final positions
     x0: np.ndarray               # (N_e, T, 2) — initial positions
     mask: np.ndarray             # (N_e, T) bool
-    loss_history: list[dict] = field(default_factory=list)
-    # each entry: {"iter": int, "attract": float, "repel": float,
-    #              "stretch": float, "bend": float, "fidelity": float, "total": float}
+    metrics_history: list[dict] = field(default_factory=list)
+    # one row per logged iteration; columns include:
+    #   iter, mu, spatial_scale_ref,
+    #   energy_total, energy_attract, energy_repel, energy_elastic, energy_fidelity,
+    #   energy_change_rel,
+    #   disp_max_abs, disp_max_rel, disp_rms_abs, disp_rms_rel,
+    #   coherence_change_rel
     n_iter: int = 0
     converged: bool = False
     position_history: np.ndarray | None = None   # (n_saved, N_e, T, 2) or None

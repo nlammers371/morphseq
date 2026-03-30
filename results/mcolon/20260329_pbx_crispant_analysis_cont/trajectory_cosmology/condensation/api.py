@@ -13,12 +13,14 @@ import numpy as np
 
 from .dynamics import run_dynamics
 from .state import CondensationConfig, CondensationResult
+from .stopping import StoppingConfig
 
 
 def run_condensation(
     x0: np.ndarray,
     mask: np.ndarray,
     config: CondensationConfig | None = None,
+    stopping: StoppingConfig | None = None,
     log_every: int = 10,
     save_every: int | None = None,
     verbose: bool = True,
@@ -32,11 +34,15 @@ def run_condensation(
     mask : (N_e, T) bool
         True where embryo i is observed at time t.
     config : CondensationConfig, optional
-        Hyperparameters. Uses defaults if None.
+        Dynamical system hyperparameters. Uses defaults if None.
+    stopping : StoppingConfig, optional
+        Multi-metric stopping heuristics. Uses defaults if None.
+        To disable a criterion, set its threshold to None, e.g.:
+          StoppingConfig(disp_max_rel_threshold=None)
     log_every : int
-        Print loss every N iterations.
+        Print diagnostics every N iterations.
     save_every : int or None
-        Save a position snapshot every N iterations.
+        Save a position snapshot every N iterations for animation.
         Required to produce animation with animation.animate_iterations().
         None disables snapshot saving (default, saves memory).
     verbose : bool
@@ -44,13 +50,15 @@ def run_condensation(
     Returns
     -------
     CondensationResult
-        result.position_history is (n_saved, N_e, T, 2) if save_every was set,
-        else None.
+        result.metrics_history — full per-iteration diagnostic log (list of dicts)
+        result.position_history — (n_saved, N_e, T, 2) if save_every set, else None
     """
     if config is None:
         config = CondensationConfig()
+    if stopping is None:
+        stopping = StoppingConfig()
 
     return run_dynamics(
-        x0=x0, mask=mask, config=config,
+        x0=x0, mask=mask, config=config, stopping=stopping,
         log_every=log_every, save_every=save_every, verbose=verbose,
     )
