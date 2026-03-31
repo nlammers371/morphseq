@@ -349,7 +349,7 @@ def main() -> None:
             output_dir / f"{args.variant}_3d_before_after_{cond_tag}.gif",
             n_frames=args.n_frames,
             title_left=f"initial",
-            title_right=f"final (iter {args.n_iter}, eps_scale={args.eps_mult_scale})",
+            title_right=f"final (iter {args.n_iter}, λ_rep={args.repulsion_strength_mult})",
         )
 
 
