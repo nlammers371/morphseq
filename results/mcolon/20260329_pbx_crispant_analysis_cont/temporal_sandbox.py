@@ -49,6 +49,7 @@ sys.path.insert(0, str(_HERE))
 
 from trajectory_cosmology.condensation.coherence import compute_coherence
 from trajectory_cosmology.condensation.dynamics import run_dynamics
+from trajectory_cosmology.condensation.forces import estimate_local_spacing_ref
 from trajectory_cosmology.condensation.state import CondensationConfig, CondensationResult
 
 # Reuse helpers from the 2D slice sandbox
@@ -345,8 +346,10 @@ def _temporal_metrics(
 
 @dataclass
 class TemporalRunConfig:
-    sigma_frac: float = 0.5       # × mean per-slice radial_spread (coherence bandwidth)
-    eps_mult: float = 0.005       # × (0.6 × sigma²) — validated from 2D sandbox
+    sigma_frac: float = 0.5               # × mean per-slice radial_spread (coherence bandwidth)
+    repulsion_strength_mult: float = 0.005  # λ_rep: epsilon_r = λ_rep × s_local²
+                                            # s_local = median k-NN distance from initial positions
+                                            # Portable across datasets; validated at 0.005
     k_attract: int = 20
     delta: int = 3                # coherence backward window (time bins)
     lr: float = 1e-4              # validated from 2D sandbox
@@ -358,15 +361,12 @@ class TemporalRunConfig:
     alpha: float = 0.9
     # Two-scale force law
     sigma_local_frac: float | None = None  # None = use sigma_frac (old behavior)
-                                           # Set to activate local-scale attraction
-                                           # sigma_attract_local = sigma_local_frac × median_5nn
-    sigma_void_frac: float = 2.0           # sigma_void = sigma_void_frac × scale_ref (for future Phase 2)
+    sigma_void_frac: float = 2.0           # sigma_void = sigma_void_frac × scale_ref
     epsilon_void: float = 0.0              # void repulsion strength (0 = off)
     # Truncated bump repulsion (r_cut > 0 activates; 0 = classic soft-core)
-    r_cut_frac: float = 0.0               # r_cut = r_cut_frac × median_5nn; 0 = soft-core
-    eps_mult_scale: float = 1.0           # multiplicative scale on eps_mult (for sensitivity sweep)
+    r_cut_frac: float = 0.0               # r_cut = r_cut_frac × s_local; 0 = soft-core
     # Local neighborhood scale preservation
-    lambda_scale: float = 0.0             # 0 = off; try 0.1–2.0; soft regularizer, not a hard leash
+    lambda_scale: float = 0.0             # 0 = off; try 0.1–2.0; soft regularizer
     k_local_scale: int = 5                # number of initial neighbors defining r_i^(0)
 
 
@@ -403,24 +403,28 @@ def run_temporal(
     positions = dataset.positions  # (N_e, T, 2)
     mask = dataset.mask
 
-    # Derive sigma and epsilon_r from the data scale
+    # Derive sigma from the global inter-bundle scale (attraction bandwidth)
     per_slice_spreads = [radial_spread(positions[:, t, :]) for t in range(dataset.n_time)]
     scale_ref = float(np.mean(per_slice_spreads))
     sigma = config.sigma_frac * scale_ref
-    epsilon_r = config.eps_mult * config.eps_mult_scale * 0.6 * sigma ** 2
 
-    # Per-slice median 5-NN distance (label-free local scale estimate)
-    knn_dists_per_slice = [_median_knn_dist(positions[:, t, :], k=5) for t in range(dataset.n_time)]
-    median_knn = float(np.mean(knn_dists_per_slice))
+    # Derive epsilon_r from the LOCAL neighborhood spacing, not from sigma.
+    # s_local = median k-NN distance across all observed (embryo, time) pairs.
+    # epsilon_r = repulsion_strength_mult × s_local²
+    # This makes repulsion portable: the knob is dimensionless and calibrated to
+    # the scale where repulsion actually acts (within-bundle spacing), not the
+    # mesoscale bundle geometry that sigma tracks.
+    s_local = estimate_local_spacing_ref(positions, dataset.mask, k=5)
+    epsilon_r = config.repulsion_strength_mult * s_local ** 2
 
     # Derive sigma_attract_local from within-slice kNN distances
     if config.sigma_local_frac is not None:
-        sigma_attract_local = config.sigma_local_frac * median_knn
+        sigma_attract_local = config.sigma_local_frac * s_local
     else:
         sigma_attract_local = None
 
-    # Derive r_cut for truncated bump repulsion
-    r_cut = config.r_cut_frac * median_knn if config.r_cut_frac > 0.0 else 0.0
+    # Derive r_cut for truncated bump repulsion (also local-spacing anchored)
+    r_cut = config.r_cut_frac * s_local if config.r_cut_frac > 0.0 else 0.0
 
     # Derive sigma_void for (optional) broad density-field repulsion
     sigma_void = config.sigma_void_frac * scale_ref
@@ -428,8 +432,9 @@ def run_temporal(
     if verbose:
         sal_str = f"{sigma_attract_local:.4f}" if sigma_attract_local is not None else "None (=sigma)"
         rcut_str = f"{r_cut:.4f}" if r_cut > 0 else "0 (soft-core)"
-        print(f"  scale_ref={scale_ref:.3f}  median_knn={median_knn:.4f}  sigma={sigma:.4f}  "
+        print(f"  scale_ref={scale_ref:.3f}  s_local={s_local:.4f}  sigma={sigma:.4f}  "
               f"sigma_attract_local={sal_str}  epsilon_r={epsilon_r:.6f}  "
+              f"(λ_rep={config.repulsion_strength_mult})  "
               f"r_cut={rcut_str}  epsilon_void={config.epsilon_void:.4f}")
 
     cond_cfg = CondensationConfig(
@@ -590,7 +595,7 @@ def plot_temporal_run(result: TemporalRunResult, output_dir: Path) -> None:
         cfg = result.config
         fig.suptitle(
             f"{ds.variant} | {title_prefix.strip()} | "
-            f"k={cfg.k_attract} σ_frac={cfg.sigma_frac} eps={cfg.eps_mult} δ={cfg.delta} mu0={cfg.mu0}",
+            f"k={cfg.k_attract} σ_frac={cfg.sigma_frac} λ_rep={cfg.repulsion_strength_mult} δ={cfg.delta} mu0={cfg.mu0}",
             fontsize=9,
         )
         fig.tight_layout()
@@ -846,7 +851,7 @@ def run_delta_sweep(
     for delta in delta_values:
         cfg = TemporalRunConfig(
             sigma_frac=base_config.sigma_frac,
-            eps_mult=base_config.eps_mult,
+            repulsion_strength_mult=base_config.repulsion_strength_mult,
             k_attract=base_config.k_attract,
             delta=delta,
             lr=base_config.lr,
@@ -967,6 +972,11 @@ def _parse_args() -> argparse.Namespace:
                    help="Sweep truncated repulsion cutoffs and epsilon scales on crossing_bundles. "
                         "Tests: soft-core baseline, lower epsilon (0.5×, 0.25×), "
                         "truncated r_cut (0.1×, 0.25×, 0.5× median_5nn).")
+    p.add_argument("--scale-sweep", action="store_true",
+                   help="Sweep lambda_scale (local neighborhood preservation): "
+                        "baseline_decompact (old eps), tuned_eps (eps×0.1), "
+                        "tuned_eps + lambda=0.1, tuned_eps + lambda=1.0. "
+                        "Generates per-condition animations and summary bar chart.")
     return p.parse_args()
 
 
@@ -1122,25 +1132,139 @@ def main() -> None:
         ]].to_string(index=False))
         print(f"\n  Saved: {output_dir / 'comparison_baseline_vs_local_sigma.csv'}")
 
+    # --- Scale sweep: lambda_scale = 0 vs 0.1 vs 1.0 ---
+    if args.scale_sweep:
+        print("\n=== Scale Sweep: lambda_scale ===")
+        # repulsion_strength_mult values:
+        #   0.005 = default (calibrated to s_local, always correct now)
+        #   0.05  = 10× stronger — simulates the old broken behavior for comparison
+        scale_conditions = [
+            # label,                    rep_mult,  lambda_scale
+            ("strong_rep_decompact",    0.05,       0.0),   # broken: 10× too strong, decompaction
+            ("default_rep_no_lambda",   0.005,      0.0),   # correct calibration, no lambda
+            ("default_rep_lambda_0.1",  0.005,      0.1),   # correct + soft lambda
+            ("default_rep_lambda_1.0",  0.005,      1.0),   # correct + moderate lambda
+        ]
+        scale_rows = []
+        scale_dir = output_dir / "scale_sweep"
+        scale_dir.mkdir(parents=True, exist_ok=True)
+        for variant_name, ds in [("stable_bundles", ds_stable), ("crossing_bundles", ds_cross)]:
+            for label, rep_mult, lam in scale_conditions:
+                cfg_sc = TemporalRunConfig(
+                    k_attract=args.k_attract,
+                    delta=args.delta,
+                    lr=args.lr,
+                    n_iter=args.n_iter,
+                    mu0=args.mu0,
+                    repulsion_strength_mult=rep_mult,
+                    lambda_scale=lam,
+                    k_local_scale=5,
+                )
+                cond_dir = scale_dir / variant_name / label
+                cond_dir.mkdir(parents=True, exist_ok=True)
+                save_snaps = not args.no_animation
+                print(f"  {variant_name} / {label} ...", flush=True)
+                r = run_temporal(ds, cfg_sc, save_snapshots=save_snaps, verbose=False)
+                r.metrics_df.to_csv(cond_dir / "metrics_history.csv", index=False)
+                plot_temporal_run(r, cond_dir)
+                if save_snaps:
+                    animate_temporal_run(r, cond_dir)
+                    # Rename animation to make condition obvious
+                    src = cond_dir / "animation.gif"
+                    dst = cond_dir / f"animation_{variant_name}_{label}.gif"
+                    if src.exists():
+                        src.rename(dst)
+                        print(f"    Saved animation: {dst}")
+                fm = r.final_metrics
+                row = {
+                    "variant": variant_name,
+                    "condition": label,
+                    "repulsion_strength_mult": rep_mult,
+                    "lambda_scale": lam,
+                    "sep_ratio_final": fm["sep_ratio_mean"],
+                    "sep_ratio_initial": r.initial_metrics["sep_ratio_mean"],
+                    "coherence_selectivity": fm["coherence_selectivity"],
+                    "collapse_score": r.collapse_score,
+                    "within_bundle_spread_ratio": fm.get("within_bundle_spread_ratio", float("nan")),
+                    "local_radius_ratio_median": fm.get("local_radius_ratio_median", float("nan")),
+                    "local_radius_ratio_p95": fm.get("local_radius_ratio_p95", float("nan")),
+                }
+                scale_rows.append(row)
+                print(
+                    f"    spread_ratio={row['within_bundle_spread_ratio']:.3f}  "
+                    f"p95={row['local_radius_ratio_p95']:.3f}  "
+                    f"sep={row['sep_ratio_final']:.1f}  "
+                    f"collapse={row['collapse_score']:.3f}"
+                )
+
+        scale_df = pd.DataFrame(scale_rows)
+        scale_df.to_csv(scale_dir / "scale_sweep_summary.csv", index=False)
+
+        # Summary bar chart
+        fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+        ax_flat = axes.ravel()
+        metrics_to_plot = [
+            ("within_bundle_spread_ratio", "within_bundle_spread_ratio\n(target ≤ 1.1, lower=better)", True),
+            ("local_radius_ratio_p95",     "local_radius_ratio_p95\n(label-free, lower=better)", True),
+            ("sep_ratio_final",            "sep_ratio_final\n(higher=better)", False),
+            ("collapse_score",             "collapse_score\n(1.0 = no global change)", False),
+        ]
+        cond_labels = [c[0] for c in scale_conditions]
+        x = np.arange(len(cond_labels))
+        variants = scale_df["variant"].unique()
+        bar_colors = ["#2166AC", "#B2182B"]
+        for ax, (col, title, lower_better) in zip(ax_flat, metrics_to_plot):
+            for vi, (vname, bc) in enumerate(zip(variants, bar_colors)):
+                sub = scale_df[scale_df["variant"] == vname]
+                vals = [sub[sub["condition"] == c][col].values[0] if len(sub[sub["condition"] == c]) > 0 else float("nan")
+                        for c in cond_labels]
+                ax.bar(x + vi * 0.38, vals, width=0.36, label=vname, color=bc, alpha=0.8)
+            ax.set_xticks(x + 0.19)
+            ax.set_xticklabels(cond_labels, rotation=25, ha="right", fontsize=7)
+            ax.axhline(1.0, color="gray", lw=0.8, ls=":")
+            ax.set_title(title, fontsize=9)
+            ax.legend(fontsize=7)
+            if lower_better:
+                ax.axhline(1.1, color="orange", lw=0.8, ls="--", alpha=0.7)  # target line
+        fig.suptitle(
+            "Scale sweep: baseline_decompact vs tuned_eps vs +lambda_scale\n"
+            "orange dashed = target threshold (1.1)",
+            fontsize=10,
+        )
+        fig.tight_layout()
+        fig.savefig(scale_dir / "scale_sweep_summary.png", dpi=120)
+        plt.close(fig)
+
+        print("\n  Scale sweep results:")
+        for vname in scale_df["variant"].unique():
+            print(f"\n  -- {vname} --")
+            sub = scale_df[scale_df["variant"] == vname]
+            print(sub[[
+                "condition", "within_bundle_spread_ratio", "local_radius_ratio_p95",
+                "sep_ratio_final", "collapse_score"
+            ]].to_string(index=False))
+        print(f"\n  Saved: {scale_dir / 'scale_sweep_summary.csv'}")
+        print(f"  Saved: {scale_dir / 'scale_sweep_summary.png'}")
+
     # --- Repulsion sweep: truncated vs soft-core, varying r_cut and epsilon ---
     if args.repulsion_sweep:
         print("\n=== Repulsion Sweep: truncated r_cut vs baseline ===")
         rep_conditions = [
-            # label,        r_cut_frac, eps_mult_scale
-            ("softcore_1x",      0.0,   1.0),
-            ("softcore_0.5x",    0.0,   0.5),
-            ("softcore_0.25x",   0.0,   0.25),
-            ("softcore_0.1x",    0.0,   0.1),
-            ("bump_rcut0.10",    0.10,  1.0),
-            ("bump_rcut0.25",    0.25,  1.0),
-            ("bump_rcut0.50",    0.50,  1.0),
-            ("bump_rcut0.25_half", 0.25, 0.5),
+            # label,            r_cut_frac, rep_mult
+            ("default_rep",          0.0,   0.005),
+            ("strong_rep_2x",        0.0,   0.010),
+            ("strong_rep_5x",        0.0,   0.025),
+            ("strong_rep_10x",       0.0,   0.050),
+            ("bump_rcut0.10",        0.10,  0.005),
+            ("bump_rcut0.25",        0.25,  0.005),
+            ("bump_rcut0.50",        0.50,  0.005),
+            ("bump_rcut0.25_half",   0.25,  0.0025),
         ]
         rep_rows = []
         rep_dir = output_dir / "repulsion_sweep"
         rep_dir.mkdir(parents=True, exist_ok=True)
         for variant_name, ds in [("stable_bundles", ds_stable), ("crossing_bundles", ds_cross)]:
-            for label, rcut_frac, eps_scale in rep_conditions:
+            for label, rcut_frac, rep_mult in rep_conditions:
                 cfg_rep = TemporalRunConfig(
                     k_attract=args.k_attract,
                     delta=args.delta,
@@ -1148,7 +1272,7 @@ def main() -> None:
                     n_iter=args.n_iter,
                     mu0=args.mu0,
                     r_cut_frac=rcut_frac,
-                    eps_mult_scale=eps_scale,
+                    repulsion_strength_mult=rep_mult,
                 )
                 print(f"  {variant_name} / {label} ...", flush=True)
                 r = run_temporal(ds, cfg_rep, save_snapshots=False, verbose=False)
@@ -1157,7 +1281,7 @@ def main() -> None:
                     "variant": variant_name,
                     "condition": label,
                     "r_cut_frac": rcut_frac,
-                    "eps_mult_scale": eps_scale,
+                    "repulsion_strength_mult": rep_mult,
                     "sep_ratio_final": fm["sep_ratio_mean"],
                     "coherence_selectivity": fm["coherence_selectivity"],
                     "collapse_score": r.collapse_score,
@@ -1188,7 +1312,7 @@ def main() -> None:
                 sub = rep_df[rep_df["variant"] == vname]
                 x = np.arange(len(sub)) + i * 0.35
                 ax.bar(x, sub[col], width=0.3, label=vname, alpha=0.8)
-            ax.set_xticks(np.arange(len(rep_conditions)))
+            ax.set_xticks(np.arange(len(rep_conditions)) + 0.175)
             ax.set_xticklabels([c[0] for c in rep_conditions], rotation=35, ha="right", fontsize=7)
             ax.axhline(1.0, color="gray", lw=0.8, ls=":")
             ax.set_title(title, fontsize=9)

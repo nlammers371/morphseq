@@ -273,10 +273,12 @@ def main() -> None:
     p.add_argument("--n-frames", type=int, default=72, help="Frames per full rotation")
     p.add_argument("--delta", type=int, default=3)
     p.add_argument("--mu0", type=float, default=0.0)
-    p.add_argument("--eps-mult-scale", type=float, default=1.0,
-                   help="Multiplicative scale on eps_mult. Use 0.1 for corrected dynamics.")
+    p.add_argument("--repulsion-strength-mult", type=float, default=0.005,
+                   help="λ_rep: epsilon_r = λ_rep × s_local². Default 0.005.")
     p.add_argument("--r-cut-frac", type=float, default=0.0,
                    help="Truncated repulsion cutoff as fraction of median 5-NN. 0=soft-core.")
+    p.add_argument("--lambda-scale", type=float, default=0.0,
+                   help="Local neighborhood scale preservation weight. 0=off.")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--frame-interval", type=int, default=1,
                    help="Use every Nth optimization snapshot for optimize mode")
@@ -299,8 +301,9 @@ def main() -> None:
         n_iter=args.n_iter,
         k_attract=20,
         lr=1e-4,
-        eps_mult_scale=args.eps_mult_scale,
+        repulsion_strength_mult=args.repulsion_strength_mult,
         r_cut_frac=args.r_cut_frac,
+        lambda_scale=args.lambda_scale,
     )
     needs_snapshots = args.mode in ("optimize", "both")
     print(f"Running dynamics (n_iter={args.n_iter}, save_snapshots={needs_snapshots})...")
@@ -336,7 +339,11 @@ def main() -> None:
 
     if args.mode == "side_by_side":
         print("\nGenerating side-by-side initial vs final GIF...")
-        cond_tag = f"eps{args.eps_mult_scale}" + (f"_rcut{args.r_cut_frac}" if args.r_cut_frac > 0 else "")
+        cond_tag = (
+            f"rep{args.repulsion_strength_mult}"
+            + (f"_rcut{args.r_cut_frac}" if args.r_cut_frac > 0 else "")
+            + (f"_lambda{args.lambda_scale}" if args.lambda_scale > 0 else "")
+        )
         make_side_by_side_gif(
             pos_init, pos_final, labels, time_values,
             output_dir / f"{args.variant}_3d_before_after_{cond_tag}.gif",

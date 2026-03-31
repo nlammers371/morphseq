@@ -203,6 +203,51 @@ def void_repulsion(
     return energy, grad
 
 
+def estimate_local_spacing_ref(
+    x0: np.ndarray,
+    mask: np.ndarray,
+    k: int = 5,
+) -> float:
+    """Compute the median k-NN distance across all observed points and time slices.
+
+    This is the canonical local spacing reference s_local used to calibrate
+    repulsion strength:
+
+        epsilon_r = repulsion_strength_mult * s_local**2
+
+    By anchoring to the initial nearest-neighbor spacing rather than sigma
+    (the attraction bandwidth), repulsion is calibrated to the scale where it
+    actually acts — local compactness — not the mesoscale bundle geometry.
+
+    Parameters
+    ----------
+    x0 : (N_e, T, 2) — initial positions
+    mask : (N_e, T) bool
+    k : int — number of nearest neighbors (default 5)
+
+    Returns
+    -------
+    s_local : float — median k-NN distance across all (i, t) with mask[i,t]=True
+    """
+    N_e, T, _ = x0.shape
+    all_knn_dists = []
+    for t in range(T):
+        obs_idx = np.flatnonzero(mask[:, t])
+        n_obs = len(obs_idx)
+        if n_obs < 2:
+            continue
+        pos = x0[obs_idx, t, :]
+        diff = pos[:, None, :] - pos[None, :, :]
+        sq_dist = (diff ** 2).sum(axis=-1)
+        np.fill_diagonal(sq_dist, np.inf)
+        k_eff = min(k, n_obs - 1)
+        knn_sq = np.partition(sq_dist, kth=k_eff - 1, axis=1)[:, :k_eff]
+        all_knn_dists.append(np.sqrt(knn_sq).ravel())
+    if not all_knn_dists:
+        return 1.0
+    return float(np.median(np.concatenate(all_knn_dists)))
+
+
 def build_neighborhood_info(
     x0: np.ndarray,
     mask: np.ndarray,

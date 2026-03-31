@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 
 from .coherence import compute_coherence
-from .forces import build_neighborhood_info, total_energy_and_grad
+from .forces import build_neighborhood_info, estimate_local_spacing_ref, total_energy_and_grad
 from .state import CondensationConfig, CondensationResult
 from .stopping import (
     StoppingConfig,
@@ -38,7 +38,15 @@ def run_dynamics(
     snapshot_iters = []
 
     reference_scale = reference_scale_from_positions(x0, mask)
+    local_spacing_ref = estimate_local_spacing_ref(x0, mask, k=5)
     monitor = StoppingMonitor(stopping)
+
+    if verbose:
+        print(
+            f"  run_dynamics: sigma={config.sigma:.4f}  epsilon_r={config.epsilon_r:.6f}  "
+            f"local_spacing_ref={local_spacing_ref:.4f}  "
+            f"epsilon_r/s_local²={config.epsilon_r / (local_spacing_ref**2 + 1e-16):.4f}"
+        )
 
     # Precompute fixed local neighborhood structure from initial positions.
     # This is the anchor for local_scale_preservation — never updated during the loop.
