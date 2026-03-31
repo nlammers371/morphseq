@@ -37,6 +37,10 @@ class CondensationConfig:
         Initial fidelity anchor weight.
     gamma : float
         Fidelity decay factor per iteration (mu = mu0 * gamma^n).
+    k_attract : int | None
+        Number of nearest neighbors for local attraction. None = all pairs.
+    subtract_mean_attraction : bool
+        Whether to subtract the per-slice mean attraction gradient.
 
     Optimization
     ------------
@@ -57,6 +61,15 @@ class CondensationConfig:
     lambda_bend: float = 0.05
     mu0: float = 1.0
     gamma: float = 0.97
+    k_attract: int | None = 15
+    subtract_mean_attraction: bool = False
+    # Two-scale force law
+    sigma_attract_local: float | None = None  # None = use sigma (backwards-compatible)
+    sigma_void: float | None = None           # None = disabled; set to use void repulsion
+    epsilon_void: float = 0.0                 # void repulsion strength (0 = off)
+    # Truncated repulsion (replaces soft-core when r_cut > 0)
+    r_cut: float = 0.0                        # cutoff radius; 0 = use classic soft-core repulsion
+                                              # if > 0: bump repulsion E = ε_r*(1-r²/r_cut²)² for r<r_cut
     alpha: float = 0.9
     lr: float = 0.01
     max_iter: int = 500
@@ -66,9 +79,9 @@ class CondensationConfig:
 @dataclass
 class CondensationState:
     """Mutable state during the optimization loop."""
-    positions: np.ndarray        # (N_e, T, 2)
-    velocities: np.ndarray       # (N_e, T, 2)
-    coherence: np.ndarray        # (N_e, N_e, T) — frozen per iteration
+    positions: np.ndarray
+    velocities: np.ndarray
+    coherence: np.ndarray
     iteration: int = 0
     converged: bool = False
 
@@ -76,18 +89,11 @@ class CondensationState:
 @dataclass
 class CondensationResult:
     """Output of a completed condensation run."""
-    positions: np.ndarray        # (N_e, T, 2) — final positions
-    x0: np.ndarray               # (N_e, T, 2) — initial positions
-    mask: np.ndarray             # (N_e, T) bool
+    positions: np.ndarray
+    x0: np.ndarray
+    mask: np.ndarray
     metrics_history: list[dict] = field(default_factory=list)
-    # one row per logged iteration; columns include:
-    #   iter, mu, spatial_scale_ref,
-    #   energy_total, energy_attract, energy_repel, energy_elastic, energy_fidelity,
-    #   energy_change_rel,
-    #   disp_max_abs, disp_max_rel, disp_rms_abs, disp_rms_rel,
-    #   coherence_change_rel
     n_iter: int = 0
     converged: bool = False
-    position_history: np.ndarray | None = None   # (n_saved, N_e, T, 2) or None
+    position_history: np.ndarray | None = None
     snapshot_iters: list[int] = field(default_factory=list)
-    # iteration numbers corresponding to position_history frames
