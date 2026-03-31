@@ -2,20 +2,6 @@
 run_condensation_experiment.py
 ------------------------------
 Thin driver for a single condensation experiment run.
-
-Loads data, initializes positions, runs condensation, saves outputs.
-No logic lives here — everything delegates to trajectory_cosmology/*.
-
-Usage
------
-conda run -n segmentation_grounded_sam --no-capture-output python \
-  results/mcolon/20260329_pbx_crispant_analysis_cont/run_condensation_experiment.py \
-  --input <path_to_csv> \
-  --label-col true_class \
-  --init pca \
-  --n-iter 100 \
-  --save-every 10 \
-  --output-dir results/mcolon/20260329_pbx_crispant_analysis_cont/results/condensation_pca_100iter/
 """
 from __future__ import annotations
 
@@ -40,6 +26,12 @@ from trajectory_cosmology.condensation.stopping import StoppingConfig
 from trajectory_cosmology import plotting
 
 
+def _parse_optional_int(value: str) -> int | None:
+    if value.lower() == 'none':
+        return None
+    return int(value)
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="Run one condensation experiment.")
     p.add_argument("--input", required=True, help="Path to input CSV")
@@ -58,6 +50,10 @@ def parse_args():
     p.add_argument("--mu0", type=float, default=1.0)
     p.add_argument("--gamma", type=float, default=0.97)
     p.add_argument("--epsilon-r", type=float, default=0.01)
+    p.add_argument("--eta", type=float, default=1e-4)
+    p.add_argument("--k-attract", type=_parse_optional_int, default=15,
+                   help="kNN attraction degree; pass 'none' for all-pairs attraction")
+    p.add_argument("--subtract-mean-attraction", action="store_true")
     p.add_argument("--output-dir", required=True)
     return p.parse_args()
 
@@ -67,7 +63,6 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- load data ---
     prob_cols = args.prob_cols.split(",") if args.prob_cols else None
     if args.input_type == "multiclass":
         data = from_multiclass_csv(args.input, prob_cols=prob_cols, label_col=args.label_col)
@@ -78,14 +73,12 @@ def main():
     print(f"Observed entries: {data.mask.sum()} / {data.mask.size}")
     print(f"Conditions: {sorted(set(data.labels.tolist()))}")
 
-    # --- initialize positions ---
     print(f"Initializing with {args.init} ...")
     if args.init == "pca":
         x0 = pca_init(data.features, data.mask)
     else:
         x0 = aligned_umap_init(data.features, data.mask)
 
-    # --- configure and run ---
     config = CondensationConfig(
         sigma=args.sigma,
         delta=args.delta,
@@ -95,9 +88,12 @@ def main():
         mu0=args.mu0,
         gamma=args.gamma,
         epsilon_r=args.epsilon_r,
+        eta=args.eta,
+        k_attract=args.k_attract,
+        subtract_mean_attraction=args.subtract_mean_attraction,
         max_iter=args.n_iter,
     )
-    stopping = StoppingConfig(patience=args.n_iter + 1)  # observe-only; don't stop early
+    stopping = StoppingConfig(patience=args.n_iter + 1)
 
     print(f"Running {args.n_iter} iterations ...")
     result = run_condensation(
@@ -111,14 +107,12 @@ def main():
     )
     print(f"Done. Converged: {result.converged} | Iterations: {result.n_iter}")
 
-    # --- save metrics ---
     metrics_df = pd.DataFrame(result.metrics_history)
-    metrics_path = output_dir / "metrics.csv"
+    metrics_path = output_dir / 'metrics.csv'
     metrics_df.to_csv(metrics_path, index=False)
     print(f"Metrics: {metrics_path}")
 
-    # --- save positions ---
-    pos_path = output_dir / "condensed_positions.npz"
+    pos_path = output_dir / 'condensed_positions.npz'
     np.savez(
         pos_path,
         positions=result.positions,
@@ -128,15 +122,13 @@ def main():
     )
     print(f"Positions: {pos_path}")
 
-    # --- plot trajectories ---
     fig, _ = plotting.plot_trajectories(
         result.positions, result.mask, data.time_values, labels=data.labels,
         title=f"Condensed trajectories ({args.init} init, {result.n_iter} iters)",
     )
-    fig.savefig(output_dir / "plot_trajectories.png", dpi=150, bbox_inches="tight")
+    fig.savefig(output_dir / 'plot_trajectories.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
-    # --- plot panels at 6 evenly spaced times ---
     T = len(data.time_values)
     snap_idx = np.linspace(0, T - 1, min(6, T), dtype=int)
     snapshot_times = [float(data.time_values[i]) for i in snap_idx]
@@ -145,35 +137,34 @@ def main():
         labels=data.labels, snapshot_times=snapshot_times,
         title=f"Panels ({args.init} init)",
     )
-    fig.savefig(output_dir / "plot_panels.png", dpi=150, bbox_inches="tight")
+    fig.savefig(output_dir / 'plot_panels.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
-    # --- plot metrics ---
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     axes = axes.ravel()
     for ax, col, ylabel in zip(
         axes,
-        ["energy_total", "disp_rms_rel", "energy_change_rel", "coherence_change_rel"],
-        ["Total energy", "RMS displacement (rel)", "Energy change (rel)", "Coherence change (rel)"],
+        ['energy_total', 'disp_rms_rel', 'energy_change_rel', 'coherence_change_rel'],
+        ['Total energy', 'RMS displacement (rel)', 'Energy change (rel)', 'Coherence change (rel)'],
     ):
         if col in metrics_df.columns:
-            ax.plot(metrics_df["iter"], metrics_df[col])
-            ax.set_xlabel("Iteration")
+            ax.plot(metrics_df['iter'], metrics_df[col])
+            ax.set_xlabel('Iteration')
             ax.set_ylabel(ylabel)
             ax.set_title(ylabel)
-    fig.suptitle(f"Convergence metrics — {args.init} init, sigma={args.sigma}, delta={args.delta}")
+    fig.suptitle(
+        f"Convergence metrics — {args.init} init, sigma={args.sigma}, delta={args.delta}, k={args.k_attract}")
     fig.tight_layout()
-    fig.savefig(output_dir / "plot_metrics.png", dpi=150, bbox_inches="tight")
+    fig.savefig(output_dir / 'plot_metrics.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
     print(f"Figures saved to {output_dir}")
 
-    # --- print summary ---
     last = metrics_df.iloc[-1]
     print("\n--- Final iteration summary ---")
-    for col in ["energy_total", "disp_rms_rel", "disp_max_rel", "energy_change_rel", "coherence_change_rel"]:
+    for col in ['energy_total', 'disp_rms_rel', 'disp_max_rel', 'energy_change_rel', 'coherence_change_rel']:
         if col in last:
             print(f"  {col}: {last[col]:.6f}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

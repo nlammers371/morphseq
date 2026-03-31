@@ -794,3 +794,54 @@ A void term is working correctly if:
 4. `domain_escape_frac ≈ 0` (confinement holding)
 
 A void term is failing if it improves global spacing at the cost of inflating bundles (`spread_ratio >> 1`) or if it does nothing for `crowded_one_side`.
+
+---
+
+## Force Calibration Framework and Bifurcating Trunk Baseline (2026-03-30)
+
+### The core lesson from the repulsion episode
+
+The force was not wrong. The scale it was calibrated to was wrong.
+
+This principle now applies to all force terms. Every force must be expressed relative to the natural reference scale for the geometric feature it regulates:
+
+| Force | Reference scale | Dimensionless knob | Derived coefficient |
+|-------|----------------|-------------------|---------------------|
+| Repulsion | `s_local` (median k-NN) | `repulsion_strength_mult` | `ε_r = λ_rep × s_local²` ✓ done |
+| Fidelity | `s_local` | `fidelity_strength_mult` | `μ = λ_fid / s_local²` |
+| Stretch | `s_step` (median per-step ‖Δx‖) | `stretch_strength_mult` | `λ_stretch = λ_str / s_step²` |
+| Bend | `s_bend` (median ‖second diff‖) | `bend_strength_mult` | `λ_bend = λ_bnd / s_bend²` |
+| Void | `s_global` | `void_strength_mult` | grid occupancy penalty |
+| Anisotropy | intrinsically dimensionless | `anisotropy_ratio` β | β = compression⊥ / ∥ |
+
+Full design spec: `trajectory_cosmology/FORCE_CALIBRATION_FRAMEWORK.md`
+
+### Coherence: information signal, not force knob
+
+Coherence `C_ij(t) ∈ [0,1]` gates attraction (who deserves to attract) but should not set how strongly. The scale problem applies to coherence on the **input side only**: currently `σ` is calibrated to inter-bundle scale; should be `σ_coh = coherence_scale_mult × s_local` so "close" is judged relative to local spacing. Output remains dimensionless. Knobs should be structural (`delta`, `coherence_scale_mult`), not force magnitudes.
+
+### Bifurcating trunk comparison (v2)
+
+Synthetic Y-shaped dataset: one compact trunk at t=0–3, branching at t=4–7, clear Y at t=8–12. All four currently implemented forces tested from the **same saved initialization** (`initialization.npz`) to ensure identical coherence inputs.
+
+Results: all conditions identical.
+
+| Condition | trunk_lin_early | branch_sep_late | spread_ratio |
+|-----------|-----------------|-----------------|--------------|
+| A: isotropic | 0.94 | 1.44 | 0.93 |
+| B: + fidelity | 0.94 | 1.45 | 0.94 |
+| C: pairwise void proxy | 0.94 | 1.44 | 0.93 |
+| D: + elasticity | 0.94 | 1.44 | 0.93 |
+
+Ground truth target: `branch_sep_late > 2.0`.
+
+**Interpretation**: all current forces are isotropic in the spatial plane. They compact and separate blobs but cannot form line-like trunks or preserve branch topology. The Y collapses because coherence has no directional information. This is precisely the gap anisotropy fills.
+
+The bifurcating trunk test is now a **sharp diagnostic**: anisotropy is working when `branch_sep_late > 2.0` and `trunk_linearity_early > 0.9` simultaneously.
+
+### Next steps (in priority order)
+
+1. Coherence scale normalization (`σ_coh = coherence_scale_mult × s_local`)
+2. Fidelity / stretch / bend scale calibration (add `estimate_step_scale_ref`, `estimate_bend_scale_ref`)
+3. Anisotropic force term (3D covariance → trunk direction → directional projectors)
+4. Grid void integration into core stack

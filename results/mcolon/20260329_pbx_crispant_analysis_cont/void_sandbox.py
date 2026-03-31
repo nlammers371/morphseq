@@ -1,7 +1,7 @@
 """
 void_sandbox.py
 ---------------
-Diagnostic sandbox for the void repulsion term.
+Diagnostic sandbox for the grid-based void term.
 
 Job description of the void term
 ---------------------------------
@@ -9,12 +9,33 @@ Input:  compact bundles crowded unevenly within a bounded domain.
 Output: bundle centers redistributed more evenly through that domain.
 Constraint: local bundle density unchanged.
 
-The void term acts at bundle-centroid scale (sigma_void >> sigma_attract),
-not at point-to-point spacing. It is a broad Gaussian density-field repulsion:
+The void term acts at bundle-centroid scale (sigma_void >> s_local),
+not at point-to-point spacing.
 
-    rho_i = sum_{j != i} exp(-||x_i - x_j||^2 / 2 sigma_void^2)
-    E_void = epsilon_void * sum_i rho_i
-    grad_i E_void = epsilon_void * sum_j (x_i - x_j)/sigma_void^2 * exp(-r^2/2 sigma_void^2)
+Grid-based occupancy formulation
+---------------------------------
+Lay down a coarse G_x x G_y grid of cell centers c_g in the fixed domain.
+For each cell g, define smooth occupancy:
+
+    m_g = sum_i exp(-||x_i - c_g||^2 / 2 sigma_void^2)
+
+Energy = penalize deviation from uniform occupancy:
+
+    E_void = lambda_void * sum_g (m_g - m_bar)^2
+    where m_bar = (1/G) sum_g m_g
+
+Gradient:
+
+    grad_{x_i} E_void = 2 * lambda_void * sum_g (m_g - m_bar) * d(m_g)/d(x_i)
+    d(m_g)/d(x_i) = -(x_i - c_g) / sigma_void^2 * exp(-||x_i - c_g||^2 / 2 sigma_void^2)
+
+Why this is the right formulation:
+  - sigma_void broad -> sees bundle-scale density, not point spacing
+  - If sigma_void >> within-bundle spacing, all points in a bundle see ~same grid
+    cell occupancy -> void force is nearly uniform across the bundle -> mostly
+    translates bundle centers, not internal structure
+  - Quadratic penalty on occupancy variance is convex in m_g, clean gradient
+  - No need for pairwise point iteration; O(N * G) per iteration
 
 Confinement is sandbox scaffolding only — a soft elastic penalty for leaving
 the fixed [-5,5]x[-5,5] test domain. This makes "spread out" meaningful by
@@ -78,7 +99,6 @@ from trajectory_cosmology.condensation.forces import (
     attraction,
     repulsion,
     estimate_local_spacing_ref,
-    void_repulsion,
 )
 
 # Fixed sandbox domain
@@ -87,6 +107,109 @@ DOMAIN_PAD = 0.5       # confinement kicks in outside DOMAIN +/- PAD
 
 _BUNDLE_COLORS = ["#2166AC", "#B2182B", "#4DAC26", "#F1A340",
                   "#762A83", "#D95F02", "#1F78B4", "#E78AC3"]
+
+
+# ===========================================================================
+# Grid-based void term (sandbox-only implementation)
+# ===========================================================================
+
+def make_grid_centers(
+    domain: tuple[float, float],
+    grid_shape: tuple[int, int],
+) -> np.ndarray:
+    """Build (G_x * G_y, 2) array of grid cell centers in the fixed domain.
+
+    Parameters
+    ----------
+    domain : (lo, hi) — same for x and y
+    grid_shape : (G_x, G_y)
+    """
+    lo, hi = domain
+    xs = np.linspace(lo, hi, grid_shape[0])
+    ys = np.linspace(lo, hi, grid_shape[1])
+    gx, gy = np.meshgrid(xs, ys, indexing="ij")
+    return np.stack([gx.ravel(), gy.ravel()], axis=1)   # (G, 2)
+
+
+def grid_void_energy_and_grad(
+    positions: np.ndarray,         # (N, 2)
+    grid_centers: np.ndarray,      # (G, 2) — fixed, computed once
+    sigma_void: float,
+    lambda_void: float,
+) -> tuple[float, np.ndarray]:
+    """Grid-based occupancy void term: energy and gradient.
+
+    Smooth occupancy of grid cell g:
+        m_g = sum_i exp(-||x_i - c_g||^2 / 2 sigma_void^2)
+
+    Energy:
+        E = lambda_void * sum_g (m_g - m_bar)^2    where m_bar = mean_g(m_g)
+
+    Gradient w.r.t. x_i:
+        grad_i E = 2 * lambda_void
+                   * sum_g (m_g - m_bar) * K_ig * (-(x_i - c_g) / sigma_void^2)
+
+    where K_ig = exp(-||x_i - c_g||^2 / 2 sigma_void^2).
+
+    Note: d(m_bar)/d(x_i) is included via the chain rule on m_bar = mean(m_g),
+    but because m_bar is the mean of all m_g, its contribution sums to zero
+    when all cells are counted — so we can equivalently center the residual
+    and differentiate only through m_g. This is confirmed below:
+
+        d/d(x_i) sum_g (m_g - m_bar)^2
+        = 2 sum_g (m_g - m_bar) * d(m_g - m_bar)/d(x_i)
+        = 2 sum_g (m_g - m_bar) * [d(m_g)/d(x_i) - (1/G) sum_{g'} d(m_{g'})/d(x_i)]
+        = 2 sum_g (m_g - m_bar) * d(m_g)/d(x_i)
+          - (2/G) [sum_g (m_g - m_bar)] * sum_{g'} d(m_{g'})/d(x_i)
+        = 2 sum_g (m_g - m_bar) * d(m_g)/d(x_i)   [since sum_g (m_g - m_bar) = 0]
+
+    So differentiating only through m_g with the centered residual is exact.
+
+    Parameters
+    ----------
+    positions : (N, 2)
+    grid_centers : (G, 2) — fixed domain grid, from make_grid_centers()
+    sigma_void : float — must be >> within-bundle spacing to act at bundle scale
+    lambda_void : float — strength; 0 = off
+
+    Returns
+    -------
+    energy : float
+    grad : (N, 2)
+    """
+    if lambda_void == 0.0:
+        return 0.0, np.zeros_like(positions)
+
+    N = positions.shape[0]
+    G = grid_centers.shape[0]
+    inv_sigma2 = 1.0 / (sigma_void ** 2)
+
+    # diff[i, g] = x_i - c_g    shape (N, G, 2)
+    diff = positions[:, None, :] - grid_centers[None, :, :]    # (N, G, 2)
+    sq_dist = (diff ** 2).sum(axis=-1)                         # (N, G)
+
+    # K[i, g] = exp(-sq_dist_ig / 2 sigma_void^2)
+    K = np.exp(-0.5 * inv_sigma2 * sq_dist)                    # (N, G)
+
+    # m_g = sum_i K[i, g]
+    m = K.sum(axis=0)                                          # (G,)
+    m_bar = m.mean()
+    residual = m - m_bar                                       # (G,)  centered
+
+    # Energy
+    energy = float(lambda_void * (residual ** 2).sum())
+
+    # Gradient:
+    # grad_i = 2 * lambda_void * sum_g residual_g * d(m_g)/d(x_i)
+    # d(m_g)/d(x_i) = -inv_sigma2 * K[i,g] * (x_i - c_g)     shape (2,)
+    # => grad_i = -2 * lambda_void * inv_sigma2
+    #             * sum_g [ residual_g * K[i,g] * diff[i,g,:] ]
+    # = -2 * lambda_void * inv_sigma2 * (K * residual)[i,:] @ diff[i,:,:]
+    weighted = K * residual[None, :]                           # (N, G)
+    # sum over g: (N, G) x (N, G, 2) -> (N, 2)
+    grad = -2.0 * lambda_void * inv_sigma2 * (weighted[:, :, None] * diff).sum(axis=1)
+
+    return energy, grad
 
 
 # ===========================================================================
@@ -348,10 +471,12 @@ class VoidRunConfig:
     repulsion_strength_mult: float = 0.005
     k_attract: int = 20
     sigma_frac: float = 0.5          # sigma = sigma_frac * scale_ref (global scale)
-    # Void term
-    epsilon_void: float = 0.01
+    # Grid-based void term
+    lambda_void: float = 0.0         # 0 = off; start with 0.01–0.1
     sigma_void_frac: float = 3.0     # sigma_void = sigma_void_frac * scale_ref
-    # Confinement (sandbox scaffolding)
+                                     # must be >> s_local to act at bundle scale
+    void_grid_shape: tuple = (16, 16)  # coarse grid resolution
+    # Confinement (sandbox scaffolding only)
     lambda_conf: float = 0.5
     use_confinement: bool = True
     # Optimizer
@@ -390,10 +515,14 @@ def run_void(
     epsilon_r = config.repulsion_strength_mult * s_local ** 2
     sigma_void = config.sigma_void_frac * scale_ref
 
+    # Build fixed grid once from domain — never updated during optimization
+    grid_centers = make_grid_centers(dataset.domain, config.void_grid_shape)
+
     if verbose:
         print(f"  [{dataset.name}] scale_ref={scale_ref:.3f}  s_local={s_local:.4f}  "
               f"sigma={sigma:.4f}  sigma_void={sigma_void:.4f}  "
-              f"epsilon_r={epsilon_r:.6f}  epsilon_void={config.epsilon_void:.4f}")
+              f"epsilon_r={epsilon_r:.6f}  lambda_void={config.lambda_void:.4f}  "
+              f"grid={config.void_grid_shape}")
 
     # Initial coherence: uniform (no label info — void term should work label-free)
     coherence = _uniform_coherence(N)
@@ -411,7 +540,11 @@ def run_void(
         _, g_att = attraction(positions_3d, mask, coherence, sigma,
                               k_attract=config.k_attract)
         _, g_rep = repulsion(positions_3d, mask, epsilon_r, eta=1e-4)
-        _, g_void = void_repulsion(positions_3d, mask, config.epsilon_void, sigma_void)
+        # Grid-based void term (sandbox-only). Operates on 2D positions directly.
+        _, g_void_2d = grid_void_energy_and_grad(
+            _unpack(positions_3d), grid_centers, sigma_void, config.lambda_void
+        )
+        g_void = g_void_2d[:, None, :]   # (N, 2) -> (N, 1, 2) to match gradient shape
         if config.use_confinement:
             _, g_conf = confinement(positions_3d, mask,
                                     domain=dataset.domain,
@@ -429,6 +562,10 @@ def run_void(
             history.append(snap)
             snapshot_iters.append(n)
             m = compute_metrics(snap, pos2d, labels, dataset.domain)
+            e_void_snap, _ = grid_void_energy_and_grad(
+                snap, grid_centers, sigma_void, config.lambda_void
+            )
+            m["energy_void"] = e_void_snap
             m["iter"] = n
             metrics_history.append(m)
 
@@ -501,7 +638,7 @@ def plot_before_after(result: VoidRunResult, output_dir: Path) -> None:
     im = result.initial_metrics
     fig.suptitle(
         f"{result.dataset.name} | "
-        f"ε_void={cfg.epsilon_void} σ_void_frac={cfg.sigma_void_frac} "
+        f"λ_void={cfg.lambda_void} σ_void_frac={cfg.sigma_void_frac} "
         f"λ_conf={cfg.lambda_conf}\n"
         f"spread_ratio={fm['within_bundle_spread_ratio']:.3f}  "
         f"p95={fm['local_radius_ratio_p95']:.3f}  "
@@ -539,7 +676,7 @@ def plot_metrics_history(result: VoidRunResult, output_dir: Path) -> None:
 
     cfg = result.config
     fig.suptitle(
-        f"{result.dataset.name} | ε_void={cfg.epsilon_void} σ_void_frac={cfg.sigma_void_frac}",
+        f"{result.dataset.name} | λ_void={cfg.lambda_void} σ_void_frac={cfg.sigma_void_frac}",
         fontsize=10,
     )
     fig.tight_layout()
@@ -586,7 +723,7 @@ def animate_void(result: VoidRunResult, output_dir: Path, frame_interval: int = 
         ax_pos.set_aspect("equal")
         ax_pos.set_title(
             f"{result.dataset.name} | iter {iter_n}\n"
-            f"ε_void={result.config.epsilon_void}  σ_void_frac={result.config.sigma_void_frac}",
+            f"λ_void={result.config.lambda_void}  σ_void_frac={result.config.sigma_void_frac}",
             fontsize=9,
         )
         ax_pos.grid(True, alpha=0.2)
@@ -631,26 +768,27 @@ def animate_void(result: VoidRunResult, output_dir: Path, frame_interval: int = 
 
 def run_void_sweep(
     datasets: list[VoidDataset],
-    epsilon_void_values: list[float],
+    lambda_void_values: list[float],
     sigma_void_fracs: list[float],
     base_config: VoidRunConfig,
     output_dir: Path,
     no_animation: bool = False,
     verbose: bool = True,
 ) -> pd.DataFrame:
-    """Sweep epsilon_void and sigma_void_frac across all datasets."""
+    """Sweep lambda_void and sigma_void_frac across all datasets."""
     rows = []
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for ds in datasets:
-        for eps_void in epsilon_void_values:
+        for lv in lambda_void_values:
             for sv_frac in sigma_void_fracs:
                 cfg = VoidRunConfig(
                     repulsion_strength_mult=base_config.repulsion_strength_mult,
                     k_attract=base_config.k_attract,
                     sigma_frac=base_config.sigma_frac,
-                    epsilon_void=eps_void,
+                    lambda_void=lv,
                     sigma_void_frac=sv_frac,
+                    void_grid_shape=base_config.void_grid_shape,
                     lambda_conf=base_config.lambda_conf,
                     use_confinement=base_config.use_confinement,
                     lr=base_config.lr,
@@ -658,7 +796,7 @@ def run_void_sweep(
                     n_iter=base_config.n_iter,
                     save_every=base_config.save_every,
                 )
-                cond_dir = output_dir / ds.name / f"ev{eps_void}_sv{sv_frac}"
+                cond_dir = output_dir / ds.name / f"lv{lv}_sv{sv_frac}"
                 cond_dir.mkdir(parents=True, exist_ok=True)
 
                 result = run_void(ds, cfg, verbose=verbose)
@@ -671,7 +809,7 @@ def run_void_sweep(
                 im = result.initial_metrics
                 rows.append({
                     "dataset": ds.name,
-                    "epsilon_void": eps_void,
+                    "lambda_void": lv,
                     "sigma_void_frac": sv_frac,
                     "within_bundle_spread_ratio": fm["within_bundle_spread_ratio"],
                     "local_radius_ratio_p95": fm["local_radius_ratio_p95"],
@@ -709,23 +847,23 @@ def _plot_sweep_summary(df: pd.DataFrame, output_dir: Path) -> None:
     ]
 
     colors = ["#2166AC", "#B2182B", "#4DAC26", "#F1A340"]
-    eps_vals = sorted(df["epsilon_void"].unique())
+    eps_vals = sorted(df["lambda_void"].unique())
 
     for ax, (col, title) in zip(ax_flat, metrics):
         for di, ds_name in enumerate(datasets):
             sub = df[df["dataset"] == ds_name]
-            # Plot vs epsilon_void for first sigma_void_frac
+            # Plot vs lambda_void for first sigma_void_frac
             sv0 = sub["sigma_void_frac"].iloc[0]
-            sub0 = sub[sub["sigma_void_frac"] == sv0].sort_values("epsilon_void")
-            ax.plot(sub0["epsilon_void"], sub0[col],
+            sub0 = sub[sub["sigma_void_frac"] == sv0].sort_values("lambda_void")
+            ax.plot(sub0["lambda_void"], sub0[col],
                     "o-", color=colors[di % len(colors)], label=ds_name, lw=1.5)
         ax.axhline(1.0, color="gray", lw=0.8, ls=":")
         ax.set_title(title, fontsize=8)
-        ax.set_xlabel("epsilon_void", fontsize=8)
+        ax.set_xlabel("lambda_void", fontsize=8)
         ax.legend(fontsize=6)
         ax.grid(True, alpha=0.2)
 
-    fig.suptitle("Void term sweep summary (sigma_void_frac fixed at first value)", fontsize=10)
+    fig.suptitle("Grid void term sweep: lambda_void vs metrics (sigma_void_frac fixed at first value)", fontsize=10)
     fig.tight_layout()
     fig.savefig(output_dir / "void_sweep_summary.png", dpi=120)
     plt.close(fig)
@@ -742,9 +880,11 @@ def _parse_args() -> argparse.Namespace:
                    default="results/mcolon/20260329_pbx_crispant_analysis_cont/results/void_sandbox_v1")
     p.add_argument("--n-per-bundle", type=int, default=30)
     p.add_argument("--n-iter", type=int, default=300)
-    p.add_argument("--epsilon-void-values", nargs="+", type=float,
-                   default=[0.0, 0.005, 0.01, 0.05],
-                   help="Void repulsion strengths to sweep.")
+    p.add_argument("--lambda-void-values", nargs="+", type=float,
+                   default=[0.0, 0.01, 0.05, 0.1],
+                   help="Grid void term strengths to sweep (lambda_void).")
+    p.add_argument("--void-grid-shape", nargs=2, type=int, default=[16, 16],
+                   help="Coarse grid resolution for void term (G_x G_y).")
     p.add_argument("--sigma-void-fracs", nargs="+", type=float,
                    default=[2.0, 3.0, 5.0],
                    help="sigma_void = frac × scale_ref.")
@@ -777,18 +917,20 @@ def main() -> None:
         n_iter=args.n_iter,
         lambda_conf=args.lambda_conf,
         use_confinement=not args.no_confinement,
+        void_grid_shape=tuple(args.void_grid_shape),
     )
 
     print(f"\n=== Void Sandbox Sweep ===")
     print(f"Datasets: {[ds.name for ds in datasets]}")
-    print(f"epsilon_void: {args.epsilon_void_values}")
+    print(f"lambda_void: {args.lambda_void_values}")
     print(f"sigma_void_frac: {args.sigma_void_fracs}")
+    print(f"grid_shape: {args.void_grid_shape}")
     print(f"n_iter={args.n_iter}  lambda_conf={args.lambda_conf}  "
           f"confinement={'on' if not args.no_confinement else 'OFF'}\n")
 
     df = run_void_sweep(
         datasets=datasets,
-        epsilon_void_values=args.epsilon_void_values,
+        lambda_void_values=args.lambda_void_values,
         sigma_void_fracs=args.sigma_void_fracs,
         base_config=base_config,
         output_dir=output_dir,
@@ -801,7 +943,7 @@ def main() -> None:
         print(f"\n-- {ds_name} --")
         sub = df[df["dataset"] == ds_name]
         print(sub[[
-            "epsilon_void", "sigma_void_frac",
+            "lambda_void", "sigma_void_frac",
             "centroid_dist_improvement", "centroid_spacing_cv_final",
             "within_bundle_spread_ratio", "local_radius_ratio_p95",
             "domain_escape_frac",
