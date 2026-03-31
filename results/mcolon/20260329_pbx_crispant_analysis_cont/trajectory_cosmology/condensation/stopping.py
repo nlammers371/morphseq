@@ -172,7 +172,7 @@ def log_metrics(
 
     # energy terms
     row["energy_total"] = energy_terms.get("total", float("nan"))
-    for key in ("attract", "repel", "void", "elastic", "fidelity"):
+    for key in ("attract", "repel", "void", "scale", "elastic", "fidelity"):
         row[f"energy_{key}"] = energy_terms.get(key, float("nan"))
 
     # relative energy change

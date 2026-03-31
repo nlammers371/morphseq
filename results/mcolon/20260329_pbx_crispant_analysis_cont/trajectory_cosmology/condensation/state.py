@@ -70,6 +70,11 @@ class CondensationConfig:
     # Truncated repulsion (replaces soft-core when r_cut > 0)
     r_cut: float = 0.0                        # cutoff radius; 0 = use classic soft-core repulsion
                                               # if > 0: bump repulsion E = ε_r*(1-r²/r_cut²)² for r<r_cut
+    # Local neighborhood scale preservation
+    lambda_scale: float = 0.0                 # soft regularizer strength; 0 = off
+                                              # E = λ_scale * Σ_i (r_i^(n) - r_i^(0))^2
+                                              # start small (e.g. 0.1-1.0), not a hard leash
+    k_local_scale: int = 5                    # number of initial neighbors defining r_i^(0)
     alpha: float = 0.9
     lr: float = 0.01
     max_iter: int = 500

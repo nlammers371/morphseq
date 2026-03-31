@@ -584,3 +584,141 @@ The sandbox's job is done: it proved the force law class works on simple geometr
 
  All files under results/mcolon/20260329_pbx_crispant_analysis_cont/.
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+---
+
+## Temporal Sandbox Experiments (multi-slice force law, 2026-03-30)
+
+### Context: Scale mismatch diagnosis (decompaction pathology)
+
+After moving from the 2D slice sandbox to the full temporal sandbox (8 time slices, N=30 per cluster, 3 clusters), we observed a new pathology: **decompaction** — already-compact bundles inflate and develop outliers after running the force law.
+
+Root cause (diagnosed):
+
+- `sigma` (and thus `epsilon_r`) were calibrated to the **inter-bundle scale** (mean per-slice radial spread ≈ 3.3 units, scale_ref ≈ 1.65 units)
+- Within-bundle spacing is ~0.14 units — **10–25× smaller than sigma**
+- Attraction kernel `K = exp(-r²/2σ²)` is nearly flat inside compact bundles (K ≈ 0.98–1.0 for all within-bundle pairs) → attraction gradient is near zero inside bundles
+- Repulsion `ε_r / (r² + η)` still has a meaningful gradient at r=0.14, so it continues pushing within-bundle points apart
+- Result: bundles inflate to a scale set by repulsion balance, not initial compactness
+
+**Key insight**: `eps_mult = 0.005` was validated in the 2D sandbox where `sigma ≈ scale_ref ≈ 1`. In the temporal sandbox, `sigma = 1.65` but within-bundle spacing = 0.14 — `epsilon_r` is calibrated to inter-bundle scale but acts at within-bundle scale. It is **~25× too strong** for within-bundle geometry.
+
+---
+
+### Temporal Experiment 1: Repulsion sweep
+
+**Conditions tested** (8 total, on crossing_bundles and stable_bundles synthetic datasets, 300 iters):
+
+| Condition | eps_mult | r_cut | Description |
+|-----------|----------|-------|-------------|
+| softcore_1x | 0.005 | 0 | Baseline (old 2D-sandbox default) |
+| softcore_0.5x | 0.0025 | 0 | Half repulsion |
+| softcore_0.25x | 0.00125 | 0 | Quarter repulsion |
+| **softcore_0.1x** | **0.0005** | 0 | **10× reduction — sweet spot** |
+| bump_rcut_0.10 | 0.005 | 0.10×median_5nn | Truncated bump, very small exclusion zone |
+| bump_rcut_0.25 | 0.005 | 0.25×median_5nn | Truncated bump, small exclusion zone |
+| bump_rcut_0.50 | 0.005 | 0.50×median_5nn | Truncated bump, moderate exclusion zone |
+| bump_rcut_0.25_half | 0.0025 | 0.25×median_5nn | Bump + halved strength |
+
+**Key results** (crossing_bundles, 300 iter):
+
+| Condition | within_bundle_spread_ratio | sep_ratio_mean | local_radius_ratio_p95 |
+|-----------|---------------------------|----------------|------------------------|
+| softcore_1x | ~3–5× (decompaction) | ~5 | ~2.0 |
+| **softcore_0.1x** | **≈1.0** | **~20** | **≈1.19** |
+| bump conditions (50 iter) | ≈0.984 | — | — |
+| bump conditions (300 iter) | collapsed | 71–79 | 0.10 |
+
+**Winner**: `softcore_0.1x` (eps_mult=0.0005).
+
+**Bump repulsion failure mode**: At 50 iterations, bump conditions looked good. By 300 iterations, they **collapsed** (sep_ratio jumped to 71–79, local_radius_median=0.10 = 10% of initial size). Root cause: when r_cut << healthy bundle spacing, attraction dominates with no balancing repulsion → bundles compress to the exclusion zone radius over many iterations.
+
+**Lesson**: Bump repulsion is a **collision-prevention brake only**, not a long-range stabilizer. The `r_cut` must be set smaller than healthy bundle spacing (exclusion zone only), but this means it provides no equilibrium restoring force at the healthy bundle scale. For stable equilibrium, gradually-decaying soft-core repulsion tuned to the correct strength is more appropriate.
+
+**Practical rule for temporal multi-slice setting**:
+- `eps_mult = 0.0005` (not 0.005 as in the 2D sandbox — 10× weaker)
+- This reflects that `sigma ≈ inter-bundle scale >> within-bundle scale` in the temporal case
+- The 2D sandbox validated eps_mult=0.005 where sigma ≈ scale_ref ≈ 1; in temporal, sigma/within_scale ≈ 10×, so epsilon must scale down proportionally
+
+---
+
+### New metric: `local_radius_ratio_p95`
+
+A **label-free** compactness metric that extrapolates from sandbox to real data (where bundle labels are unknown):
+
+```
+local_radius_ratio_p95 = 95th percentile of (current_median_kNN_radius / initial_median_kNN_radius)
+```
+
+- Value 1.0 = perfect compactness preservation
+- Value > 1.2 = bundles have inflated meaningfully
+- Value < 0.8 = compression toward collapse
+- **Does not require ground-truth cluster labels** — usable on real embryo data
+
+---
+
+### Temporal Experiment 2: Local sigma (sigma_attract_local) — FAILED
+
+Tested `sigma_local_frac=0.5` → `sigma_attract_local ≈ 0.075` (half of median_5nn ≈ 0.14).
+
+**Result**: Made decompaction worse (local_radius_ratio_p95 jumped from 2.0 to 3.4).
+
+Root cause: at sigma_attract_local=0.075, K_local ≈ 0 for nearly all pairs. Attraction gradient collapsed to near zero everywhere → effectively repulsion-only → bundles inflated more than baseline. A local sigma must be comparable to within-bundle spacing, not half of it, to provide a meaningful restoring force.
+
+**Status**: `sigma_attract_local` parameter is wired in `forces.py` and `state.py` but not recommended as the primary fix. Kept for future experimentation with sigma fractions ≥ 1.0× median_5nn.
+
+---
+
+## Local Neighborhood Scale Preservation (2026-03-30)
+
+### Design rationale
+
+The validated fix (`eps_mult=0.0005`) is a **global parameter** — it weakens repulsion everywhere. A more principled approach anchors local density to the initialization:
+
+```
+E_scale = λ_scale × Σ_i (r_i^(n) - r_i^(0))²
+```
+
+Where:
+- `r_i^(0)` = mean distance to k fixed initial neighbors (computed once from x0, **never updated**)
+- `r_i^(n)` = current mean distance to the same fixed neighbor indices
+- `λ_scale` = soft regularizer weight
+
+**Key design choices**:
+1. Anchored to **initial positions**, not current state — prevents drift from initialization while allowing mesoscopic rearrangement
+2. **Soft regularizer, not hard constraint** — lambda starts small (0.1–1.0), not a rigid leash
+3. Neighbor indices are **fixed** — determined from x0, same throughout the run
+
+### Three-scale architecture (design decision)
+
+Three forces serve three distinct roles at three spatial scales:
+
+| Force | Parameter | Scale | Job |
+|-------|-----------|-------|-----|
+| Attraction | sigma, k_attract | Inter-bundle | Clusters co-traveling embryos across time |
+| Short-range exclusion | epsilon_r, (r_cut) | Sub-bundle | Collision avoidance only |
+| Local density preservation | lambda_scale, k_local_scale | Within-bundle | Anchors compactness to initialization |
+
+This replaces the two-force design where repulsion had to simultaneously prevent collapse AND prevent decompaction — conflicting requirements at different spatial scales.
+
+### Cautions (from design review)
+
+- **Fixed neighbor identity can become too rigid**: if optimization changes topology substantially, some initial neighbors may be inappropriate. Start small and observe.
+- **Log separately**: `energy_scale`, `scale_residual_mean`, `scale_residual_p95` tracked per iteration.
+- **Do not replace eps_mult tuning**: scale preservation supplements the validated eps_mult=0.0005, it doesn't replace it.
+
+### Implementation summary
+
+- `build_neighborhood_info(x0, mask, k_local=5)` — called once before the loop; returns fixed neighbor indices and `r0` per time slice
+- `local_scale_preservation(positions, mask, neighborhood_info, lambda_scale)` — energy + gradient
+- New `CondensationConfig` fields: `lambda_scale=0.0` (off by default), `k_local_scale=5`
+- `dynamics.py`: `neighborhood_info` precomputed before the loop, passed to `total_energy_and_grad` at every iteration
+
+### Planned scale sweep
+
+| Condition | lambda_scale | eps_mult |
+|-----------|-------------|----------|
+| baseline | 0.0 | 0.0005 |
+| small_lambda | 0.1 | 0.0005 |
+| moderate_lambda | 1.0 | 0.0005 |
+
+Primary metric: `within_bundle_spread_ratio` ≤ 1.1. Secondary: `local_radius_ratio_p95`, `sep_ratio_mean`, `scale_residual_p95`.

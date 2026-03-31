@@ -365,6 +365,9 @@ class TemporalRunConfig:
     # Truncated bump repulsion (r_cut > 0 activates; 0 = classic soft-core)
     r_cut_frac: float = 0.0               # r_cut = r_cut_frac × median_5nn; 0 = soft-core
     eps_mult_scale: float = 1.0           # multiplicative scale on eps_mult (for sensitivity sweep)
+    # Local neighborhood scale preservation
+    lambda_scale: float = 0.0             # 0 = off; try 0.1–2.0; soft regularizer, not a hard leash
+    k_local_scale: int = 5                # number of initial neighbors defining r_i^(0)
 
 
 @dataclass
@@ -448,6 +451,8 @@ def run_temporal(
         sigma_void=sigma_void,
         epsilon_void=config.epsilon_void,
         r_cut=r_cut,
+        lambda_scale=config.lambda_scale,
+        k_local_scale=config.k_local_scale,
     )
 
     # Compute initial coherence and metrics
@@ -696,6 +701,7 @@ def plot_temporal_run(result: TemporalRunResult, output_dir: Path) -> None:
         ("energy_attract", "#B2182B", "e_att"),
         ("energy_repel", "#4DAC26", "e_rep"),
         ("energy_void", "#1F78B4", "e_void"),
+        ("energy_scale", "#D95F02", "e_scale"),
         ("energy_elastic", "#F1A340", "e_elastic"),
         ("energy_fidelity", "#762A83", "e_fidelity"),
     ]:
@@ -955,6 +961,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Void repulsion strength. 0 = off (default).")
     p.add_argument("--compare", action="store_true",
                    help="Run baseline vs local-sigma comparison experiment and print summary table.")
+    p.add_argument("--lambda-scale", type=float, default=0.0,
+                   help="Local neighborhood scale preservation strength. 0=off. Try 0.1–2.0.")
     p.add_argument("--repulsion-sweep", action="store_true",
                    help="Sweep truncated repulsion cutoffs and epsilon scales on crossing_bundles. "
                         "Tests: soft-core baseline, lower epsilon (0.5×, 0.25×), "
@@ -975,6 +983,7 @@ def main() -> None:
         mu0=args.mu0,
         sigma_local_frac=args.sigma_local_frac,
         epsilon_void=args.epsilon_void,
+        lambda_scale=args.lambda_scale,
     )
 
     all_summaries = []

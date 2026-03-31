@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 
 from .coherence import compute_coherence
-from .forces import total_energy_and_grad
+from .forces import build_neighborhood_info, total_energy_and_grad
 from .state import CondensationConfig, CondensationResult
 from .stopping import (
     StoppingConfig,
@@ -40,6 +40,10 @@ def run_dynamics(
     reference_scale = reference_scale_from_positions(x0, mask)
     monitor = StoppingMonitor(stopping)
 
+    # Precompute fixed local neighborhood structure from initial positions.
+    # This is the anchor for local_scale_preservation — never updated during the loop.
+    neighborhood_info = build_neighborhood_info(x0, mask, k_local=config.k_local_scale)
+
     prev_total_energy: float | None = None
     prev_coherence: np.ndarray | None = None
 
@@ -64,6 +68,8 @@ def run_dynamics(
             epsilon_void=config.epsilon_void,
             sigma_void=config.sigma_void,
             r_cut=config.r_cut,
+            lambda_scale=config.lambda_scale,
+            neighborhood_info=neighborhood_info,
         )
 
         grad *= mask[:, :, None].astype(float)
@@ -92,10 +98,11 @@ def run_dynamics(
 
         if n % log_every == 0 and verbose:
             void_str = f" void={energies['void']:+.4f}" if config.epsilon_void > 0 else ""
+            scale_str = f" scale={energies['scale']:+.4f}" if config.lambda_scale > 0 else ""
             print(
                 f"iter {n:4d} | total={energies['total']:+.4f} "
                 f"att={energies['attract']:+.4f} rep={energies['repel']:+.4f}"
-                f"{void_str} "
+                f"{void_str}{scale_str} "
                 f"ela={energies['elastic']:+.4f} fid={energies['fidelity']:+.4f} "
                 f"disp_rms={row['disp_rms_rel']:.5f} disp_max={row['disp_max_rel']:.5f}"
             )
