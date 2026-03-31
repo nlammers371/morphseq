@@ -845,3 +845,58 @@ The bifurcating trunk test is now a **sharp diagnostic**: anisotropy is working 
 2. Fidelity / stretch / bend scale calibration (add `estimate_step_scale_ref`, `estimate_bend_scale_ref`)
 3. Anisotropic force term (3D covariance → trunk direction → directional projectors)
 4. Grid void integration into core stack
+
+---
+
+## Phase B Discovery Findings (2026-03-31)
+
+From `force_discovery_sweep.py` on the Y-shaped benchmark (n=40/branch, 300 iter, 9-point log
+sweep per family). Regime thresholds derived from `sweep_results.csv` at τ=2%/5%/15% relative
+deviation from isotropic baseline. GIFs in `results/force_regime_v1/`.
+
+### Decision per force
+
+**Repulsion — keep at default, do not tune**
+Currently calibrated to `λ_rep = 0.005` → `ε_r = 0.005 × s_local²`. This is the working core.
+Sweep onset at λ≈0.06, destructive at λ≈0.17 (29% spread inflation). Default sits safely in the
+inert zone. **Do not change.**
+
+**Fidelity — leave off, status unclear**
+Gentle monotone effect: `branch_sep` 1.41 → 1.53 as λ 0 → 5, never destructive within sweep
+range. Effect is real but small. Default `λ_fid = 0`. **Leave off until there is a specific
+reason to turn on.**
+
+**Elasticity stretch and bend — nearly identical, consider consolidating to one**
+Both forces show the same qualitative behavior: suppress branching, increase linearity. Sweep
+curves are nearly identical in shape and scale — the two forces are currently redundant. Neither
+is harmful at zero. **Leave both off (`λ_str = λ_bnd = 0`). Before enabling either, decide
+whether one is sufficient or whether they serve genuinely different roles.**
+
+**Void proxy — not working, disable**
+Pairwise Gaussian void (`epsilon_void`) barely moves any metric across the full sweep. Max
+deviation at ε=0.1 is 5.8% on spread, near-zero on branch_sep and linearity. The force is
+essentially inert on the Y-dataset because there is no void problem to solve: the embedding
+already uses space reasonably. The pairwise proxy is a placeholder for the real grid-based
+occupancy void (a fundamentally different design). **Disable `epsilon_void`. Do not use until
+the grid void is implemented.**
+
+### Current recommended defaults (as of 2026-03-31)
+
+| Force | Parameter | Default | Status |
+|-------|-----------|---------|--------|
+| repulsion | `repulsion_strength_mult` | 0.005 | active, working — do not change |
+| coherence | `sigma_frac=0.5`, `delta=3` | — | active, working |
+| fidelity | `fidelity_strength_mult` | 0.0 | off — leave off |
+| elasticity stretch | `stretch_strength_mult` | 0.0 | off — redundant with bend |
+| elasticity bend | `bend_strength_mult` | 0.0 | off — redundant with stretch |
+| void proxy | `epsilon_void` | 0.0 | off — not working; wait for grid void |
+| anisotropy | — | not implemented | next priority |
+
+### Open questions
+
+- Should stretch and bend be consolidated into a single "trajectory smoothness" multiplier?
+  The sweep gives no reason to use both independently.
+- Fidelity has a small real effect in the right direction. Under what conditions does it matter?
+  (Hypothesis: sparse masks, noisy embeddings.)
+- The void proxy is inert on synthetic data. Real PBX embeddings may have crowded regions where
+  a void force matters. Revisit on real data, not synthetic.
