@@ -722,3 +722,75 @@ This replaces the two-force design where repulsion had to simultaneously prevent
 | moderate_lambda | 1.0 | 0.0005 |
 
 Primary metric: `within_bundle_spread_ratio` ≤ 1.1. Secondary: `local_radius_ratio_p95`, `sep_ratio_mean`, `scale_residual_p95`.
+
+---
+
+## Void Term Design (2026-03-30)
+
+### Job description
+
+The void term has a specific, bounded job:
+
+**Input**: compact bundles crowded unevenly within a bounded domain  
+**Output**: bundle centers redistributed more evenly through that domain  
+**Constraint**: local bundle density unchanged
+
+It is not a second repulsion term. It acts at **bundle-centroid scale** (`sigma_void >> sigma`), not at point-to-point spacing. The kernel bandwidth must span multiple bundles — otherwise it degenerates into generic pairwise repulsion and is redundant with the existing term.
+
+### Why a fixed domain is required
+
+Without a fixed reference domain, "spread out more evenly" has no meaning. The system would simply drift outward indefinitely. Two anchoring choices:
+- **Sandbox**: fixed `[-5,5]×[-5,5]` square — clean, unambiguous, used in `void_sandbox.py`
+- **Real data**: padded initial bounding box per slice — revisit when porting to trajectory model
+
+Confinement is sandbox scaffolding only (`lambda_conf` parameter). It is NOT proposed as a permanent force in the trajectory model — that decision is deferred until after the void term is validated.
+
+### Implementation (Option A — first to test)
+
+Broad Gaussian density-field repulsion:
+
+```
+rho_i = sum_{j≠i} exp(-||x_i - x_j||^2 / 2 sigma_void^2)
+E_void = epsilon_void * sum_i rho_i
+grad_i = epsilon_void * sum_j (x_i - x_j)/sigma_void^2 * exp(-r^2/2 sigma_void^2)
+```
+
+Parameters:
+- `epsilon_void`: strength (default 0 = off)  
+- `sigma_void_frac`: `sigma_void = sigma_void_frac × scale_ref`, default 3.0
+
+Option B (grid-based occupancy equalization) is second-generation — only if Option A shows promise but drifts too much or requires careful tuning.
+
+### Force architecture: three scales
+
+| Force | Parameter | Spatial scale | Job |
+|-------|-----------|---------------|-----|
+| Attraction | sigma, k_attract | Inter-bundle | Who travels together |
+| Repulsion | repulsion_strength_mult, s_local | Within-bundle | Collision avoidance |
+| Void | epsilon_void, sigma_void | Multi-bundle | Global spacing equalization |
+
+### Validation tests (`void_sandbox.py`)
+
+Four synthetic cases, fixed `[-5,5]×[-5,5]` domain:
+
+| Test | Setup | Success criterion |
+|------|-------|-------------------|
+| `crowded_one_side` | 4 bundles, left half only | `centroid_dist_improvement > 1`, `spread_ratio ≈ 1` |
+| `well_spaced` | 4 bundles, already uniform | Nothing changes much |
+| `mixed_sizes` | 3 bundles N=10/30/60 | Centers spread, size differences preserved |
+| `line_crowded` | 4 bundles along line, too close | Spacing increases, topology preserved |
+
+**Primary metrics**:
+- Local (must stay near 1.0): `within_bundle_spread_ratio`, `local_radius_ratio_p95`
+- Global (should improve for crowded cases): `mean_centroid_dist`, `centroid_spacing_cv`
+- Stability: `collapse_score`, `domain_escape_frac`
+
+### What to look for in sweep results
+
+A void term is working correctly if:
+1. `crowded_one_side`: `centroid_dist_improvement > 1` and `centroid_spacing_cv` decreases
+2. `well_spaced`: both metrics barely change (< 5% deviation from initial)
+3. All cases: `within_bundle_spread_ratio ≈ 1.0`, `local_radius_ratio_p95 ≈ 1.0` (local damage < 10%)
+4. `domain_escape_frac ≈ 0` (confinement holding)
+
+A void term is failing if it improves global spacing at the cost of inflating bundles (`spread_ratio >> 1`) or if it does nothing for `crowded_one_side`.
