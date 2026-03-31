@@ -1,7 +1,7 @@
 """
-coherence.py
-------------
-Spatial kernel and temporal coherence C_ij(t).
+compute.py
+----------
+Temporal coherence C_ij(t).
 
 C_ij(t) is the memory of the system: it gates attraction by how persistently
 two embryos have co-traveled over a causal backward window.
@@ -12,25 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-
-def gaussian_kernel(
-    positions: np.ndarray,
-    sigma: float,
-) -> np.ndarray:
-    """Pairwise Gaussian spatial kernel at a single time slice.
-
-    Parameters
-    ----------
-    positions : (N_e, 2)
-    sigma : float
-
-    Returns
-    -------
-    K : (N_e, N_e) — K[i,j] = exp(-||x_i - x_j||^2 / (2 sigma^2))
-    """
-    diff = positions[:, None, :] - positions[None, :, :]  # (N_e, N_e, 2)
-    sq_dist = (diff ** 2).sum(axis=-1)                    # (N_e, N_e)
-    return np.exp(-sq_dist / (2.0 * sigma ** 2))
+from .kernels import gaussian_kernel
 
 
 def compute_coherence(
@@ -71,10 +53,12 @@ def compute_coherence(
         w_sum = np.zeros((N_e, N_e), dtype=float)
 
         for tau in range(t_start, t + 1):
-            K_tau = gaussian_kernel(positions[:, tau, :], sigma)   # (N_e, N_e)
-            joint_mask = mask[:, tau, None] * mask[None, :, tau]   # (N_e, N_e) float
-            K_sum += K_tau * joint_mask
-            w_sum += joint_mask
+            obs_idx = np.flatnonzero(mask[:, tau])
+            if len(obs_idx) == 0:
+                continue
+            K_tau = gaussian_kernel(positions[obs_idx, tau, :], sigma)
+            K_sum[np.ix_(obs_idx, obs_idx)] += K_tau
+            w_sum[np.ix_(obs_idx, obs_idx)] += 1.0
 
         C[:, :, t] = K_sum / (w_sum + eps_mask)
 

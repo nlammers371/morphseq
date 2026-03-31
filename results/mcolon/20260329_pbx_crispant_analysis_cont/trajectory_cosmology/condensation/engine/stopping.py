@@ -11,7 +11,7 @@ actually looks like in this system before committing to a rule.
 Three responsibilities:
   1. compute_*  — pure metric functions (arrays in, scalars out)
   2. log_metrics — assemble one row of diagnostics per iteration
-  3. evaluate_stopping_heuristics — multi-metric patience-based decision
+  3. StoppingMonitor — multi-metric patience-based decision
 
 All displacement metrics are normalized by a reference spatial scale
 computed once from the initial positions. This makes thresholds portable

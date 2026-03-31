@@ -1,3 +1,4 @@
 from .api import run_condensation
 from .state import CondensationConfig, CondensationResult, CondensationState
-from .stopping import StoppingConfig, StoppingMonitor
+from .geometry_refs import GeometryRefs, estimate_geometry_refs
+from .engine.stopping import StoppingConfig, StoppingMonitor

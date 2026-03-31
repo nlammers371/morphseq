@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from .dynamics import run_dynamics
+from .engine.run import run_dynamics
 from .state import CondensationConfig, CondensationResult
-from .stopping import StoppingConfig
+from .engine.stopping import StoppingConfig
 
 
 def run_condensation(

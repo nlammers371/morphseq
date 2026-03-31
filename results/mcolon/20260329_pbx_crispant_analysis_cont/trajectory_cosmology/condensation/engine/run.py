@@ -1,15 +1,17 @@
 """
-dynamics.py
------------
+run.py
+------
 Damped gradient update loop, fidelity annealing, and stopping criteria.
 """
 from __future__ import annotations
 
 import numpy as np
 
-from .coherence import compute_coherence
-from .forces import build_neighborhood_info, estimate_local_spacing_ref, total_energy_and_grad
-from .state import CondensationConfig, CondensationResult
+from ..coherence.compute import compute_coherence
+from ..forces.local_scale import build_neighborhood_info
+from ..forces.total import total_energy_and_grad
+from ..geometry_refs import estimate_local_spacing_ref
+from ..state import CondensationConfig, CondensationResult
 from .stopping import (
     StoppingConfig,
     StoppingMonitor,
@@ -55,8 +57,13 @@ def run_dynamics(
     prev_total_energy: float | None = None
     prev_coherence: np.ndarray | None = None
 
+    # sigma_coh: bandwidth for coherence kernel. Separate from attraction sigma
+    # so coherence can be calibrated to local spacing while attraction uses
+    # the inter-bundle scale. Falls back to config.sigma when not set.
+    sigma_coh = config.sigma_coh if config.sigma_coh is not None else config.sigma
+
     for n in range(config.max_iter):
-        coherence = compute_coherence(positions, mask, sigma=config.sigma, delta=config.delta)
+        coherence = compute_coherence(positions, mask, sigma=sigma_coh, delta=config.delta)
         mu = config.mu0 * (config.gamma ** n)
 
         energies, grad = total_energy_and_grad(

@@ -53,7 +53,10 @@ class CondensationConfig:
     tol : float
         Convergence tolerance on max position change per iteration.
     """
-    sigma: float = 0.5
+    sigma: float = 0.5       # attraction bandwidth (inter-bundle scale)
+    sigma_coh: float | None = None  # coherence kernel bandwidth; None = use sigma
+                                    # set to coherence_scale_mult * s_local for
+                                    # scale-independent coherence computation
     delta: int = 3
     epsilon_r: float = 0.01
     eta: float = 1e-4

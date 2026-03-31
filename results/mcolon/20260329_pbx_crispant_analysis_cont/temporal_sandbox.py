@@ -48,8 +48,11 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from trajectory_cosmology.condensation.coherence import compute_coherence
-from trajectory_cosmology.condensation.dynamics import run_dynamics
-from trajectory_cosmology.condensation.forces import estimate_local_spacing_ref
+from trajectory_cosmology.condensation.engine import run_dynamics
+from trajectory_cosmology.condensation.geometry_refs import (
+    estimate_geometry_refs,
+    estimate_local_spacing_ref,
+)
 from trajectory_cosmology.condensation.state import CondensationConfig, CondensationResult
 
 # Reuse helpers from the 2D slice sandbox
@@ -346,28 +349,46 @@ def _temporal_metrics(
 
 @dataclass
 class TemporalRunConfig:
-    sigma_frac: float = 0.5               # × mean per-slice radial_spread (coherence bandwidth)
-    repulsion_strength_mult: float = 0.005  # λ_rep: epsilon_r = λ_rep × s_local²
-                                            # s_local = median k-NN distance from initial positions
-                                            # Portable across datasets; validated at 0.005
-    k_attract: int = 20
+    # --- Structural / informational knobs (not force magnitudes) ---
+    sigma_frac: float = 0.5       # attraction bandwidth: sigma = sigma_frac × s_global
+    coherence_scale_mult: float | None = None
+                                  # coherence kernel bandwidth: sigma_coh = mult × s_local
+                                  # None = use sigma (old behaviour, σ = inter-bundle scale)
+                                  # Set e.g. 1.0 to anchor coherence to local spacing
     delta: int = 3                # coherence backward window (time bins)
-    lr: float = 1e-4              # validated from 2D sandbox
-    n_iter: int = 300
-    lambda_stretch: float = 0.0   # off by default — isolate coherence mechanism
-    lambda_bend: float = 0.0      # same
-    mu0: float = 0.0              # NO fidelity by default — test mechanism cleanly
+    k_attract: int = 20
+
+    # --- Dimensionless force multipliers (each × reference scale² → coefficient) ---
+    repulsion_strength_mult: float = 0.005
+                                  # ε_r = λ_rep × s_local²   (validated at 0.005)
+    fidelity_strength_mult: float = 0.0
+                                  # μ_0 = λ_fid / s_local²   (0 = off)
+    stretch_strength_mult: float = 0.0
+                                  # λ_stretch = λ_str / s_step²  (0 = off)
+    bend_strength_mult: float = 0.0
+                                  # λ_bend = λ_bnd / s_bend²     (0 = off)
+    epsilon_void: float = 0.0     # pairwise void proxy strength (0 = off)
+                                  # NOTE: broad pairwise Gaussian, NOT grid-based occupancy void
+    sigma_void_frac: float = 5.0  # sigma_void = sigma_void_frac × s_global
+
+    # --- Raw overrides (backward compat — used when dimensionless mult is 0) ---
+    # If fidelity_strength_mult > 0, mu0 is derived; otherwise mu0 is used directly.
+    # Same pattern for stretch/bend. This lets old callers pass raw values unchanged.
+    mu0: float = 0.0
+    lambda_stretch: float = 0.0
+    lambda_bend: float = 0.0
     gamma: float = 0.999
     alpha: float = 0.9
-    # Two-scale force law
+
+    # --- Optimization ---
+    lr: float = 1e-4
+    n_iter: int = 300
+
+    # --- Legacy / less-used ---
     sigma_local_frac: float | None = None  # None = use sigma_frac (old behavior)
-    sigma_void_frac: float = 2.0           # sigma_void = sigma_void_frac × scale_ref
-    epsilon_void: float = 0.0              # void repulsion strength (0 = off)
-    # Truncated bump repulsion (r_cut > 0 activates; 0 = classic soft-core)
     r_cut_frac: float = 0.0               # r_cut = r_cut_frac × s_local; 0 = soft-core
-    # Local neighborhood scale preservation
-    lambda_scale: float = 0.0             # 0 = off; try 0.1–2.0; soft regularizer
-    k_local_scale: int = 5                # number of initial neighbors defining r_i^(0)
+    lambda_scale: float = 0.0
+    k_local_scale: int = 5
 
 
 @dataclass
@@ -403,48 +424,66 @@ def run_temporal(
     positions = dataset.positions  # (N_e, T, 2)
     mask = dataset.mask
 
-    # Derive sigma from the global inter-bundle scale (attraction bandwidth)
-    per_slice_spreads = [radial_spread(positions[:, t, :]) for t in range(dataset.n_time)]
-    scale_ref = float(np.mean(per_slice_spreads))
-    sigma = config.sigma_frac * scale_ref
+    # --- Measure geometry references from initial positions ---
+    # All force coefficients are derived from these reference scales.
+    # This is the geometry_refs layer: measure first, calibrate second.
+    refs = estimate_geometry_refs(positions, mask, k_local=5)
 
-    # Derive epsilon_r from the LOCAL neighborhood spacing, not from sigma.
-    # s_local = median k-NN distance across all observed (embryo, time) pairs.
-    # epsilon_r = repulsion_strength_mult × s_local²
-    # This makes repulsion portable: the knob is dimensionless and calibrated to
-    # the scale where repulsion actually acts (within-bundle spacing), not the
-    # mesoscale bundle geometry that sigma tracks.
-    s_local = estimate_local_spacing_ref(positions, dataset.mask, k=5)
-    epsilon_r = config.repulsion_strength_mult * s_local ** 2
+    # --- Derive force coefficients from dimensionless multipliers ---
+    # Repulsion: calibrated to local point spacing (validated at 0.005)
+    epsilon_r = config.repulsion_strength_mult * refs.s_local ** 2
 
-    # Derive sigma_attract_local from within-slice kNN distances
-    if config.sigma_local_frac is not None:
-        sigma_attract_local = config.sigma_local_frac * s_local
+    # Fidelity: if dimensionless mult given, derive from s_local; else use raw mu0
+    if config.fidelity_strength_mult > 0.0:
+        mu0 = config.fidelity_strength_mult / (refs.s_local ** 2 + 1e-16)
     else:
-        sigma_attract_local = None
+        mu0 = config.mu0
 
-    # Derive r_cut for truncated bump repulsion (also local-spacing anchored)
-    r_cut = config.r_cut_frac * s_local if config.r_cut_frac > 0.0 else 0.0
+    # Stretch: if dimensionless mult given, derive from s_step; else use raw lambda_stretch
+    if config.stretch_strength_mult > 0.0:
+        lambda_stretch = config.stretch_strength_mult / (refs.s_step ** 2 + 1e-16)
+    else:
+        lambda_stretch = config.lambda_stretch
 
-    # Derive sigma_void for (optional) broad density-field repulsion
-    sigma_void = config.sigma_void_frac * scale_ref
+    # Bend: if dimensionless mult given, derive from s_bend; else use raw lambda_bend
+    if config.bend_strength_mult > 0.0:
+        lambda_bend = config.bend_strength_mult / (refs.s_bend ** 2 + 1e-16)
+    else:
+        lambda_bend = config.lambda_bend
+
+    # Attraction bandwidth: inter-bundle scale
+    sigma = config.sigma_frac * refs.s_global
+
+    # Coherence bandwidth: local scale if coherence_scale_mult set, else use sigma
+    if config.coherence_scale_mult is not None:
+        sigma_coh = config.coherence_scale_mult * refs.s_local
+    else:
+        sigma_coh = None  # dynamics.py falls back to sigma
+
+    # Derived spatial params
+    sigma_attract_local = config.sigma_local_frac * refs.s_local if config.sigma_local_frac is not None else None
+    r_cut = config.r_cut_frac * refs.s_local if config.r_cut_frac > 0.0 else 0.0
+    sigma_void = config.sigma_void_frac * refs.s_global
 
     if verbose:
         sal_str = f"{sigma_attract_local:.4f}" if sigma_attract_local is not None else "None (=sigma)"
         rcut_str = f"{r_cut:.4f}" if r_cut > 0 else "0 (soft-core)"
-        print(f"  scale_ref={scale_ref:.3f}  s_local={s_local:.4f}  sigma={sigma:.4f}  "
-              f"sigma_attract_local={sal_str}  epsilon_r={epsilon_r:.6f}  "
-              f"(λ_rep={config.repulsion_strength_mult})  "
-              f"r_cut={rcut_str}  epsilon_void={config.epsilon_void:.4f}")
+        coh_str = f"{sigma_coh:.4f}" if sigma_coh is not None else f"None (=sigma={sigma:.4f})"
+        print(f"  {refs}")
+        print(f"  sigma={sigma:.4f}  sigma_coh={coh_str}  sigma_attract_local={sal_str}")
+        print(f"  epsilon_r={epsilon_r:.6f} (λ_rep={config.repulsion_strength_mult})"
+              f"  mu0={mu0:.4f}  lambda_stretch={lambda_stretch:.4f}  lambda_bend={lambda_bend:.6f}")
+        print(f"  r_cut={rcut_str}  epsilon_void={config.epsilon_void:.4f}")
 
     cond_cfg = CondensationConfig(
         sigma=sigma,
+        sigma_coh=sigma_coh,
         delta=config.delta,
         epsilon_r=epsilon_r,
         eta=1e-4,
-        lambda_stretch=config.lambda_stretch,
-        lambda_bend=config.lambda_bend,
-        mu0=config.mu0,
+        lambda_stretch=lambda_stretch,
+        lambda_bend=lambda_bend,
+        mu0=mu0,
         gamma=config.gamma,
         k_attract=config.k_attract,
         subtract_mean_attraction=False,
@@ -460,8 +499,9 @@ def run_temporal(
         k_local_scale=config.k_local_scale,
     )
 
-    # Compute initial coherence and metrics
-    C_init = compute_coherence(positions, mask, sigma=sigma, delta=config.delta)
+    # Compute initial coherence and metrics using the same sigma_coh that dynamics will use
+    _sigma_for_init_coh = sigma_coh if sigma_coh is not None else sigma
+    C_init = compute_coherence(positions, mask, sigma=_sigma_for_init_coh, delta=config.delta)
     initial_metrics = _temporal_metrics(positions, dataset.labels, C_init, mask)
     # positions_ref not provided for initial metrics — ratio relative to self = 1.0 by definition
 
@@ -474,7 +514,7 @@ def run_temporal(
     )
 
     pos_final = cond_result.positions
-    C_final = compute_coherence(pos_final, mask, sigma=sigma, delta=config.delta)
+    C_final = compute_coherence(pos_final, mask, sigma=_sigma_for_init_coh, delta=config.delta)
     final_metrics = _temporal_metrics(pos_final, dataset.labels, C_final, mask,
                                       positions_ref=positions)
 
@@ -486,7 +526,7 @@ def run_temporal(
         sel_rows = []
         for snap_idx, snap_iter in enumerate(cond_result.snapshot_iters):
             snap_pos = cond_result.position_history[snap_idx]
-            C_snap = compute_coherence(snap_pos, mask, sigma=sigma, delta=config.delta)
+            C_snap = compute_coherence(snap_pos, mask, sigma=_sigma_for_init_coh, delta=config.delta)
             m = _temporal_metrics(snap_pos, dataset.labels, C_snap, mask,
                                   positions_ref=positions)
             sel_rows.append({"iter": snap_iter, **m})
