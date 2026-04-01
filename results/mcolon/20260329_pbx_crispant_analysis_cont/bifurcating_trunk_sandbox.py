@@ -761,46 +761,56 @@ def plot_force_sweeps(
     # Each entry: (param_name, values, default, fixed_overrides, xlabel_suffix)
     # fixed_overrides: kwargs to hold constant while sweeping this param
     # (isotropic baseline always has repulsion_strength_mult=default, everything else off)
+    # Each entry: (param_name, values, default, no_change_threshold, fixed_overrides, xlabel_suffix)
+    # no_change_threshold: value where force first produces >2% metric deviation on Y-benchmark
+    # NOTE: thresholds measured on WELL-INITIALIZED Y-benchmark. On poorly-initialized data
+    # the force will activate at LOWER values — defaults are intentionally just below threshold.
     sweep_specs = [
         (
             "repulsion_strength_mult",
             np.array([0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]),
-            0.005,
+            0.005,   # default
+            0.0071,  # no_change threshold on well-initialized Y-benchmark
             dict(fidelity_init_strength=0.0, epsilon_void=0.0),
             "",
         ),
         (
-            "fidelity_init_strength",
-            np.array([0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]),
-            1.0,
+            "fidelity_strength_mult",
+            np.array([0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0]),
+            0.25,    # default
+            0.334,   # no_change threshold
             dict(fidelity_half_life_iters=70.0, epsilon_void=0.0),
             "(fidelity_half_life_iters=70 fixed)",
         ),
         (
             "fidelity_half_life_iters",
             np.array([1.0, 3.0, 5.0, 10.0, 20.0, 50.0, 70.0, 100.0, 200.0, 500.0]),
-            70.0,
-            dict(fidelity_init_strength=1.0, epsilon_void=0.0),
-            "(fidelity_init_strength=1.0 fixed)\niters → half of anchor weight",
+            70.0,    # default
+            None,    # no threshold — continuous parameter
+            dict(fidelity_strength_mult=0.25, epsilon_void=0.0),
+            "(fidelity_strength_mult=0.25 fixed)\niters until anchor halves",
         ),
         (
             "epsilon_void",
-            np.array([0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]),
-            0.005,
+            np.array([0.0005, 0.001, 0.002, 0.005, 0.014, 0.02, 0.05, 0.1, 0.2]),
+            0.014,   # default
+            0.018,   # no_change threshold
             dict(fidelity_init_strength=0.0, sigma_void_frac=5.0),
             "(sigma_void_frac=5.0 fixed)",
         ),
         (
             "stretch_strength_mult",
-            np.array([0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0]),
-            0.001,
+            np.array([0.001, 0.005, 0.01, 0.04, 0.1, 0.2, 0.5, 1.0, 2.0]),
+            0.04,    # default
+            0.049,   # no_change threshold
             dict(fidelity_init_strength=0.0, epsilon_void=0.0),
             "",
         ),
         (
             "bend_strength_mult",
-            np.array([0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0]),
-            0.001,
+            np.array([0.001, 0.005, 0.01, 0.04, 0.1, 0.2, 0.5, 1.0, 2.0]),
+            0.04,    # default
+            0.049,   # no_change threshold
             dict(fidelity_init_strength=0.0, epsilon_void=0.0),
             "",
         ),
@@ -829,7 +839,7 @@ def plot_force_sweeps(
     fig = plt.figure(figsize=(15, 10))
     outer = GridSpec(2, 3, figure=fig, hspace=0.55, wspace=0.35)
 
-    for facet_idx, (param, values, default, fixed_kw, xlabel_suffix) in enumerate(sweep_specs):
+    for facet_idx, (param, values, default, no_change_threshold, fixed_kw, xlabel_suffix) in enumerate(sweep_specs):
         row, col = divmod(facet_idx, 3)
         inner = GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[row, col],
                                         hspace=0.05, height_ratios=[1, 1])
@@ -853,8 +863,12 @@ def plot_force_sweeps(
 
         # Top subplot: branch_sep_late
         ax_top.plot(values, branch_seps, "o-", color=color_sep, lw=1.6, ms=4)
-        ax_top.axhline(baseline_sep, color=color_sep, lw=2.0, ls=":", alpha=0.85)
-        ax_top.axvline(default, color="black", lw=1.2, ls="--", alpha=0.7)
+        ax_top.axhline(baseline_sep, color=color_sep, lw=2.5, ls=":", alpha=0.85)
+        ax_top.axvline(default, color="black", lw=1.8, ls="--", alpha=0.85)
+        if no_change_threshold is not None:
+            ax_top.axvspan(values[0] * 0.5, no_change_threshold,
+                           alpha=0.10, color="green", zorder=0, label="below no_change")
+            ax_top.axvline(no_change_threshold, color="green", lw=1.2, ls="-.", alpha=0.7)
         ax_top.set_ylabel("branch_sep_late", fontsize=7, color=color_sep, fontweight="bold")
         ax_top.tick_params(axis="y", labelsize=6, colors=color_sep)
         ax_top.tick_params(axis="x", labelbottom=False)
@@ -867,21 +881,29 @@ def plot_force_sweeps(
 
         # Bottom subplot: trunk_linearity_early
         ax_bot.plot(values, trunk_lins, "s--", color=color_lin, lw=1.6, ms=4)
-        ax_bot.axhline(baseline_lin, color=color_lin, lw=2.0, ls=":", alpha=0.85)
-        ax_bot.axvline(default, color="black", lw=1.2, ls="--", alpha=0.7)
+        ax_bot.axhline(baseline_lin, color=color_lin, lw=2.5, ls=":", alpha=0.85)
+        ax_bot.axvline(default, color="black", lw=1.8, ls="--", alpha=0.85)
+        if no_change_threshold is not None:
+            ax_bot.axvspan(values[0] * 0.5, no_change_threshold,
+                           alpha=0.10, color="green", zorder=0)
+            ax_bot.axvline(no_change_threshold, color="green", lw=1.2, ls="-.", alpha=0.7)
         ax_bot.set_ylabel("trunk_lin_early", fontsize=7, color=color_lin, fontweight="bold")
         ax_bot.tick_params(axis="y", labelsize=6, colors=color_lin)
         ax_bot.tick_params(axis="x", labelsize=6, rotation=30)
         ax_bot.grid(True, which="both", alpha=0.2, lw=0.4)
-        ax_bot.set_xlabel(f"value (log)\ndefault={default}", fontsize=7)
+        thresh_note = f"  no_change≤{no_change_threshold:.4g}" if no_change_threshold is not None else ""
+        ax_bot.set_xlabel(f"value (log)\ndefault={default}{thresh_note}", fontsize=7)
 
     # Legend as figure-level annotation
     from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
     legend_handles = [
         Line2D([0], [0], color=color_sep, marker="o", lw=1.6, ms=4, label="branch_sep_late"),
         Line2D([0], [0], color=color_lin, marker="s", lw=1.6, ms=4, ls="--", label="trunk_linearity_early"),
-        Line2D([0], [0], color="black", lw=1.2, ls="--", label="default value"),
-        Line2D([0], [0], color="gray", lw=2.0, ls=":", label="isotropic baseline"),
+        Line2D([0], [0], color="black", lw=1.8, ls="--", label="default value"),
+        Line2D([0], [0], color="gray", lw=2.5, ls=":", label="isotropic baseline"),
+        Line2D([0], [0], color="green", lw=1.2, ls="-.", label="no_change threshold"),
+        Patch(facecolor="green", alpha=0.15, label="inert region (well-init. benchmark)"),
     ]
     fig.legend(handles=legend_handles, loc="lower center", ncol=4, fontsize=8,
                bbox_to_anchor=(0.5, 0.01), frameon=True)

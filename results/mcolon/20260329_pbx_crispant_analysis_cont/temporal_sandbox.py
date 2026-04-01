@@ -374,19 +374,27 @@ class TemporalRunConfig:
     k_attract: int = 20
 
     # --- Dimensionless force multipliers (each × reference scale² → coefficient) ---
+    # Design principle: each default is set just below the no_change threshold on the
+    # Y-benchmark (lr=1e-4, n_iter=500). Under good initialization they stay inert.
+    # Under poor initialization (noisy, sparse, misaligned) they activate and correct.
     repulsion_strength_mult: float = 0.005
-                                  # ε_r = λ_rep × s_local²   (validated at 0.005)
-    fidelity_strength_mult: float = 0.0
-                                  # μ_0 = λ_fid / s_local²   (0 = off)
-    stretch_strength_mult: float = 0.001
+                                  # ε_r = λ_rep × s_local²
+                                  # no_change threshold: 0.0071 — default sits just below
+    fidelity_strength_mult: float = 0.25
+                                  # μ_0 = λ_fid / s_local²
+                                  # no_change threshold: 0.334 — default sits just below
+                                  # anchors to init early; decays via fidelity_half_life_iters
+    stretch_strength_mult: float = 0.04
                                   # λ_stretch = λ_str / s_step²
-                                  # sweep: inert ≤0.05, onset ~0.05-0.58, destructive ≥0.58
-                                  # 0.001 is well inside inert zone — weak default, safe to crank
-    bend_strength_mult: float = 0.001
+                                  # no_change threshold: 0.049 — default sits just below
+                                  # activates if trajectory steps are irregular
+    bend_strength_mult: float = 0.04
                                   # λ_bend = λ_bnd / s_bend²
-                                  # sweep: inert ≤0.17, onset ~0.17-2.0, destructive ≥2.0
-                                  # 0.001 is well inside inert zone — weak default, safe to crank
-    epsilon_void: float = 0.0     # pairwise void proxy strength (0 = off)
+                                  # no_change threshold: 0.049 — default sits just below
+                                  # activates if trajectory curvature is extreme
+    epsilon_void: float = 0.014   # pairwise void proxy strength
+                                  # no_change threshold: 0.018 — default sits just below
+                                  # activates if embeddings are crowded/overlapping
                                   # NOTE: broad pairwise Gaussian, NOT grid-based occupancy void
     sigma_void_frac: float = 5.0  # sigma_void = sigma_void_frac × s_global
 
@@ -406,8 +414,8 @@ class TemporalRunConfig:
     alpha: float = 0.9
 
     # --- Optimization ---
-    lr: float = 1e-4
-    n_iter: int = 300
+    lr: float = 1e-4    # calibrated: stable, plateaus by 500 iters (solver_tempo sweep)
+    n_iter: int = 500   # calibrated: metrics plateau at ~300-500 iters at lr=1e-4
 
     # --- Legacy / less-used ---
     sigma_local_frac: float | None = None  # None = use sigma_frac (old behavior)
