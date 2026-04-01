@@ -171,7 +171,7 @@ def run_sweep_point(
         delta=delta,
         lr=lr,
         n_iter=n_iter,
-        mu0=0.0,
+        fidelity_init_strength=0.0,
         epsilon_void=0.0,
         lambda_stretch=0.0,
         lambda_bend=0.0,

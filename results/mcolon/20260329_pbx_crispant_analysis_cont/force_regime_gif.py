@@ -282,7 +282,7 @@ def run_regime_conditions(
                                   n_per_cluster=n_per_branch)
     baseline_cfg = TemporalRunConfig(
         k_attract=k_attract, delta=delta, lr=lr, n_iter=n_iter,
-        mu0=0.0, epsilon_void=0.0, lambda_stretch=0.0, lambda_bend=0.0,
+        fidelity_init_strength=0.0, epsilon_void=0.0, lambda_stretch=0.0, lambda_bend=0.0,
         fidelity_strength_mult=0.0, stretch_strength_mult=0.0, bend_strength_mult=0.0,
     )
     results["baseline"] = run_temporal(dataset, baseline_cfg, save_snapshots=False, verbose=False)
@@ -301,7 +301,7 @@ def run_regime_conditions(
                                       n_per_cluster=n_per_branch)
         cfg = TemporalRunConfig(
             k_attract=k_attract, delta=delta, lr=lr, n_iter=n_iter,
-            mu0=0.0, epsilon_void=0.0, lambda_stretch=0.0, lambda_bend=0.0,
+            fidelity_init_strength=0.0, epsilon_void=0.0, lambda_stretch=0.0, lambda_bend=0.0,
             fidelity_strength_mult=0.0, stretch_strength_mult=0.0, bend_strength_mult=0.0,
         )
         setattr(cfg, sweep.field, value)
