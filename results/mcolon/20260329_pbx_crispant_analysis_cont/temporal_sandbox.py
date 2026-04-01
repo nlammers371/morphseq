@@ -347,6 +347,21 @@ def _temporal_metrics(
 # Section 3: Run config and runner
 # ===========================================================================
 
+def gamma_from_half_life_iters(fidelity_half_life_iters: float | None) -> float:
+    """Convert fidelity half-life (in iterations) to per-iteration retention multiplier.
+
+    mu(n) = mu0 * gamma^n,  where gamma = 2^(-1/h)
+
+    h = fidelity_half_life_iters: number of iterations for mu to drop by half.
+    None → gamma = 1.0 (no decay, constant anchor).
+    """
+    if fidelity_half_life_iters is None:
+        return 1.0
+    if fidelity_half_life_iters <= 0:
+        raise ValueError(f"fidelity_half_life_iters must be > 0, got {fidelity_half_life_iters}")
+    return 2.0 ** (-1.0 / fidelity_half_life_iters)
+
+
 @dataclass
 class TemporalRunConfig:
     # --- Structural / informational knobs (not force magnitudes) ---
@@ -378,13 +393,16 @@ class TemporalRunConfig:
     # --- Raw overrides (backward compat — used when dimensionless mult is 0) ---
     # If fidelity_strength_mult > 0, fidelity_init_strength is derived; otherwise used directly.
     # Same pattern for stretch/bend. This lets old callers pass raw values unchanged.
-    fidelity_init_strength: float = 0.0   # was mu0; initial anchor weight
+    fidelity_init_strength: float = 0.0        # initial anchor weight (0 = fidelity off)
     lambda_stretch: float = 0.0
     lambda_bend: float = 0.0
-    fidelity_half_life: float = 0.99      # was gamma; per-iteration retention
-                                          # 0.99 = slow decay, just enough to matter (onset regime)
-                                          # 1.0  = no decay (permanent anchor — different regime entirely)
-                                          # 0.1  = fast decay (anchor gone in ~10 iterations)
+    fidelity_half_life_iters: float | None = 70.0
+                                                # solver iterations for fidelity weight to halve.
+                                                # mu(n) = fidelity_init_strength * 2^(-n/h)
+                                                # None = no decay (constant anchor, different regime)
+                                                # 70  ≈ old gamma=0.99 onset
+                                                # 50  = faster decay
+                                                # 100 = more persistent anchor
     alpha: float = 0.9
 
     # --- Optimization ---
@@ -491,7 +509,7 @@ def run_temporal(
         lambda_stretch=lambda_stretch,
         lambda_bend=lambda_bend,
         fidelity_init_strength=fidelity_init_strength,
-        fidelity_half_life=config.fidelity_half_life,
+        fidelity_half_life=gamma_from_half_life_iters(config.fidelity_half_life_iters),
         k_attract=config.k_attract,
         subtract_mean_attraction=False,
         alpha=config.alpha,
@@ -906,7 +924,7 @@ def run_delta_sweep(
             lambda_stretch=base_config.lambda_stretch,
             lambda_bend=base_config.lambda_bend,
             fidelity_init_strength=base_config.fidelity_init_strength,
-            fidelity_half_life=base_config.fidelity_half_life,
+            fidelity_half_life_iters=base_config.fidelity_half_life_iters,
             alpha=base_config.alpha,
         )
         if verbose:

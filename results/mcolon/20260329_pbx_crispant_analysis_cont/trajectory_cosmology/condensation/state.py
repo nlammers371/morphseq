@@ -34,10 +34,10 @@ class CondensationConfig:
     lambda_bend : float
         Bending (curvature) penalty weight.
     fidelity_init_strength : float
-        Initial fidelity anchor weight (mu at iteration 0).
+        Initial fidelity anchor weight at iteration 0. Set to 0.0 to disable fidelity.
     fidelity_half_life : float
-        Per-iteration retention multiplier (mu_n = fidelity_init_strength * fidelity_half_life^n).
-        0.999 = slow decay (anchor persists); 0.1 = fast decay (anchor dies quickly).
+        Internal per-iteration retention multiplier gamma (mu_n = fidelity_init_strength * gamma^n).
+        Derived from fidelity_half_life_iters via gamma = 2^(-1/h). Not set directly by users.
     k_attract : int | None
         Number of nearest neighbors for local attraction. None = all pairs.
     subtract_mean_attraction : bool
@@ -64,9 +64,8 @@ class CondensationConfig:
     lambda_stretch: float = 0.1
     lambda_bend: float = 0.05
     fidelity_init_strength: float = 1.0   # full initial anchor pull
-    fidelity_half_life: float = 0.99      # slow decay, just enough to matter
-                                          # 1.0 = no decay (permanent anchor — different regime)
-                                          # 0.1 = fast decay (anchor gone in ~10 iterations)
+    fidelity_half_life: float = 0.99      # internal gamma; derived from fidelity_half_life_iters
+                                          # do not set directly — use TemporalRunConfig.fidelity_half_life_iters
     k_attract: int | None = 15
     subtract_mean_attraction: bool = False
     # Two-scale force law

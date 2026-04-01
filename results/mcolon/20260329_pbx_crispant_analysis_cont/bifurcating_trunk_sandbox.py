@@ -46,7 +46,7 @@ Four conditions run automatically (all from the same saved initialization)
 ---------------------------------------------------------------------------
   A. isotropic              — coherence + repulsion only (baseline)
   B. fidelity               — + fidelity anchor (fidelity_init_strength=1.0,
-                               fidelity_half_life=0.999 — slow/persistent decay)
+                               fidelity_half_life_iters=70 — half-life 70 iterations)
   C. pairwise_void_proxy    — + broad pairwise Gaussian void (epsilon_void=0.005,
                                sigma_void_frac=5.0). NOTE: this is NOT the grid-based
                                occupancy void. It is a broad pairwise density-field
@@ -55,7 +55,7 @@ Four conditions run automatically (all from the same saved initialization)
   D. elasticity             — + stretch + bending penalty (lambda_stretch=0.05,
                                lambda_bend=0.02)
   E. all_on                 — all forces on: fidelity (fidelity_init_strength=1.0,
-                               fidelity_half_life=0.1 — fast decay, anchor dies quickly)
+                               fidelity_half_life_iters=5 — fast decay, half-life 5 iters)
                                + void proxy (epsilon_void=0.005, sigma_void_frac=5.0)
                                + elasticity defaults (stretch_strength_mult=0.001,
                                bend_strength_mult=0.001)
@@ -754,7 +754,7 @@ def plot_force_sweeps(
     Horizontal dotted line: isotropic baseline for each metric.
 
     Families (row-major order):
-      [0,0] repulsion_strength_mult   [0,1] fidelity_init_strength  [0,2] fidelity_half_life
+      [0,0] repulsion_strength_mult   [0,1] fidelity_init_strength  [0,2] fidelity_half_life_iters
       [1,0] epsilon_void              [1,1] stretch_strength_mult   [1,2] bend_strength_mult
     """
     # --- Define sweep specs ---
@@ -773,15 +773,15 @@ def plot_force_sweeps(
             "fidelity_init_strength",
             np.array([0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]),
             1.0,
-            dict(fidelity_half_life=0.99, epsilon_void=0.0),
-            "(fidelity_half_life=0.99 fixed)",
+            dict(fidelity_half_life_iters=70.0, epsilon_void=0.0),
+            "(fidelity_half_life_iters=70 fixed)",
         ),
         (
-            "fidelity_half_life",
-            np.array([0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99, 0.999, 0.9999]),
-            0.99,
+            "fidelity_half_life_iters",
+            np.array([1.0, 3.0, 5.0, 10.0, 20.0, 50.0, 70.0, 100.0, 200.0, 500.0]),
+            70.0,
             dict(fidelity_init_strength=1.0, epsilon_void=0.0),
-            "(fidelity_init_strength=1.0 fixed)",
+            "(fidelity_init_strength=1.0 fixed)\niters → half of anchor weight",
         ),
         (
             "epsilon_void",
@@ -969,7 +969,7 @@ def main() -> None:
         (
             "B_fidelity",
             "B: + fidelity\n(init_str=1.0, half_life=0.999)",
-            TemporalRunConfig(**base_kwargs, fidelity_init_strength=1.0, fidelity_half_life=0.999, epsilon_void=0.0),
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=1.0, fidelity_half_life_iters=70.0, epsilon_void=0.0),
         ),
         (
             "C_pairwise_void_proxy",
@@ -985,7 +985,7 @@ def main() -> None:
         (
             "E_all_on",
             "E: all ON\n(fid half_life=0.1 fast + void + ela)",
-            TemporalRunConfig(**base_kwargs, fidelity_init_strength=1.0, fidelity_half_life=0.1,
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=1.0, fidelity_half_life_iters=5.0,
                               epsilon_void=0.005, sigma_void_frac=5.0),
         ),
     ]
