@@ -22,7 +22,7 @@ from trajectory_cosmology.schema import from_multiclass_csv, from_pairwise_margi
 from trajectory_cosmology.init_embedding import pca_init, aligned_umap_init
 from trajectory_cosmology.condensation.api import run_condensation
 from trajectory_cosmology.condensation.state import CondensationConfig
-from trajectory_cosmology.condensation.stopping import StoppingConfig
+from trajectory_cosmology.condensation.engine.stopping import StoppingConfig
 from trajectory_cosmology import plotting
 
 
@@ -47,8 +47,9 @@ def parse_args():
     p.add_argument("--lr", type=float, default=0.01)
     p.add_argument("--lambda-stretch", type=float, default=0.1)
     p.add_argument("--lambda-bend", type=float, default=0.05)
-    p.add_argument("--mu0", type=float, default=1.0)
-    p.add_argument("--gamma", type=float, default=0.97)
+    p.add_argument("--fidelity-init-strength", type=float, default=1.0)
+    p.add_argument("--fidelity-half-life-iters", type=float, default=70.0,
+                   help="Solver iters for fidelity weight to halve. gamma = 2^(-1/h).")
     p.add_argument("--epsilon-r", type=float, default=0.01)
     p.add_argument("--eta", type=float, default=1e-4)
     p.add_argument("--k-attract", type=_parse_optional_int, default=15,
@@ -79,21 +80,22 @@ def main():
     else:
         x0 = aligned_umap_init(data.features, data.mask)
 
+    fidelity_half_life = 2.0 ** (-1.0 / args.fidelity_half_life_iters)
     config = CondensationConfig(
         sigma=args.sigma,
         delta=args.delta,
         lr=args.lr,
         lambda_stretch=args.lambda_stretch,
         lambda_bend=args.lambda_bend,
-        mu0=args.mu0,
-        gamma=args.gamma,
+        fidelity_init_strength=args.fidelity_init_strength,
+        fidelity_half_life=fidelity_half_life,
         epsilon_r=args.epsilon_r,
         eta=args.eta,
         k_attract=args.k_attract,
         subtract_mean_attraction=args.subtract_mean_attraction,
         max_iter=args.n_iter,
     )
-    stopping = StoppingConfig(patience=args.n_iter + 1)
+    stopping = StoppingConfig()
 
     print(f"Running {args.n_iter} iterations ...")
     result = run_condensation(
