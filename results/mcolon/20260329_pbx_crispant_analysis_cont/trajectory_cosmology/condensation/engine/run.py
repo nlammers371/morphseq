@@ -64,7 +64,7 @@ def run_dynamics(
 
     for n in range(config.max_iter):
         coherence = compute_coherence(positions, mask, sigma=sigma_coh, delta=config.delta)
-        mu = config.mu0 * (config.gamma ** n)
+        mu = config.fidelity_init_strength * (config.fidelity_half_life ** n)
 
         energies, grad = total_energy_and_grad(
             positions=positions,

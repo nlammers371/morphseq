@@ -11,7 +11,7 @@ Two tests:
   Test B (crossing_bundles): Two bundles converge, cross, then re-separate.
                               Coherence must not permanently fuse them.
 
-Defaults deliberately set mu0=0.0 (no fidelity) so results reflect the
+Defaults deliberately set fidelity_init_strength=0.0 (no fidelity) so results reflect the
 coherence + spatial force mechanism alone, not the anchor.
 
 Run (smoke test):
@@ -363,21 +363,28 @@ class TemporalRunConfig:
                                   # ε_r = λ_rep × s_local²   (validated at 0.005)
     fidelity_strength_mult: float = 0.0
                                   # μ_0 = λ_fid / s_local²   (0 = off)
-    stretch_strength_mult: float = 0.0
-                                  # λ_stretch = λ_str / s_step²  (0 = off)
-    bend_strength_mult: float = 0.0
-                                  # λ_bend = λ_bnd / s_bend²     (0 = off)
+    stretch_strength_mult: float = 0.001
+                                  # λ_stretch = λ_str / s_step²
+                                  # sweep: inert ≤0.05, onset ~0.05-0.58, destructive ≥0.58
+                                  # 0.001 is well inside inert zone — weak default, safe to crank
+    bend_strength_mult: float = 0.001
+                                  # λ_bend = λ_bnd / s_bend²
+                                  # sweep: inert ≤0.17, onset ~0.17-2.0, destructive ≥2.0
+                                  # 0.001 is well inside inert zone — weak default, safe to crank
     epsilon_void: float = 0.0     # pairwise void proxy strength (0 = off)
                                   # NOTE: broad pairwise Gaussian, NOT grid-based occupancy void
     sigma_void_frac: float = 5.0  # sigma_void = sigma_void_frac × s_global
 
     # --- Raw overrides (backward compat — used when dimensionless mult is 0) ---
-    # If fidelity_strength_mult > 0, mu0 is derived; otherwise mu0 is used directly.
+    # If fidelity_strength_mult > 0, fidelity_init_strength is derived; otherwise used directly.
     # Same pattern for stretch/bend. This lets old callers pass raw values unchanged.
-    mu0: float = 0.0
+    fidelity_init_strength: float = 0.0   # was mu0; initial anchor weight
     lambda_stretch: float = 0.0
     lambda_bend: float = 0.0
-    gamma: float = 0.999
+    fidelity_half_life: float = 0.99      # was gamma; per-iteration retention
+                                          # 0.99 = slow decay, just enough to matter (onset regime)
+                                          # 1.0  = no decay (permanent anchor — different regime entirely)
+                                          # 0.1  = fast decay (anchor gone in ~10 iterations)
     alpha: float = 0.9
 
     # --- Optimization ---
@@ -433,11 +440,11 @@ def run_temporal(
     # Repulsion: calibrated to local point spacing (validated at 0.005)
     epsilon_r = config.repulsion_strength_mult * refs.s_local ** 2
 
-    # Fidelity: if dimensionless mult given, derive from s_local; else use raw mu0
+    # Fidelity: if dimensionless mult given, derive from s_local; else use raw fidelity_init_strength
     if config.fidelity_strength_mult > 0.0:
-        mu0 = config.fidelity_strength_mult / (refs.s_local ** 2 + 1e-16)
+        fidelity_init_strength = config.fidelity_strength_mult / (refs.s_local ** 2 + 1e-16)
     else:
-        mu0 = config.mu0
+        fidelity_init_strength = config.fidelity_init_strength
 
     # Stretch: if dimensionless mult given, derive from s_step; else use raw lambda_stretch
     if config.stretch_strength_mult > 0.0:
@@ -472,7 +479,7 @@ def run_temporal(
         print(f"  {refs}")
         print(f"  sigma={sigma:.4f}  sigma_coh={coh_str}  sigma_attract_local={sal_str}")
         print(f"  epsilon_r={epsilon_r:.6f} (λ_rep={config.repulsion_strength_mult})"
-              f"  mu0={mu0:.4f}  lambda_stretch={lambda_stretch:.4f}  lambda_bend={lambda_bend:.6f}")
+              f"  fidelity_init_strength={fidelity_init_strength:.4f}  lambda_stretch={lambda_stretch:.4f}  lambda_bend={lambda_bend:.6f}")
         print(f"  r_cut={rcut_str}  epsilon_void={config.epsilon_void:.4f}")
 
     cond_cfg = CondensationConfig(
@@ -483,8 +490,8 @@ def run_temporal(
         eta=1e-4,
         lambda_stretch=lambda_stretch,
         lambda_bend=lambda_bend,
-        mu0=mu0,
-        gamma=config.gamma,
+        fidelity_init_strength=fidelity_init_strength,
+        fidelity_half_life=config.fidelity_half_life,
         k_attract=config.k_attract,
         subtract_mean_attraction=False,
         alpha=config.alpha,
@@ -635,7 +642,7 @@ def plot_temporal_run(result: TemporalRunResult, output_dir: Path) -> None:
         cfg = result.config
         fig.suptitle(
             f"{ds.variant} | {title_prefix.strip()} | "
-            f"k={cfg.k_attract} σ_frac={cfg.sigma_frac} λ_rep={cfg.repulsion_strength_mult} δ={cfg.delta} mu0={cfg.mu0}",
+            f"k={cfg.k_attract} σ_frac={cfg.sigma_frac} λ_rep={cfg.repulsion_strength_mult} δ={cfg.delta} fid_init={cfg.fidelity_init_strength}",
             fontsize=9,
         )
         fig.tight_layout()
@@ -758,7 +765,7 @@ def plot_temporal_run(result: TemporalRunResult, output_dir: Path) -> None:
 
     fig.suptitle(
         f"{ds.variant} | k={result.config.k_attract} δ={result.config.delta} "
-        f"mu0={result.config.mu0} lr={result.config.lr:.0e}",
+        f"fid_init={result.config.fidelity_init_strength} lr={result.config.lr:.0e}",
         fontsize=10,
     )
     fig.tight_layout()
@@ -898,8 +905,8 @@ def run_delta_sweep(
             n_iter=base_config.n_iter,
             lambda_stretch=base_config.lambda_stretch,
             lambda_bend=base_config.lambda_bend,
-            mu0=base_config.mu0,
-            gamma=base_config.gamma,
+            fidelity_init_strength=base_config.fidelity_init_strength,
+            fidelity_half_life=base_config.fidelity_half_life,
             alpha=base_config.alpha,
         )
         if verbose:
@@ -994,8 +1001,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--delta", type=int, default=3)
     p.add_argument("--delta-sweep", nargs="+", type=int, default=[1, 3, 5, 10],
                    help="Delta values to sweep on crossing bundles")
-    p.add_argument("--mu0", type=float, default=0.0,
-                   help="Fidelity anchor weight (0 = off, cleanest mechanism test)")
+    p.add_argument("--fidelity-init-strength", type=float, default=0.0,
+                   help="Initial fidelity anchor weight (0 = off, cleanest mechanism test)")
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--no-animation", action="store_true")
     p.add_argument("--seed", type=int, default=42)
@@ -1030,7 +1037,7 @@ def main() -> None:
         delta=args.delta,
         lr=args.lr,
         n_iter=args.n_iter,
-        mu0=args.mu0,
+        fidelity_init_strength=args.fidelity_init_strength,
         sigma_local_frac=args.sigma_local_frac,
         epsilon_void=args.epsilon_void,
         lambda_scale=args.lambda_scale,
@@ -1065,7 +1072,7 @@ def main() -> None:
     print(f"    local_radius_ratio_p95:      {m.get('local_radius_ratio_p95', float('nan')):.3f}")
 
     all_summaries.append({
-        "variant": "stable_bundles", "delta": args.delta, "mu0": args.mu0,
+        "variant": "stable_bundles", "delta": args.delta, "fidelity_init_strength": args.fidelity_init_strength,
         "sigma_local_frac": args.sigma_local_frac,
         "sep_ratio_mean_initial": result_stable.initial_metrics["sep_ratio_mean"],
         "sep_ratio_mean_final": m["sep_ratio_mean"],
@@ -1111,7 +1118,7 @@ def main() -> None:
     print(f"    local_radius_ratio_p95:      {m.get('local_radius_ratio_p95', float('nan')):.3f}")
 
     all_summaries.append({
-        "variant": "crossing_bundles", "delta": args.delta, "mu0": args.mu0,
+        "variant": "crossing_bundles", "delta": args.delta, "fidelity_init_strength": args.fidelity_init_strength,
         "sigma_local_frac": args.sigma_local_frac,
         "sep_ratio_mean_initial": result_cross.initial_metrics["sep_ratio_mean"],
         "sep_ratio_mean_final": m["sep_ratio_mean"],
@@ -1146,7 +1153,7 @@ def main() -> None:
                     delta=args.delta,
                     lr=args.lr,
                     n_iter=args.n_iter,
-                    mu0=args.mu0,
+                    fidelity_init_strength=args.fidelity_init_strength,
                     sigma_local_frac=sloc,
                 )
                 print(f"  {variant_name} / {label} ...", flush=True)
@@ -1195,7 +1202,7 @@ def main() -> None:
                     delta=args.delta,
                     lr=args.lr,
                     n_iter=args.n_iter,
-                    mu0=args.mu0,
+                    fidelity_init_strength=args.fidelity_init_strength,
                     repulsion_strength_mult=rep_mult,
                     lambda_scale=lam,
                     k_local_scale=5,
@@ -1310,7 +1317,7 @@ def main() -> None:
                     delta=args.delta,
                     lr=args.lr,
                     n_iter=args.n_iter,
-                    mu0=args.mu0,
+                    fidelity_init_strength=args.fidelity_init_strength,
                     r_cut_frac=rcut_frac,
                     repulsion_strength_mult=rep_mult,
                 )

@@ -33,10 +33,11 @@ class CondensationConfig:
         Stretch (step-size) penalty weight.
     lambda_bend : float
         Bending (curvature) penalty weight.
-    mu0 : float
-        Initial fidelity anchor weight.
-    gamma : float
-        Fidelity decay factor per iteration (mu = mu0 * gamma^n).
+    fidelity_init_strength : float
+        Initial fidelity anchor weight (mu at iteration 0).
+    fidelity_half_life : float
+        Per-iteration retention multiplier (mu_n = fidelity_init_strength * fidelity_half_life^n).
+        0.999 = slow decay (anchor persists); 0.1 = fast decay (anchor dies quickly).
     k_attract : int | None
         Number of nearest neighbors for local attraction. None = all pairs.
     subtract_mean_attraction : bool
@@ -62,8 +63,10 @@ class CondensationConfig:
     eta: float = 1e-4
     lambda_stretch: float = 0.1
     lambda_bend: float = 0.05
-    mu0: float = 1.0
-    gamma: float = 0.97
+    fidelity_init_strength: float = 1.0   # full initial anchor pull
+    fidelity_half_life: float = 0.99      # slow decay, just enough to matter
+                                          # 1.0 = no decay (permanent anchor — different regime)
+                                          # 0.1 = fast decay (anchor gone in ~10 iterations)
     k_attract: int | None = 15
     subtract_mean_attraction: bool = False
     # Two-scale force law

@@ -45,7 +45,8 @@ Branch-geometry metrics
 Four conditions run automatically (all from the same saved initialization)
 ---------------------------------------------------------------------------
   A. isotropic              — coherence + repulsion only (baseline)
-  B. fidelity               — + fidelity anchor (mu0=1.0, gamma=0.999)
+  B. fidelity               — + fidelity anchor (fidelity_init_strength=1.0,
+                               fidelity_half_life=0.999 — slow/persistent decay)
   C. pairwise_void_proxy    — + broad pairwise Gaussian void (epsilon_void=0.005,
                                sigma_void_frac=5.0). NOTE: this is NOT the grid-based
                                occupancy void. It is a broad pairwise density-field
@@ -53,6 +54,11 @@ Four conditions run automatically (all from the same saved initialization)
                                Labelled as "proxy" to distinguish from the grid void.
   D. elasticity             — + stretch + bending penalty (lambda_stretch=0.05,
                                lambda_bend=0.02)
+  E. all_on                 — all forces on: fidelity (fidelity_init_strength=1.0,
+                               fidelity_half_life=0.1 — fast decay, anchor dies quickly)
+                               + void proxy (epsilon_void=0.005, sigma_void_frac=5.0)
+                               + elasticity defaults (stretch_strength_mult=0.001,
+                               bend_strength_mult=0.001)
 
 Anisotropy: not yet implemented. Excluded from all plots until it exists.
 
@@ -732,6 +738,164 @@ def plot_metrics_comparison(
     print(f"  Saved: {output_path}")
 
 
+def plot_force_sweeps(
+    init_path: Path,
+    base_kwargs: dict,
+    output_path: Path,
+    n_per_branch: int = 40,
+    split_full: int = 8,
+    verbose: bool = False,
+) -> None:
+    """2×3 grid of force-family sweep plots.
+
+    Each facet = one force family. Within each facet: two stacked subplots sharing
+    the x-axis — top: branch_sep_late, bottom: trunk_linearity_early.
+    X-axis: parameter value (log scale). Vertical dashed line: default value.
+    Horizontal dotted line: isotropic baseline for each metric.
+
+    Families (row-major order):
+      [0,0] repulsion_strength_mult   [0,1] fidelity_init_strength  [0,2] fidelity_half_life
+      [1,0] epsilon_void              [1,1] stretch_strength_mult   [1,2] bend_strength_mult
+    """
+    # --- Define sweep specs ---
+    # Each entry: (param_name, values, default, fixed_overrides, xlabel_suffix)
+    # fixed_overrides: kwargs to hold constant while sweeping this param
+    # (isotropic baseline always has repulsion_strength_mult=default, everything else off)
+    sweep_specs = [
+        (
+            "repulsion_strength_mult",
+            np.array([0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]),
+            0.005,
+            dict(fidelity_init_strength=0.0, epsilon_void=0.0),
+            "",
+        ),
+        (
+            "fidelity_init_strength",
+            np.array([0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]),
+            1.0,
+            dict(fidelity_half_life=0.99, epsilon_void=0.0),
+            "(fidelity_half_life=0.99 fixed)",
+        ),
+        (
+            "fidelity_half_life",
+            np.array([0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99, 0.999, 0.9999]),
+            0.99,
+            dict(fidelity_init_strength=1.0, epsilon_void=0.0),
+            "(fidelity_init_strength=1.0 fixed)",
+        ),
+        (
+            "epsilon_void",
+            np.array([0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2]),
+            0.005,
+            dict(fidelity_init_strength=0.0, sigma_void_frac=5.0),
+            "(sigma_void_frac=5.0 fixed)",
+        ),
+        (
+            "stretch_strength_mult",
+            np.array([0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0]),
+            0.001,
+            dict(fidelity_init_strength=0.0, epsilon_void=0.0),
+            "",
+        ),
+        (
+            "bend_strength_mult",
+            np.array([0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0]),
+            0.001,
+            dict(fidelity_init_strength=0.0, epsilon_void=0.0),
+            "",
+        ),
+    ]
+
+    # --- Run isotropic baseline once ---
+    ds_base = load_initialization(init_path, variant="bifurcating_trunk",
+                                  n_per_cluster=n_per_branch)
+    pos_init_fixed = ds_base.positions.copy()
+    cfg_base = TemporalRunConfig(**base_kwargs, fidelity_init_strength=0.0, epsilon_void=0.0)
+    print("  Running isotropic baseline...")
+    res_base = run_temporal(ds_base, cfg_base, save_snapshots=False, verbose=False)
+    base_summary = trunk_summary_metrics(res_base.cond_result.positions, pos_init_fixed,
+                                         ds_base.labels, split_full=split_full)
+    baseline_sep = base_summary["branch_sep_late"]
+    baseline_lin = base_summary["trunk_linearity_early"]
+    print(f"  baseline: branch_sep={baseline_sep:.4f}  trunk_lin={baseline_lin:.4f}")
+
+    color_sep = "#2166AC"   # blue
+    color_lin = "#D6604D"   # red-orange
+
+    # --- Build figure: 2 rows × 3 cols of facets, each facet = 2 stacked subplots ---
+    # Use gridspec: outer 2×3, inner each cell split into 2 rows
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+
+    fig = plt.figure(figsize=(15, 10))
+    outer = GridSpec(2, 3, figure=fig, hspace=0.55, wspace=0.35)
+
+    for facet_idx, (param, values, default, fixed_kw, xlabel_suffix) in enumerate(sweep_specs):
+        row, col = divmod(facet_idx, 3)
+        inner = GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[row, col],
+                                        hspace=0.05, height_ratios=[1, 1])
+        ax_top = fig.add_subplot(inner[0])
+        ax_bot = fig.add_subplot(inner[1], sharex=ax_top)
+
+        branch_seps = []
+        trunk_lins = []
+        print(f"\n  Sweeping {param}...")
+        for v in values:
+            ds = load_initialization(init_path, variant="bifurcating_trunk",
+                                     n_per_cluster=n_per_branch)
+            kw = {**fixed_kw, param: float(v)}
+            cfg = TemporalRunConfig(**base_kwargs, **kw)
+            res = run_temporal(ds, cfg, save_snapshots=False, verbose=False)
+            s = trunk_summary_metrics(res.cond_result.positions, pos_init_fixed,
+                                      ds.labels, split_full=split_full)
+            branch_seps.append(s["branch_sep_late"])
+            trunk_lins.append(s["trunk_linearity_early"])
+            print(f"    {param}={v:.5g}  sep={branch_seps[-1]:.4f}  lin={trunk_lins[-1]:.4f}")
+
+        # Top subplot: branch_sep_late
+        ax_top.plot(values, branch_seps, "o-", color=color_sep, lw=1.6, ms=4)
+        ax_top.axhline(baseline_sep, color=color_sep, lw=2.0, ls=":", alpha=0.85)
+        ax_top.axvline(default, color="black", lw=1.2, ls="--", alpha=0.7)
+        ax_top.set_ylabel("branch_sep_late", fontsize=7, color=color_sep, fontweight="bold")
+        ax_top.tick_params(axis="y", labelsize=6, colors=color_sep)
+        ax_top.tick_params(axis="x", labelbottom=False)
+        ax_top.grid(True, which="both", alpha=0.2, lw=0.4)
+        ax_top.set_xscale("log")
+        ax_top.set_title(
+            f"{param}\n{xlabel_suffix}" if xlabel_suffix else param,
+            fontsize=8, fontweight="bold", pad=3,
+        )
+
+        # Bottom subplot: trunk_linearity_early
+        ax_bot.plot(values, trunk_lins, "s--", color=color_lin, lw=1.6, ms=4)
+        ax_bot.axhline(baseline_lin, color=color_lin, lw=2.0, ls=":", alpha=0.85)
+        ax_bot.axvline(default, color="black", lw=1.2, ls="--", alpha=0.7)
+        ax_bot.set_ylabel("trunk_lin_early", fontsize=7, color=color_lin, fontweight="bold")
+        ax_bot.tick_params(axis="y", labelsize=6, colors=color_lin)
+        ax_bot.tick_params(axis="x", labelsize=6, rotation=30)
+        ax_bot.grid(True, which="both", alpha=0.2, lw=0.4)
+        ax_bot.set_xlabel(f"value (log)\ndefault={default}", fontsize=7)
+
+    # Legend as figure-level annotation
+    from matplotlib.lines import Line2D
+    legend_handles = [
+        Line2D([0], [0], color=color_sep, marker="o", lw=1.6, ms=4, label="branch_sep_late"),
+        Line2D([0], [0], color=color_lin, marker="s", lw=1.6, ms=4, ls="--", label="trunk_linearity_early"),
+        Line2D([0], [0], color="black", lw=1.2, ls="--", label="default value"),
+        Line2D([0], [0], color="gray", lw=2.0, ls=":", label="isotropic baseline"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=4, fontsize=8,
+               bbox_to_anchor=(0.5, 0.01), frameon=True)
+
+    fig.suptitle("Force family sweeps — bifurcating trunk benchmark\n"
+                 "Each panel: branch_sep_late (top) and trunk_linearity_early (bottom) vs parameter value",
+                 fontsize=10, fontweight="bold", y=0.98)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    print(f"\n  Saved: {output_path}")
+
+
 # ===========================================================================
 # Section 6: Main
 # ===========================================================================
@@ -753,6 +917,8 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--n-frames", type=int, default=72, help="Frames per 3D rotating GIF")
     p.add_argument("--no-animation", action="store_true")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--fidelity-half-life-sweep", action="store_true",
+                   help="Run all force family sweeps and generate 2x3 sweep figure")
     return p.parse_args()
 
 
@@ -798,23 +964,29 @@ def main() -> None:
         (
             "A_isotropic",
             "A: isotropic",
-            TemporalRunConfig(**base_kwargs, mu0=0.0, epsilon_void=0.0),
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=0.0, epsilon_void=0.0),
         ),
         (
             "B_fidelity",
-            "B: + fidelity\n(mu0=1.0, γ=0.999)",
-            TemporalRunConfig(**base_kwargs, mu0=1.0, gamma=0.999, epsilon_void=0.0),
+            "B: + fidelity\n(init_str=1.0, half_life=0.999)",
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=1.0, fidelity_half_life=0.999, epsilon_void=0.0),
         ),
         (
             "C_pairwise_void_proxy",
             "C: + pairwise void proxy\n(ε_void=0.005, σ_void_frac=5.0)\n[NOT grid void]",
-            TemporalRunConfig(**base_kwargs, mu0=0.0, epsilon_void=0.005, sigma_void_frac=5.0),
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=0.0, epsilon_void=0.005, sigma_void_frac=5.0),
         ),
         (
             "D_elasticity",
             "D: + elasticity\n(λ_stretch=0.05, λ_bend=0.02)",
-            TemporalRunConfig(**base_kwargs, mu0=0.0, epsilon_void=0.0,
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=0.0, epsilon_void=0.0,
                               lambda_stretch=0.05, lambda_bend=0.02),
+        ),
+        (
+            "E_all_on",
+            "E: all ON\n(fid half_life=0.1 fast + void + ela)",
+            TemporalRunConfig(**base_kwargs, fidelity_init_strength=1.0, fidelity_half_life=0.1,
+                              epsilon_void=0.005, sigma_void_frac=5.0),
         ),
     ]
 
@@ -864,6 +1036,19 @@ def main() -> None:
     print("  branch_sep_late              : >2.0 = clear split      (<1.0 = still fused)")
     print("  within_branch_spread_ratio   : ~1.0 = local structure preserved  (>2 = inflated)")
     print("  coherence_selectivity        : >1.0 = model distinguishes branches")
+
+    # --- Optional force family sweeps ---
+    if args.fidelity_half_life_sweep:
+        print("\n=== Force family sweeps ===")
+        plot_force_sweeps(
+            init_path=init_path,
+            base_kwargs=base_kwargs,
+            output_path=output_dir / "force_sweeps.png",
+            n_per_branch=args.n_per_branch,
+            split_full=args.split_full,
+            verbose=False,
+        )
+
     print(f"\nOutputs: {output_dir}")
 
 
