@@ -1,35 +1,48 @@
 """
-principal_graph.py
-------------------
-Fit a principal tree to condition-level centroids and test genotype
-branch-allocation distributions at each branch point.
+principal_graph.py  (v2)
+------------------------
+Fit a principal tree to the (x, y, t) space-time trajectory cloud and test
+whether genotypes distribute non-uniformly across branch arms.
 
-Statistical framework
----------------------
-Nodes are geometry; the statistical object is the *distribution of embryos
-across outgoing edges* at each branch node.
-
-At branch point v with outgoing edges e_1 ... e_k:
-  - Assign each embryo near v to the edge whose far endpoint it is closest to.
-  - Compute counts[genotype, edge].
-  - Permutation chi-square: shuffle genotype labels among all embryos near v,
-    recompute counts, build null distribution → p-value.
+Design decisions
+----------------
+* Graph is fitted on a COARSENED space-time grid (not raw observations) to
+  avoid local density artifacts that plagued v1.
+* Permutation unit = EMBRYO.  All timepoints from one embryo move together
+  in the null.  Observation-level permutation would inflate significance
+  because repeated observations per embryo are not independent.
+* Labels enter only at the test stage.  Graph construction is label-agnostic.
+* Two schematics are saved: (t_hpf, y) and (t_hpf, x) to avoid hiding real
+  branch geometry by projection.
 
 Public API
 ----------
-  build_centroid_mst(positions, mask, labels, time_values, auroc_df)
+  build_spacetime_grid_centroids(positions, mask, time_values,
+                                  grid_cells, t_weight)
+      -> (centroids_df, obs_ownership)
+
+  build_spacetime_mst(centroids_df, k_neighbors)
       -> (nodes_df, edges, adjacency)
+
+  contract_mst_skeleton(nodes_df, edges, adjacency, obs_ownership)
+      -> (skel_nodes_df, skel_edges, skel_adj)
+
   identify_branch_points(adjacency) -> list[int]
-  assign_embryos_to_edges(positions, mask, labels, time_values,
-                          nodes_df, edges, branch_node_ids, radius_factor)
+
+  assign_embryos_to_arms(skel_nodes_df, skel_adj, branch_node_ids,
+                          labels, obs_ownership)
       -> assignments_df
+
   permutation_branch_test(assignments_df, branch_node_id,
-                          n_perm, seed) -> BranchTestResult
+                           n_perm, seed) -> BranchTestResult
+
   BranchTestResult  (dataclass)
+  branch_results_to_df(results) -> pd.DataFrame
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections import defaultdict, deque
+from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
@@ -49,255 +62,288 @@ class BranchTestResult:
     Attributes
     ----------
     node_id : int
-        Index into nodes_df.
-    clade_edges : list[int]
-        Edge indices incident on this branch node.
-    stat_obs : float
-        Observed chi-square-like statistic.
-    pval : float
-        Permutation p-value (fraction of null stats >= stat_obs).
-    effect_size : float
-        Cramér's V — scale-free measure of association strength.
-    counts_gk : pd.DataFrame
-        counts[genotype × edge_index] — raw counts used for the test.
-    n_embryos_tested : int
-        Total embryos assigned at this branch across all genotypes.
-    bifurcation_time_hpf : float | None
-        Time bin centre where the test was run (if time-resolved).
+    arm_ids : list[int]  — arm indices (= component indices after removing v)
+    stat_obs : float     — chi-square statistic on embryo × arm table
+    pval : float         — permutation p-value (embryo-level null)
+    effect_size : float  — Cramér's V
+    counts_ge : pd.DataFrame  — embryos × arm contingency table
+    n_embryos : int      — total embryos tested at this branch
+    t_hpf_branch : float — mean t_hpf of the branch node
     """
     node_id: int
-    clade_edges: list[int]
+    arm_ids: list[int]
     stat_obs: float
     pval: float
     effect_size: float
-    counts_gk: pd.DataFrame
-    n_embryos_tested: int
-    bifurcation_time_hpf: float | None = None
+    counts_ge: pd.DataFrame
+    n_embryos: int
+    t_hpf_branch: float
 
 
 # ---------------------------------------------------------------------------
-# MST construction
+# Step 1 — Coarsened space-time grid centroids
 # ---------------------------------------------------------------------------
 
-def build_embryo_mst(
-    positions: np.ndarray,          # (N_e, T, 2)
-    mask: np.ndarray,               # (N_e, T)
-    labels: np.ndarray,             # (N_e,)
-    time_values: np.ndarray,        # (T,)
-    t_idx: int | None = None,
-    k_neighbors: int = 6,
-    subsample_n: int | None = None,
-    seed: int = 42,
-) -> tuple[pd.DataFrame, list[tuple[int, int]], np.ndarray]:
-    """Fit a k-NN MST on the full embryo point cloud at a single time bin.
+def build_spacetime_grid_centroids(
+    positions: np.ndarray,    # (N_e, T, 2)
+    mask: np.ndarray,         # (N_e, T)
+    time_values: np.ndarray,  # (T,)
+    grid_cells: int = 5,
+    t_weight: float = 2.0,
+) -> tuple[pd.DataFrame, dict[int, list[tuple[int, int]]]]:
+    """Coarsen the (x, y, t) cloud into a spatial grid per time bin.
 
-    This produces genuine branch points because individual embryo positions
-    can fan out from a common hub — unlike the 5-node centroid MST which
-    is always a chain.
+    For each time bin t, divide the observed (x, y) positions into a
+    grid_cells × grid_cells grid.  Compute the centroid of each occupied cell.
+    Assign a t_norm coordinate to each centroid.
 
     Parameters
     ----------
     positions : (N_e, T, 2)
     mask : (N_e, T)
-    labels : (N_e,)
     time_values : (T,)
-    t_idx : int | None — time bin index; defaults to most-observed bin
-    k_neighbors : int — k for k-NN graph construction
-    subsample_n : int | None — if set, subsample embryos per condition to
-        at most this number (useful for balanced graphs)
-    seed : int — for subsampling reproducibility
+    grid_cells : int — spatial grid resolution per time bin
+    t_weight : float — scales temporal axis relative to spatial axes
 
     Returns
     -------
-    nodes_df : DataFrame
-        Columns: node_id, condition, x, y, time_bin_center
-        One row per embryo node used.
+    centroids_df : DataFrame
+        Columns: node_id, x, y, t_hpf, t_norm, n_obs
+        One row per occupied grid cell.
+    obs_ownership : dict[node_id -> list[(embryo_idx, t_idx)]]
+        Which (embryo, time) observations fall in each centroid cell.
+    """
+    t_min, t_max = float(time_values.min()), float(time_values.max())
+    t_range = t_max - t_min if t_max > t_min else 1.0
+
+    # Global x/y range for grid bounds
+    all_x, all_y = [], []
+    for i in range(positions.shape[0]):
+        for t in range(positions.shape[1]):
+            if mask[i, t]:
+                all_x.append(positions[i, t, 0])
+                all_y.append(positions[i, t, 1])
+    x_min, x_max = min(all_x), max(all_x)
+    y_min, y_max = min(all_y), max(all_y)
+    x_range = (x_max - x_min) or 1.0
+    y_range = (y_max - y_min) or 1.0
+
+    # Bin each observation
+    # Key: (t_idx, cell_x, cell_y)
+    cell_obs: dict[tuple, list[tuple[int, int]]] = defaultdict(list)
+    cell_xy: dict[tuple, list[tuple[float, float]]] = defaultdict(list)
+
+    for i in range(positions.shape[0]):
+        for t in range(positions.shape[1]):
+            if not mask[i, t]:
+                continue
+            x, y = positions[i, t, 0], positions[i, t, 1]
+            cx = int(min(grid_cells - 1,
+                         int((x - x_min) / x_range * grid_cells)))
+            cy = int(min(grid_cells - 1,
+                         int((y - y_min) / y_range * grid_cells)))
+            key = (int(t), cx, cy)
+            cell_obs[key].append((i, int(t)))
+            cell_xy[key].append((x, y))
+
+    # Build centroid nodes
+    rows = []
+    obs_ownership: dict[int, list[tuple[int, int]]] = {}
+    for key, obs_list in sorted(cell_obs.items()):
+        t_idx, cx, cy = key
+        hpf = float(time_values[t_idx])
+        t_norm = (hpf - t_min) / t_range * t_weight
+        xys = cell_xy[key]
+        x_c = float(np.mean([p[0] for p in xys]))
+        y_c = float(np.mean([p[1] for p in xys]))
+        node_id = len(rows)
+        rows.append({
+            "node_id": node_id,
+            "x":       x_c,
+            "y":       y_c,
+            "t_hpf":   hpf,
+            "t_norm":  t_norm,
+            "n_obs":   len(obs_list),
+        })
+        obs_ownership[node_id] = obs_list
+
+    centroids_df = pd.DataFrame(rows)
+    return centroids_df, obs_ownership
+
+
+# ---------------------------------------------------------------------------
+# Step 2 — k-NN MST on coarsened centroids
+# ---------------------------------------------------------------------------
+
+def build_spacetime_mst(
+    centroids_df: pd.DataFrame,
+    k_neighbors: int = 5,
+) -> tuple[pd.DataFrame, list[tuple[int, int]], np.ndarray]:
+    """Fit a k-NN MST on the coarsened space-time centroids.
+
+    Uses (x, y, t_norm) as the 3D coordinates.
+
+    Parameters
+    ----------
+    centroids_df : from build_spacetime_grid_centroids
+    k_neighbors : int
+
+    Returns
+    -------
+    nodes_df : same as centroids_df (passed through)
     edges : list of (node_id_a, node_id_b)
     adjacency : (n_nodes, n_nodes) dense int array
     """
     from sklearn.neighbors import kneighbors_graph
 
-    if t_idx is None:
-        t_idx = int(mask.sum(axis=0).argmax())
+    pts = centroids_df[["x", "y", "t_norm"]].values
+    n = len(pts)
 
-    rng = np.random.default_rng(seed)
-
-    # Collect observed embryos at t_idx
-    obs_indices = np.where(mask[:, t_idx])[0]
-
-    if subsample_n is not None:
-        conditions = np.unique(labels[obs_indices])
-        keep = []
-        for cond in conditions:
-            cond_obs = obs_indices[labels[obs_indices] == cond]
-            if len(cond_obs) > subsample_n:
-                chosen = rng.choice(cond_obs, size=subsample_n, replace=False)
-            else:
-                chosen = cond_obs
-            keep.append(chosen)
-        obs_indices = np.concatenate(keep)
-
-    if len(obs_indices) < k_neighbors + 1:
+    if n < k_neighbors + 1:
         raise ValueError(
-            f"Only {len(obs_indices)} embryos at t_idx={t_idx}; "
-            f"need at least k_neighbors+1={k_neighbors+1}."
+            f"Only {n} centroid nodes; need at least k_neighbors+1={k_neighbors+1}. "
+            "Reduce grid_cells or k_neighbors."
         )
 
-    pts = positions[obs_indices, t_idx, :]   # (n_obs, 2)
-    rows = []
-    for local_i, emb_i in enumerate(obs_indices):
-        rows.append({
-            "node_id":         local_i,
-            "embryo_idx":      int(emb_i),
-            "condition":       str(labels[emb_i]),
-            "x":               float(pts[local_i, 0]),
-            "y":               float(pts[local_i, 1]),
-            "time_bin_center": float(time_values[t_idx]),
-        })
-    nodes_df = pd.DataFrame(rows)
-
-    # Build k-NN graph → MST
-    knn = kneighbors_graph(pts, n_neighbors=k_neighbors, mode="distance",
-                           include_self=False)
+    knn = kneighbors_graph(pts, n_neighbors=k_neighbors,
+                           mode="distance", include_self=False)
     mst_sparse = scipy.sparse.csgraph.minimum_spanning_tree(knn)
-    mst_sym = mst_sparse + mst_sparse.T   # symmetrise
+    mst_sym = mst_sparse + mst_sparse.T
     mst_coo = scipy.sparse.coo_matrix(mst_sym)
 
+    seen: set[tuple[int, int]] = set()
     edges: list[tuple[int, int]] = []
-    seen = set()
     for i, j in zip(mst_coo.row, mst_coo.col):
-        key = (min(i, j), max(i, j))
+        key = (min(int(i), int(j)), max(int(i), int(j)))
         if key not in seen:
             edges.append(key)
             seen.add(key)
 
-    n_nodes = len(nodes_df)
-    adjacency = np.zeros((n_nodes, n_nodes), dtype=int)
+    adjacency = np.zeros((n, n), dtype=int)
     for (i, j) in edges:
         adjacency[i, j] = 1
         adjacency[j, i] = 1
 
-    return nodes_df, edges, adjacency
+    return centroids_df, edges, adjacency
 
+
+# ---------------------------------------------------------------------------
+# Step 3 — Contract degree-2 chains to skeleton
+# ---------------------------------------------------------------------------
 
 def contract_mst_skeleton(
     nodes_df: pd.DataFrame,
     edges: list[tuple[int, int]],
     adjacency: np.ndarray,
-) -> tuple[pd.DataFrame, list[tuple[int, int]], np.ndarray]:
-    """Contract degree-2 chains to produce a skeleton with only branch points and leaves.
+    obs_ownership: dict[int, list[tuple[int, int]]],
+) -> tuple[pd.DataFrame, list[tuple[int, int]], np.ndarray, dict[int, list[tuple[int, int]]]]:
+    """Collapse degree-2 chains; return skeleton nodes and edges.
 
-    In a raw k-NN MST most nodes are degree-2 "pass-through" nodes on chains
-    between branch points or leaves.  This function collapses those chains
-    so the output graph contains only:
-      - Leaf nodes (degree == 1)
-      - Branch nodes (degree >= 3)
-
-    Each contracted edge carries the majority-vote condition label of the
-    nodes it absorbed.
+    Skeleton nodes are leaves (degree 1) or branch points (degree >= 3).
+    Each skeleton node absorbs the centroid nodes on the chain it spans,
+    and by extension all (embryo_idx, t_idx) observations from those nodes.
 
     Parameters
     ----------
-    nodes_df : from build_embryo_mst
-    edges : from build_embryo_mst
-    adjacency : from build_embryo_mst
+    nodes_df : from build_spacetime_mst
+    edges : from build_spacetime_mst
+    adjacency : from build_spacetime_mst
+    obs_ownership : from build_spacetime_grid_centroids
 
     Returns
     -------
     skel_nodes_df : DataFrame
-        Columns: node_id, condition, x, y, time_bin_center, n_embryos
-        Centroid of all original nodes merged into each skeleton node.
+        Columns: node_id, x_mean, y_mean, t_hpf_mean, n_obs, degree
     skel_edges : list of (node_id_a, node_id_b)
-    skel_adjacency : (n_skel_nodes, n_skel_nodes)
+    skel_adj : (n_skel, n_skel) int array
+    skel_obs_ownership : dict[skel_node_id -> list[(embryo_idx, t_idx)]]
     """
-    from collections import defaultdict
-
     n_nodes = adjacency.shape[0]
     degrees = adjacency.sum(axis=1)
 
-    # Skeleton nodes: leaves (degree 1) or branch points (degree >= 3)
+    # Skeleton = leaves (degree 1) + branches (degree >= 3)
     skel_mask = (degrees == 1) | (degrees >= 3)
-    skel_node_ids = sorted(np.where(skel_mask)[0])
+    skel_orig_ids = sorted(np.where(skel_mask)[0])
 
-    if not skel_node_ids:
-        # All nodes are degree-2; nothing to contract — return original
-        return nodes_df, edges, adjacency
+    if len(skel_orig_ids) == 0:
+        # Entire graph is a single chain — treat endpoints as skeleton
+        endpoints = np.where(degrees <= 1)[0]
+        skel_orig_ids = sorted(endpoints.tolist()) or [0, n_nodes - 1]
 
-    skel_set = set(skel_node_ids)
+    skel_set = set(skel_orig_ids)
 
-    # For each skeleton node, find the set of original nodes it "owns"
-    # (the degree-2 chain between it and the next skeleton node)
-    # We do this by BFS/DFS from each skeleton node along degree-2 chains.
-    owned: dict[int, list[int]] = defaultdict(list)
-    for skel_id in skel_node_ids:
-        owned[skel_id].append(skel_id)
+    # Map each original node to the nearest skeleton node via chain walking
+    orig_to_skel: dict[int, int] = {}
+    owned_by_skel: dict[int, list[int]] = defaultdict(list)
 
-    # Map each original node to the nearest skeleton node
-    orig_to_skel = {}
-    for skel_id in skel_node_ids:
-        orig_to_skel[skel_id] = skel_id
+    for s in skel_orig_ids:
+        orig_to_skel[s] = s
+        owned_by_skel[s].append(s)
 
-    # Walk degree-2 chains
-    for skel_id in skel_node_ids:
-        for start_nbr in np.where(adjacency[skel_id] > 0)[0]:
-            if int(start_nbr) in skel_set:
+    # Walk chains from each skeleton node
+    for s in skel_orig_ids:
+        for start in np.where(adjacency[s] > 0)[0]:
+            start = int(start)
+            if start in skel_set or start in orig_to_skel:
                 continue
-            # Walk the chain until we hit another skeleton node
-            prev = skel_id
-            cur = int(start_nbr)
+            prev, cur = s, start
             chain = [cur]
             while cur not in skel_set:
                 nbrs = [int(n) for n in np.where(adjacency[cur] > 0)[0]
                         if int(n) != prev]
                 if not nbrs:
                     break
-                prev = cur
-                cur = nbrs[0]
+                prev, cur = cur, nbrs[0]
                 if cur not in skel_set:
                     chain.append(cur)
-            # Assign first half of chain to skel_id
-            # (second half will be assigned when we walk from the other skel node)
-            mid = len(chain) // 2
+            mid = max(1, len(chain) // 2)
             for c in chain[:mid]:
                 if c not in orig_to_skel:
-                    orig_to_skel[c] = skel_id
-                    owned[skel_id].append(c)
+                    orig_to_skel[c] = s
+                    owned_by_skel[s].append(c)
 
-    # Assign any unvisited nodes to nearest skeleton node by position
-    coords_all = nodes_df[["x", "y"]].values
-    skel_coords = np.array([coords_all[s] for s in skel_node_ids])
+    # Assign any remaining nodes to nearest skeleton by Euclidean distance
+    coords = nodes_df[["x", "y", "t_norm"]].values
+    skel_coords = np.array([coords[s] for s in skel_orig_ids])
     for i in range(n_nodes):
         if i not in orig_to_skel:
-            dists = np.linalg.norm(skel_coords - coords_all[i], axis=1)
-            nearest = skel_node_ids[int(np.argmin(dists))]
+            dists = np.linalg.norm(skel_coords - coords[i], axis=1)
+            nearest = skel_orig_ids[int(np.argmin(dists))]
             orig_to_skel[i] = nearest
-            owned[nearest].append(i)
+            owned_by_skel[nearest].append(i)
 
-    # Build skeleton nodes: centroid of owned nodes
-    new_node_rows = []
-    skel_id_to_new = {s: i for i, s in enumerate(skel_node_ids)}
-    for skel_id in skel_node_ids:
-        members = owned[skel_id]
+    # Build new skeleton node ids (0-indexed)
+    skel_id_map = {s: new_id for new_id, s in enumerate(skel_orig_ids)}
+
+    # Build skel_nodes_df
+    skel_rows = []
+    skel_obs_ownership: dict[int, list[tuple[int, int]]] = {}
+    for s in skel_orig_ids:
+        new_id = skel_id_map[s]
+        members = owned_by_skel[s]
         member_rows = nodes_df.iloc[members]
-        new_node_rows.append({
-            "node_id":         skel_id_to_new[skel_id],
-            "orig_node_id":    skel_id,
-            "condition":       member_rows["condition"].mode().iloc[0],
-            "x":               float(member_rows["x"].mean()),
-            "y":               float(member_rows["y"].mean()),
-            "time_bin_center": float(member_rows["time_bin_center"].iloc[0]),
-            "n_embryos":       len(members),
+        all_obs: list[tuple[int, int]] = []
+        for m in members:
+            all_obs.extend(obs_ownership.get(m, []))
+        skel_obs_ownership[new_id] = all_obs
+        skel_rows.append({
+            "node_id":    new_id,
+            "orig_id":    s,
+            "x_mean":     float(member_rows["x"].mean()),
+            "y_mean":     float(member_rows["y"].mean()),
+            "t_hpf_mean": float(member_rows["t_hpf"].mean()),
+            "t_norm_mean": float(member_rows["t_norm"].mean()),
+            "n_obs":      len(all_obs),
         })
-    skel_nodes_df = pd.DataFrame(new_node_rows).reset_index(drop=True)
+    skel_nodes_df = pd.DataFrame(skel_rows).reset_index(drop=True)
 
-    # Build skeleton edges: unique pairs of skeleton nodes connected by
-    # an original edge (after mapping through orig_to_skel)
-    skel_edge_set = set()
+    # Build skeleton edges
+    skel_edge_set: set[tuple[int, int]] = set()
     for (i, j) in edges:
         si = orig_to_skel.get(i, i)
         sj = orig_to_skel.get(j, j)
-        si_new = skel_id_to_new.get(si)
-        sj_new = skel_id_to_new.get(sj)
+        si_new = skel_id_map.get(si)
+        sj_new = skel_id_map.get(sj)
         if si_new is not None and sj_new is not None and si_new != sj_new:
             key = (min(si_new, sj_new), max(si_new, sj_new))
             skel_edge_set.add(key)
@@ -309,354 +355,140 @@ def contract_mst_skeleton(
         skel_adj[i, j] = 1
         skel_adj[j, i] = 1
 
-    # Also store owned node indices per skeleton node for subtree tests
-    skel_nodes_df["owned_orig_nodes"] = [
-        owned[skel_id] for skel_id in skel_node_ids
-    ]
+    # Add degree column
+    skel_nodes_df["degree"] = skel_adj.sum(axis=1)
+    skel_nodes_df["is_branch"] = skel_nodes_df["degree"] >= 3
 
-    return skel_nodes_df, skel_edges, skel_adj
-
-
-def build_centroid_mst(
-    positions: np.ndarray,          # (N_e, T, 2)
-    mask: np.ndarray,               # (N_e, T)
-    labels: np.ndarray,             # (N_e,)
-    time_values: np.ndarray,        # (T,)
-    auroc_df: pd.DataFrame | None = None,
-    late_bins_n: int = 8,
-    t_idx_for_layout: int | None = None,
-) -> tuple[pd.DataFrame, list[tuple[int, int]], np.ndarray]:
-    """Fit a Minimum Spanning Tree on condition centroids.
-
-    Each node in the MST represents one (condition, time_bin) pair where
-    a centroid can be computed.  Edge weights are Euclidean distances between
-    centroids in condensed 2D space.  When auroc_df is provided the final MST
-    topology is also recorded but the edge-weight distance metric stays
-    geometric (spatial) so the layout reflects the actual embedding.
-
-    For the primary statistical uses (branch tests) we aggregate over all
-    observed time bins.  For the schematic layout we use a representative
-    time slice specified by t_idx_for_layout.
-
-    Parameters
-    ----------
-    positions : (N_e, T, 2)
-    mask : (N_e, T)
-    labels : (N_e,)
-    time_values : (T,)
-    auroc_df : optional — contrast_specificity_by_timebin.csv, used only for
-        recording cross-clade AUROC in the returned nodes_df.
-    late_bins_n : int
-        Number of late time bins used to build the aggregate distance matrix
-        for UPGMA-style topology determination.
-    t_idx_for_layout : int | None
-        Index into time_values for the representative layout slice.
-        Defaults to the time bin with the most observed embryos.
-
-    Returns
-    -------
-    nodes_df : DataFrame
-        Columns: node_id, condition, time_bin_center, x, y, n_embryos
-        One row per (condition, time_bin) with a valid centroid.
-    edges : list of (node_id_a, node_id_b)
-        MST edges as pairs of node_df row indices.
-    adjacency : (n_nodes, n_nodes) dense int array
-        Adjacency matrix of the MST (symmetric, 0/1).
-
-    Notes
-    -----
-    The MST is fit separately per time bin.  For the branch tests we use
-    the time-aggregated MST (fitted on centroids stacked across all T bins).
-    An additional "summary MST" is also fitted on condition-level mean
-    positions averaged across the late bins — this is used for the schematic.
-    """
-    conditions = np.unique(labels)
-    n_conditions = len(conditions)
-    cond_idx_map = {c: np.where(labels == c)[0] for c in conditions}
-
-    # ------------------------------------------------------------------
-    # 1. Determine representative layout time bin
-    # ------------------------------------------------------------------
-    if t_idx_for_layout is None:
-        t_idx_for_layout = int(mask.sum(axis=0).argmax())
-
-    # ------------------------------------------------------------------
-    # 2. Build per-condition centroids at the layout time bin
-    # ------------------------------------------------------------------
-    rows = []
-    for cond in conditions:
-        idx = cond_idx_map[cond]
-        obs = mask[idx, t_idx_for_layout]
-        if obs.sum() == 0:
-            continue
-        pts = positions[idx[obs], t_idx_for_layout, :]
-        rows.append({
-            "node_id":        len(rows),
-            "condition":      cond,
-            "time_bin_center": float(time_values[t_idx_for_layout]),
-            "x":              pts[:, 0].mean(),
-            "y":              pts[:, 1].mean(),
-            "n_embryos":      int(obs.sum()),
-        })
-    nodes_df = pd.DataFrame(rows).reset_index(drop=True)
-
-    if len(nodes_df) < 2:
-        raise ValueError("Fewer than 2 conditions with observations at layout time bin.")
-
-    # ------------------------------------------------------------------
-    # 3. Build pairwise Euclidean distance matrix on centroid positions
-    # ------------------------------------------------------------------
-    coords = nodes_df[["x", "y"]].values          # (n_nodes, 2)
-    n_nodes = len(nodes_df)
-    dist_matrix = np.full((n_nodes, n_nodes), np.inf)
-    for i in range(n_nodes):
-        for j in range(n_nodes):
-            if i != j:
-                dist_matrix[i, j] = np.linalg.norm(coords[i] - coords[j])
-
-    # ------------------------------------------------------------------
-    # 4. Fit MST via scipy
-    # ------------------------------------------------------------------
-    sparse_dist = scipy.sparse.csr_matrix(dist_matrix)
-    mst_sparse = scipy.sparse.csgraph.minimum_spanning_tree(sparse_dist)
-    mst_coo = mst_sparse.tocoo()
-
-    edges: list[tuple[int, int]] = []
-    for i, j in zip(mst_coo.row, mst_coo.col):
-        edges.append((int(i), int(j)))
-
-    # Build symmetric adjacency
-    adjacency = np.zeros((n_nodes, n_nodes), dtype=int)
-    for (i, j) in edges:
-        adjacency[i, j] = 1
-        adjacency[j, i] = 1
-
-    return nodes_df, edges, adjacency
+    return skel_nodes_df, skel_edges, skel_adj, skel_obs_ownership
 
 
 # ---------------------------------------------------------------------------
-# Branch point detection
+# Step 4 — Identify branch points
 # ---------------------------------------------------------------------------
 
 def identify_branch_points(adjacency: np.ndarray) -> list[int]:
-    """Return node indices where degree >= 3 (branch points in the MST).
-
-    Parameters
-    ----------
-    adjacency : (n_nodes, n_nodes) int array — symmetric adjacency matrix
-
-    Returns
-    -------
-    List of node indices (row indices in nodes_df) with degree >= 3.
-    """
-    degrees = adjacency.sum(axis=1)
-    return [int(i) for i in np.where(degrees >= 3)[0]]
+    """Return node indices with degree >= 3."""
+    return [int(i) for i in np.where(adjacency.sum(axis=1) >= 3)[0]]
 
 
 # ---------------------------------------------------------------------------
-# Embryo-to-edge assignment
+# Step 5 — Assign embryos to subtree arms (embryo-level)
 # ---------------------------------------------------------------------------
 
-def assign_embryos_to_edges(
-    positions: np.ndarray,          # (N_e, T, 2)
-    mask: np.ndarray,               # (N_e, T)
-    labels: np.ndarray,             # (N_e,)
-    time_values: np.ndarray,        # (T,)
-    nodes_df: pd.DataFrame,
-    edges: list[tuple[int, int]],
+def assign_embryos_to_arms(
+    skel_nodes_df: pd.DataFrame,
+    skel_adj: np.ndarray,
     branch_node_ids: list[int],
-    radius_factor: float = 2.5,
-    t_idx: int | None = None,
+    labels: np.ndarray,               # (N_e,) genotype per embryo
+    skel_obs_ownership: dict[int, list[tuple[int, int]]],
 ) -> pd.DataFrame:
-    """Assign each embryo to the nearest outgoing edge at each branch node.
+    """Assign each embryo to an arm at each branch node.
 
-    For each branch node v and each embryo i observed at time t_idx:
-      - Compute distance from embryo position to v's centroid.
-      - If within radius (radius_factor × mean inter-centroid distance),
-        assign the embryo to the outgoing edge whose *far endpoint* centroid
-        is closest to the embryo.
+    For each branch node v:
+    1. Remove v from the skeleton graph.
+    2. BFS from each neighbour → connected components = arms.
+    3. Each arm owns a set of (embryo_idx, t_idx) observations
+       (via skel_obs_ownership expanded through BFS).
+    4. Each embryo is assigned to the arm where it has the MOST observations
+       (majority vote). If tied, use arm with earlier mean t_hpf.
 
-    Parameters
-    ----------
-    positions : (N_e, T, 2)
-    mask : (N_e, T)
-    labels : (N_e,)
-    time_values : (T,)
-    nodes_df : from build_centroid_mst
-    edges : from build_centroid_mst
-    branch_node_ids : from identify_branch_points
-    radius_factor : float
-        Controls how far from a branch node to collect embryos.
-        Radius = radius_factor × mean_edge_length.
-    t_idx : int | None
-        Time bin index to use.  Defaults to the time bin recorded in nodes_df
-        (the layout time bin).
+    This is the embryo-level assignment — the permutation test shuffles
+    embryo genotype labels, not observation labels.
 
     Returns
     -------
     assignments_df : DataFrame
-        Columns: embryo_idx, genotype, branch_node_id, edge_idx,
-                 dist_to_node, time_bin_center
-        One row per (embryo, branch_node) assignment.
+        Columns: embryo_idx, genotype, branch_node_id, arm_idx,
+                 n_obs_in_arm, n_obs_total
+        One row per (embryo, branch_node).
     """
-    if t_idx is None:
-        # Use the time bin stored in nodes_df
-        t_val = nodes_df["time_bin_center"].iloc[0]
-        t_idx = int(np.searchsorted(time_values, t_val))
-
-    # Compute mean edge length for radius
-    coords = nodes_df[["x", "y"]].values
-    edge_lengths = [
-        np.linalg.norm(coords[i] - coords[j])
-        for (i, j) in edges
-    ]
-    mean_edge_len = float(np.mean(edge_lengths)) if edge_lengths else 1.0
-    radius = radius_factor * mean_edge_len
-
     rows = []
-    for bn in branch_node_ids:
-        branch_centroid = coords[bn]
-        # Find outgoing edges from this branch node
-        incident_edges = [(eidx, i, j) for eidx, (i, j) in enumerate(edges)
-                          if i == bn or j == bn]
-        if len(incident_edges) < 2:
-            continue
-        # Far endpoint of each incident edge
-        far_endpoints = []
-        for eidx, i, j in incident_edges:
-            far = j if i == bn else i
-            far_endpoints.append((eidx, far))
-
-        # Collect embryos within radius
-        for emb_idx in range(positions.shape[0]):
-            if not mask[emb_idx, t_idx]:
-                continue
-            emb_pos = positions[emb_idx, t_idx, :]
-            dist_to_node = float(np.linalg.norm(emb_pos - branch_centroid))
-            if dist_to_node > radius:
-                continue
-            # Assign to nearest far-endpoint
-            dists_to_far = [
-                np.linalg.norm(emb_pos - coords[far])
-                for (_, far) in far_endpoints
-            ]
-            best = int(np.argmin(dists_to_far))
-            assigned_edge_idx = far_endpoints[best][0]
-            rows.append({
-                "embryo_idx":      emb_idx,
-                "genotype":        str(labels[emb_idx]),
-                "branch_node_id":  bn,
-                "edge_idx":        assigned_edge_idx,
-                "dist_to_node":    dist_to_node,
-                "time_bin_center": float(time_values[t_idx]),
-            })
-
-    return pd.DataFrame(rows)
-
-
-def assign_embryos_to_subtrees(
-    nodes_df: pd.DataFrame,
-    adjacency: np.ndarray,
-    branch_node_ids: list[int],
-    orig_nodes_df: pd.DataFrame | None = None,
-) -> pd.DataFrame:
-    """Assign graph nodes to subtrees for each branch node via BFS.
-
-    Works with both raw embryo-level nodes_df and skeleton nodes_df
-    (from contract_mst_skeleton).  If nodes_df has an 'owned_orig_nodes'
-    column (skeleton case), each skeleton node's arm membership is expanded
-    to cover all original embryo nodes it owns.
-
-    Parameters
-    ----------
-    nodes_df : DataFrame — from build_embryo_mst or contract_mst_skeleton
-    adjacency : (n_nodes, n_nodes) symmetric adjacency matrix
-    branch_node_ids : list of branch node indices
-    orig_nodes_df : optional original embryo-level nodes_df; used when
-        nodes_df is a contracted skeleton so arm counts reflect individual
-        embryos, not skeleton nodes.
-
-    Returns
-    -------
-    assignments_df : DataFrame
-        Columns: node_id, embryo_idx, genotype, branch_node_id, edge_idx,
-                 time_bin_center
-        One row per (embryo, branch_node) assignment.
-    """
-    from collections import deque
-
-    rows = []
-    t_hpf = float(nodes_df["time_bin_center"].iloc[0])
-    has_owned = "owned_orig_nodes" in nodes_df.columns
 
     for bn in branch_node_ids:
-        neighbours = list(np.where(adjacency[bn] > 0)[0])
+        t_branch = float(skel_nodes_df.loc[bn, "t_hpf_mean"])
+        neighbours = list(np.where(skel_adj[bn] > 0)[0])
         if len(neighbours) < 2:
             continue
 
-        visited_global = set([bn])
+        # BFS to find arms (connected components with bn removed)
+        visited = {bn}
         arms: list[list[int]] = []
         for start in neighbours:
-            if start in visited_global:
+            start = int(start)
+            if start in visited:
                 continue
-            arm: list[int] = []
+            arm_nodes: list[int] = []
             queue = deque([start])
-            visited_global.add(start)
+            visited.add(start)
             while queue:
                 node = queue.popleft()
-                arm.append(node)
-                for nbr in np.where(adjacency[node] > 0)[0]:
-                    if int(nbr) not in visited_global:
-                        visited_global.add(int(nbr))
-                        queue.append(int(nbr))
-            arms.append(arm)
+                arm_nodes.append(node)
+                for nbr in np.where(skel_adj[node] > 0)[0]:
+                    nbr = int(nbr)
+                    if nbr not in visited:
+                        visited.add(nbr)
+                        queue.append(nbr)
+            arms.append(arm_nodes)
 
+        if len(arms) < 2:
+            continue
+
+        # Compute mean t_hpf per arm (for tie-breaking)
+        arm_mean_t = []
+        for arm in arms:
+            t_vals = [skel_nodes_df.loc[n, "t_hpf_mean"] for n in arm]
+            arm_mean_t.append(float(np.mean(t_vals)))
+
+        # Collect embryo → {arm_idx: n_obs} mapping
+        emb_arm_counts: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
         for arm_idx, arm in enumerate(arms):
-            for node_id in arm:
-                row_data = nodes_df.iloc[node_id]
-                if has_owned and orig_nodes_df is not None:
-                    owned_orig = row_data["owned_orig_nodes"]
-                    for orig_id in owned_orig:
-                        orig_row = orig_nodes_df.iloc[orig_id]
-                        emb_idx = int(orig_row.get("embryo_idx", orig_id))
-                        rows.append({
-                            "node_id":         orig_id,
-                            "embryo_idx":      emb_idx,
-                            "genotype":        str(orig_row["condition"]),
-                            "branch_node_id":  bn,
-                            "edge_idx":        arm_idx,
-                            "time_bin_center": t_hpf,
-                        })
-                else:
-                    emb_idx = int(row_data.get("embryo_idx", node_id))
-                    rows.append({
-                        "node_id":         node_id,
-                        "embryo_idx":      emb_idx,
-                        "genotype":        str(row_data["condition"]),
-                        "branch_node_id":  bn,
-                        "edge_idx":        arm_idx,
-                        "time_bin_center": t_hpf,
-                    })
+            for node in arm:
+                for (emb_i, _t_i) in skel_obs_ownership.get(node, []):
+                    emb_arm_counts[emb_i][arm_idx] += 1
+
+        if not emb_arm_counts:
+            continue
+
+        # Also include branch node's own observations — assign by majority too
+        for (emb_i, _t_i) in skel_obs_ownership.get(bn, []):
+            # Already in emb_arm_counts if any arm contains them — skip double-count
+            if emb_i not in emb_arm_counts:
+                emb_arm_counts[emb_i]  # touch to initialise defaultdict
+
+        for emb_i, arm_counts in emb_arm_counts.items():
+            n_total = sum(arm_counts.values())
+            if n_total == 0:
+                continue
+            # Majority vote with tie-break on earlier arm t_hpf
+            best_arm = max(
+                arm_counts.keys(),
+                key=lambda a: (arm_counts[a], -arm_mean_t[a]),
+            )
+            rows.append({
+                "embryo_idx":     emb_i,
+                "genotype":       str(labels[emb_i]),
+                "branch_node_id": bn,
+                "arm_idx":        best_arm,
+                "n_obs_in_arm":   arm_counts[best_arm],
+                "n_obs_total":    n_total,
+                "t_hpf_branch":   t_branch,
+            })
 
     if not rows:
         return pd.DataFrame(columns=[
-            "node_id", "embryo_idx", "genotype",
-            "branch_node_id", "edge_idx", "time_bin_center",
+            "embryo_idx", "genotype", "branch_node_id", "arm_idx",
+            "n_obs_in_arm", "n_obs_total", "t_hpf_branch",
         ])
     return pd.DataFrame(rows)
 
 
 # ---------------------------------------------------------------------------
-# Permutation test
+# Step 6 — Permutation chi-square test (embryo-level)
 # ---------------------------------------------------------------------------
 
 def _chi_square_stat(counts: np.ndarray) -> float:
-    """Chi-square statistic for a (G × K) contingency table.
-
-    Returns 0.0 if any marginal is zero or if the table has a single row/col.
-    """
-    row_sums = counts.sum(axis=1, keepdims=True)  # (G, 1)
-    col_sums = counts.sum(axis=0, keepdims=True)  # (1, K)
+    row_sums = counts.sum(axis=1, keepdims=True)
+    col_sums = counts.sum(axis=0, keepdims=True)
     total = counts.sum()
     if total == 0 or counts.shape[0] < 2 or counts.shape[1] < 2:
         return 0.0
@@ -667,10 +499,9 @@ def _chi_square_stat(counts: np.ndarray) -> float:
 
 
 def _cramers_v(stat: float, n: int, min_dim: int) -> float:
-    """Cramér's V from chi-square statistic."""
     if n == 0 or min_dim <= 1:
         return 0.0
-    return float(np.sqrt(stat / (n * (min_dim - 1))))
+    return float(np.sqrt(max(0.0, stat) / (n * (min_dim - 1))))
 
 
 def permutation_branch_test(
@@ -679,18 +510,17 @@ def permutation_branch_test(
     n_perm: int = 1000,
     seed: int = 42,
 ) -> BranchTestResult:
-    """Permutation chi-square test at one branch node.
+    """Embryo-level permutation chi-square test at one branch node.
 
-    Tests H₀: genotype labels are independent of edge assignment.
+    H₀: genotype is independent of arm assignment.
 
-    Permutation procedure:
-      For each resample, shuffle genotype labels among all embryos assigned
-      to this branch node, recompute the chi-square statistic, build null
-      distribution.  p-value = fraction of null stats >= observed stat.
+    Permutation procedure: shuffle genotype labels across the embryos
+    assigned to this branch node.  Each shuffle keeps one label per embryo
+    (because assignments_df is already embryo-level).
 
     Parameters
     ----------
-    assignments_df : from assign_embryos_to_edges
+    assignments_df : from assign_embryos_to_arms
     branch_node_id : int
     n_perm : int
     seed : int
@@ -702,117 +532,93 @@ def permutation_branch_test(
     sub = assignments_df[assignments_df["branch_node_id"] == branch_node_id].copy()
 
     rng = np.random.default_rng(seed)
-
     genotypes = sorted(sub["genotype"].unique())
-    edge_idxs = sorted(sub["edge_idx"].unique())
+    arms = sorted(sub["arm_idx"].unique())
     n_embryos = len(sub)
 
-    # Observed contingency table
-    counts_obs = np.zeros((len(genotypes), len(edge_idxs)), dtype=float)
     g_map = {g: i for i, g in enumerate(genotypes)}
-    e_map = {e: i for i, e in enumerate(edge_idxs)}
+    a_map = {a: i for i, a in enumerate(arms)}
+
+    # Observed contingency (embryos × arms)
+    counts_obs = np.zeros((len(genotypes), len(arms)), dtype=float)
     for _, row in sub.iterrows():
-        counts_obs[g_map[row["genotype"]], e_map[row["edge_idx"]]] += 1
+        counts_obs[g_map[row["genotype"]], a_map[row["arm_idx"]]] += 1
 
     stat_obs = _chi_square_stat(counts_obs)
 
-    # Permutation null
+    # Permutation null — shuffle embryo genotype labels
     genotype_arr = sub["genotype"].values.copy()
-    edge_arr = sub["edge_idx"].values.copy()
+    arm_arr = sub["arm_idx"].values.copy()
 
     null_stats = np.zeros(n_perm, dtype=float)
     for k in range(n_perm):
         shuffled = rng.permutation(genotype_arr)
         counts_null = np.zeros_like(counts_obs)
-        for gi, ei in zip(shuffled, edge_arr):
-            counts_null[g_map[gi], e_map[ei]] += 1
+        for gi, ai in zip(shuffled, arm_arr):
+            counts_null[g_map[gi], a_map[ai]] += 1
         null_stats[k] = _chi_square_stat(counts_null)
 
     pval = float((null_stats >= stat_obs).mean())
-    # Avoid pval=0 floor: use 1/n_perm as minimum
     pval = max(pval, 1.0 / n_perm)
 
-    min_dim = min(len(genotypes), len(edge_idxs))
+    min_dim = min(len(genotypes), len(arms))
     effect_size = _cramers_v(stat_obs, n_embryos, min_dim)
 
-    t_hpf = float(sub["time_bin_center"].iloc[0]) if len(sub) > 0 else None
+    t_branch = float(sub["t_hpf_branch"].iloc[0]) if len(sub) > 0 else 0.0
 
     counts_df = pd.DataFrame(
         counts_obs,
         index=genotypes,
-        columns=[f"edge_{e}" for e in edge_idxs],
+        columns=[f"arm_{a}" for a in arms],
     )
 
     return BranchTestResult(
         node_id=branch_node_id,
-        clade_edges=edge_idxs,
+        arm_ids=arms,
         stat_obs=stat_obs,
         pval=pval,
         effect_size=effect_size,
-        counts_gk=counts_df,
-        n_embryos_tested=n_embryos,
-        bifurcation_time_hpf=t_hpf,
+        counts_ge=counts_df,
+        n_embryos=n_embryos,
+        t_hpf_branch=t_branch,
     )
 
 
 def run_all_branch_tests(
-    positions: np.ndarray,
-    mask: np.ndarray,
-    labels: np.ndarray,
-    time_values: np.ndarray,
-    nodes_df: pd.DataFrame,
-    edges: list[tuple[int, int]],
-    adjacency: np.ndarray,
+    skel_nodes_df: pd.DataFrame,
+    skel_adj: np.ndarray,
     branch_node_ids: list[int],
-    radius_factor: float = 2.5,
+    labels: np.ndarray,
+    skel_obs_ownership: dict[int, list[tuple[int, int]]],
     n_perm: int = 1000,
     seed: int = 42,
-    use_subtrees: bool = False,
-    orig_nodes_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, list[BranchTestResult]]:
-    """Convenience wrapper: assign embryos + run test at every branch node.
-
-    Parameters
-    ----------
-    use_subtrees : bool
-        If True, use subtree-BFS assignment (for embryo-level MST).
-        If False, use radius-based centroid assignment.
-
-    Returns
-    -------
-    assignments_df : full embryo-to-edge assignment table
-    results : list of BranchTestResult, one per branch node
-    """
-    if use_subtrees:
-        assignments_df = assign_embryos_to_subtrees(
-            nodes_df, adjacency, branch_node_ids,
-            orig_nodes_df=orig_nodes_df,
-        )
-    else:
-        assignments_df = assign_embryos_to_edges(
-            positions, mask, labels, time_values,
-            nodes_df, edges, branch_node_ids,
-            radius_factor=radius_factor,
-        )
+    """Convenience wrapper: assign + test at every branch node."""
+    assignments_df = assign_embryos_to_arms(
+        skel_nodes_df, skel_adj, branch_node_ids,
+        labels, skel_obs_ownership,
+    )
     results = []
     for bn in branch_node_ids:
-        res = permutation_branch_test(assignments_df, bn, n_perm=n_perm, seed=seed)
+        if bn not in assignments_df["branch_node_id"].values:
+            continue
+        res = permutation_branch_test(assignments_df, bn,
+                                      n_perm=n_perm, seed=seed)
         results.append(res)
     return assignments_df, results
 
 
 def branch_results_to_df(results: list[BranchTestResult]) -> pd.DataFrame:
-    """Flatten BranchTestResult list to a summary DataFrame."""
     rows = []
     for r in results:
         rows.append({
-            "node_id":              r.node_id,
-            "n_edges":              len(r.clade_edges),
-            "n_embryos_tested":     r.n_embryos_tested,
-            "stat_obs":             round(r.stat_obs, 4),
-            "pval":                 round(r.pval, 4),
+            "node_id":               r.node_id,
+            "t_hpf_branch":          round(r.t_hpf_branch, 1),
+            "n_arms":                len(r.arm_ids),
+            "n_embryos":             r.n_embryos,
+            "stat_obs":              round(r.stat_obs, 4),
+            "pval":                  round(r.pval, 4),
             "effect_size_cramers_v": round(r.effect_size, 4),
-            "bifurcation_time_hpf": r.bifurcation_time_hpf,
-            "significant_p05":      r.pval < 0.05,
+            "significant_p05":       r.pval < 0.05,
         })
     return pd.DataFrame(rows)
