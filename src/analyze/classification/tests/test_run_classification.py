@@ -63,6 +63,27 @@ def test_all_vs_rest():
     assert len(result.comparison_ids) == 3  # A vs rest, B vs rest, C vs rest
 
 
+def test_verbose_default_multiclass_message(capsys):
+    df = _make_df()
+    run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Mode: multiclass problem" in out
+    assert "Default: yes" in out
+    assert "Reporting: one-vs-rest per class" in out
+    assert "Resolved: A vs B+C" in out
+    assert "Per-class lines below are one-vs-rest readouts from a multiclass model." in out
+
+
 def test_all_vs_rest_sparse_bin_retains_valid_classes():
     rows = []
     for cls_idx, cls in enumerate(["A", "B", "C"]):
@@ -124,6 +145,28 @@ def test_explicit_pair():
     assert result.scores["negative_label"].unique().tolist() == ["B"]
 
 
+def test_verbose_explicit_binary_message(capsys):
+    df = _make_df()
+    run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        positive="A",
+        negative="B",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Mode: binary comparison problem" in out
+    assert "Default: no" in out
+    assert "Reporting: one AUROC series per resolved comparison" in out
+    assert "Resolved: A vs B" in out
+
+
 def test_all_pairs():
     df = _make_df()
     result = run_classification(
@@ -139,6 +182,26 @@ def test_all_pairs():
     )
     # C(3,2) = 3 pairs
     assert len(result.comparison_ids) == 3
+
+
+def test_negative_only_pooled_tuple_verbose_stays_binary(capsys):
+    df = _make_df(n_classes=4)
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        negative=("B", "C"),
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Mode: binary comparison problem" in out
+    assert "Resolved: A vs B+C, D vs B+C" in out
+    assert set(result.scores["negative_label"].unique()) == {"B+C"}
 
 
 def test_pooled():
@@ -519,3 +582,190 @@ def test_save_dir_auto_save(tmp_path):
     preds_original = result.layers["predictions"]
     preds_loaded = loaded.layers["predictions"]
     pd.testing.assert_frame_equal(preds_loaded, preds_original)
+
+
+def test_save_contrast_coordinates_all_pairs():
+    df = _make_df()
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        comparisons="all_pairs",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=False,
+        save_contrast_coordinates=True,
+    )
+
+    expected_layers = {
+        "raw_contrast_scores_long",
+        "contrast_specificity_by_timebin",
+        "raw_coordinates",
+        "shrunk_coordinates",
+        "residual_coordinates",
+        "probe_index",
+    }
+    assert expected_layers.issubset(set(result.layers.cached()))
+    assert "predictions" not in result.layers
+
+    raw_long = result.layers["raw_contrast_scores_long"]
+    specificity = result.layers["contrast_specificity_by_timebin"]
+    raw_coordinates = result.layers["raw_coordinates"]
+    shrunk_coordinates = result.layers["shrunk_coordinates"]
+    residual_coordinates = result.layers["residual_coordinates"]
+    probe_index = result.layers["probe_index"]
+
+    assert raw_long["m_raw"].between(-1.0, 1.0).all()
+    assert len(specificity) == 6
+    assert len(raw_coordinates) == 18
+    assert set(raw_coordinates["feature_set"].unique()) == {"emb"}
+
+    probe_cols = probe_index.loc[probe_index["feature_set"] == "emb", "column_name"].tolist()
+    assert len(probe_cols) == 3
+    assert probe_index["column_order"].tolist() == [0, 1, 2]
+    assert set(probe_cols) == set(result.comparison_ids)
+
+    raw_join = raw_coordinates.melt(
+        id_vars=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center"],
+        value_vars=probe_cols,
+        var_name="comparison_id",
+        value_name="m_raw_wide",
+    )
+    shrunk_join = shrunk_coordinates.melt(
+        id_vars=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center"],
+        value_vars=probe_cols,
+        var_name="comparison_id",
+        value_name="m_shrunk_wide",
+    )
+    residual_join = residual_coordinates.melt(
+        id_vars=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center"],
+        value_vars=probe_cols,
+        var_name="comparison_id",
+        value_name="m_residual_wide",
+    )
+    merged = raw_long.merge(
+        specificity[["feature_set", "comparison_id", "time_bin", "time_bin_center", "w"]],
+        on=["feature_set", "comparison_id", "time_bin", "time_bin_center"],
+        how="left",
+        validate="many_to_one",
+    )
+    merged = merged.merge(
+        raw_join,
+        on=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center", "comparison_id"],
+        how="left",
+        validate="one_to_one",
+    ).merge(
+        shrunk_join,
+        on=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center", "comparison_id"],
+        how="left",
+        validate="one_to_one",
+    ).merge(
+        residual_join,
+        on=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center", "comparison_id"],
+        how="left",
+        validate="one_to_one",
+    )
+
+    np.testing.assert_allclose(merged["m_raw_wide"], merged["m_raw"])
+    np.testing.assert_allclose(merged["m_shrunk_wide"], merged["m_raw"] * merged["w"])
+    np.testing.assert_allclose(
+        merged["m_residual_wide"],
+        merged["m_raw_wide"] - merged["m_shrunk_wide"],
+    )
+
+
+
+def test_save_contrast_coordinates_rejects_multiclass():
+    df = _make_df()
+    with pytest.raises(ValueError, match="binary comparison runs"):
+        run_classification(
+            df,
+            class_col="genotype",
+            id_col="embryo_id",
+            time_col="predicted_stage_hpf",
+            features={"emb": "z_mu_b"},
+            n_permutations=4,
+            n_jobs=1,
+            verbose=False,
+            save_contrast_coordinates=True,
+        )
+
+
+
+def test_save_contrast_coordinates_requires_permutations():
+    df = _make_df(n_classes=2)
+    with pytest.raises(ValueError, match="requires n_permutations > 0"):
+        run_classification(
+            df,
+            class_col="genotype",
+            id_col="embryo_id",
+            time_col="predicted_stage_hpf",
+            positive="A",
+            negative="B",
+            features={"emb": "z_mu_b"},
+            n_permutations=0,
+            n_jobs=1,
+            verbose=False,
+            save_contrast_coordinates=True,
+        )
+
+
+
+def test_save_contrast_coordinates_multi_feature():
+    df = _make_df(n_classes=2)
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        positive="A",
+        negative="B",
+        features={"emb": "z_mu_b", "single": ["z_mu_b_0"]},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=False,
+        save_contrast_coordinates=True,
+    )
+
+    raw_coordinates = result.layers["raw_coordinates"]
+    probe_index = result.layers["probe_index"]
+    specificity = result.layers["contrast_specificity_by_timebin"]
+
+    assert set(raw_coordinates["feature_set"].unique()) == {"emb", "single"}
+    assert set(probe_index["feature_set"].unique()) == {"emb", "single"}
+    assert set(specificity["feature_set"].unique()) == {"emb", "single"}
+    assert probe_index.groupby("feature_set").size().to_dict() == {"emb": 1, "single": 1}
+
+
+
+def test_save_contrast_coordinates_save_load_roundtrip(tmp_path):
+    df = _make_df()
+    save_path = tmp_path / "contrast_coords_run"
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        comparisons="all_pairs",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=False,
+        save_contrast_coordinates=True,
+        save_dir=save_path,
+    )
+
+    from analyze.classification.engine.analysis import ClassificationAnalysis
+
+    loaded = ClassificationAnalysis.load(save_path)
+    for layer_name in [
+        "raw_contrast_scores_long",
+        "contrast_specificity_by_timebin",
+        "raw_coordinates",
+        "shrunk_coordinates",
+        "residual_coordinates",
+        "probe_index",
+    ]:
+        pd.testing.assert_frame_equal(loaded.layers[layer_name], result.layers[layer_name])

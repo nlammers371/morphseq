@@ -476,6 +476,9 @@ def _run_multiclass_classification_loop(
     ovr_results: dict[str, list[dict[str, Any]]] = {label: [] for label in class_labels}
     all_embryo_predictions: list[dict[str, Any]] = []
 
+    if verbose:
+        print("  Per-class lines below are one-vs-rest readouts from a multiclass model.")
+
     for i, t in enumerate(time_bins):
         if verbose:
             print(f"\n  [{i + 1}/{len(time_bins)}] Time bin {t} hpf...")
@@ -721,7 +724,33 @@ def _collect_binary_predictions(
 
 
 # ---------------------------------------------------------------------------
-# Step 7b: Collect multiclass predictions
+# Step 7b: Collect binary margins
+# ---------------------------------------------------------------------------
+
+
+def _collect_binary_margins(
+    bin_results: list[dict[str, Any]],
+    comparison: ResolvedComparison,
+    feature_set: str,
+    id_col: str,
+) -> list[dict[str, Any]]:
+    """Signed margin rows for pairwise contrast-coordinate assembly."""
+    rows = []
+    for br in bin_results:
+        for pred in br.get("_predictions", []):
+            rows.append({
+                "feature_set": feature_set,
+                "comparison_id": comparison.comparison_id,
+                id_col: pred[id_col],
+                "time_bin": int(br["time_bin"]),
+                "time_bin_center": float(pred["time_bin_center"]),
+                "m_raw": 2.0 * float(pred["p_pos"]) - 1.0,
+            })
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Step 7c: Collect multiclass predictions
 # ---------------------------------------------------------------------------
 
 

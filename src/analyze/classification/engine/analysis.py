@@ -57,6 +57,12 @@ class _LazyLayers:
         "multiclass_predictions": ("multiclass_predictions.parquet", "parquet"),
         "confusion": ("confusion.parquet", "parquet"),
         "null_full": ("null_distributions.npz", "nulls"),
+        "raw_contrast_scores_long": ("raw_contrast_scores_long.parquet", "parquet"),
+        "contrast_specificity_by_timebin": ("contrast_specificity_by_timebin.parquet", "parquet"),
+        "raw_coordinates": ("raw_coordinates.parquet", "parquet"),
+        "shrunk_coordinates": ("shrunk_coordinates.parquet", "parquet"),
+        "residual_coordinates": ("residual_coordinates.parquet", "parquet"),
+        "probe_index": ("probe_index.parquet", "parquet"),
     }
 
     def __init__(self, base_dir: Path | None = None) -> None:
@@ -94,7 +100,6 @@ class _LazyLayers:
             return default
 
     def __contains__(self, key: str) -> bool:
-        """Check existence without loading data."""
         if key in self._cache:
             return True
         if key not in self._REGISTRY:
@@ -105,7 +110,6 @@ class _LazyLayers:
         return (self._base_dir / filename).exists()
 
     def available(self) -> list[str]:
-        """Keys that exist on disk or in cache."""
         result = list(self._cache.keys())
         if self._base_dir is not None:
             for key, (filename, _) in self._REGISTRY.items():
@@ -117,15 +121,12 @@ class _LazyLayers:
         return sorted(self._cache.keys())
 
     def store(self, key: str, data: Any) -> None:
-        """Cache an in-memory artifact."""
         self._cache[key] = data
 
     def _fork(self) -> _LazyLayers:
-        """New instance with same base_dir, empty cache."""
         return _LazyLayers(self._base_dir)
 
     def _save_to_dir(self, path: Path, overwrite: bool = False) -> None:
-        """Write all cached layers to disk."""
         path = Path(path)
         for key, data in self._cache.items():
             if key not in self._REGISTRY:
@@ -164,8 +165,6 @@ class ClassificationAnalysis:
     def __post_init__(self) -> None:
         _validate_scores(self.scores)
 
-    # -- Properties ----------------------------------------------------------
-
     @property
     def feature_sets(self) -> list[str]:
         return sorted(self.scores["feature_set"].unique().tolist())
@@ -173,8 +172,6 @@ class ClassificationAnalysis:
     @property
     def comparison_ids(self) -> list[str]:
         return sorted(self.scores["comparison_id"].unique().tolist())
-
-    # -- Subsetting ----------------------------------------------------------
 
     def subset(
         self,
@@ -202,8 +199,6 @@ class ClassificationAnalysis:
             layers=self.layers._fork(),
         )
 
-    # -- Stacking ------------------------------------------------------------
-
     def stack(
         self,
         other: ClassificationAnalysis,
@@ -230,8 +225,6 @@ class ClassificationAnalysis:
             layers=_LazyLayers(),
         )
 
-    # -- Plotting sugar ------------------------------------------------------
-
     def plot_aurocs(self, *, curve_col: str | None = None, facet_col: str | None = None, **kwargs: Any) -> Any:
         from analyze.classification.viz.auroc_over_time import plot_aurocs_over_time
         return plot_aurocs_over_time(
@@ -242,8 +235,6 @@ class ClassificationAnalysis:
         confusion = self.layers["confusion"]
         from analyze.classification.viz.confusion import plot_confusion
         return plot_confusion(self.scores, confusion, **kwargs)
-
-    # -- Persistence ---------------------------------------------------------
 
     def save(self, path: str | Path, overwrite: bool = False) -> Path:
         path = Path(path)
@@ -271,7 +262,6 @@ class ClassificationAnalysis:
 
     @classmethod
     def from_legacy(cls, path: str | Path) -> ClassificationAnalysis:
-        """Placeholder for loading legacy ClassificationResults directories."""
         raise NotImplementedError(
             "from_legacy() is not yet implemented. "
             "Use the existing ClassificationResults.load() for legacy data."

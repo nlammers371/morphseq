@@ -1,10 +1,10 @@
 """
 05_pbx_condensation.py
 ----------------------
-Run trajectory condensation on real PBX crispant multiclass probability data.
+Run trajectory condensation on PBX crispant vector data.
 
 Pipeline:
-  1. Load multiclass_probability_vectors.csv → CosmologyData
+  1. Load multiclass probability or pairwise margin vectors → CosmologyData
   2. Initialize 2D positions via AlignedUMAP (or PCA for fast smoke test)
   3. Run condensation with calibrated force defaults
   4. Save positions, metrics, and diagnostic figures
@@ -47,7 +47,7 @@ import pandas as pd
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
-from trajectory_cosmology import schema, init_embedding, plotting
+from trajectory_cosmology import animation as tc_animation, schema, init_embedding, plotting
 from trajectory_cosmology.condensation.api import run_condensation
 from trajectory_cosmology.condensation.state import CondensationConfig
 from trajectory_cosmology.condensation.engine.stopping import StoppingConfig
@@ -79,7 +79,11 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="PBX crispant trajectory condensation.")
     p.add_argument(
         "--input", required=True,
-        help="Path to multiclass_probability_vectors.csv",
+        help="Path to multiclass probability or pairwise margin vector CSV.",
+    )
+    p.add_argument(
+        "--input-type", choices=["auto", "multiclass", "pairwise"], default="auto",
+        help="Input schema. 'auto' infers from columns.",
     )
     p.add_argument(
         "--output-dir", required=True,
@@ -124,7 +128,7 @@ def main() -> None:
     # 1. Load data
     # ------------------------------------------------------------------
     print(f"Loading: {args.input}")
-    data = schema.from_multiclass_csv(args.input, label_col="genotype")
+    data = _load_cosmology_data(args.input, args.input_type)
     schema.validate(data)
 
     N_e, T, K = data.features.shape
@@ -207,15 +211,18 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 5a. Positions
     pos_path = output_dir / "condensed_positions.npz"
-    np.savez(
-        pos_path,
-        positions=result.positions,
-        x0=x0,
-        mask=data.mask,
-        time_values=data.time_values,
-        embryo_ids=data.embryo_ids,
-        labels=data.labels,
-    )
+    save_payload = {
+        "positions": result.positions,
+        "x0": x0,
+        "mask": data.mask,
+        "time_values": data.time_values,
+        "embryo_ids": data.embryo_ids,
+        "labels": data.labels,
+    }
+    if result.position_history is not None:
+        save_payload["position_history"] = result.position_history
+        save_payload["snapshot_iters"] = np.asarray(result.snapshot_iters, dtype=int)
+    np.savez(pos_path, **save_payload)
     print(f"Saved positions: {pos_path}  shape={result.positions.shape}")
 
     # 5b. Metrics
@@ -273,6 +280,21 @@ def main() -> None:
                   title=f"{args.init.upper()} init — sigma={config.sigma} delta={config.delta} "
                         f"lr={config.lr:.0e} k={config.k_attract}")
 
+    if result.position_history is not None:
+        tc_animation.animate_rotation(
+            result.positions, data.mask, data.time_values,
+            labels=data.labels, color_map=color_map,
+            output_path=output_dir / "rotation.gif",
+            title=f"PBX condensed trajectories ({args.init.upper()} init, {result.n_iter} iters)",
+        )
+        tc_animation.animate_iterations(
+            result.position_history, data.mask, data.time_values,
+            iter_labels=result.snapshot_iters,
+            labels=data.labels, color_map=color_map,
+            output_path=output_dir / "iterations.gif",
+            title=f"PBX condensation progress ({args.init.upper()} init)",
+        )
+
     print(f"\nAll outputs saved to: {output_dir}")
     _print_final_summary(metrics_df)
 
@@ -320,6 +342,27 @@ def _print_final_summary(metrics_df: pd.DataFrame) -> None:
                 "energy_change_rel", "coherence_change_rel"]:
         if col in last.index and not pd.isna(last[col]):
             print(f"  {col}: {last[col]:.6f}")
+
+
+def _load_cosmology_data(input_path: str, input_type: str) -> schema.CosmologyData:
+    if input_type == "multiclass":
+        return schema.from_multiclass_csv(input_path, label_col="genotype")
+    if input_type == "pairwise":
+        return schema.from_pairwise_margin_csv(input_path, label_col="genotype")
+
+    df = pd.read_csv(input_path, nrows=5)
+    has_prob = any(c.startswith("p_") or c.startswith("pred_proba_") for c in df.columns)
+    has_pairwise = any("_vs_" in c for c in df.columns)
+
+    if has_pairwise and not has_prob:
+        return schema.from_pairwise_margin_csv(input_path, label_col="genotype")
+    if has_prob:
+        return schema.from_multiclass_csv(input_path, label_col="genotype")
+
+    raise ValueError(
+        f"Could not infer input type for {input_path}. "
+        "Expected probability columns ('p_*') or pairwise columns ('*_vs_*')."
+    )
 
 
 if __name__ == "__main__":
