@@ -24,6 +24,7 @@ from .engine.loop import (
     _build_binary_labels,
     _collect_binary_margins,
     _collect_binary_predictions,
+    _collect_binary_support,
     _collect_confusion,
     _collect_confusion_from_ovr,
     _collect_multiclass_predictions,
@@ -38,6 +39,7 @@ from .engine.null import NullDistributions
 
 CONTRAST_COORDINATE_LAYER_KEYS = [
     "raw_contrast_scores_long",
+    "contrast_support_long",
     "contrast_specificity_by_timebin",
     "raw_coordinates",
     "shrunk_coordinates",
@@ -180,6 +182,7 @@ def run_classification(
     all_score_rows: list[dict[str, Any]] = []
     all_pred_rows: list[dict[str, Any]] = []
     all_margin_rows: list[dict[str, Any]] = []
+    all_support_rows: list[dict[str, Any]] = []
     all_confusion_rows: list[dict[str, Any]] = []
     all_null_arrays: list[tuple[str, str, float, np.ndarray]] = []
     multiclass_preds_df: pd.DataFrame | None = None
@@ -284,6 +287,17 @@ def run_classification(
                 all_margin_rows.extend(
                     _collect_binary_margins(bin_results, rc, fs_name, id_col)
                 )
+                all_support_rows.extend(
+                    _collect_binary_support(
+                        df_labeled,
+                        df_binned,
+                        bin_results,
+                        rc,
+                        fs_name,
+                        id_col,
+                        class_col,
+                    )
+                )
 
             all_confusion_rows.extend(_collect_confusion(bin_results, rc, fs_name))
 
@@ -363,6 +377,7 @@ def run_classification(
     if save_contrast_coordinates:
         contrast_layers = assemble_contrast_coordinates(
             all_margin_rows,
+            all_support_rows,
             scores,
             _build_id_metadata(df, id_col=id_col, class_col=class_col),
             id_col,

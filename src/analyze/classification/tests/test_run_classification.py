@@ -601,6 +601,7 @@ def test_save_contrast_coordinates_all_pairs():
 
     expected_layers = {
         "raw_contrast_scores_long",
+        "contrast_support_long",
         "contrast_specificity_by_timebin",
         "raw_coordinates",
         "shrunk_coordinates",
@@ -611,6 +612,7 @@ def test_save_contrast_coordinates_all_pairs():
     assert "predictions" not in result.layers
 
     raw_long = result.layers["raw_contrast_scores_long"]
+    support_long = result.layers["contrast_support_long"]
     specificity = result.layers["contrast_specificity_by_timebin"]
     raw_coordinates = result.layers["raw_coordinates"]
     shrunk_coordinates = result.layers["shrunk_coordinates"]
@@ -618,6 +620,9 @@ def test_save_contrast_coordinates_all_pairs():
     probe_index = result.layers["probe_index"]
 
     assert raw_long["m_raw"].between(-1.0, 1.0).all()
+    assert set(support_long["support_status"].unique()) <= {"supported", "unsupported_id", "unsupported_group"}
+    assert {"group_supported", "id_supported", "support_status", "group_label"}.issubset(support_long.columns)
+    assert {"positive_group_supported", "negative_group_supported", "min_group_support_passed"}.issubset(specificity.columns)
     assert len(specificity) == 6
     assert len(raw_coordinates) == 18
     assert set(raw_coordinates["feature_set"].unique()) == {"emb"}
@@ -731,6 +736,7 @@ def test_save_contrast_coordinates_multi_feature():
 
     raw_coordinates = result.layers["raw_coordinates"]
     probe_index = result.layers["probe_index"]
+    support_long = result.layers["contrast_support_long"]
     specificity = result.layers["contrast_specificity_by_timebin"]
 
     assert set(raw_coordinates["feature_set"].unique()) == {"emb", "single"}
@@ -762,6 +768,7 @@ def test_save_contrast_coordinates_save_load_roundtrip(tmp_path):
     loaded = ClassificationAnalysis.load(save_path)
     for layer_name in [
         "raw_contrast_scores_long",
+        "contrast_support_long",
         "contrast_specificity_by_timebin",
         "raw_coordinates",
         "shrunk_coordinates",

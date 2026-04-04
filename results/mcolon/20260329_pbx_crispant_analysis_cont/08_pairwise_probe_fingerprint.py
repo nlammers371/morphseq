@@ -39,6 +39,7 @@ DEFAULT_GENOTYPES = [
 ]
 LAYER_EXPORTS = [
     "raw_contrast_scores_long",
+    "contrast_support_long",
     "contrast_specificity_by_timebin",
     "raw_coordinates",
     "shrunk_coordinates",
@@ -100,21 +101,41 @@ def maybe_apply_smoke_subset(df: pd.DataFrame, *, bin_width: float, enabled: boo
     return df.loc[time_bins.isin(keep_bins)].reset_index(drop=True)
 
 
-def export_dense_vectors(
+def _prepare_coordinate_export(
+    coordinates: pd.DataFrame,
+    *,
+    embryo_meta: pd.DataFrame,
+) -> tuple[pd.DataFrame, list[str]]:
+    if coordinates.empty:
+        raise ValueError("Cannot export pairwise vectors from an empty coordinate table.")
+    probe_cols = [c for c in coordinates.columns if c not in BASE_COORD_COLS]
+    out = coordinates.copy()
+    out = out.merge(embryo_meta, on="embryo_id", how="left", validate="many_to_one")
+    out["_time_bin"] = out["time_bin"].astype(int)
+    out = out[["embryo_id", "time_bin_center", "genotype", *probe_cols, "experiment_id", "_time_bin", "time_bin"]]
+    out = out.sort_values(["time_bin_center", "embryo_id"]).reset_index(drop=True)
+    return out, probe_cols
+
+
+def export_sparse_vectors(
     coordinates: pd.DataFrame,
     *,
     embryo_meta: pd.DataFrame,
     output_path: Path,
 ) -> list[str]:
-    if coordinates.empty:
-        raise ValueError(f"Cannot export dense vectors from empty coordinates: {output_path}")
-    probe_cols = [c for c in coordinates.columns if c not in BASE_COORD_COLS]
-    dense = coordinates.copy()
+    sparse, probe_cols = _prepare_coordinate_export(coordinates, embryo_meta=embryo_meta)
+    sparse.to_csv(output_path, index=False)
+    return probe_cols
+
+
+def export_legacy_zero_filled_vectors(
+    coordinates: pd.DataFrame,
+    *,
+    embryo_meta: pd.DataFrame,
+    output_path: Path,
+) -> list[str]:
+    dense, probe_cols = _prepare_coordinate_export(coordinates, embryo_meta=embryo_meta)
     dense[probe_cols] = dense[probe_cols].fillna(0.0)
-    dense = dense.merge(embryo_meta, on="embryo_id", how="left", validate="many_to_one")
-    dense["_time_bin"] = dense["time_bin"].astype(int)
-    dense = dense[["embryo_id", "time_bin_center", "genotype", *probe_cols, "experiment_id", "_time_bin", "time_bin"]]
-    dense = dense.sort_values(["time_bin_center", "embryo_id"]).reset_index(drop=True)
     dense.to_csv(output_path, index=False)
     return probe_cols
 
@@ -150,15 +171,25 @@ def main() -> None:
     for layer_name in LAYER_EXPORTS:
         analysis.layers[layer_name].to_csv(args.output_dir / f"{layer_name}.csv", index=False)
 
-    raw_probe_cols = export_dense_vectors(
+    raw_probe_cols = export_sparse_vectors(
         analysis.layers["raw_coordinates"],
         embryo_meta=embryo_meta,
         output_path=args.output_dir / "pairwise_raw_vectors.csv",
     )
-    shrunk_probe_cols = export_dense_vectors(
+    shrunk_probe_cols = export_sparse_vectors(
         analysis.layers["shrunk_coordinates"],
         embryo_meta=embryo_meta,
         output_path=args.output_dir / "pairwise_shrunk_vectors.csv",
+    )
+    export_legacy_zero_filled_vectors(
+        analysis.layers["raw_coordinates"],
+        embryo_meta=embryo_meta,
+        output_path=args.output_dir / "pairwise_raw_vectors_legacy_zero_filled.csv",
+    )
+    export_legacy_zero_filled_vectors(
+        analysis.layers["shrunk_coordinates"],
+        embryo_meta=embryo_meta,
+        output_path=args.output_dir / "pairwise_shrunk_vectors_legacy_zero_filled.csv",
     )
 
     manifest = {
@@ -172,6 +203,8 @@ def main() -> None:
         "smoke": bool(args.smoke),
         "raw_vector_columns": raw_probe_cols,
         "shrunk_vector_columns": shrunk_probe_cols,
+        "pairwise_vectors_semantics": "sparse_nan_preserving",
+        "legacy_zero_filled_exports": True,
     }
     pd.Series(manifest, dtype="object").to_json(args.output_dir / "pairwise_manifest.json", indent=2)
     print(args.output_dir)

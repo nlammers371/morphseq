@@ -58,6 +58,7 @@ class _LazyLayers:
         "confusion": ("confusion.parquet", "parquet"),
         "null_full": ("null_distributions.npz", "nulls"),
         "raw_contrast_scores_long": ("raw_contrast_scores_long.parquet", "parquet"),
+        "contrast_support_long": ("contrast_support_long.parquet", "parquet"),
         "contrast_specificity_by_timebin": ("contrast_specificity_by_timebin.parquet", "parquet"),
         "raw_coordinates": ("raw_coordinates.parquet", "parquet"),
         "shrunk_coordinates": ("shrunk_coordinates.parquet", "parquet"),

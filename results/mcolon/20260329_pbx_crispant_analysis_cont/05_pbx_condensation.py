@@ -129,7 +129,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     print(f"Loading: {args.input}")
     data = _load_cosmology_data(args.input, args.input_type)
-    schema.validate(data)
+    schema.validate(data, allow_feature_nans=bool(np.isnan(data.features[data.mask]).any()))
 
     N_e, T, K = data.features.shape
     print(f"  {N_e} embryos × {T} time bins × {K} features")

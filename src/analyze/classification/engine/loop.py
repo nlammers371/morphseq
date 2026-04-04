@@ -749,6 +749,76 @@ def _collect_binary_margins(
     return rows
 
 
+def _collect_binary_support(
+    df_labeled: pd.DataFrame,
+    df_binned: pd.DataFrame,
+    bin_results: list[dict[str, Any]],
+    comparison: ResolvedComparison,
+    feature_set: str,
+    id_col: str,
+    class_col: str,
+) -> list[dict[str, Any]]:
+    """Support rows distinguishing unsupported_group from unsupported_id."""
+    support_rows: list[dict[str, Any]] = []
+    member_df = (
+        df_labeled[[id_col, class_col, "_y"]]
+        .drop_duplicates()
+        .copy()
+    )
+    member_df[id_col] = member_df[id_col].astype(str)
+    member_df["group_label"] = np.where(member_df["_y"].astype(int) == 1, comparison.positive_label, comparison.negative_label)
+
+    positive_ids = member_df.loc[member_df["_y"] == 1, id_col].astype(str).tolist()
+    negative_ids = member_df.loc[member_df["_y"] == 0, id_col].astype(str).tolist()
+    by_bin = {
+        int(time_bin): sub.copy()
+        for time_bin, sub in df_binned.groupby("_time_bin", sort=True)
+    }
+    scored_bins = {int(br["time_bin"]) for br in bin_results}
+    all_bins = sorted(by_bin.keys())
+
+    for time_bin in all_bins:
+        sub = by_bin[time_bin]
+        pos_present = set(sub.loc[sub["_y"] == 1, id_col].astype(str))
+        neg_present = set(sub.loc[sub["_y"] == 0, id_col].astype(str))
+        comparison_supported = time_bin in scored_bins
+        positive_group_supported = comparison_supported and bool(pos_present)
+        negative_group_supported = comparison_supported and bool(neg_present)
+        time_bin_center = float(time_bin) + 0.5 * float(bin_results[0]["bin_width"] if bin_results else 0.0)
+
+        for embryo_id in positive_ids:
+            id_supported = comparison_supported and embryo_id in pos_present
+            support_rows.append({
+                "feature_set": feature_set,
+                "comparison_id": comparison.comparison_id,
+                id_col: embryo_id,
+                "group_label": comparison.positive_label,
+                "positive_label": comparison.positive_label,
+                "negative_label": comparison.negative_label,
+                "time_bin": int(time_bin),
+                "time_bin_center": time_bin_center,
+                "group_supported": bool(positive_group_supported),
+                "id_supported": bool(id_supported),
+                "support_status": "supported" if positive_group_supported and id_supported else ("unsupported_group" if not positive_group_supported else "unsupported_id"),
+            })
+        for embryo_id in negative_ids:
+            id_supported = comparison_supported and embryo_id in neg_present
+            support_rows.append({
+                "feature_set": feature_set,
+                "comparison_id": comparison.comparison_id,
+                id_col: embryo_id,
+                "group_label": comparison.negative_label,
+                "positive_label": comparison.positive_label,
+                "negative_label": comparison.negative_label,
+                "time_bin": int(time_bin),
+                "time_bin_center": time_bin_center,
+                "group_supported": bool(negative_group_supported),
+                "id_supported": bool(id_supported),
+                "support_status": "supported" if negative_group_supported and id_supported else ("unsupported_group" if not negative_group_supported else "unsupported_id"),
+            })
+    return support_rows
+
+
 # ---------------------------------------------------------------------------
 # Step 7c: Collect multiclass predictions
 # ---------------------------------------------------------------------------

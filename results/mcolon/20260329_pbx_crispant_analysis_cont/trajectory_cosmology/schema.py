@@ -61,7 +61,7 @@ class CosmologyData:
     time_index: dict[float, int]
 
 
-def validate(data: CosmologyData) -> None:
+def validate(data: CosmologyData, *, allow_feature_nans: bool = False) -> None:
     """Assert all shape and semantic invariants on a CosmologyData instance.
 
     Raises AssertionError with a descriptive message on violation.
@@ -84,17 +84,34 @@ def validate(data: CosmologyData) -> None:
     assert len(data.feature_names) == K, (
         f"feature_names length {len(data.feature_names)} != K={K}"
     )
-    assert list(data.time_values) == sorted(data.time_values), (
-        "time_values must be sorted ascending"
-    )
+    assert np.all(np.diff(data.time_values) >= 0), "time_values must be sorted ascending"
+    assert len(set(data.embryo_ids.tolist())) == N_e, "embryo_ids must be unique"
+    assert len(set(map(float, data.time_values.tolist()))) == T, "time_values must be unique"
     assert len(data.embryo_index) == N_e, (
         "embryo_index must have one entry per embryo"
     )
     assert len(data.time_index) == T, (
         "time_index must have one entry per time bin"
     )
-    # features outside the mask should not be relied on, but warn if any are non-NaN
-    # (they may be zero-filled depending on source format — both are acceptable)
+
+    for i, embryo_id in enumerate(data.embryo_ids):
+        assert data.embryo_index[embryo_id] == i, (
+            f"embryo_index mismatch for {embryo_id}: expected {i}"
+        )
+    for j, time_value in enumerate(data.time_values):
+        assert data.time_index[float(time_value)] == j, (
+            f"time_index mismatch for {time_value}: expected {j}"
+        )
+
+    observed = data.features[data.mask]
+    if observed.size and not allow_feature_nans:
+        assert np.isfinite(observed).all(), "observed feature values must be finite"
+
+    unobserved = data.features[~data.mask]
+    if unobserved.size:
+        assert np.isnan(unobserved).all(), (
+            "unobserved feature values must be NaN to prevent masked-data leakage"
+        )
 
 
 def from_multiclass_csv(
@@ -112,16 +129,19 @@ def from_multiclass_csv(
         CSV with columns: embryo_id, time_bin_center, genotype, p_<condition>, ...
     prob_cols
         Probability column names. Auto-detected as columns starting with "p_"
-        if None.
+        or "pred_proba_" if None.
     """
     df = pd.read_csv(path)
 
     if prob_cols is None:
-        prob_cols = [c for c in df.columns if c.startswith("p_")]
+        prob_cols = [
+            c for c in df.columns
+            if c.startswith("p_") or c.startswith("pred_proba_")
+        ]
     if not prob_cols:
         raise ValueError(f"No probability columns found in {path}")
 
-    return _build_canonical(df, prob_cols, embryo_col, time_col, label_col)
+    return _build_canonical(df, prob_cols, embryo_col, time_col, label_col, allow_feature_nans=False)
 
 
 def from_pairwise_margin_csv(
@@ -149,7 +169,7 @@ def from_pairwise_margin_csv(
     if not margin_cols:
         raise ValueError(f"No pairwise margin columns found in {path}")
 
-    return _build_canonical(df, margin_cols, embryo_col, time_col, label_col)
+    return _build_canonical(df, margin_cols, embryo_col, time_col, label_col, allow_feature_nans=True)
 
 
 def _build_canonical(
@@ -158,6 +178,7 @@ def _build_canonical(
     embryo_col: str,
     time_col: str,
     label_col: str,
+    allow_feature_nans: bool = False,
 ) -> CosmologyData:
     embryo_ids = np.array(sorted(df[embryo_col].unique()))
     time_values = np.array(sorted(df[time_col].unique()), dtype=float)
@@ -169,14 +190,26 @@ def _build_canonical(
     features = np.full((N_e, T, K), np.nan, dtype=float)
     mask = np.zeros((N_e, T), dtype=bool)
     labels = np.full(N_e, "", dtype=object)
+    label_sets: dict[int, set[str]] = {i: set() for i in range(N_e)}
 
     for _, row in df.iterrows():
         i = embryo_index[row[embryo_col]]
         j = time_index[float(row[time_col])]
         features[i, j, :] = row[list(feature_cols)].values.astype(float)
         mask[i, j] = True
+        label_value = str(row[label_col])
+        label_sets[i].add(label_value)
         if labels[i] == "":
-            labels[i] = row[label_col]
+            labels[i] = label_value
+
+    for i, observed_labels in label_sets.items():
+        if not observed_labels:
+            continue
+        if len(observed_labels) != 1:
+            embryo_id = embryo_ids[i]
+            raise AssertionError(
+                f"embryo {embryo_id} has inconsistent labels across rows: {sorted(observed_labels)}"
+            )
 
     data = CosmologyData(
         features=features,
@@ -188,5 +221,5 @@ def _build_canonical(
         embryo_index=embryo_index,
         time_index=time_index,
     )
-    validate(data)
+    validate(data, allow_feature_nans=allow_feature_nans)
     return data

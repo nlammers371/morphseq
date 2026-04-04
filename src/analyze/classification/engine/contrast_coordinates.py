@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
-
-_COORD_INDEX_COLS = ["feature_set", "time_bin", "time_bin_center"]
+from .contrast_support import assemble_contrast_support
 
 
 def _validate_id_metadata(
@@ -40,30 +38,6 @@ def _ordered_probe_ids(scores: pd.DataFrame) -> list[str]:
         .sort_values(["feature_set", "comparison_id"])
     )
     return pairs["comparison_id"].drop_duplicates().tolist()
-
-
-def _build_specificity(scores: pd.DataFrame) -> pd.DataFrame:
-    cols = [
-        "feature_set",
-        "comparison_id",
-        "positive_label",
-        "negative_label",
-        "time_bin",
-        "time_bin_center",
-        "auroc_obs",
-        "auroc_null_mean",
-        "auroc_null_std",
-        "pval",
-    ]
-    specificity = scores[cols].copy()
-    specificity["w"] = np.clip(
-        (specificity["auroc_obs"].astype(float) - specificity["auroc_null_mean"].astype(float)) / 0.5,
-        0.0,
-        1.0,
-    )
-    return specificity.sort_values(
-        ["feature_set", "comparison_id", "time_bin", "time_bin_center"]
-    ).reset_index(drop=True)
 
 
 def _pivot_coordinates(
@@ -131,6 +105,7 @@ def _build_probe_index(
 
 def assemble_contrast_coordinates(
     margin_rows: list[dict[str, Any]],
+    support_rows: list[dict[str, Any]],
     scores: pd.DataFrame,
     id_metadata: pd.DataFrame,
     id_col: str,
@@ -150,7 +125,11 @@ def assemble_contrast_coordinates(
         ["feature_set", id_col, "genotype", "time_bin", "time_bin_center", "comparison_id", "m_raw"]
     ].copy().sort_values(["feature_set", "comparison_id", "time_bin", id_col]).reset_index(drop=True)
 
-    specificity = _build_specificity(scores)
+    contrast_support_long, specificity = assemble_contrast_support(
+        support_rows,
+        scores,
+        id_col=id_col,
+    )
     probe_columns = _ordered_probe_ids(scores)
 
     shrunk_long = raw_long.merge(
@@ -184,6 +163,7 @@ def assemble_contrast_coordinates(
 
     return {
         "raw_contrast_scores_long": raw_long,
+        "contrast_support_long": contrast_support_long,
         "contrast_specificity_by_timebin": specificity,
         "raw_coordinates": raw_coordinates,
         "shrunk_coordinates": shrunk_coordinates,
