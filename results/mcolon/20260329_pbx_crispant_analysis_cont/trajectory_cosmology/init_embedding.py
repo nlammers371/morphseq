@@ -127,29 +127,25 @@ def pca_init(
     """Simple PCA fallback initialization — no temporal alignment.
 
     Useful for smoke tests when umap-learn is unavailable or slow.
-
-    Parameters
-    ----------
-    features : (N_e, T, K)
-    mask : (N_e, T) bool
-
-    Returns
-    -------
-    x0 : (N_e, T, 2) float array
+    For sparse pairwise inputs, NaNs are mean-imputed on observed rows.
     """
     from sklearn.decomposition import PCA
+    from sklearn.impute import SimpleImputer
 
-    N_e, T, _ = features.shape
-    x0 = np.full((N_e, T, 2), np.nan)
+    n_e, t_count, _ = features.shape
+    x0 = np.full((n_e, t_count, 2), np.nan)
 
-    all_rows = features[mask]  # (n_obs, K)
-    pca = PCA(n_components=2, random_state=random_state).fit(all_rows)
+    all_rows = features[mask]
+    imputer = SimpleImputer(strategy="mean")
+    all_rows_imputed = imputer.fit_transform(all_rows)
+    pca = PCA(n_components=2, random_state=random_state).fit(all_rows_imputed)
 
-    for t in range(T):
-        observed = mask[:, t]
+    for t_idx in range(t_count):
+        observed = mask[:, t_idx]
         if observed.sum() == 0:
             continue
-        x0[observed, t, :] = pca.transform(features[observed, t, :])
+        rows = imputer.transform(features[observed, t_idx, :])
+        x0[observed, t_idx, :] = pca.transform(rows)
 
     return x0
 

@@ -993,3 +993,48 @@ and a clear statement of when metrics plateau so the budget is justified.
 
 Note: `fidelity_half_life_iters` is measured in solver iterations and depends on n_iter
 for its practical meaning (half_life=70 out of 100 iters is very different from 70 out of 800).
+
+---
+
+## 2026-04-03 PBX pairwise note: avoid PCA initialization
+
+For the sparse pairwise PBX workflow, PCA initialization has not produced a satisfactory starting geometry in practice. In the ranked smoke run, the PCA init visibly under-structured the trajectories and was not a good basis for judging condensation behavior.
+
+Current practical guidance:
+- use `UMAP` initialization for PBX smoke and full pairwise runs
+- do not use PCA smoke outputs as the visual reference for candidate selection
+- keep PCA available only as a debugging fallback, not the default tuning path
+
+
+---
+
+## 2026-04-03 PBX force-ablation note: separate coherence gating from attraction mechanics
+
+The PBX pairwise workflow now has an explicit force-ablation runner:
+`results/mcolon/20260329_pbx_crispant_analysis_cont/18_force_ablation_coherence.py`
+
+Purpose:
+- test attraction mechanics separately from temporal coherence
+- reuse the same saved `x0_init.npz` across all ablation runs so the comparison is not confounded by reinitialization
+- turn off `k_attract` for the coherence-focused ablations (`k_attract=None`) so the experiment isolates coherence gating rather than local-neighbor truncation
+
+Current ablation family:
+- `repel_fid_only`
+- `attract_uniform_plus_repel_fid`
+- `attract_computed_plus_repel_fid_sigma0p1`
+- `attract_computed_plus_repel_fid_sigma0p3`
+- `attract_computed_plus_repel_fid_sigma0p4`
+- `attract_computed_plus_repel_fid_sigma0p5`
+- `attract_computed_plus_repel_fid_sigma0p6`
+- `baseline_current`
+
+Interpretation structure:
+- `uniform` coherence asks what generic attraction does without temporal-memory gating
+- `computed` coherence asks what changes once persistent local-neighborhood structure is allowed to gate attraction
+- `0.1 * s_local` is the negative-control coherence setting
+- `0.3-0.6 * s_local` is the main working band suggested by the current calibration notes
+
+Implementation detail:
+- force terms are now explicitly weighted in `CondensationConfig` via `w_attract`, `w_repel`, `w_fidelity`, `w_elastic`, `w_void`, `w_scale`
+- coherence source is switched by `coherence_mode` (`computed` vs `uniform`)
+- this is a minimal ablation hook, not yet a general force-plugin architecture

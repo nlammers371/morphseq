@@ -37,6 +37,12 @@ def total_energy_and_grad(
     r_cut: float = 0.0,
     lambda_scale: float = 0.0,
     neighborhood_info: dict | None = None,
+    w_attract: float = 1.0,
+    w_repel: float = 1.0,
+    w_fidelity: float = 1.0,
+    w_elastic: float = 1.0,
+    w_void: float = 1.0,
+    w_scale: float = 1.0,
 ) -> tuple[dict[str, float], np.ndarray]:
     """Compute all energy terms and combined gradient."""
     e_att, g_att = attraction(
@@ -59,13 +65,20 @@ def total_energy_and_grad(
     )
 
     energies = {
-        "attract": e_att,
-        "repel": e_rep,
-        "void": e_void,
-        "elastic": e_ela,
-        "fidelity": e_fid,
-        "scale": e_scale,
-        "total": e_att + e_rep + e_void + e_ela + e_fid + e_scale,
+        "attract": w_attract * e_att,
+        "repel": w_repel * e_rep,
+        "void": w_void * e_void,
+        "elastic": w_elastic * e_ela,
+        "fidelity": w_fidelity * e_fid,
+        "scale": w_scale * e_scale,
     }
-    grad = g_att + g_rep + g_void + g_ela + g_fid + g_scale
+    energies["total"] = sum(energies.values())
+    grad = (
+        w_attract * g_att
+        + w_repel * g_rep
+        + w_void * g_void
+        + w_elastic * g_ela
+        + w_fidelity * g_fid
+        + w_scale * g_scale
+    )
     return energies, grad

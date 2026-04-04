@@ -155,6 +155,7 @@ def log_metrics(
     prev_total_energy: float | None = None,
     C_prev: np.ndarray | None = None,
     C_curr: np.ndarray | None = None,
+    support_metrics: dict[str, float] | None = None,
 ) -> dict:
     """Assemble one diagnostics row for the iteration log.
 
@@ -191,6 +192,9 @@ def log_metrics(
         row["coherence_change_rel"] = coherence_change_metric(C_prev, C_curr)
     else:
         row["coherence_change_rel"] = float("nan")
+
+    if support_metrics is not None:
+        row.update(support_metrics)
 
     return row
 

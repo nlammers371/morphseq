@@ -56,8 +56,10 @@ class CondensationConfig:
     """
     sigma: float = 0.5       # attraction bandwidth (inter-bundle scale)
     sigma_coh: float | None = None  # coherence kernel bandwidth; None = use sigma
-                                    # set to coherence_scale_mult * s_local for
-                                    # scale-independent coherence computation
+                                    # overridden when coherence_scale_mult is set
+    attraction_scale_mult: float | None = None  # if set, sigma = c_att * s_global
+    coherence_scale_mult: float | None = None   # if set, sigma_coh = c_coh * s_local
+    coherence_mode: str = "computed"  # computed or uniform
     delta: int = 3
     epsilon_r: float = 0.01
     eta: float = 1e-4
@@ -79,6 +81,12 @@ class CondensationConfig:
     lambda_scale: float = 0.0                 # soft regularizer strength; 0 = off
                                               # E = λ_scale * Σ_i (r_i^(n) - r_i^(0))^2
                                               # start small (e.g. 0.1-1.0), not a hard leash
+    w_attract: float = 1.0
+    w_repel: float = 1.0
+    w_fidelity: float = 1.0
+    w_elastic: float = 1.0
+    w_void: float = 1.0
+    w_scale: float = 1.0
     k_local_scale: int = 5                    # number of initial neighbors defining r_i^(0)
     alpha: float = 0.9
     lr: float = 0.01
