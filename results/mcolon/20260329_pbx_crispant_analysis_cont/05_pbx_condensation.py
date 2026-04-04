@@ -120,17 +120,17 @@ def main() -> None:
 
     config = CondensationConfig(
         sigma=0.5,
-        delta=3,
+        temporal_cohere_window=3,
         epsilon_r=0.005,
         lambda_stretch=0.04,
         lambda_bend=0.04,
         fidelity_init_strength=0.25,
         fidelity_half_life=_gamma_from_half_life_iters(70.0),
         epsilon_void=0.014,
-        k_attract=20,
-        lr=1e-4,
-        alpha=0.9,
-        max_iter=args.n_iter,
+        attract_k=20,
+        solver_lr=1e-4,
+        solver_momentum=0.9,
+        solver_max_iter=args.n_iter,
     )
     stopping = StoppingConfig(
         disp_max_rel_threshold=None,
@@ -140,7 +140,7 @@ def main() -> None:
     )
 
     save_every = args.save_every if args.save_every > 0 else None
-    print(f"\nRunning condensation ({args.n_iter} iterations, lr={config.lr:.0e}) ...")
+    print(f"\nRunning condensation ({args.n_iter} iterations, solver_lr={config.lr:.0e}) ...")
     result = run_condensation(
         x0=x0,
         mask=data.mask,
@@ -212,7 +212,7 @@ def main() -> None:
     _plot_metrics(
         metrics_df,
         output_dir / "plot_metrics.png",
-        title=f"{args.init.upper()} init - sigma={config.sigma} delta={config.delta} lr={config.lr:.0e} k={config.k_attract}",
+        title=f"{args.init.upper()} init - sigma={config.sigma} temporal_cohere_window={config.delta} solver_lr={config.lr:.0e} k={config.k_attract}",
     )
 
     if result.position_history is not None:

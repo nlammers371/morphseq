@@ -397,13 +397,28 @@ def assign_embryos_to_arms(
                     all_conds.append(str(row["condition"]))
             arm_conds[arm_idx] = sorted(set(all_conds))
 
-        # For each embryo, assign to nearest arm at each observed time
+        # Only vote on time bins where ≥2 arms have centroids (discriminating
+        # bins). Pre-fork trunk bins appear in only one arm, so they'd assign
+        # all embryos to that arm and dilute the post-fork signal.
+        all_ti_per_arm = [set(arm_centroids[a].keys()) for a in range(len(arms))]
+        all_ti: set[int] = set()
+        for s in all_ti_per_arm:
+            all_ti |= s
+        ti_arm_count = {
+            ti: sum(1 for s in all_ti_per_arm if ti in s)
+            for ti in all_ti
+        }
+        discriminating_ti = {ti for ti, c in ti_arm_count.items() if c >= 2}
+
+        # For each embryo, assign to nearest arm at discriminating time bins
         emb_arm_counts: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
         n_embryos = positions.shape[0]
 
         for emb_i in range(n_embryos):
             for ti in range(positions.shape[1]):
                 if not mask[emb_i, ti]:
+                    continue
+                if ti not in discriminating_ti:
                     continue
                 emb_xy = positions[emb_i, ti, :]
                 # Find arms that have a centroid for this time bin

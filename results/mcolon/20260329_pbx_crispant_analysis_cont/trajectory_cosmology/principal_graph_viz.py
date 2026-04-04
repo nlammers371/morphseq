@@ -118,8 +118,9 @@ def plot_spacetime_schematic(
     # ------------------------------------------------------------------
     # 2. Skeleton edges
     # ------------------------------------------------------------------
-    # Edge thickness: proportional to n_obs on the thicker of two nodes
-    node_n_obs = skel_nodes_df["n_obs"].values
+    # Edge thickness: proportional to n_orig (orig traj nodes owned) on the thicker of two nodes
+    obs_col = "n_obs" if "n_obs" in skel_nodes_df.columns else "n_orig"
+    node_n_obs = skel_nodes_df[obs_col].values
     max_n = max(node_n_obs.max(), 1)
 
     for (i, j) in skel_edges:
