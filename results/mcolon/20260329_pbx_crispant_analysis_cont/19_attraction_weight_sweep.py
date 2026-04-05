@@ -172,15 +172,15 @@ def _build_sweep_specs(
     base_kwargs = dict(
         sigma=sigma,
         sigma_coh=sigma_coh,
-        coherence_mode='computed',
-        delta=3,
+        temporal_cohere_mode='computed',
+        temporal_cohere_window=3,
         epsilon_r=0.005,
         fidelity_init_strength=0.25,
         fidelity_half_life=_gamma_from_half_life_iters(70.0),
-        lr=1e-4,
-        alpha=0.9,
-        max_iter=n_iter,
-        k_attract=None,
+        solver_lr=1e-4,
+        solver_momentum=0.9,
+        solver_max_iter=n_iter,
+        attract_k=None,
         lambda_stretch=0.0,
         lambda_bend=0.0,
         epsilon_void=0.0,
@@ -408,7 +408,7 @@ def _plot_metrics(metrics_df: pd.DataFrame, output_path: Path, title: str = '') 
         ax.set_xlabel('Iteration', fontsize=9)
         ax.set_ylabel(label, fontsize=9)
         ax.set_title(label, fontsize=9)
-        ax.grid(True, alpha=0.25)
+        ax.grid(True, solver_momentum=0.25)
     for ax in axes[len(available):]:
         ax.set_visible(False)
     if title:
@@ -433,7 +433,7 @@ def _plot_weight_summary(summary: pd.DataFrame, output_path: Path) -> None:
     for ax, (col, title) in zip(axes, metrics):
         ax.plot(x, summary[col].astype(float), marker='o', lw=1.8)
         ax.set_title(title, fontsize=10)
-        ax.grid(True, alpha=0.25)
+        ax.grid(True, solver_momentum=0.25)
         ax.set_xlabel('w_attract', fontsize=9)
     fig.tight_layout()
     fig.savefig(output_path, dpi=140, bbox_inches='tight')

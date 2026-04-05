@@ -16,82 +16,167 @@ import numpy as np
 class CondensationConfig:
     """Hyperparameters for the condensation dynamical system.
 
-    Spatial / temporal
-    ------------------
-    sigma : float
-        Gaussian kernel bandwidth in embedding units.
-    delta : int
-        Causal backward window size in time bins for coherence.
-
-    Forces
-    ------
-    epsilon_r : float
-        Repulsion strength.
-    eta : float
-        Soft-core repulsion stabilizer (prevents divide-by-zero).
-    lambda_stretch : float
-        Stretch (step-size) penalty weight.
-    lambda_bend : float
-        Bending (curvature) penalty weight.
-    fidelity_init_strength : float
-        Initial fidelity anchor weight at iteration 0. Set to 0.0 to disable fidelity.
-    fidelity_half_life : float
-        Internal per-iteration retention multiplier gamma (mu_n = fidelity_init_strength * gamma^n).
-        Derived from fidelity_half_life_iters via gamma = 2^(-1/h). Not set directly by users.
-    k_attract : int | None
-        Number of nearest neighbors for local attraction. None = all pairs.
-    subtract_mean_attraction : bool
-        Whether to subtract the per-slice mean attraction gradient.
-
-    Optimization
-    ------------
-    alpha : float
-        Momentum damping coefficient.
-    lr : float
-        Learning rate.
-    max_iter : int
-        Maximum number of iterations.
-    tol : float
-        Convergence tolerance on max position change per iteration.
+    Public config is moving toward structural names like ``attract_*``,
+    ``temporal_cohere_*``, and ``solver_*``. Legacy/internal names remain as
+    compatibility aliases so older scripts still run.
     """
-    sigma: float = 0.5       # attraction bandwidth (inter-bundle scale)
-    sigma_coh: float | None = None  # coherence kernel bandwidth; None = use sigma
-                                    # overridden when coherence_scale_mult is set
-    attraction_scale_mult: float | None = None  # if set, sigma = c_att * s_global
-    coherence_scale_mult: float | None = None   # if set, sigma_coh = c_coh * s_local
-    coherence_mode: str = "computed"  # computed or uniform
+
+    # Public structural names
+    attract_scale_mult: float | None = None
+    attract_k: int | None = None
+    temporal_cohere_scale_mult: float | None = None
+    temporal_cohere_window: int | None = None
+    temporal_cohere_mode: str | None = None
+    attract_weight: float | None = None
+    temporal_cohere_weight: float | None = None
+    solver_lr: float | None = None
+    solver_max_iter: int | None = None
+    solver_tol: float | None = None
+    solver_momentum: float | None = None
+
+    # Legacy / internal names kept for compatibility.
+    sigma: float = 0.5
+    sigma_coh: float | None = None
+    attraction_scale_mult: float | None = None
+    coherence_scale_mult: float | None = None
+    coherence_mode: str = "computed"
+    coherence_weight: float = 1.0
     delta: int = 3
     epsilon_r: float = 0.01
     eta: float = 1e-4
     lambda_stretch: float = 0.1
     lambda_bend: float = 0.05
-    fidelity_init_strength: float = 1.0   # full initial anchor pull
-    fidelity_half_life: float = 0.99      # internal gamma; derived from fidelity_half_life_iters
-                                          # do not set directly — use TemporalRunConfig.fidelity_half_life_iters
+    fidelity_init_strength: float = 1.0
+    fidelity_half_life: float = 0.99
     k_attract: int | None = 15
     subtract_mean_attraction: bool = False
-    # Two-scale force law
-    sigma_attract_local: float | None = None  # None = use sigma (backwards-compatible)
-    sigma_void: float | None = None           # None = disabled; set to use void repulsion
-    epsilon_void: float = 0.0                 # void repulsion strength (0 = off)
-    # Truncated repulsion (replaces soft-core when r_cut > 0)
-    r_cut: float = 0.0                        # cutoff radius; 0 = use classic soft-core repulsion
-                                              # if > 0: bump repulsion E = ε_r*(1-r²/r_cut²)² for r<r_cut
-    # Local neighborhood scale preservation
-    lambda_scale: float = 0.0                 # soft regularizer strength; 0 = off
-                                              # E = λ_scale * Σ_i (r_i^(n) - r_i^(0))^2
-                                              # start small (e.g. 0.1-1.0), not a hard leash
+    sigma_attract_local: float | None = None
+    sigma_void: float | None = None
+    epsilon_void: float = 0.0
+    r_cut: float = 0.0
+    lambda_scale: float = 0.0
     w_attract: float = 1.0
     w_repel: float = 1.0
     w_fidelity: float = 1.0
     w_elastic: float = 1.0
     w_void: float = 1.0
     w_scale: float = 1.0
-    k_local_scale: int = 5                    # number of initial neighbors defining r_i^(0)
+    k_local_scale: int = 5
     alpha: float = 0.9
     lr: float = 0.01
     max_iter: int = 500
     tol: float = 1e-4
+
+    def __post_init__(self) -> None:
+        self.attraction_scale_mult = self._resolve_alias(
+            public_value=self.attract_scale_mult,
+            legacy_value=self.attraction_scale_mult,
+            public_name="attract_scale_mult",
+            legacy_name="attraction_scale_mult",
+            legacy_default=None,
+        )
+        self.attract_scale_mult = self.attraction_scale_mult
+
+        self.k_attract = self._resolve_alias(
+            public_value=self.attract_k,
+            legacy_value=self.k_attract,
+            public_name="attract_k",
+            legacy_name="k_attract",
+            legacy_default=15,
+        )
+        self.attract_k = self.k_attract
+
+        self.coherence_scale_mult = self._resolve_alias(
+            public_value=self.temporal_cohere_scale_mult,
+            legacy_value=self.coherence_scale_mult,
+            public_name="temporal_cohere_scale_mult",
+            legacy_name="coherence_scale_mult",
+            legacy_default=None,
+        )
+        self.temporal_cohere_scale_mult = self.coherence_scale_mult
+
+        self.delta = self._resolve_alias(
+            public_value=self.temporal_cohere_window,
+            legacy_value=self.delta,
+            public_name="temporal_cohere_window",
+            legacy_name="delta",
+            legacy_default=3,
+        )
+        self.temporal_cohere_window = self.delta
+
+        self.coherence_mode = self._resolve_alias(
+            public_value=self.temporal_cohere_mode,
+            legacy_value=self.coherence_mode,
+            public_name="temporal_cohere_mode",
+            legacy_name="coherence_mode",
+            legacy_default="computed",
+        )
+        self.temporal_cohere_mode = self.coherence_mode
+
+        self.w_attract = self._resolve_alias(
+            public_value=self.attract_weight,
+            legacy_value=self.w_attract,
+            public_name="attract_weight",
+            legacy_name="w_attract",
+            legacy_default=1.0,
+        )
+        self.attract_weight = self.w_attract
+
+        self.coherence_weight = self._resolve_alias(
+            public_value=self.temporal_cohere_weight,
+            legacy_value=self.coherence_weight,
+            public_name="temporal_cohere_weight",
+            legacy_name="coherence_weight",
+            legacy_default=1.0,
+        )
+        self.temporal_cohere_weight = self.coherence_weight
+
+        self.lr = self._resolve_alias(
+            public_value=self.solver_lr,
+            legacy_value=self.lr,
+            public_name="solver_lr",
+            legacy_name="lr",
+            legacy_default=0.01,
+        )
+        self.solver_lr = self.lr
+
+        self.max_iter = self._resolve_alias(
+            public_value=self.solver_max_iter,
+            legacy_value=self.max_iter,
+            public_name="solver_max_iter",
+            legacy_name="max_iter",
+            legacy_default=500,
+        )
+        self.solver_max_iter = self.max_iter
+
+        self.tol = self._resolve_alias(
+            public_value=self.solver_tol,
+            legacy_value=self.tol,
+            public_name="solver_tol",
+            legacy_name="tol",
+            legacy_default=1e-4,
+        )
+        self.solver_tol = self.tol
+
+        self.alpha = self._resolve_alias(
+            public_value=self.solver_momentum,
+            legacy_value=self.alpha,
+            public_name="solver_momentum",
+            legacy_name="alpha",
+            legacy_default=0.9,
+        )
+        self.solver_momentum = self.alpha
+
+    @staticmethod
+    def _resolve_alias(*, public_value, legacy_value, public_name: str, legacy_name: str, legacy_default):
+        if public_value is None:
+            return legacy_value
+        if legacy_value is not None and legacy_value != legacy_default and public_value != legacy_value:
+            raise ValueError(
+                f"Conflicting values for {public_name} and {legacy_name}: "
+                f"{public_value!r} vs {legacy_value!r}"
+            )
+        return public_value
 
 
 @dataclass

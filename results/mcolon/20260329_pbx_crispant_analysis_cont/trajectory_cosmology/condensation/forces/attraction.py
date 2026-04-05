@@ -47,7 +47,7 @@ def attraction(
     sigma: float,
     sigma_attract_local: float | None = None,
     k_attract: int | None = None,
-    subtract_mean: bool = False,
+    subtract_mean: bool = False
 ) -> tuple[float, np.ndarray]:
     """Persistence-gated attraction energy and gradient.
 

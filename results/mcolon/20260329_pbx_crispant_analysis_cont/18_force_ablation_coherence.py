@@ -181,13 +181,13 @@ def _build_ablations(
 ) -> list[dict[str, Any]]:
     base_kwargs = dict(
         sigma=sigma,
-        delta=3,
+        temporal_cohere_window=3,
         epsilon_r=0.005,
         fidelity_init_strength=0.25,
         fidelity_half_life=_gamma_from_half_life_iters(70.0),
-        lr=1e-4,
-        alpha=0.9,
-        max_iter=n_iter,
+        solver_lr=1e-4,
+        solver_momentum=0.9,
+        solver_max_iter=n_iter,
     )
     ablations: list[dict[str, Any]] = [
         {
@@ -195,8 +195,8 @@ def _build_ablations(
             'description': 'Repulsion + fidelity only. Attraction fully disabled.',
             'config': CondensationConfig(
                 **base_kwargs,
-                coherence_mode='uniform',
-                k_attract=None,
+                temporal_cohere_mode='uniform',
+                attract_k=None,
                 lambda_stretch=0.0,
                 lambda_bend=0.0,
                 epsilon_void=0.0,
@@ -214,8 +214,8 @@ def _build_ablations(
             'description': 'Attraction + repulsion + fidelity, but coherence replaced with a uniform observed-pair mask.',
             'config': CondensationConfig(
                 **base_kwargs,
-                coherence_mode='uniform',
-                k_attract=None,
+                temporal_cohere_mode='uniform',
+                attract_k=None,
                 lambda_stretch=0.0,
                 lambda_bend=0.0,
                 epsilon_void=0.0,
@@ -238,9 +238,9 @@ def _build_ablations(
                 'description': f'Attraction + repulsion + fidelity with computed coherence at sigma_coh={mult:.2f} * s_local.',
                 'config': CondensationConfig(
                     **base_kwargs,
-                    coherence_mode='computed',
+                    temporal_cohere_mode='computed',
                     sigma_coh=float(mult) * s_local,
-                    k_attract=None,
+                    attract_k=None,
                     lambda_stretch=0.0,
                     lambda_bend=0.0,
                     epsilon_void=0.0,
@@ -261,17 +261,17 @@ def _build_ablations(
             'description': 'Current PBX baseline used for direct comparison against the force-isolated ablations.',
             'config': CondensationConfig(
                 sigma=sigma,
-                delta=3,
+                temporal_cohere_window=3,
                 epsilon_r=0.005,
                 lambda_stretch=0.04,
                 lambda_bend=0.04,
                 fidelity_init_strength=0.25,
                 fidelity_half_life=_gamma_from_half_life_iters(70.0),
                 epsilon_void=0.014,
-                k_attract=20,
-                lr=1e-4,
-                alpha=0.9,
-                max_iter=n_iter,
+                attract_k=20,
+                solver_lr=1e-4,
+                solver_momentum=0.9,
+                solver_max_iter=n_iter,
             ),
         }
     )
@@ -511,7 +511,7 @@ def _plot_metrics(metrics_df: pd.DataFrame, output_path: Path, title: str = '') 
         ax.set_xlabel('Iteration', fontsize=9)
         ax.set_ylabel(label, fontsize=9)
         ax.set_title(label, fontsize=9)
-        ax.grid(True, alpha=0.25)
+        ax.grid(True, solver_momentum=0.25)
     for ax in axes[len(available):]:
         ax.set_visible(False)
     if title:
@@ -540,7 +540,7 @@ def _plot_ablation_summary(summary: pd.DataFrame, output_path: Path) -> None:
         ax.set_title(title, fontsize=10)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
-        ax.grid(True, axis='y', alpha=0.25)
+        ax.grid(True, axis='y', solver_momentum=0.25)
     fig.tight_layout()
     fig.savefig(output_path, dpi=140, bbox_inches='tight')
     plt.close(fig)

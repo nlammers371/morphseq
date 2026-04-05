@@ -372,6 +372,8 @@ class TemporalRunConfig:
                                   # Set e.g. 1.0 to anchor coherence to local spacing
     delta: int = 3                # coherence backward window (time bins)
     k_attract: int = 20
+    attract_weight: float = 1.0
+    temporal_cohere_weight: float = 1.0
 
     # --- Dimensionless force multipliers (each × reference scale² → coefficient) ---
     # Design principle: each default is set just below the no_change threshold on the
@@ -519,6 +521,8 @@ def run_temporal(
         fidelity_init_strength=fidelity_init_strength,
         fidelity_half_life=gamma_from_half_life_iters(config.fidelity_half_life_iters),
         k_attract=config.k_attract,
+        attract_weight=config.attract_weight,
+        temporal_cohere_weight=config.temporal_cohere_weight,
         subtract_mean_attraction=False,
         alpha=config.alpha,
         lr=config.lr,
@@ -530,6 +534,8 @@ def run_temporal(
         r_cut=r_cut,
         lambda_scale=config.lambda_scale,
         k_local_scale=config.k_local_scale,
+        w_attract=config.attract_weight,
+        coherence_weight=config.temporal_cohere_weight,
     )
 
     # Compute initial coherence and metrics using the same sigma_coh that dynamics will use

@@ -245,9 +245,9 @@ def _run_pbx_sweep(
         cfg = CondensationConfig(
             sigma=0.5,
             sigma_coh=None,
-            attraction_scale_mult=float(att_mult),
+            attract_scale_mult=float(att_mult),
             coherence_scale_mult=float(coh_mult),
-            coherence_mode="computed",
+            temporal_cohere_mode="computed",
             delta=3,
             epsilon_r=0.005,
             lambda_stretch=0.04,
@@ -257,8 +257,8 @@ def _run_pbx_sweep(
             epsilon_void=0.014,
             k_attract=int(k_attract),
             lr=1e-4,
-            alpha=0.9,
-            max_iter=int(n_iter),
+            solver_momentum=0.9,
+            solver_max_iter=int(n_iter),
         )
         result = run_condensation(
             x0=x0,

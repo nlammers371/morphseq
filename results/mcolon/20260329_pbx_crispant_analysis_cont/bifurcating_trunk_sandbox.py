@@ -487,6 +487,41 @@ def _draw_3d_trunk(
     ax.tick_params(labelsize=6)
 
 
+def save_trunk_3d_panels(
+    pos_initial: np.ndarray,
+    pos_final: np.ndarray,
+    labels: np.ndarray,
+    time_values: np.ndarray,
+    output_path: Path,
+    title_left: str = "initial",
+    title_right: str = "final",
+    elev: float = 25,
+    azim: float = -60,
+) -> None:
+    """Static 3D side-by-side panel for direct geometry inspection."""
+    all_pos = np.vstack([pos_initial.reshape(-1, 2), pos_final.reshape(-1, 2)])
+    pad = 0.5
+    xlim = (all_pos[:, 0].min() - pad, all_pos[:, 0].max() + pad)
+    ylim = (all_pos[:, 1].min() - pad, all_pos[:, 1].max() + pad)
+
+    fig = plt.figure(figsize=(16, 7), dpi=120)
+    ax_l = fig.add_subplot(121, projection="3d")
+    _draw_3d_trunk(ax_l, pos_initial, labels, time_values, title=title_left)
+    ax_l.set_xlim(xlim); ax_l.set_zlim(ylim)
+    ax_l.view_init(elev=elev, azim=azim)
+
+    ax_r = fig.add_subplot(122, projection="3d")
+    _draw_3d_trunk(ax_r, pos_final, labels, time_values, title=title_right)
+    ax_r.set_xlim(xlim); ax_r.set_zlim(ylim)
+    ax_r.view_init(elev=elev, azim=azim)
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=130)
+    plt.close(fig)
+    print(f"  Saved: {output_path}")
+
+
 def make_trunk_3d_gif(
     positions: np.ndarray,    # (N_e, T, 2)
     labels: np.ndarray,
@@ -922,6 +957,401 @@ def plot_force_sweeps(
 # Section 6: Main
 # ===========================================================================
 
+
+
+def plot_refactored_force_sweeps(
+    init_path: Path,
+    base_kwargs: dict,
+    output_path: Path,
+    summary_csv_path: Path,
+    n_per_branch: int = 40,
+    split_full: int = 8,
+    verbose: bool = False,
+    inspect_root: Path | None = None,
+    save_geometry: bool = False,
+    save_gif: bool = False,
+    n_frames: int = 72,
+    sweep_overrides: dict[str, np.ndarray] | None = None,
+) -> pd.DataFrame:
+    """Sweep the disentangled attraction/coherence scales on the bifurcating trunk benchmark.
+
+    Two facets:
+      [0] attract_scale_mult              (sigma_att = mult * s_global)
+      [1] temporal_cohere_scale_mult      (sigma_coh = mult * s_local)
+
+    Each facet contains stacked branch_sep_late and trunk_linearity_early traces,
+    matching the original force-family sweep style.
+    """
+    sweep_specs = [
+        (
+            "sigma_frac",
+            "attract_scale_mult",
+            np.array([0.10, 0.15, 0.20, 0.30, 0.40, 0.50, 0.70, 1.00, 1.50]),
+            0.50,
+            None,
+            dict(coherence_scale_mult=0.25, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "sigma_att = c_att * s_global\n(cohere_scale_mult=0.25 fixed)",
+        ),
+        (
+            "coherence_scale_mult",
+            "temporal_cohere_scale_mult",
+            np.array([0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.70, 1.00]),
+            0.25,
+            None,
+            dict(sigma_frac=0.50, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "sigma_coh = c_coh * s_local\n(attract_scale_mult=0.50 fixed)",
+        ),
+    ]
+    if sweep_overrides:
+        sweep_specs = [
+            (
+                param,
+                label,
+                np.asarray(sweep_overrides.get(param, values), dtype=float),
+                default,
+                no_change_threshold,
+                fixed_kw,
+                subtitle,
+            )
+            for param, label, values, default, no_change_threshold, fixed_kw, subtitle in sweep_specs
+        ]
+
+    ds_base = load_initialization(init_path, variant="bifurcating_trunk",
+                                  n_per_cluster=n_per_branch)
+    pos_init_fixed = ds_base.positions.copy()
+    cfg_base = TemporalRunConfig(**base_kwargs, fidelity_init_strength=0.0, epsilon_void=0.0)
+    print("  Running refactored baseline...")
+    res_base = run_temporal(ds_base, cfg_base, save_snapshots=False, verbose=False)
+    base_summary = trunk_summary_metrics(res_base.cond_result.positions, pos_init_fixed,
+                                         ds_base.labels, split_full=split_full)
+    baseline_sep = base_summary["branch_sep_late"]
+    baseline_lin = base_summary["trunk_linearity_early"]
+    print(f"  baseline: branch_sep={baseline_sep:.4f}  trunk_lin={baseline_lin:.4f}")
+
+    color_sep = "#2166AC"
+    color_lin = "#D6604D"
+    all_rows = []
+
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+
+    fig = plt.figure(figsize=(10, 9))
+    outer = GridSpec(1, 2, figure=fig, hspace=0.5, wspace=0.35)
+
+    for facet_idx, (param, label, values, default, no_change_threshold, fixed_kw, subtitle) in enumerate(sweep_specs):
+        inner = GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[facet_idx],
+                                        hspace=0.05, height_ratios=[1, 1])
+        ax_top = fig.add_subplot(inner[0])
+        ax_bot = fig.add_subplot(inner[1], sharex=ax_top)
+
+        branch_seps = []
+        trunk_lins = []
+        print(f"\n  Sweeping {label}...")
+        for v in values:
+            ds = load_initialization(init_path, variant="bifurcating_trunk",
+                                     n_per_cluster=n_per_branch)
+            kw = {**fixed_kw, param: float(v)}
+            cfg = TemporalRunConfig(**base_kwargs, **kw)
+            res = run_temporal(ds, cfg, save_snapshots=False, verbose=False)
+            s = trunk_summary_metrics(res.cond_result.positions, pos_init_fixed,
+                                      ds.labels, split_full=split_full)
+            branch_seps.append(s["branch_sep_late"])
+            trunk_lins.append(s["trunk_linearity_early"])
+            if save_geometry and inspect_root is not None:
+                value_slug = f"{float(v):g}".replace("-", "neg_").replace(".", "p")
+                condition_dir = inspect_root / label / f"{param}_{value_slug}"
+                condition_dir.mkdir(parents=True, exist_ok=True)
+                res.metrics_df.to_csv(condition_dir / "metrics_history.csv", index=False)
+                np.savez(
+                    condition_dir / "condensed_positions.npz",
+                    positions=res.cond_result.positions,
+                    mask=ds.mask,
+                    labels=ds.labels,
+                    time_values=ds.time_values,
+                )
+                plot_branch_geometry(
+                    res,
+                    condition_dir,
+                    split_full=split_full,
+                    condition_label=f"{label}={float(v):g}",
+                )
+                save_trunk_3d_panels(
+                    pos_init_fixed,
+                    res.cond_result.positions,
+                    ds.labels,
+                    ds.time_values,
+                    condition_dir / "trunk_3d_before_after.png",
+                    title_left="initialization (shared)",
+                    title_right=f"final | {label}={float(v):g}",
+                )
+                if save_gif:
+                    make_trunk_side_by_side_gif(
+                        pos_init_fixed,
+                        res.cond_result.positions,
+                        ds.labels,
+                        ds.time_values,
+                        condition_dir / "3d_before_after.gif",
+                        title_left="initialization (shared)",
+                        title_right=f"final | {label}={float(v):g}",
+                        n_frames=n_frames,
+                    )
+
+            row = {
+                "family": label,
+                "param": param,
+                "value": float(v),
+                "default_value": float(default),
+                "branch_sep_late": float(s["branch_sep_late"]),
+                "trunk_linearity_early": float(s["trunk_linearity_early"]),
+                "within_branch_spread_ratio": float(s["within_branch_spread_ratio"]),
+                "coherence_selectivity": float(s.get("coherence_selectivity", float("nan"))),
+                "baseline_branch_sep_late": float(baseline_sep),
+                "baseline_trunk_linearity_early": float(baseline_lin),
+                "delta_branch_sep": float(s["branch_sep_late"] - baseline_sep),
+                "delta_trunk_linearity": float(s["trunk_linearity_early"] - baseline_lin),
+            }
+            all_rows.append(row)
+            print(f"    {label}={v:.5g}  sep={branch_seps[-1]:.4f}  lin={trunk_lins[-1]:.4f}")
+
+        ax_top.plot(values, branch_seps, "o-", color=color_sep, lw=1.6, ms=4)
+        ax_top.axhline(baseline_sep, color=color_sep, lw=2.5, ls=":", alpha=0.85)
+        ax_top.axvline(default, color="black", lw=1.8, ls="--", alpha=0.85)
+        if no_change_threshold is not None:
+            ax_top.axvspan(values[0] * 0.5, no_change_threshold, alpha=0.10, color="green", zorder=0)
+            ax_top.axvline(no_change_threshold, color="green", lw=1.2, ls="-.", alpha=0.7)
+        ax_top.set_ylabel("branch_sep_late", fontsize=7, color=color_sep, fontweight="bold")
+        ax_top.tick_params(axis="y", labelsize=6, colors=color_sep)
+        ax_top.tick_params(axis="x", labelbottom=False)
+        ax_top.grid(True, which="both", alpha=0.2, lw=0.4)
+        ax_top.set_xscale("log")
+        ax_top.set_title(f"{label}\n{subtitle}", fontsize=8, fontweight="bold", pad=3)
+
+        ax_bot.plot(values, trunk_lins, "s--", color=color_lin, lw=1.6, ms=4)
+        ax_bot.axhline(baseline_lin, color=color_lin, lw=2.5, ls=":", alpha=0.85)
+        ax_bot.axvline(default, color="black", lw=1.8, ls="--", alpha=0.85)
+        if no_change_threshold is not None:
+            ax_bot.axvspan(values[0] * 0.5, no_change_threshold, alpha=0.10, color="green", zorder=0)
+            ax_bot.axvline(no_change_threshold, color="green", lw=1.2, ls="-.", alpha=0.7)
+        ax_bot.set_ylabel("trunk_lin_early", fontsize=7, color=color_lin, fontweight="bold")
+        ax_bot.tick_params(axis="y", labelsize=6, colors=color_lin)
+        ax_bot.tick_params(axis="x", labelsize=6, rotation=30)
+        ax_bot.grid(True, which="both", alpha=0.2, lw=0.4)
+        ax_bot.set_xlabel(f"value (log)\ndefault={default}", fontsize=7)
+
+    from matplotlib.lines import Line2D
+    legend_handles = [
+        Line2D([0], [0], color=color_sep, marker="o", lw=1.6, ms=4, label="branch_sep_late"),
+        Line2D([0], [0], color=color_lin, marker="s", lw=1.6, ms=4, ls="--", label="trunk_linearity_early"),
+        Line2D([0], [0], color="black", lw=1.8, ls="--", label="default value"),
+        Line2D([0], [0], color="gray", lw=2.5, ls=":", label="isotropic baseline"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=4, fontsize=8,
+               bbox_to_anchor=(0.5, 0.01), frameon=True)
+
+    fig.suptitle("Refactored scale sweeps — bifurcating trunk benchmark\n"
+                 "Each panel: branch_sep_late (top) and trunk_linearity_early (bottom) vs parameter value",
+                 fontsize=10, fontweight="bold", y=0.98)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    df = pd.DataFrame(all_rows)
+    df.to_csv(summary_csv_path, index=False)
+    print(f"\n  Saved: {output_path}")
+    print(f"  Saved: {summary_csv_path}")
+    return df
+
+def plot_refactored_weight_sweeps(
+    init_path: Path,
+    base_kwargs: dict,
+    output_path: Path,
+    summary_csv_path: Path,
+    n_per_branch: int = 40,
+    split_full: int = 8,
+    verbose: bool = False,
+    inspect_root: Path | None = None,
+    save_geometry: bool = False,
+    save_gif: bool = False,
+    n_frames: int = 72,
+    sweep_overrides: dict[str, np.ndarray] | None = None,
+) -> pd.DataFrame:
+    """Sweep the disentangled attraction/coherence weights on the bifurcating trunk benchmark."""
+    sweep_specs = [
+        (
+            "attract_weight",
+            "attract_weight",
+            np.array([0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]),
+            1.0,
+            None,
+            dict(sigma_frac=0.50, coherence_scale_mult=0.25, temporal_cohere_weight=1.0, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "attract amplitude only\n(scales fixed: sigma_frac=0.50, cohere_scale_mult=0.25)",
+        ),
+        (
+            "temporal_cohere_weight",
+            "temporal_cohere_weight",
+            np.array([0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]),
+            1.0,
+            None,
+            dict(sigma_frac=0.50, coherence_scale_mult=0.25, attract_weight=1.0, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "temporal gate strength only\n(scales fixed: sigma_frac=0.50, cohere_scale_mult=0.25)",
+        ),
+    ]
+    if sweep_overrides:
+        sweep_specs = [
+            (
+                param,
+                label,
+                np.asarray(sweep_overrides.get(param, values), dtype=float),
+                default,
+                no_change_threshold,
+                fixed_kw,
+                subtitle,
+            )
+            for param, label, values, default, no_change_threshold, fixed_kw, subtitle in sweep_specs
+        ]
+
+    ds_base = load_initialization(init_path, variant="bifurcating_trunk",
+                                  n_per_cluster=n_per_branch)
+    pos_init_fixed = ds_base.positions.copy()
+    cfg_base = TemporalRunConfig(
+        **base_kwargs, sigma_frac=0.50, coherence_scale_mult=0.25,
+        attract_weight=1.0, temporal_cohere_weight=1.0,
+        fidelity_init_strength=0.0, epsilon_void=0.0,
+    )
+    print("  Running refactored weight baseline...")
+    res_base = run_temporal(ds_base, cfg_base, save_snapshots=False, verbose=False)
+    base_summary = trunk_summary_metrics(res_base.cond_result.positions, pos_init_fixed,
+                                         ds_base.labels, split_full=split_full)
+    baseline_sep = base_summary["branch_sep_late"]
+    baseline_lin = base_summary["trunk_linearity_early"]
+    print(f"  baseline: branch_sep={baseline_sep:.4f}  trunk_lin={baseline_lin:.4f}")
+
+    color_sep = "#2166AC"
+    color_lin = "#D6604D"
+    all_rows = []
+
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+    fig = plt.figure(figsize=(10, 9))
+    outer = GridSpec(1, 2, figure=fig, hspace=0.5, wspace=0.35)
+
+    for facet_idx, (param, label, values, default, no_change_threshold, fixed_kw, subtitle) in enumerate(sweep_specs):
+        inner = GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[facet_idx],
+                                        hspace=0.05, height_ratios=[1, 1])
+        ax_top = fig.add_subplot(inner[0])
+        ax_bot = fig.add_subplot(inner[1], sharex=ax_top)
+
+        branch_seps = []
+        trunk_lins = []
+        print(f"\n  Sweeping {label}...")
+        for v in values:
+            ds = load_initialization(init_path, variant="bifurcating_trunk",
+                                     n_per_cluster=n_per_branch)
+            kw = {**fixed_kw, param: float(v)}
+            cfg = TemporalRunConfig(**base_kwargs, **kw)
+            res = run_temporal(ds, cfg, save_snapshots=False, verbose=False)
+            s = trunk_summary_metrics(res.cond_result.positions, pos_init_fixed,
+                                      ds.labels, split_full=split_full)
+            branch_seps.append(s["branch_sep_late"])
+            trunk_lins.append(s["trunk_linearity_early"])
+            if save_geometry and inspect_root is not None:
+                value_slug = f"{float(v):g}".replace("-", "neg_").replace(".", "p")
+                condition_dir = inspect_root / label / f"{param}_{value_slug}"
+                condition_dir.mkdir(parents=True, exist_ok=True)
+                res.metrics_df.to_csv(condition_dir / "metrics_history.csv", index=False)
+                np.savez(
+                    condition_dir / "condensed_positions.npz",
+                    positions=res.cond_result.positions,
+                    mask=ds.mask,
+                    labels=ds.labels,
+                    time_values=ds.time_values,
+                )
+                plot_branch_geometry(
+                    res,
+                    condition_dir,
+                    split_full=split_full,
+                    condition_label=f"{label}={float(v):g}",
+                )
+                save_trunk_3d_panels(
+                    pos_init_fixed,
+                    res.cond_result.positions,
+                    ds.labels,
+                    ds.time_values,
+                    condition_dir / "trunk_3d_before_after.png",
+                    title_left="initialization (shared)",
+                    title_right=f"final | {label}={float(v):g}",
+                )
+                if save_gif:
+                    make_trunk_side_by_side_gif(
+                        pos_init_fixed,
+                        res.cond_result.positions,
+                        ds.labels,
+                        ds.time_values,
+                        condition_dir / "3d_before_after.gif",
+                        title_left="initialization (shared)",
+                        title_right=f"final | {label}={float(v):g}",
+                        n_frames=n_frames,
+                    )
+            row = {
+                "family": label,
+                "param": param,
+                "value": float(v),
+                "default_value": float(default),
+                "branch_sep_late": float(s["branch_sep_late"]),
+                "trunk_linearity_early": float(s["trunk_linearity_early"]),
+                "within_branch_spread_ratio": float(s["within_branch_spread_ratio"]),
+                "coherence_selectivity": float(s.get("coherence_selectivity", float("nan"))),
+                "baseline_branch_sep_late": float(baseline_sep),
+                "baseline_trunk_linearity_early": float(baseline_lin),
+                "delta_branch_sep": float(s["branch_sep_late"] - baseline_sep),
+                "delta_trunk_linearity": float(s["trunk_linearity_early"] - baseline_lin),
+            }
+            all_rows.append(row)
+            print(f"    {label}={v:.5g}  sep={branch_seps[-1]:.4f}  lin={trunk_lins[-1]:.4f}")
+
+        ax_top.plot(values, branch_seps, "o-", color=color_sep, lw=1.6, ms=4)
+        ax_top.axhline(baseline_sep, color=color_sep, lw=2.5, ls=":", alpha=0.85)
+        ax_top.axvline(default, color="black", lw=1.8, ls="--", alpha=0.85)
+        ax_top.set_ylabel("branch_sep_late", fontsize=7, color=color_sep, fontweight="bold")
+        ax_top.tick_params(axis="y", labelsize=6, colors=color_sep)
+        ax_top.tick_params(axis="x", labelbottom=False)
+        ax_top.grid(True, which="both", alpha=0.2, lw=0.4)
+        ax_top.set_xscale("log")
+        ax_top.set_title(f"{label}\n{subtitle}", fontsize=8, fontweight="bold", pad=3)
+
+        ax_bot.plot(values, trunk_lins, "s--", color=color_lin, lw=1.6, ms=4)
+        ax_bot.axhline(baseline_lin, color=color_lin, lw=2.5, ls=":", alpha=0.85)
+        ax_bot.axvline(default, color="black", lw=1.8, ls="--", alpha=0.85)
+        ax_bot.set_ylabel("trunk_lin_early", fontsize=7, color=color_lin, fontweight="bold")
+        ax_bot.tick_params(axis="y", labelsize=6, colors=color_lin)
+        ax_bot.tick_params(axis="x", labelsize=6, rotation=30)
+        ax_bot.grid(True, which="both", alpha=0.2, lw=0.4)
+        ax_bot.set_xlabel(f"value (log)\ndefault={default}", fontsize=7)
+
+    from matplotlib.lines import Line2D
+    legend_handles = [
+        Line2D([0], [0], color=color_sep, marker="o", lw=1.6, ms=4, label="branch_sep_late"),
+        Line2D([0], [0], color=color_lin, marker="s", lw=1.6, ms=4, ls="--", label="trunk_linearity_early"),
+        Line2D([0], [0], color="black", lw=1.8, ls="--", label="default value"),
+        Line2D([0], [0], color="gray", lw=2.5, ls=":", label="isotropic baseline"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=4, fontsize=8,
+               bbox_to_anchor=(0.5, 0.01), frameon=True)
+
+    fig.suptitle("Refactored weight sweeps — bifurcating trunk benchmark\n"
+                 "Each panel: branch_sep_late (top) and trunk_linearity_early (bottom) vs parameter value",
+                 fontsize=10, fontweight="bold", y=0.98)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    df = pd.DataFrame(all_rows)
+    df.to_csv(summary_csv_path, index=False)
+    print(f"\n  Saved: {output_path}")
+    print(f"  Saved: {summary_csv_path}")
+    return df
+
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Bifurcating trunk force comparison sandbox."
@@ -941,6 +1371,22 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--fidelity-half-life-sweep", action="store_true",
                    help="Run all force family sweeps and generate 2x3 sweep figure")
+    p.add_argument("--refactored-scale-sweep", action="store_true",
+                   help="Run disentangled attraction/coherence scale sweeps on the same benchmark")
+    p.add_argument("--refactored-scale-save-folders", action="store_true",
+                   help="Save inspectable geometry folders for each refactored scale condition.")
+    p.add_argument("--refactored-scale-gif", action="store_true",
+                   help="Also save 3D before/after GIFs for each refactored scale condition.")
+    p.add_argument("--refactored-attract-values", type=str, default="",
+                   help="Comma-separated override for attract_scale_mult sweep values.")
+    p.add_argument("--refactored-cohere-values", type=str, default="",
+                   help="Comma-separated override for temporal_cohere_scale_mult sweep values.")
+    p.add_argument("--refactored-weight-sweep", action="store_true",
+                   help="Run disentangled attraction/coherence weight sweeps on the same benchmark")
+    p.add_argument("--refactored-attract-weight-values", type=str, default="",
+                   help="Comma-separated override for attract_weight sweep values.")
+    p.add_argument("--refactored-cohere-weight-values", type=str, default="",
+                   help="Comma-separated override for temporal_cohere_weight sweep values.")
     return p.parse_args()
 
 
@@ -1032,6 +1478,15 @@ def main() -> None:
         summaries.append(summary)
         condition_finals.append((cond_label, pos_final))
 
+        # Save condensed positions for downstream graph fitting
+        np.savez(
+            output_dir / dir_name / "condensed_positions.npz",
+            positions=pos_final,
+            mask=ds.mask,
+            labels=ds.labels,
+            time_values=ds.time_values,
+        )
+
     # --- Summary comparison figure ---
     print("\nGenerating summary_comparison.png...")
     plot_summary_comparison(
@@ -1069,6 +1524,50 @@ def main() -> None:
             n_per_branch=args.n_per_branch,
             split_full=args.split_full,
             verbose=False,
+        )
+
+    if args.refactored_scale_sweep:
+        print("\n=== Refactored scale sweeps ===")
+        sweep_overrides = {}
+        if args.refactored_attract_values:
+            sweep_overrides["sigma_frac"] = np.array([float(x) for x in args.refactored_attract_values.split(",") if x.strip()], dtype=float)
+        if args.refactored_cohere_values:
+            sweep_overrides["coherence_scale_mult"] = np.array([float(x) for x in args.refactored_cohere_values.split(",") if x.strip()], dtype=float)
+        plot_refactored_force_sweeps(
+            init_path=init_path,
+            base_kwargs=base_kwargs,
+            output_path=output_dir / "refactored_force_sweeps.png",
+            summary_csv_path=output_dir / "refactored_force_sweeps_summary.csv",
+            n_per_branch=args.n_per_branch,
+            split_full=args.split_full,
+            verbose=False,
+            inspect_root=(output_dir / "refactored_scale_conditions") if args.refactored_scale_save_folders else None,
+            save_geometry=args.refactored_scale_save_folders,
+            save_gif=args.refactored_scale_gif,
+            n_frames=args.n_frames,
+            sweep_overrides=sweep_overrides or None,
+        )
+
+    if args.refactored_weight_sweep:
+        print("\n=== Refactored weight sweeps ===")
+        sweep_overrides = {}
+        if args.refactored_attract_weight_values:
+            sweep_overrides["attract_weight"] = np.array([float(x) for x in args.refactored_attract_weight_values.split(",") if x.strip()], dtype=float)
+        if args.refactored_cohere_weight_values:
+            sweep_overrides["temporal_cohere_weight"] = np.array([float(x) for x in args.refactored_cohere_weight_values.split(",") if x.strip()], dtype=float)
+        plot_refactored_weight_sweeps(
+            init_path=init_path,
+            base_kwargs=base_kwargs,
+            output_path=output_dir / "refactored_weight_sweeps.png",
+            summary_csv_path=output_dir / "refactored_weight_sweeps_summary.csv",
+            n_per_branch=args.n_per_branch,
+            split_full=args.split_full,
+            verbose=False,
+            inspect_root=(output_dir / "refactored_weight_conditions") if args.refactored_scale_save_folders else None,
+            save_geometry=args.refactored_scale_save_folders,
+            save_gif=args.refactored_scale_gif,
+            n_frames=args.n_frames,
+            sweep_overrides=sweep_overrides or None,
         )
 
     print(f"\nOutputs: {output_dir}")

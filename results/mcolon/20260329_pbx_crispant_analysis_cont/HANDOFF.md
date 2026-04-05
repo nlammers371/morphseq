@@ -33,6 +33,8 @@ Operational follow-up:
 - The multiclass aligned UMAPs currently look better than the pairwise support-aware embedding for the global phenotypic positioning view.
 - The `4 hpf` bin-width runs look preliminarily more stable and may have more statistical power than the finer bins, but that is still provisional and should be checked quantitatively rather than assumed from appearance alone.
 - The no-yolk QC looked effectively broken in the PBX data and was excluding a large number of otherwise useful `snip_id`s.
+- For the bridge experiment follow-up, the current preference is to proceed with the `20251207_pbx + 20260304 + 20260306` bridge-enabled multiclass run **without** `wik_ab`. Including `wik_ab` from the current experiments only was useful as a sensitivity check, but the no-`wik_ab` bridge run currently appears to give denser, cleaner clusters and is the preferred version for interpretation unless a later comparison changes that.
+- Refactored attraction/coherence amplitude sweeps on the bifurcating-trunk benchmark were useful diagnostically, but the separated-amplitude path is **not** the preferred production behavior. The inspectable evidence is recorded in `FORCE_SEPARATION_NOTE.md`; the current preference is to keep the naming cleanup (`temporal_cohere_*`, `attract_*`, `solver_*`) but revert solver behavior to the original multiplicative attraction × coherence interaction.
 
 ## Rerun status
 
@@ -58,4 +60,3 @@ Known state at handoff:
    - `data_viz/03_plot_all_vs_inj_ctrl_heatmaps.py`
    - `data_viz/04_plot_control_comparison_heatmaps.py`
 3. Then continue the rest of the misclassification refresh out of `20260329_pbx_crispant_analysis_cont`, not the older `20260326` root.
-

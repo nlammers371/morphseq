@@ -85,12 +85,12 @@ def run_dynamics(
     # multipliers when provided, keeping the calibrated scheme explicit.
 
     for n in range(config.max_iter):
-        if config.coherence_mode == "computed":
-            coherence = compute_coherence(positions, mask, sigma=sigma_coh, delta=config.delta)
-        elif config.coherence_mode == "uniform":
+        if config.temporal_cohere_mode == "computed":
+            coherence = compute_coherence(positions, mask, sigma=sigma_coh, delta=config.temporal_cohere_window)
+        elif config.temporal_cohere_mode == "uniform":
             coherence = _uniform_coherence(mask)
         else:
-            raise ValueError(f"Unsupported coherence_mode={config.coherence_mode!r}")
+            raise ValueError(f"Unsupported temporal_cohere_mode={config.temporal_cohere_mode!r}")
         mu = config.fidelity_init_strength * (config.fidelity_half_life ** n)
 
         energies, grad = total_energy_and_grad(
