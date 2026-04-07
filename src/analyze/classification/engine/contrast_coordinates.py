@@ -121,8 +121,23 @@ def assemble_contrast_coordinates(
     if margins["genotype"].isna().any():
         raise ValueError("Some margin rows could not be mapped back to genotype metadata.")
 
+    # Pull positive_label / negative_label from scores so callers never need a
+    # separate join to interpret comparison_id.
+    label_map = (
+        scores[["comparison_id", "positive_label", "negative_label"]]
+        .drop_duplicates("comparison_id")
+        .set_index("comparison_id")
+    )
+    margins["positive_label"] = margins["comparison_id"].map(label_map["positive_label"])
+    margins["negative_label"] = margins["comparison_id"].map(label_map["negative_label"])
+
     raw_long = margins[
-        ["feature_set", id_col, "genotype", "time_bin", "time_bin_center", "comparison_id", "m_raw"]
+        [
+            "feature_set", id_col, "genotype",
+            "time_bin", "time_bin_center",
+            "comparison_id", "positive_label", "negative_label",
+            "m_raw",
+        ]
     ].copy().sort_values(["feature_set", "comparison_id", "time_bin", id_col]).reset_index(drop=True)
 
     contrast_support_long, specificity = assemble_contrast_support(

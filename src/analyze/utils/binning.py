@@ -152,6 +152,47 @@ def bin_embryos_by_time(
     return out
 
 
+def bins_in_time_window(
+    bin_t_min: "np.ndarray | pd.Series",
+    bin_t_max: "np.ndarray | pd.Series",
+    time_window: "tuple[float, float]",
+    *,
+    closed: str = "both",
+) -> "np.ndarray":
+    """Return a boolean mask of bins whose center falls within *time_window*.
+
+    A bin is in scope iff its center time satisfies the window condition.
+    Center-of-bin inclusion avoids partial-overlap weirdness when bins straddle
+    a window edge.
+
+    Parameters
+    ----------
+    bin_t_min, bin_t_max : array-like of float
+        Left and right edges of each bin (same length).
+    time_window : (t_min, t_max)
+        Inclusive window boundaries in the same units as bin edges.
+    closed : {"both"}
+        Only "both" (inclusive on both ends) is supported for now.
+
+    Returns
+    -------
+    in_scope : np.ndarray of bool
+        True for each bin whose center is in [t_min, t_max].
+
+    Examples
+    --------
+    >>> edges_lo = np.array([22., 24., 26., 28.])
+    >>> edges_hi = np.array([24., 26., 28., 30.])
+    >>> bins_in_time_window(edges_lo, edges_hi, (24.5, 27.5))
+    array([False,  True,  True, False])
+    """
+    if closed != "both":
+        raise ValueError(f"closed={closed!r} is not supported; only 'both'.")
+    t_min, t_max = float(time_window[0]), float(time_window[1])
+    centers = (np.asarray(bin_t_min, dtype=float) + np.asarray(bin_t_max, dtype=float)) / 2.0
+    return (centers >= t_min) & (centers <= t_max)
+
+
 def filter_binned_data(
     df_binned: pd.DataFrame,
     min_time_bins: int = 3,
