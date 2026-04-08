@@ -50,7 +50,7 @@ def _gamma_from_half_life_iters(h: float) -> float:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run PBX condensation on combined all-pairs vectors.")
-    parser.add_argument("--variant", choices=["shrunk", "raw"], default="shrunk")
+    parser.add_argument("--variant", choices=["shrunk", "raw"], default="raw")
     parser.add_argument("--include-wik-ab", action="store_true")
     parser.add_argument("--bin-width", type=float, default=4.0)
     parser.add_argument("--n-permutations", type=int, default=500)
@@ -140,7 +140,7 @@ def main() -> None:
         elastic_mix=float(args.elastic_mix),
         fidelity_init_strength=0.25,
         fidelity_half_life=_gamma_from_half_life_iters(70.0),
-        epsilon_void=0.014,
+        void_strength=0.014,
         outlier_strength=float(args.outlier_strength),
         outlier_cutoff_mode=cutoff_mode,
         outlier_cutoff_value=float(cutoff_value),
@@ -290,7 +290,7 @@ def main() -> None:
         "n_iter": int(args.n_iter),
         "init_requested": args.init,
         "init_used": args.init,
-        "canonical_representation": args.variant == "shrunk" and not args.include_wik_ab,
+        "canonical_representation": "pairwise_raw_vectors.csv" if not args.include_wik_ab else f"pairwise_{args.variant}_vectors.csv",
     }
     (output_dir / "condensation_manifest.json").write_text(json.dumps(manifest, indent=2))
     print(output_dir)

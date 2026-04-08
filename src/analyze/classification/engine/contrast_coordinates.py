@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import warnings
 
 import pandas as pd
 
@@ -156,6 +157,12 @@ def assemble_contrast_coordinates(
     if shrunk_long["w"].isna().any():
         raise ValueError("Missing shrinkage weights for some margin rows.")
     shrunk_long["m_shrunk"] = shrunk_long["w"].astype(float) * shrunk_long["m_raw"].astype(float)
+
+    warnings.warn(
+        "shrunk_coordinates are experimental and have not yet been validated to preserve real-world geometry. "        "Use with caution for production trajectory analyses.",
+        UserWarning,
+        stacklevel=2,
+    )
 
     raw_coordinates = _pivot_coordinates(
         raw_long,
