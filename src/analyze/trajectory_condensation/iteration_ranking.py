@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from . import plotting
+from .viz import plotting
 from .space_density_metrics import summarize_iteration_geometry
 
 

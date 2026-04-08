@@ -11,6 +11,7 @@ Public API:
   load_run(path)  — load condensed_positions.npz → RunDescriptor
   render_run(...) — write full output bundle (plots + GIFs) to a directory
   compare_runs(runs, mode) — side-by-side figure for N≥2 runs
+  compare_run_grid(run_grid, mode) — row/column comparison grid for grouped sweeps
 
 Embryo alignment note
 ---------------------
@@ -432,15 +433,16 @@ def compare_runs(
     extension. Animated comparison via compare_runs_rotation_gif() is
     planned for v2.
     """
-    if len(runs) < 2:
-        raise ValueError(f"compare_runs requires at least 2 runs, got {len(runs)}")
+    if len(runs) < 1:
+        raise ValueError("compare_runs requires at least 1 run")
     if mode not in ("trajectories", "stacked_3d"):
         raise ValueError(f"Unknown mode {mode!r}. v1 supports: 'trajectories', 'stacked_3d'")
 
     cfg = config or VizConfig()
     N_runs = len(runs)
 
-    _warn_embryo_mismatch(runs)
+    if len(runs) > 1:
+        _warn_embryo_mismatch(runs)
 
     auto_figsize = (cfg.figsize[0] * N_runs, cfg.figsize[1])
     fig_size = figsize or auto_figsize
@@ -462,6 +464,48 @@ def compare_runs(
         plt.close(fig)
         return output_path
 
+    return fig, axes
+
+
+def compare_run_grid(
+    run_grid: list[list[RunDescriptor]],
+    mode: Literal["trajectories", "stacked_3d"] = "trajectories",
+    *,
+    config: VizConfig | None = None,
+    align_axes: bool = True,
+    figsize: tuple[float, float] | None = None,
+    output_path: str | Path | None = None,
+) -> tuple | Path:
+    """Render a row/column grid of runs for method-by-strength style sweeps."""
+    if not run_grid or not run_grid[0]:
+        raise ValueError("compare_run_grid requires a non-empty rectangular grid.")
+    n_rows = len(run_grid)
+    n_cols = len(run_grid[0])
+    for row in run_grid:
+        if len(row) != n_cols:
+            raise ValueError("compare_run_grid requires all rows to have the same length.")
+    cfg = config or VizConfig()
+    fig_size = figsize or (cfg.figsize[0] * n_cols, cfg.figsize[1] * n_rows)
+
+    _warn_embryo_mismatch([run for row in run_grid for run in row])
+
+    if mode == "trajectories":
+        fig, axes = _compare_grid_trajectories(run_grid, cfg, fig_size)
+    elif mode == "stacked_3d":
+        fig, axes = _compare_grid_stacked_3d(run_grid, cfg, fig_size)
+    else:
+        raise ValueError(f"Unknown mode {mode!r}. v1 supports: 'trajectories', 'stacked_3d'")
+
+    if align_axes:
+        _align_axes([ax for row in axes for ax in row], mode)
+
+    fig.tight_layout()
+    if output_path is not None:
+        output_path = Path(output_path)
+        fig.savefig(output_path, dpi=cfg.dpi, bbox_inches="tight")
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+        return output_path
     return fig, axes
 
 
@@ -510,6 +554,43 @@ def _compare_stacked_3d(runs, cfg: VizConfig, fig_size):
         _draw_stacked_3d_viz(ax, run, cfg)
         ax.set_title(run.title or f"Run {r + 1}", fontsize=9)
         axes.append(ax)
+    return fig, axes
+
+
+def _compare_grid_trajectories(run_grid, cfg: VizConfig, fig_size):
+    import matplotlib.pyplot as plt
+
+    n_rows = len(run_grid)
+    n_cols = len(run_grid[0])
+    fig, axes_arr = plt.subplots(n_rows, n_cols, figsize=fig_size, squeeze=False)
+    axes = [[axes_arr[r][c] for c in range(n_cols)] for r in range(n_rows)]
+    for r in range(n_rows):
+        for c in range(n_cols):
+            run = run_grid[r][c]
+            ax = axes[r][c]
+            _draw_trajectories(ax, run, cfg)
+            ax.set_title(run.title or f"Run {r + 1},{c + 1}", fontsize=9)
+    return fig, axes
+
+
+def _compare_grid_stacked_3d(run_grid, cfg: VizConfig, fig_size):
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    n_rows = len(run_grid)
+    n_cols = len(run_grid[0])
+    fig = plt.figure(figsize=fig_size)
+    axes: list[list] = []
+    for r in range(n_rows):
+        row_axes = []
+        for c in range(n_cols):
+            ax = fig.add_subplot(n_rows, n_cols, r * n_cols + c + 1, projection="3d")
+            ax.view_init(elev=_ELEV, azim=_AZIM_START)
+            run = run_grid[r][c]
+            _draw_stacked_3d_viz(ax, run, cfg)
+            ax.set_title(run.title or f"Run {r + 1},{c + 1}", fontsize=9)
+            row_axes.append(ax)
+        axes.append(row_axes)
     return fig, axes
 
 
