@@ -1,7 +1,15 @@
 """Core trajectory condensation exports."""
 
 from . import force_diagnostics, init_embedding, iteration_ranking, schema, space_density_metrics, viz
-from .viz import VizConfig, RunDescriptor, render_run, compare_runs, compare_run_grid, load_run
+from .viz import (
+    VizConfig,
+    RunDescriptor,
+    render_run,
+    render_feature_over_time_facets,
+    compare_runs,
+    compare_run_grid,
+    load_run,
+)
 from .force_diagnostics import ForceSnapshot, force_snapshot, force_target_table
 from .condensation import (
     CondensationConfig,
@@ -30,6 +38,7 @@ __all__ = [
     "force_snapshot",
     "force_target_table",
     "render_run",
+    "render_feature_over_time_facets",
     "compare_runs",
     "compare_run_grid",
     "load_run",

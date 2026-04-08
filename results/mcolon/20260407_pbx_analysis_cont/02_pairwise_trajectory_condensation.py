@@ -32,11 +32,13 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from analyze.trajectory_condensation import animation as tc_animation, init_embedding, plotting, schema
 from analyze.trajectory_condensation.condensation import CondensationConfig, StoppingConfig, run_condensation
 from analyze.trajectory_condensation.iteration_ranking import (
-    plot_iteration_scores,
-    render_selected_iteration_bundle,
     save_ranking_outputs,
     score_saved_iterations,
     select_evenly_distributed,
+)
+from analyze.trajectory_condensation.viz.iteration_choice_plots import (
+    plot_iteration_scores,
+    render_selected_iteration_bundle,
 )
 
 from common import GENOTYPE_COLORS, condensation_results_dir, pairwise_results_dir
@@ -61,8 +63,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--selection-objective", choices=["balanced"], default="balanced")
+    parser.add_argument("--epsilon-r", type=float, default=5e-4)
+    parser.add_argument("--elastic-strength", type=float, default=16.0)
+    parser.add_argument("--elastic-mix", type=float, default=0.25)
+    parser.add_argument("--outlier-strength", type=float, default=16.0)
+    parser.add_argument("--outlier-cutoff-preset", choices=["q95", "q97", "q99", "robust3"], default="robust3")
     parser.add_argument("--smoke", action="store_true")
     return parser.parse_args()
+
+
+def parse_cutoff_preset(name: str) -> tuple[str, float]:
+    preset = str(name).strip().lower()
+    if preset == "q95":
+        return "quantile", 0.95
+    if preset == "q97":
+        return "quantile", 0.97
+    if preset == "q99":
+        return "quantile", 0.99
+    if preset == "robust3":
+        return "robust", 3.0
+    raise ValueError(f"Unsupported outlier cutoff preset: {name!r}")
 
 
 def main() -> None:
@@ -71,6 +91,8 @@ def main() -> None:
         args.n_iter = 100
         args.save_every = 10
         args.top_k = min(args.top_k, 3)
+
+    cutoff_mode, cutoff_value = parse_cutoff_preset(args.outlier_cutoff_preset)
 
     pairwise_dir = pairwise_results_dir(
         include_wik_ab=bool(args.include_wik_ab),
@@ -113,12 +135,15 @@ def main() -> None:
     config = CondensationConfig(
         sigma=0.5,
         temporal_cohere_window=3,
-        epsilon_r=0.005,
-        lambda_stretch=0.04,
-        lambda_bend=0.04,
+        epsilon_r=float(args.epsilon_r),
+        elastic_strength=float(args.elastic_strength),
+        elastic_mix=float(args.elastic_mix),
         fidelity_init_strength=0.25,
         fidelity_half_life=_gamma_from_half_life_iters(70.0),
         epsilon_void=0.014,
+        outlier_strength=float(args.outlier_strength),
+        outlier_cutoff_mode=cutoff_mode,
+        outlier_cutoff_value=float(cutoff_value),
         attract_k=20,
         solver_lr=1e-4,
         solver_momentum=0.9,
