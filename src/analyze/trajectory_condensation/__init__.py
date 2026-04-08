@@ -18,7 +18,7 @@ from .viz import (
     compare_run_grid,
     load_run,
 )
-from .schema import CondensationData, validate, from_multiclass_csv, from_pairwise_margin_csv
+from .schema import CondensationData, validate, from_multiclass_csv, from_pairwise_margin_csv, subset_pairwise
 from .force_diagnostics import ForceSnapshot, force_snapshot, force_target_table
 from .condensation import (
     CondensationConfig,
@@ -39,6 +39,7 @@ __all__ = [
     "validate",
     "from_multiclass_csv",
     "from_pairwise_margin_csv",
+    "subset_pairwise",
     "force_diagnostics",
     "init_embedding",
     "iteration_ranking",

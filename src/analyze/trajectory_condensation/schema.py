@@ -172,6 +172,54 @@ def from_pairwise_margin_csv(
     return _build_canonical(df, margin_cols, embryo_col, time_col, label_col, allow_feature_nans=True)
 
 
+def subset_pairwise(
+    data: CondensationData,
+    keep_genotypes: Sequence[str],
+    *,
+    drop_irrelevant_comparisons: bool = True,
+    nan_policy: str = "warn_drop",
+) -> CondensationData:
+    """Subset a CondensationData to a specific set of genotypes.
+
+    Thin wrapper around classification.pairwise_outputs.subset_pairwise_cube().
+    See that function for full parameter documentation.
+
+    Parameters
+    ----------
+    data : CondensationData from from_pairwise_margin_csv()
+    keep_genotypes : genotype labels to retain
+    drop_irrelevant_comparisons : drop A__vs__B cols irrelevant to keep_genotypes
+    nan_policy : "warn_drop" | "error" | "keep"
+    """
+    from ..classification.pairwise_outputs import subset_pairwise_cube
+
+    r = subset_pairwise_cube(
+        features=data.features,
+        mask=data.mask,
+        embryo_ids=data.embryo_ids,
+        time_values=data.time_values,
+        labels=data.labels,
+        feature_names=data.feature_names,
+        keep_genotypes=keep_genotypes,
+        drop_irrelevant_comparisons=drop_irrelevant_comparisons,
+        nan_policy=nan_policy,
+    )
+    embryo_index = {e: i for i, e in enumerate(r.embryo_ids)}
+    time_index = {float(t): j for j, t in enumerate(r.time_values)}
+    result = CondensationData(
+        features=r.features,
+        mask=r.mask,
+        embryo_ids=r.embryo_ids,
+        time_values=r.time_values,
+        labels=r.labels,
+        feature_names=r.feature_names,
+        embryo_index=embryo_index,
+        time_index=time_index,
+    )
+    validate(result, allow_feature_nans=True)
+    return result
+
+
 def _build_canonical(
     df: pd.DataFrame,
     feature_cols: Sequence[str],
