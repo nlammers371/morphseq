@@ -258,7 +258,7 @@ def main() -> None:
             result.position_history,
             data.mask,
             data.time_values,
-            iter_labels=result.snapshot_iters,
+            snapshot_iters=result.snapshot_iters,
             labels=data.labels,
             color_map=color_map,
             output_path=output_dir / "iterations.gif",
