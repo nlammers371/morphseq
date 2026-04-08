@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Animation defaults (internal constants — add to VizConfig when needed)
@@ -172,6 +173,69 @@ def load_run(
         position_history=position_history,
         snapshot_iters=snapshot_iters,
     )
+
+
+def render_feature_over_time_facets(
+    df: pd.DataFrame,
+    *,
+    features: str | list[str],
+    time_col: str,
+    id_col: str,
+    color_by: str | None = None,
+    color_lookup: dict[object, str] | None = None,
+    facet_row: str | None = None,
+    facet_col: str | None = None,
+    row_order: list[object] | None = None,
+    col_order: list[object] | None = None,
+    show_individual: bool = True,
+    show_trend: bool = True,
+    show_error_band: bool = False,
+    trend_statistic: str = "median",
+    legend_loc: str = "outside",
+    title: str | None = None,
+    output_png: str | Path | None = None,
+    output_html: str | Path | None = None,
+) -> dict[str, object]:
+    """Render a faceted feature-over-time figure to matplotlib and Plotly.
+
+    This is a thin visualization-level wrapper around the generic faceting
+    engine used by older PBX scripts. It keeps the reusable entrypoint in the
+    trajectory-condensation viz package.
+    """
+    from analyze.viz.plotting import plot_feature_over_time
+    from analyze.viz.plotting.faceting_engine import FacetSpec
+
+    layout = FacetSpec(row_order=row_order, col_order=col_order)
+    figs = plot_feature_over_time(
+        df,
+        features=features,
+        time_col=time_col,
+        id_col=id_col,
+        color_by=color_by,
+        color_lookup=color_lookup,
+        facet_row=facet_row,
+        facet_col=facet_col,
+        layout=layout,
+        show_individual=show_individual,
+        show_trend=show_trend,
+        show_error_band=show_error_band,
+        trend_statistic=trend_statistic,
+        backend="both",
+        legend_loc=legend_loc,
+        title=title,
+    )
+
+    if output_png is not None:
+        output_png = Path(output_png)
+        output_png.parent.mkdir(parents=True, exist_ok=True)
+        figs["matplotlib"].savefig(output_png, dpi=300, bbox_inches="tight")
+
+    if output_html is not None:
+        output_html = Path(output_html)
+        output_html.parent.mkdir(parents=True, exist_ok=True)
+        figs["plotly"].write_html(output_html)
+
+    return figs
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +399,7 @@ def render_run(
     # ---- animation: iteration progress (smart frame count) ----
     if run.position_history is not None:
         n_frames_hist = run.position_history.shape[0]
-        iter_labels = run.snapshot_iters if run.snapshot_iters is not None else list(range(n_frames_hist))
+        snapshot_iters = run.snapshot_iters if run.snapshot_iters is not None else list(range(n_frames_hist))
 
         if n_frames_hist == 1:
             warnings.warn(
@@ -356,7 +420,7 @@ def render_run(
                 alpha_line=cfg.alpha_line, linewidth=cfg.linewidth, min_obs=2,
             )
             subtitle = "z = time (hpf) — visualization metadata, not a learned coordinate"
-            iter_str = f"iter {iter_labels[0]}"
+            iter_str = f"iter {snapshot_iters[0]}"
             ax.set_title(
                 (_title(iter_str) if title_prefix else iter_str) + "\n" + subtitle,
                 fontsize=8,
@@ -370,7 +434,7 @@ def render_run(
             p = output_dir / "iterations.gif"
             tc_animation.animate_iterations(
                 run.position_history, run.mask, run.time_values,
-                iter_labels=iter_labels,
+                snapshot_iters=snapshot_iters,
                 labels=run.labels, color_map=run.color_map,
                 output_path=p,
                 elev=_ELEV, azim=_AZIM_START, azim_end=_AZIM_END,

@@ -112,7 +112,7 @@ def animate_iterations(
     position_history: np.ndarray,
     mask: np.ndarray,
     time_values: np.ndarray,
-    iter_labels: list[int] | None = None,
+    snapshot_iters: list[int] | None = None,
     labels: np.ndarray | None = None,
     color_map: dict[str, str] | None = None,
     output_path: str | Path = "iterations.mp4",
@@ -141,7 +141,7 @@ def animate_iterations(
     position_history : (n_saved_iters, N_e, T, 2)
         Positions saved during optimization at regular intervals.
         Produce by passing save_every=N to run_condensation (future flag).
-    iter_labels : list of iteration numbers, length n_saved_iters.
+    snapshot_iters : list of iteration numbers, length n_saved_iters.
         Used for frame titles. E.g. [0, 10, 20, ...].
     azim_end : float
         Final azimuth angle (degrees) when rotation=True. Ignored otherwise.
@@ -157,8 +157,8 @@ def animate_iterations(
     _validate_inputs(position_history[0], mask, time_values)
     color_map = _resolve_color_map(labels, color_map)
 
-    if iter_labels is None:
-        iter_labels = list(range(n_iters))
+    if snapshot_iters is None:
+        snapshot_iters = list(range(n_iters))
 
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection="3d")
@@ -173,7 +173,7 @@ def animate_iterations(
             alpha_line=alpha_line, linewidth=linewidth, min_obs=min_obs,
         )
         subtitle = "z = time (hpf) — visualization metadata, not a learned coordinate"
-        iter_str = f"iter {iter_labels[frame]}"
+        iter_str = f"iter {snapshot_iters[frame]}"
         ax.set_title(
             ((title + " | " + iter_str) if title else iter_str) + "\n" + subtitle,
             fontsize=8,

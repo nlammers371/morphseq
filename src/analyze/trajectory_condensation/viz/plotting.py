@@ -4,7 +4,7 @@ plotting.py
 Visualization of ordered 2D coordinate slices across time.
 
 Works with any source of (N_e, T, 2) coordinates — AlignedUMAP, condensation
-output, PCA, or anything else. No knowledge of CosmologyData or any upstream
+output, PCA, or anything else. No knowledge of CondensationData or any upstream
 model lives here.
 
 Four rendering modes:
