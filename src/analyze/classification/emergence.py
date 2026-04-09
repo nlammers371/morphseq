@@ -369,24 +369,117 @@ def _score_partition(
     return True, cross_median, cross_support, internal_finite
 
 
+def _min_descendant_split(
+    members: list[str],
+    onset_matrix: pd.DataFrame,
+    min_cross_support: float,
+    floor: float,
+) -> float:
+    """Return the minimum split time in the recursively resolved subtree for members.
+
+    Returns float('inf') if the subtree is a leaf or unresolved (no splits).
+    Returns the actual minimum split time otherwise.
+    Used to check monotone-feasibility before committing to a partition.
+    """
+    if len(members) <= 1:
+        return float("inf")
+
+    partitions = _all_bipartitions(members)
+    for b1, b2 in partitions:
+        accepted, cross_median, cross_support, _ = _score_partition(
+            b1, b2, onset_matrix, min_cross_support
+        )
+        if not accepted:
+            continue
+        if cross_median < floor:
+            continue
+        # This child could split at cross_median; recurse to find min in its subtrees
+        min_b1 = _min_descendant_split(b1, onset_matrix, min_cross_support, cross_median)
+        min_b2 = _min_descendant_split(b2, onset_matrix, min_cross_support, cross_median)
+        # The minimum split in this subtree is cross_median or anything lower in children
+        return min(cross_median, min_b1, min_b2)
+
+    return float("inf")  # no feasible split found → leaf/unresolved
+
+
+def _is_monotone_feasible(
+    members: list[str],
+    onset_matrix: pd.DataFrame,
+    min_cross_support: float,
+    floor: float,
+    _cache: dict | None = None,
+) -> bool:
+    """Return True if members can be recursively resolved with all split times >= floor.
+
+    A group is monotone-feasible from floor if:
+    - it is a singleton or unresolvable (trivially feasible), OR
+    - there exists a partition with cross_median >= floor where both children
+      are also monotone-feasible from cross_median.
+
+    Results are memoized in _cache keyed by (frozenset(members), floor).
+    """
+    if _cache is None:
+        _cache = {}
+
+    if len(members) <= 1:
+        return True
+
+    key = (frozenset(members), round(floor, 1))
+    if key in _cache:
+        return _cache[key]
+
+    partitions = _all_bipartitions(members)
+    result = False
+    for b1, b2 in partitions:
+        accepted, cross_median, cross_support, _ = _score_partition(
+            b1, b2, onset_matrix, min_cross_support
+        )
+        if not accepted:
+            continue
+        if cross_median < floor:
+            continue
+        if (_is_monotone_feasible(b1, onset_matrix, min_cross_support, cross_median, _cache)
+                and _is_monotone_feasible(b2, onset_matrix, min_cross_support, cross_median, _cache)):
+            result = True
+            break
+
+    # If no partition passed, the subtree becomes an unresolved leaf —
+    # no split times at all, so monotonicity is trivially satisfied.
+    if not result:
+        result = True
+    _cache[key] = result
+    return result
+
+
 def _find_best_split(
     members: list[str],
     onset_matrix: pd.DataFrame,
     min_cross_support: float,
+    floor: float = 0.0,
+    _cache: dict | None = None,
 ) -> tuple[list[str], list[str], float] | None:
-    """Find the best bipartition of members.
+    """Find the best monotone-feasible bipartition of members.
 
-    Scoring rule (in priority order):
-    1. Primary: maximize cross_median (latest resolution = deepest, most informative split)
-    2. Tiebreak: higher cross_support (more evidence is better)
-    3. Tertiary: lower internal_finite_count (children more internally coherent)
+    Acceptance criteria:
+    1. Support threshold met (cross_support >= min_cross_support)
+    2. cross_median >= floor (parent's split time — ensures monotonicity)
+    3. Both children are monotone-feasible from cross_median
 
-    Returns (B1, B2, split_time) or None if no partition passes acceptance.
+    Scoring rule (among feasible candidates, in priority order):
+    1. Primary: lower internal_finite_count (children more coherent — cleaner split)
+    2. Tiebreak: higher cross_support (more evidence)
+    3. Tertiary: higher cross_median (later split time = more informative)
+
+    Returns (B1, B2, split_time) or None if no feasible partition found.
     """
+    if _cache is None:
+        _cache = {}
+
     partitions = _all_bipartitions(members)
 
     best: tuple[list[str], list[str], float] | None = None
-    best_score: tuple[float, float, int] = (-1.0, -1.0, int(1e9))  # (cross_median, support, -internal)
+    # Score: (-internal_finite, cross_support, cross_median) — all maximized
+    best_score: tuple[int, float, float] = (int(-1e9), -1.0, -1.0)
 
     for b1, b2 in partitions:
         accepted, cross_median, cross_support, internal_finite = _score_partition(
@@ -394,8 +487,14 @@ def _find_best_split(
         )
         if not accepted:
             continue
+        if cross_median < floor:
+            continue
+        # Monotonicity check: both children must be resolvable with all times >= cross_median
+        if not (_is_monotone_feasible(b1, onset_matrix, min_cross_support, cross_median, _cache)
+                and _is_monotone_feasible(b2, onset_matrix, min_cross_support, cross_median, _cache)):
+            continue
 
-        score = (cross_median, cross_support, -internal_finite)  # maximize all
+        score = (-internal_finite, cross_support, cross_median)
         if (
             best is None
             or score[0] > best_score[0]
@@ -413,16 +512,20 @@ def resolve_block(
     onset_matrix: pd.DataFrame,
     *,
     min_cross_support: float = 0.5,
+    _floor: float = 0.0,
 ) -> ResolutionNode:
     """Recursively resolve a block of co-emerging classes.
 
     Uses only within-block pairwise onsets (ignores reference).
+    Only accepts partitions whose split_time >= _floor, ensuring the result
+    tree is monotone (parent split times always <= child split times).
 
     Parameters
     ----------
     members : classes in the block
     onset_matrix : full onset matrix (only within-block pairs used)
     min_cross_support : minimum fraction of cross-partition pairs that must be finite
+    _floor : internal — minimum acceptable split_time for this level
 
     Returns
     -------
@@ -436,14 +539,15 @@ def resolve_block(
     if len(mlist) == 1:
         return ResolutionNode(members=mlist, split_time=None, children=[], unresolved=False)
 
-    best = _find_best_split(mlist, onset_matrix, min_cross_support)
+    cache: dict = {}
+    best = _find_best_split(mlist, onset_matrix, min_cross_support, floor=_floor, _cache=cache)
 
     if best is None:
         return ResolutionNode(members=mlist, split_time=None, children=[], unresolved=True)
 
     b1, b2, split_time = best
-    child1 = resolve_block(b1, onset_matrix, min_cross_support=min_cross_support)
-    child2 = resolve_block(b2, onset_matrix, min_cross_support=min_cross_support)
+    child1 = resolve_block(b1, onset_matrix, min_cross_support=min_cross_support, _floor=split_time)
+    child2 = resolve_block(b2, onset_matrix, min_cross_support=min_cross_support, _floor=split_time)
 
     return ResolutionNode(
         members=mlist,

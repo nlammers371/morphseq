@@ -552,14 +552,45 @@ function scorePartition(mat, b1, b2) {
   return { accepted: true, crossMedian, crossSupport, internalFinite };
 }
 
-function findBestSplit(mat, members) {
+// Returns true if members can be recursively resolved with all split_times >= floor.
+// cache is a Map shared across calls for the same resolveBlock invocation.
+function isMonotoneFeasible(mat, members, floor, cache) {
+  if (members.length <= 1) return true;
+  const key = [...members].sort().join(",") + "@" + Math.round(floor * 10) / 10;
+  if (cache.has(key)) return cache.get(key);
+  const partitions = allBipartitions(members);
+  let result = false;
+  for (const [b1, b2] of partitions) {
+    const s = scorePartition(mat, b1, b2);
+    if (!s.accepted) continue;
+    if (s.crossMedian < floor) continue;
+    if (isMonotoneFeasible(mat, b1, s.crossMedian, cache) &&
+        isMonotoneFeasible(mat, b2, s.crossMedian, cache)) {
+      result = true;
+      break;
+    }
+  }
+  // If no feasible split found, subtree becomes an unresolved leaf — trivially monotone.
+  if (!result) result = true;
+  cache.set(key, result);
+  return result;
+}
+
+function findBestSplit(mat, members, floor, cache) {
+  floor = floor || 0;
   const partitions = allBipartitions(members);
   let best = null, bestScore = null;
 
   partitions.forEach(([b1, b2]) => {
     const s = scorePartition(mat, b1, b2);
     if (!s.accepted) return;
-    const score = [s.crossMedian, s.crossSupport, -s.internalFinite];
+    if (s.crossMedian < floor) return;
+    // Monotonicity check: both children must be resolvable with all times >= crossMedian
+    if (!isMonotoneFeasible(mat, b1, s.crossMedian, cache)) return;
+    if (!isMonotoneFeasible(mat, b2, s.crossMedian, cache)) return;
+
+    // Scoring: lowest internal incoherence first, then support, then later split
+    const score = [-s.internalFinite, s.crossSupport, s.crossMedian];
     if (
       best === null
       || score[0] > bestScore[0]
@@ -573,18 +604,23 @@ function findBestSplit(mat, members) {
   return best;
 }
 
-function resolveBlock(mat, members) {
+function resolveBlock(mat, members, floor) {
+  floor = floor || 0;
   if (members.length <= 1)
     return { members, split_time: null, children: [], unresolved: false };
 
-  const best = findBestSplit(mat, members);
+  const cache = new Map();
+  const best = findBestSplit(mat, members, floor, cache);
   if (!best)
     return { members, split_time: null, children: [], unresolved: true };
 
   return {
     members,
     split_time: best.splitTime,
-    children: [resolveBlock(mat, best.b1), resolveBlock(mat, best.b2)],
+    children: [
+      resolveBlock(mat, best.b1, best.splitTime),
+      resolveBlock(mat, best.b2, best.splitTime),
+    ],
     unresolved: false,
   };
 }
@@ -838,7 +874,9 @@ function renderTree(timeline, selected, mat) {
     });
 
     // Split dot + time label
-    g.append("circle").attr("cx",nx).attr("cy",ny).attr("r",3.5).attr("fill","#333");
+    g.append("circle").attr("cx",nx).attr("cy",ny).attr("r",3.5).attr("fill","#333")
+      .on("mouseover", ev => showTip(`${Math.round(nd.split_time)} hpf`, ev))
+      .on("mousemove", moveTip).on("mouseout", hideTip);
     g.append("text").attr("x",nx+4).attr("y",ny-4)
       .attr("font-size",8).attr("fill","#888")
       .text(`${Math.round(nd.split_time)}`);
