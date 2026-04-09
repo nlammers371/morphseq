@@ -30,7 +30,7 @@ def run_classification(
     random_state: int = 42,
     min_samples_per_group: int = 3,
     min_samples_per_member: int = 2,
-    save_predictions: bool = False,
+    save_predictions: bool = False,   # auto-True when save_dir is set
     save_multiclass_predictions: bool = False,
     save_null_arrays: bool = False,
     save_dir: str | Path | None = None,
@@ -104,7 +104,9 @@ preds = result.layers.get("predictions") # None if missing
 result.layers.available()                # list of saved/cached keys
 ```
 
-Layer keys: `"predictions"` (`save_predictions=True`), `"multiclass_predictions"` (`save_multiclass_predictions=True`), `"confusion"`, `"null_full"` (`save_null_arrays=True`).
+Layer keys: `"predictions"` (always saved when `save_dir` is set, or when `save_predictions=True`), `"multiclass_predictions"` (`save_multiclass_predictions=True`), `"confusion"`, `"null_full"` (`save_null_arrays=True`).
+
+**`predictions` columns:** `embryo_id`, `time_bin_center`, `y_true`, `p_pos`, `y_pred`, `is_correct`, `truth_signed_margin` (range `[-1, 1]`, positive = correctly classified).
 
 **Persistence:**
 ```python
@@ -172,6 +174,36 @@ result = run_classification(
 ---
 
 ## Viz: `analyze.classification.viz`
+
+### `plot_signed_margin_trends`
+
+**File:** `src/analyze/classification/viz/misclassification.py`
+
+Per-embryo signed-margin trajectory plots for a binary comparison. Each embryo is a line colored by mean `truth_signed_margin` (RdBu_r, vmin=-1, vmax=1).
+
+```python
+from analyze.classification.viz import plot_signed_margin_trends
+
+fig = plot_signed_margin_trends(
+    embryo_df,               # DataFrame with truth_signed_margin + true_label, or p_pos + y_true
+    group1="inj_ctrl",
+    group2="pbx4_crispant",
+    max_embryos=-1,          # -1 = all embryos; positive int caps per genotype panel
+    output_path="embryo_trajectories_signed_margin.png",
+)
+```
+
+**`embryo_df` accepted columns (in priority order):**
+1. `truth_signed_margin` + `true_label` — canonical; positive = correctly classified, range `[-1, 1]`
+2. `signed_margin` + `true_label` — legacy; auto-coerced from `[-0.5, 0.5]` if needed
+3. `p_pos` + `y_true` — raw classifier output; `truth_signed_margin` computed internally
+
+**Margin conventions (`from analyze.classification import ...`):**
+- `truth_signed_margin(p_pos, y_true)` — sign relative to true label; `+1` = most correct, `-1` = most wrong. Stored in `predictions.parquet`.
+- `class_signed_margin(p_pos)` — sign relative to positive-class axis. Stored in `raw_contrast_scores_long` as `class_signed_margin`.
+- `coerce_margin_range(arr)` — rescales legacy `[-0.5, 0.5]` arrays to `[-1, 1]` at load time.
+
+---
 
 ### `plot_aurocs_over_time`
 

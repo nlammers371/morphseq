@@ -17,6 +17,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 import analyze.utils.resampling as resample
 
 from .comparison_resolution import ComparisonGroup, ResolvedComparison
+from .margins import class_signed_margin, truth_signed_margin
 
 try:
     from joblib import Parallel, delayed, effective_n_jobs as joblib_effective_n_jobs
@@ -30,12 +31,15 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 
-def _make_logistic_classifier(n_classes: int, random_state: int) -> LogisticRegression:
+def _make_logistic_classifier(
+    n_classes: int,
+    random_state: int,
+    class_weight: Any | None = "balanced",
+) -> LogisticRegression:
     return LogisticRegression(
         max_iter=1000,
         solver="liblinear",
-        multi_class="ovr",
-        class_weight="balanced",
+        class_weight=class_weight,
         random_state=random_state,
     )
 
@@ -142,6 +146,7 @@ def _permutation_test_binary(
     n_splits: int,
     n_jobs: int,
     random_state: int,
+    class_weight: Any | None = "balanced",
     bin_index: int,
     time_bin: int,
 ) -> np.ndarray:
@@ -149,7 +154,7 @@ def _permutation_test_binary(
     if n_permutations <= 0:
         return np.array([], dtype=float)
 
-    clf = _make_logistic_classifier(n_classes=2, random_state=random_state)
+    clf = _make_logistic_classifier(n_classes=2, random_state=random_state, class_weight=class_weight)
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
 
     def _stat_fn(data: dict, _rng: np.random.Generator) -> float:
@@ -196,6 +201,7 @@ def _permutation_test_ovr(
     n_splits: int,
     n_jobs: int,
     random_state: int,
+    class_weight: Any | None = "balanced",
     bin_index: int,
     time_bin: int,
 ) -> np.ndarray:
@@ -203,7 +209,7 @@ def _permutation_test_ovr(
     if n_permutations <= 0:
         return np.array([], dtype=float)
 
-    clf = _make_logistic_classifier(n_classes=n_classes, random_state=random_state)
+    clf = _make_logistic_classifier(n_classes=n_classes, random_state=random_state, class_weight=class_weight)
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
 
     def _stat_fn(data: dict, _rng: np.random.Generator) -> float:
@@ -260,6 +266,7 @@ def _score_binary_ovr_bin(
     n_permutations: int,
     n_jobs: int,
     random_state: int,
+    class_weight: Any | None = "balanced",
     bin_index: int,
     time_bin: int,
     embryo_ids: np.ndarray | None = None,
@@ -310,6 +317,7 @@ def _score_binary_ovr_bin(
         n_splits=n_splits_actual,
         n_jobs=n_jobs,
         random_state=random_state,
+        class_weight=class_weight,
         bin_index=bin_index,
         time_bin=int(time_bin),
     )
@@ -366,6 +374,7 @@ def _run_binary_classification_loop(
     n_permutations: int,
     n_jobs: int,
     random_state: int,
+    class_weight: Any | None = "balanced",
     verbose: bool,
 ) -> list[dict[str, Any]]:
     """Per-bin CV + AUROC + permutation test for a single binary comparison.
@@ -410,6 +419,7 @@ def _run_binary_classification_loop(
                 "n_permutations": n_permutations,
                 "n_jobs": 1,
                 "random_state": random_state,
+                "class_weight": class_weight,
                 "bin_index": i,
                 "time_bin": int(t),
                 "verbose": False,
@@ -454,6 +464,7 @@ def _run_multiclass_classification_loop(
     n_jobs: int,
     min_samples_per_class: int,
     random_state: int,
+    class_weight: Any | None = "balanced",
     verbose: bool,
 ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     """Run one multiclass model per bin, extract per-class binary AUROCs.
@@ -518,6 +529,7 @@ def _run_multiclass_classification_loop(
                     n_permutations=n_permutations,
                     n_jobs=n_jobs,
                     random_state=random_state,
+                    class_weight=class_weight,
                     bin_index=i,
                     time_bin=int(t),
                     positive_label=class_label,
@@ -541,7 +553,7 @@ def _run_multiclass_classification_loop(
                 print("    Sparse bin produced no valid one-vs-rest comparisons")
             continue
 
-        clf = _make_logistic_classifier(n_classes=len(class_labels), random_state=random_state)
+        clf = _make_logistic_classifier(n_classes=len(class_labels), random_state=random_state, class_weight=class_weight)
         n_splits_actual = min(n_splits, min_count)
         cv = StratifiedKFold(n_splits=n_splits_actual, shuffle=True, random_state=random_state)
 
@@ -580,6 +592,7 @@ def _run_multiclass_classification_loop(
                 X=X, y=y, class_idx=class_idx, n_classes=len(class_labels),
                 n_permutations=n_permutations, n_splits=n_splits_actual,
                 n_jobs=n_jobs, random_state=random_state,
+                class_weight=class_weight,
                 bin_index=i, time_bin=int(t),
             )
             if len(null_aurocs) == 0:
@@ -717,6 +730,7 @@ def _collect_binary_predictions(
                 "time_bin_center": pred["time_bin_center"],
                 "y_true": pred["y_true"],
                 "p_pos": pred["p_pos"],
+                "truth_signed_margin": float(truth_signed_margin(pred["p_pos"], pred["y_true"])),
                 "y_pred": pred["y_pred"],
                 "is_correct": pred["is_correct"],
             })
@@ -744,7 +758,7 @@ def _collect_binary_margins(
                 id_col: pred[id_col],
                 "time_bin": int(br["time_bin"]),
                 "time_bin_center": float(pred["time_bin_center"]),
-                "m_raw": 2.0 * float(pred["p_pos"]) - 1.0,
+                "class_signed_margin": float(class_signed_margin(pred["p_pos"])),
             })
     return rows
 

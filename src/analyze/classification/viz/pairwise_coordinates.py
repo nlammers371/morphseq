@@ -6,7 +6,7 @@ is filled:
   - rows    = positive class of each pairwise classifier
   - columns = negative class of each pairwise classifier
   - upper-right triangle cell (row=A, col=B, col_index > row_index):
-              time-averaged signed margin (m_raw) on the A-vs-B classifier
+              time-averaged signed margin (class_signed_margin) on the A-vs-B classifier
   - diagonal and lower-left triangle: NaN / masked
 
 Interpretation: a cell (row=A, col=B) shows how strongly the embryo looks like
@@ -38,7 +38,7 @@ from analyze.viz.plotting.faceting_engine import (
 __all__ = ["plot_pairwise_coordinate_heatmap"]
 
 # Required columns in the input long-form DataFrame
-_REQUIRED_COLS = {"embryo_id", "positive_label", "negative_label", "time_bin", "m_raw"}
+_REQUIRED_COLS = {"embryo_id", "positive_label", "negative_label", "time_bin", "class_signed_margin"}
 
 
 def _validate_input(df: pd.DataFrame) -> None:
@@ -61,7 +61,7 @@ def _build_upper_triangle_long(
     Layout convention:
       - rows    = positive class  (A)
       - columns = negative class  (B)
-      - upper-right triangle: cell (A, B) where col_index > row_index =  mean(m_raw)
+      - upper-right triangle: cell (A, B) where col_index > row_index =  mean(class_signed_margin)
       - diagonal:             cell (A, A)                               =  NaN (masked)
       - lower-left triangle:  cell (B, A) where col_index < row_index  =  NaN (masked)
 
@@ -79,9 +79,9 @@ def _build_upper_triangle_long(
     if time_bins is not None:
         df = df[df["time_bin"].isin(time_bins)].copy()
 
-    # Aggregate m_raw over time bins for each (positive_label, negative_label) pair
+    # Aggregate class_signed_margin over time bins for each (positive_label, negative_label) pair
     agg = (
-        df.groupby(["positive_label", "negative_label"])["m_raw"]
+        df.groupby(["positive_label", "negative_label"])["class_signed_margin"]
         .mean()
         .reset_index(name="value")
     )
@@ -157,9 +157,9 @@ def plot_pairwise_coordinate_heatmap(
     positive_labels: Optional[list[str]] = None,
     negative_labels: Optional[list[str]] = None,
     time_bins: Optional[list] = None,
-    vmin: float = -0.5,
+    vmin: float = -1.0,
     vcenter: float = 0.0,
-    vmax: float = 0.5,
+    vmax: float = 1.0,
     cmap: str = "RdBu_r",
     title: Optional[str] = None,
     output_path: Optional[Union[str, Path]] = None,
@@ -167,14 +167,14 @@ def plot_pairwise_coordinate_heatmap(
     """Render the pairwise phenotypic coordinate heatmap for a single embryo.
 
     Only the upper-right triangle is filled: rows = positive class, columns =
-    negative class, cell value = time-averaged signed margin m_raw.
+    negative class, cell value = time-averaged signed margin class_signed_margin.
     The diagonal and lower triangle are NaN / masked.
 
     Parameters
     ----------
     df : pd.DataFrame
         Long-form data with columns:
-        ``embryo_id``, ``positive_label``, ``negative_label``, ``time_bin``, ``m_raw``.
+        ``embryo_id``, ``positive_label``, ``negative_label``, ``time_bin``, ``class_signed_margin``.
         Typically comes from ``run_classification(save_contrast_coordinates=True)``
         → ``analysis.layers["raw_contrast_scores_long"]``.
     embryo_id : str
@@ -278,7 +278,7 @@ def plot_pairwise_coordinate_heatmap(
         vcenter=vcenter,
         missing_color="#e0e0e0",
     )
-    colorbar = ColorbarSpec(label="Signed margin (m_raw)", shrink=0.7)
+    colorbar = ColorbarSpec(label="Signed margin (class_signed_margin)", shrink=0.7)
 
     fig_title = title or f"Pairwise phenotypic coordinates: {embryo_id}"
 

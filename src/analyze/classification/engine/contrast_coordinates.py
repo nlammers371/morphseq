@@ -137,7 +137,7 @@ def assemble_contrast_coordinates(
             "feature_set", id_col, "genotype",
             "time_bin", "time_bin_center",
             "comparison_id", "positive_label", "negative_label",
-            "m_raw",
+            "class_signed_margin",
         ]
     ].copy().sort_values(["feature_set", "comparison_id", "time_bin", id_col]).reset_index(drop=True)
 
@@ -156,7 +156,7 @@ def assemble_contrast_coordinates(
     )
     if shrunk_long["w"].isna().any():
         raise ValueError("Missing shrinkage weights for some margin rows.")
-    shrunk_long["m_shrunk"] = shrunk_long["w"].astype(float) * shrunk_long["m_raw"].astype(float)
+    shrunk_long["m_shrunk"] = shrunk_long["w"].astype(float) * shrunk_long["class_signed_margin"].astype(float)
 
     warnings.warn(
         "shrunk_coordinates are experimental and have not yet been validated to preserve real-world geometry. "        "Use with caution for production trajectory analyses.",
@@ -167,7 +167,7 @@ def assemble_contrast_coordinates(
     raw_coordinates = _pivot_coordinates(
         raw_long,
         id_col=id_col,
-        value_col="m_raw",
+        value_col="class_signed_margin",
         probe_columns=probe_columns,
     )
     shrunk_coordinates = _pivot_coordinates(

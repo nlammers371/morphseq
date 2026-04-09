@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from analyze.utils.binning import bins_in_time_window
+from analyze.classification.engine.margins import coerce_margin_range
 
 
 
@@ -17,8 +18,8 @@ def _signed_margin_rgba(
     mean_margin: float,
     alpha: float,
     *,
-    vmin: float = -0.5,
-    vmax: float = 0.5,
+    vmin: float = -1.0,
+    vmax: float = 1.0,
 ) -> tuple[float, float, float, float]:
     cmap = plt.cm.RdBu_r
     norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
@@ -119,8 +120,8 @@ def plot_signed_margin_trends(
     discrete_class_lookup: Optional[dict[str, str]] = None,
     discrete_class_colors: Optional[dict[str, str]] = None,
     max_embryos: int = 30,
-    vmin: float = -0.5,
-    vmax: float = 0.5,
+    vmin: float = -1.0,
+    vmax: float = 1.0,
     time_window: Optional[tuple[float, float]] = None,
     output_path: Optional[Path] = None,
 ) -> "matplotlib.figure.Figure":
@@ -157,8 +158,8 @@ def plot_signed_margin_trends(
     max_embryos : int
         Maximum number of embryos to draw per panel (ranked by abs mean margin).
     vmin, vmax : float
-        Colormap and y-axis range for signed margin.  Defaults are -0.5 / 0.5
-        (the natural range when ``signed_margin = p_pos - 0.5``).
+        Colormap and y-axis range for signed margin.  Defaults are -1 / 1
+        (the canonical range of truth_signed_margin).
     time_window : (t_min, t_max) | None
         If provided, restricts which bins are used for penetrance computation
         AND which bins are shown in the trajectories.  A bin is included iff
@@ -173,29 +174,28 @@ def plot_signed_margin_trends(
     df = embryo_df.copy()
 
     # --- Resolve input shape ---
-    if "signed_margin" in df.columns and "true_label" in df.columns:
-        if "time_bin_center" not in df.columns:
-            if "time_bin" in df.columns:
-                df["time_bin_center"] = df["time_bin"].astype(float)
-            else:
-                raise ValueError("embryo_df must have a 'time_bin' or 'time_bin_center' column")
-        if "time_bin" not in df.columns:
-            df["time_bin"] = df["time_bin_center"]
+    # Preferred: truth_signed_margin column (canonical, [-1, 1])
+    # Legacy fallback: signed_margin column (coerced to [-1, 1] via coerce_margin_range)
+    # Raw fallback: p_pos + y_true columns
+    if "truth_signed_margin" in df.columns and "true_label" in df.columns:
+        df["signed_margin"] = coerce_margin_range(df["truth_signed_margin"].to_numpy())
+    elif "signed_margin" in df.columns and "true_label" in df.columns:
+        df["signed_margin"] = coerce_margin_range(df["signed_margin"].to_numpy())
     elif "p_pos" in df.columns and "y_true" in df.columns:
-        if "time_bin_center" not in df.columns:
-            if "time_bin" in df.columns:
-                df["time_bin_center"] = df["time_bin"].astype(float)
-            else:
-                raise ValueError("embryo_df must have a 'time_bin' or 'time_bin_center' column")
-        if "time_bin" not in df.columns:
-            df["time_bin"] = df["time_bin_center"]
         df["signed_margin"] = 2.0 * df["p_pos"].astype(float) - 1.0
         df["true_label"] = np.where(df["y_true"].astype(int) == 1, group2, group1)
     else:
         raise ValueError(
-            "embryo_df must have either ('signed_margin', 'true_label') columns "
-            "or ('p_pos', 'y_true') columns."
+            "embryo_df must have ('truth_signed_margin', 'true_label'), "
+            "('signed_margin', 'true_label'), or ('p_pos', 'y_true') columns."
         )
+    if "time_bin_center" not in df.columns:
+        if "time_bin" in df.columns:
+            df["time_bin_center"] = df["time_bin"].astype(float)
+        else:
+            raise ValueError("embryo_df must have a 'time_bin' or 'time_bin_center' column")
+    if "time_bin" not in df.columns:
+        df["time_bin"] = df["time_bin_center"]
 
     # --- Apply time window (center-of-bin rule via shared utility) ---
     if time_window is not None:

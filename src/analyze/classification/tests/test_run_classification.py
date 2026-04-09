@@ -619,7 +619,7 @@ def test_save_contrast_coordinates_all_pairs():
     residual_coordinates = result.layers["residual_coordinates"]
     probe_index = result.layers["probe_index"]
 
-    assert raw_long["m_raw"].between(-1.0, 1.0).all()
+    assert raw_long["class_signed_margin"].between(-1.0, 1.0).all()
     assert set(support_long["support_status"].unique()) <= {"supported", "unsupported_id", "unsupported_group"}
     assert {"group_supported", "id_supported", "support_status", "group_label"}.issubset(support_long.columns)
     assert {"positive_group_supported", "negative_group_supported", "min_group_support_passed"}.issubset(specificity.columns)
@@ -636,7 +636,7 @@ def test_save_contrast_coordinates_all_pairs():
         id_vars=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center"],
         value_vars=probe_cols,
         var_name="comparison_id",
-        value_name="m_raw_wide",
+        value_name="csm_wide",
     )
     shrunk_join = shrunk_coordinates.melt(
         id_vars=["feature_set", "embryo_id", "genotype", "time_bin", "time_bin_center"],
@@ -673,13 +673,44 @@ def test_save_contrast_coordinates_all_pairs():
         validate="one_to_one",
     )
 
-    np.testing.assert_allclose(merged["m_raw_wide"], merged["m_raw"])
-    np.testing.assert_allclose(merged["m_shrunk_wide"], merged["m_raw"] * merged["w"])
+    np.testing.assert_allclose(merged["csm_wide"], merged["class_signed_margin"])
+    np.testing.assert_allclose(merged["m_shrunk_wide"], merged["class_signed_margin"] * merged["w"])
     np.testing.assert_allclose(
         merged["m_residual_wide"],
-        merged["m_raw_wide"] - merged["m_shrunk_wide"],
+        merged["csm_wide"] - merged["m_shrunk_wide"],
     )
 
+
+
+def test_run_classification_records_class_weight_and_signed_margin():
+    df = _make_df()
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        positive="A",
+        negative="B",
+        features={"emb": "z_mu_b"},
+        n_permutations=4,
+        n_jobs=1,
+        verbose=False,
+        save_predictions=True,
+        save_contrast_coordinates=True,
+        class_weight="balanced",
+    )
+    assert result.uns["class_weight"] == "balanced"
+    preds = result.layers["predictions"]
+    assert "truth_signed_margin" in preds.columns
+    # truth_signed_margin: positive = correctly classified, range [-1, 1].
+    p = preds["p_pos"].to_numpy(dtype=float)
+    y = preds["y_true"].to_numpy(dtype=int)
+    expected = np.where(y == 1, 2.0 * p - 1.0, 1.0 - 2.0 * p)
+    np.testing.assert_allclose(preds["truth_signed_margin"].to_numpy(dtype=float), expected)
+    # contrast coordinates use class_signed_margin (directional, [-1, 1])
+    raw_long = result.layers["raw_contrast_scores_long"]
+    assert "class_signed_margin" in raw_long.columns
+    assert raw_long["class_signed_margin"].between(-1.0, 1.0).all()
 
 
 def test_save_contrast_coordinates_rejects_multiclass():

@@ -120,6 +120,7 @@ def run_classification(
     min_samples_per_member: int = 2,
     n_jobs: int = 1,
     random_state: int = 42,
+    class_weight: Any | None = "balanced",
     verbose: bool = True,
     save_predictions: bool = False,
     save_multiclass_predictions: bool = False,
@@ -156,6 +157,9 @@ def run_classification(
     )
     is_default_request = _is_default_request(positive, negative, comparisons)
 
+    if save_dir is not None:
+        save_predictions = True
+
     if save_contrast_coordinates and use_multiclass_fast_path:
         raise ValueError(
             "save_contrast_coordinates=True is only supported for binary comparison runs."
@@ -178,6 +182,7 @@ def run_classification(
             print("  Default: no")
             print("  Reporting: one AUROC series per resolved comparison")
         print(f"  Resolved: {_format_resolved_summary(resolved)}")
+        print(f"  class_weight: {class_weight!r}")
 
     all_score_rows: list[dict[str, Any]] = []
     all_pred_rows: list[dict[str, Any]] = []
@@ -220,6 +225,7 @@ def run_classification(
                 n_jobs=n_jobs,
                 min_samples_per_class=min_samples_per_group,
                 random_state=random_state,
+                class_weight=class_weight,
                 verbose=verbose,
             )
 
@@ -273,6 +279,7 @@ def run_classification(
                 n_permutations=n_permutations,
                 n_jobs=n_jobs,
                 random_state=random_state,
+                class_weight=class_weight,
                 verbose=verbose,
             )
 
@@ -323,6 +330,7 @@ def run_classification(
         "time_col": time_col,
         "bin_width": bin_width,
         "n_permutations": n_permutations,
+        "class_weight": class_weight,
         "feature_sets": {
             name: {
                 "spec": features[name],

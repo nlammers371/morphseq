@@ -1,6 +1,7 @@
 # Primary API
 from .run_classification import run_classification
 from .engine.analysis import ClassificationAnalysis
+from .engine.margins import class_signed_margin, truth_signed_margin, coerce_margin_range
 
 # Submodules
 from . import viz
@@ -23,6 +24,10 @@ __all__ = [
     # Primary
     "run_classification",
     "ClassificationAnalysis",
+    # Margin utilities
+    "class_signed_margin",
+    "truth_signed_margin",
+    "coerce_margin_range",
     # Submodules
     "viz",
     "misclassification",
