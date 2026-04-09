@@ -175,33 +175,44 @@ result = run_classification(
 
 ## Viz: `analyze.classification.viz`
 
-### `plot_signed_margin_trends`
+**Full misclassification viz reference:** see `VIZ.md` in this skill directory.
+
+### `plot_margin_trends`
 
 **File:** `src/analyze/classification/viz/misclassification.py`
 
-Per-embryo signed-margin trajectory plots for a binary comparison. Each embryo is a line colored by mean `truth_signed_margin` (RdBu_r, vmin=-1, vmax=1).
+Per-embryo signed-margin trajectory plots for a binary comparison. Takes a predictions dataframe directly — one row per (embryo, x). Negative group on left panel, positive on right.
 
 ```python
-from analyze.classification.viz import plot_signed_margin_trends
+from analyze.classification.viz.misclassification import plot_margin_trends
 
-fig = plot_signed_margin_trends(
-    embryo_df,               # DataFrame with truth_signed_margin + true_label, or p_pos + y_true
-    group1="inj_ctrl",
-    group2="pbx4_crispant",
-    max_embryos=-1,          # -1 = all embryos; positive int caps per genotype panel
-    output_path="embryo_trajectories_signed_margin.png",
+# Pipeline-native: pass full predictions df, filter by comparison_id
+fig = plot_margin_trends(
+    predictions,
+    comparison_id="inj_ctrl__vs__pbx4_crispant",
+    feature_id="vae",
+    output_path="margin_trends.png",
+)
+
+# Explicit-label mode: ad hoc dataframes
+fig = plot_margin_trends(
+    df,
+    positive_label="pbx4_crispant",
+    negative_label="inj_ctrl",
+    feature_id="vae",
+    output_path="margin_trends.png",
 )
 ```
 
-**`embryo_df` accepted columns (in priority order):**
-1. `truth_signed_margin` + `true_label` — canonical; positive = correctly classified, range `[-1, 1]`
-2. `signed_margin` + `true_label` — legacy; auto-coerced from `[-0.5, 0.5]` if needed
-3. `p_pos` + `y_true` — raw classifier output; `truth_signed_margin` computed internally
+**Predictions parquet columns** (set `save_predictions=True` in `run_classification`):
+`comparison_id`, `positive_label`, `negative_label`, `feature_set`, `embryo_id`,
+`time_bin`, `time_bin_center`, `bin_width`, `n_positive`, `n_negative`, `auroc_obs`,
+`y_true`, `p_pos`, `truth_signed_margin`, `y_pred`, `is_correct`.
 
-**Margin conventions (`from analyze.classification import ...`):**
-- `truth_signed_margin(p_pos, y_true)` — sign relative to true label; `+1` = most correct, `-1` = most wrong. Stored in `predictions.parquet`.
-- `class_signed_margin(p_pos)` — sign relative to positive-class axis. Stored in `raw_contrast_scores_long` as `class_signed_margin`.
-- `coerce_margin_range(arr)` — rescales legacy `[-0.5, 0.5]` arrays to `[-1, 1]` at load time.
+**Margin conventions (`from analyze.classification.engine.margins import ...`):**
+- `truth_signed_margin(p_pos, y_true)` — sign relative to true label; `+1` = most correct, `-1` = most wrong.
+- `class_signed_margin(p_pos)` — sign relative to positive-class axis.
+- `coerce_margin_range(arr)` — rescales legacy `[-0.5, 0.5]` arrays to `[-1, 1]`.
 
 ---
 

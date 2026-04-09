@@ -1,5 +1,9 @@
 You are a morphseq classification expert. When the user asks about AUROC comparisons, genotype classification, or difference detection, use the `src/analyze/classification/` module. Follow these rules exactly.
 
+**Full reference:** `src/analyze/classification/README.md` is the authoritative source. This COMMAND.md shows quick-start patterns.
+
+**For margin trajectory plots:** see `VIZ.md` in this skill directory for `plot_margin_trends` API and usage examples.
+
 **Important:** The canonical module is `analyze.classification`. The old `analyze.difference_detection` is a deprecated shim that re-exports from `analyze.classification` — it still works but prefer the canonical path.
 
 ## Setup
@@ -58,43 +62,57 @@ Side-by-side AUROC panels comparing feature types. `results_by_feature = {"embed
 
 Overlay multiple AUROC curves on one axis.
 
-## Standard 3-Feature Classification Pattern
+## Standard pattern: multiple feature sets
 
 ```python
-class_feature_sets = {
-    "curvature": ["baseline_deviation_normalized"],
-    "length": ["total_length_um"],
-    "embedding": "z_mu_b",
-}
-class_feature_labels = {"curvature": "Curvature", "length": "Length", "embedding": "Embedding"}
-class_colors = {gt: color_lookup.get(gt, "#808080") for gt in genotype_order}
+from analyze.classification import run_classification
 
-# Mode 1: one-vs-all
-ovr_results_by_feature = {}
-for feat_key, feat_spec in class_feature_sets.items():
-    res = run_classification_test(
-        df, groupby="genotype", groups="all", reference="rest",
-        features=feat_spec, n_jobs=-1, n_permutations=100,
-        bin_width=2.0, min_samples_per_class=3, verbose=False,
+results_by_feature = {}
+for feat_key, feat_spec in {"vae": "z_mu_b", "shape": ["total_length_um"]}.items():
+    res = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        features={feat_key: feat_spec},
+        comparisons="all_pairs",
+        bin_width=2.0,
+        n_splits=5,
+        n_permutations=500,
+        n_jobs=-1,
+        save_predictions=True,
+        save_dir=results_dir / feat_key,
     )
-    ovr_results_by_feature[feat_key] = res
-    res.comparisons.to_csv(results_dir / f"one_vs_all_{feat_key}.csv", index=False)
-
-fig = plot_feature_comparison_grid(
-    results_by_feature=ovr_results_by_feature,
-    feature_labels=class_feature_labels,
-    cluster_colors=class_colors,
-    title="One-vs-All",
-    save_path=figures_dir / "one_vs_all_grid.png",
-)
-plt.close(fig)
-
-# Mode 2: each-vs-wildtype
-if ref_genotype:
-    for feat_key, feat_spec in class_feature_sets.items():
-        res = run_classification_test(
-            df, groupby="genotype", groups=non_wt_genotypes,
-            reference=ref_genotype, features=feat_spec,
-            n_jobs=-1, n_permutations=100, bin_width=2.0, verbose=False,
-        )
+    results_by_feature[feat_key] = res
+    res.plot_aurocs(output_path=figures_dir / f"aurocs_{feat_key}.png")
 ```
+
+## Generating predictions for `plot_margin_trends`
+
+Use `run_classification` (not the legacy `run_classification_test`) with `save_predictions=True`:
+
+```python
+from analyze.classification import run_classification
+
+result = run_classification(
+    df,
+    class_col="genotype",
+    id_col="embryo_id",
+    time_col="predicted_stage_hpf",
+    positive="pbx4_crispant",
+    negative="inj_ctrl",
+    features={"vae": "z_mu_b", "shape": ["total_length_um"]},
+    comparisons="all_pairs",
+    bin_width=2.0,
+    n_splits=5,
+    n_permutations=500,
+    n_jobs=-1,
+    save_predictions=True,
+    save_dir="results/my_run/",
+)
+
+# predictions.parquet is at: results/my_run/predictions.parquet
+predictions = result.layers["predictions"]
+```
+
+Then plot directly — see `VIZ.md` for the full `plot_margin_trends` API.
