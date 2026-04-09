@@ -5,6 +5,7 @@ from .engine.analysis import ClassificationAnalysis
 # Submodules
 from . import viz
 from . import misclassification
+from . import emergence
 
 # Misclassification pipeline (unchanged)
 from .misclassification import run_misclassification_pipeline, run_stage_geometry
@@ -25,6 +26,7 @@ __all__ = [
     # Submodules
     "viz",
     "misclassification",
+    "emergence",
     # Misclassification pipeline
     "run_misclassification_pipeline",
     "run_stage_geometry",
