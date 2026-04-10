@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -32,16 +33,24 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_PROJECT_ROOT / "src"))
+
+from analyze.viz.embryo_renderer import (
+    EmbryoRenderStyle,
+    EmbryoSelectionPolicy,
+    EmbryoTrack,
+    build_snip_path,
+    draw_rounded_rect as _draw_rounded_rect_shared,
+    put_text_with_outline_colors as _put_text_with_outline_colors_shared,
+    read_snip_bgr,
+    render_embryo_circle_tile,
+    resolve_frame_schedule,
+    select_plate_tracks_from_metadata,
+)
+
 
 _WELL_RE = re.compile(r"^[A-H]\d{2}$")
-
-
-@dataclass(frozen=True)
-class EmbryoTrack:
-    embryo_id: str
-    well: str
-    times_hpf: np.ndarray  # (N,) float ascending
-    frame_indices: np.ndarray  # (N,) int aligned with times_hpf
 
 
 @dataclass
@@ -243,7 +252,7 @@ def _infer_well_from_embryo_id(embryo_id: str) -> Optional[str]:
 
 
 def _snip_path(snip_root: Path, experiment_date: str, embryo_id: str, frame_index: int) -> Path:
-    return snip_root / str(experiment_date) / f"{embryo_id}_t{int(frame_index):04d}.jpg"
+    return build_snip_path(snip_root, experiment_date, embryo_id, frame_index)
 
 
 def _load_metadata_tracks(
@@ -255,171 +264,24 @@ def _load_metadata_tracks(
     experiment_date: Optional[str] = None,
     verify_snips: bool = True,
 ) -> tuple[list[EmbryoTrack], dict[str, float], dict[str, tuple[float, int] | None], float, float]:
-    """
-    Returns:
-      - tracks: one selected EmbryoTrack per well (best-first)
-      - start_age_by_well: well -> start_age_hpf (median within selected embryo rows)
-      - last_alive_by_well: well -> (last_alive_hpf, last_alive_fi) or None if unavailable
-      - default_t_min: start_age_hpf (global median)
-      - robust_t_max: robust max predicted_stage_hpf (0.95 quantile over per-embryo maxima)
-    """
-    header = pd.read_csv(embryo_metadata_csv, nrows=0)
-    want = [
-        "embryo_id",
-        "well_id",
-        "frame_index",
-        "predicted_stage_hpf",
-        "start_age_hpf",
-        "fraction_alive",
-        "dead_flag",
-    ]
-    cols = [c for c in want if c in header.columns]
-    missing_critical = [c for c in ["embryo_id", "well_id", "frame_index", "predicted_stage_hpf"] if c not in cols]
-    if missing_critical:
-        raise ValueError(f"Missing required columns in {embryo_metadata_csv.name}: {missing_critical}")
-
-    df = pd.read_csv(embryo_metadata_csv, usecols=cols, low_memory=False)
-    df["well_id"] = df["well_id"].astype(str).str.strip().str.upper()
-    if wells_subset is not None:
-        df = df[df["well_id"].isin(wells_subset)].copy()
-    if df.empty:
-        raise ValueError("No rows remaining after applying --wells filter.")
-
-    df["embryo_id"] = df["embryo_id"].astype(str)
-    df["frame_index"] = pd.to_numeric(df["frame_index"], errors="coerce").astype("Int64")
-    df["predicted_stage_hpf"] = pd.to_numeric(df["predicted_stage_hpf"], errors="coerce")
-    df = df[df["frame_index"].notna() & df["predicted_stage_hpf"].notna()].copy()
-    if df.empty:
-        raise ValueError("No valid (frame_index, predicted_stage_hpf) rows in metadata.")
-
-    if "start_age_hpf" in df.columns:
-        df["start_age_hpf"] = pd.to_numeric(df["start_age_hpf"], errors="coerce")
-    else:
-        df["start_age_hpf"] = np.nan
-
-    if "fraction_alive" in df.columns:
-        df["fraction_alive"] = pd.to_numeric(df["fraction_alive"], errors="coerce")
-    else:
-        df["fraction_alive"] = np.nan
-
-    if "dead_flag" in df.columns:
-        df["dead_flag"] = pd.to_numeric(df["dead_flag"], errors="coerce")
-    else:
-        df["dead_flag"] = np.nan
-
-    # Choose a single embryo per well:
-    # - prefer e01 if present
-    # - then maximize survival proxy and coverage
-    # - optionally verify snip existence (avoid selecting embryos with missing JPEGs)
-    df["well"] = df["well_id"]
-    df["is_e01"] = df["embryo_id"].astype(str).str.endswith("_e01").astype(int)
-
-    per_emb = (
-        df.groupby(["well", "embryo_id"], observed=True)
-        .agg(
-            n_rows=("frame_index", "size"),
-            max_hpf=("predicted_stage_hpf", "max"),
-            min_hpf=("predicted_stage_hpf", "min"),
-            alive_mean=("fraction_alive", "mean"),
-            start_age=("start_age_hpf", "median"),
-            min_fi=("frame_index", lambda s: int(pd.to_numeric(s, errors="coerce").min())),
-            max_fi=("frame_index", lambda s: int(pd.to_numeric(s, errors="coerce").max())),
-        )
-        .reset_index()
+    selection = select_plate_tracks_from_metadata(
+        embryo_metadata_csv,
+        wells_subset=wells_subset,
+        snip_root=snip_root,
+        experiment_date=experiment_date,
+        policy=EmbryoSelectionPolicy(
+            prefer_e01=True,
+            verify_endpoint_snips=bool(verify_snips),
+            alive_threshold=float(alive_threshold),
+        ),
     )
-    per_emb["alive_mean"] = per_emb["alive_mean"].fillna(1.0)
-    per_emb["start_age"] = per_emb["start_age"].fillna(per_emb["min_hpf"])
-    per_emb = per_emb.merge(df.groupby(["well", "embryo_id"], observed=True)["is_e01"].max().reset_index(), on=["well", "embryo_id"], how="left")
-    per_emb["is_e01"] = per_emb["is_e01"].fillna(0).astype(int)
-
-    per_emb = per_emb.sort_values(
-        ["well", "is_e01", "alive_mean", "max_hpf", "n_rows", "max_fi"],
-        ascending=[True, False, False, False, False, False],
+    return (
+        selection.tracks,
+        selection.start_age_by_well,
+        selection.last_alive_by_well,
+        selection.default_t_min,
+        selection.robust_t_max,
     )
-
-    def snips_ok(well: str, embryo_id: str, min_fi: int, max_fi: int) -> bool:
-        if not verify_snips:
-            return True
-        if snip_root is None or experiment_date is None:
-            return True
-        p0 = _snip_path(snip_root, experiment_date, embryo_id, int(min_fi))
-        p1 = _snip_path(snip_root, experiment_date, embryo_id, int(max_fi))
-        return p0.exists() and p1.exists()
-
-    best_rows = []
-    for well, g in per_emb.groupby("well", sort=False):
-        picked = None
-        for r in g.itertuples(index=False):
-            if snips_ok(str(well), str(r.embryo_id), int(r.min_fi), int(r.max_fi)):
-                picked = r
-                break
-        if picked is None:
-            picked = g.iloc[0]
-        best_rows.append(picked._asdict() if hasattr(picked, "_asdict") else dict(picked))
-
-    best = pd.DataFrame(best_rows)
-    best_by_well = dict(zip(best["well"].astype(str).tolist(), best["embryo_id"].astype(str).tolist(), strict=False))
-
-    # Robust t_max: 0.95 quantile of per-embryo max_hpf for selected embryos.
-    robust_t_max = float(best["max_hpf"].quantile(0.95))
-    if not math.isfinite(robust_t_max):
-        robust_t_max = float(best["max_hpf"].max())
-
-    # Default t_min: global median start_age among selected embryos (fallback to min_hpf).
-    default_t_min = float(best["start_age"].median())
-    if not math.isfinite(default_t_min):
-        default_t_min = float(best["min_hpf"].min())
-
-    # Build tracks for selected embryos.
-    tracks: list[EmbryoTrack] = []
-    start_age_by_well: dict[str, float] = {}
-    last_alive_by_well: dict[str, tuple[float, int] | None] = {}
-    for well, embryo_id in best_by_well.items():
-        g = df[(df["well"] == well) & (df["embryo_id"] == embryo_id)].copy()
-        g = g.sort_values(["predicted_stage_hpf", "frame_index"])
-        times = g["predicted_stage_hpf"].to_numpy(dtype=float)
-        fis = g["frame_index"].to_numpy(dtype=int)
-        # Deduplicate identical times to avoid zero-denominator crossfades.
-        # Keep the earliest frame_index per time.
-        if times.size > 1:
-            keep = np.concatenate([[True], times[1:] != times[:-1]])
-            times = times[keep]
-            fis = fis[keep]
-        if times.size == 0:
-            continue
-        tracks.append(EmbryoTrack(embryo_id=str(embryo_id), well=str(well), times_hpf=times, frame_indices=fis))
-        # per-well start_age estimate
-        sa = float(best.loc[best["well"] == well, "start_age"].iloc[0])
-        if math.isfinite(sa):
-            start_age_by_well[str(well)] = sa
-
-        # last alive frame (for freeze/blank at death)
-        last_alive_by_well[str(well)] = None
-        # Prefer dead_flag-based death detection if available.
-        # We define "alive" rows as dead_flag==0 when dead_flag has any non-null values for this embryo.
-        use_dead_flag = "dead_flag" in g.columns and g["dead_flag"].notna().any()
-        if use_dead_flag:
-            alive = g[pd.to_numeric(g["dead_flag"], errors="coerce").fillna(0.0) <= 0.5].copy()
-        else:
-            alive = g[pd.to_numeric(g["fraction_alive"], errors="coerce") > float(alive_threshold)].copy()
-
-        if not alive.empty:
-            alive = alive.sort_values(["predicted_stage_hpf", "frame_index"])
-            for _, last in alive.iloc[::-1].iterrows():
-                try:
-                    lh = float(last["predicted_stage_hpf"])
-                    lfi = int(last["frame_index"])
-                    if not math.isfinite(lh):
-                        continue
-                    if verify_snips and snip_root is not None and experiment_date is not None:
-                        if not _snip_path(snip_root, experiment_date, str(embryo_id), int(lfi)).exists():
-                            continue
-                    last_alive_by_well[str(well)] = (lh, lfi)
-                    break
-                except Exception:
-                    continue
-
-    return tracks, start_age_by_well, last_alive_by_well, default_t_min, robust_t_max
 
 
 def _load_yx1_coords(yx1_csv: Path) -> pd.DataFrame:
@@ -527,46 +389,12 @@ def _schedule_for_track(
     clamp_time: Optional[float] = None,
     clamp_fi: Optional[int] = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    For each output time, return (fi0, fi1, alpha) arrays.
-    """
-    times = track.times_hpf
-    fis = track.frame_indices
-    n = int(t_out.size)
-    fi0 = np.zeros(n, dtype=np.int32)
-    fi1 = np.zeros(n, dtype=np.int32)
-    alpha = np.zeros(n, dtype=np.float32)
-
-    for k, t in enumerate(t_out.tolist()):
-        if clamp_time is not None and clamp_fi is not None:
-            if t >= float(clamp_time):
-                fi0[k] = int(clamp_fi)
-                fi1[k] = int(clamp_fi)
-                alpha[k] = 0.0
-                continue
-        if t <= float(times[0]):
-            fi0[k] = int(fis[0])
-            fi1[k] = int(fis[0])
-            alpha[k] = 0.0
-            continue
-        if t >= float(times[-1]):
-            fi0[k] = int(fis[-1])
-            fi1[k] = int(fis[-1])
-            alpha[k] = 0.0
-            continue
-        j = int(np.searchsorted(times, t, side="left"))
-        i0 = max(0, j - 1)
-        i1 = min(int(times.size - 1), j)
-        t0 = float(times[i0])
-        t1 = float(times[i1])
-        fi0[k] = int(fis[i0])
-        fi1[k] = int(fis[i1])
-        if i0 == i1 or t1 <= t0 + 1e-9:
-            alpha[k] = 0.0
-        else:
-            a = float((t - t0) / (t1 - t0))
-            alpha[k] = float(min(1.0, max(0.0, a)))
-    return fi0, fi1, alpha
+    return resolve_frame_schedule(
+        track,
+        t_out,
+        clamp_time=clamp_time,
+        clamp_frame_index=clamp_fi,
+    )
 
 
 def _put_text_with_outline(img: np.ndarray, text: str, org: tuple[int, int], *, font_scale: float = 1.0) -> None:
@@ -589,14 +417,15 @@ def _put_text_with_outline_colors(
     outline_bgr: tuple[int, int, int],
     font: Optional[int] = None,
 ) -> None:
-    import cv2
-
-    if font is None:
-        font = cv2.FONT_HERSHEY_SIMPLEX
-    thickness = max(1, int(round(2.0 * font_scale)))
-    outline = thickness + 3
-    cv2.putText(img, text, org, font, float(font_scale), outline_bgr, int(outline), cv2.LINE_AA)
-    cv2.putText(img, text, org, font, float(font_scale), fg_bgr, int(thickness), cv2.LINE_AA)
+    _put_text_with_outline_colors_shared(
+        img,
+        text,
+        org,
+        font_scale=font_scale,
+        fg_bgr=fg_bgr,
+        outline_bgr=outline_bgr,
+        font=font,
+    )
 
 
 def _draw_rounded_rect(
@@ -607,36 +436,7 @@ def _draw_rounded_rect(
     corner_radius: int,
     thickness: int = -1,
 ) -> None:
-    """Draw a rounded rectangle (filled if thickness=-1, outline otherwise)."""
-    import cv2
-
-    x0, y0 = int(pt1[0]), int(pt1[1])
-    x1, y1 = int(pt2[0]), int(pt2[1])
-    r = min(int(corner_radius), (x1 - x0) // 2, (y1 - y0) // 2)
-    r = max(0, r)
-    if r == 0:
-        cv2.rectangle(img, pt1, pt2, color, thickness=thickness, lineType=cv2.LINE_AA)
-        return
-
-    # Build a mask-based approach for filled, or draw arcs+lines for outline
-    if thickness == -1:
-        # Filled rounded rect via compositing
-        cv2.rectangle(img, (x0 + r, y0), (x1 - r, y1), color, thickness=-1, lineType=cv2.LINE_AA)
-        cv2.rectangle(img, (x0, y0 + r), (x1, y1 - r), color, thickness=-1, lineType=cv2.LINE_AA)
-        cv2.circle(img, (x0 + r, y0 + r), r, color, thickness=-1, lineType=cv2.LINE_AA)
-        cv2.circle(img, (x1 - r, y0 + r), r, color, thickness=-1, lineType=cv2.LINE_AA)
-        cv2.circle(img, (x0 + r, y1 - r), r, color, thickness=-1, lineType=cv2.LINE_AA)
-        cv2.circle(img, (x1 - r, y1 - r), r, color, thickness=-1, lineType=cv2.LINE_AA)
-    else:
-        # Outline: four arcs + four lines
-        cv2.ellipse(img, (x0 + r, y0 + r), (r, r), 180, 0, 90, color, thickness, cv2.LINE_AA)
-        cv2.ellipse(img, (x1 - r, y0 + r), (r, r), 270, 0, 90, color, thickness, cv2.LINE_AA)
-        cv2.ellipse(img, (x1 - r, y1 - r), (r, r), 0, 0, 90, color, thickness, cv2.LINE_AA)
-        cv2.ellipse(img, (x0 + r, y1 - r), (r, r), 90, 0, 90, color, thickness, cv2.LINE_AA)
-        cv2.line(img, (x0 + r, y0), (x1 - r, y0), color, thickness, cv2.LINE_AA)
-        cv2.line(img, (x0 + r, y1), (x1 - r, y1), color, thickness, cv2.LINE_AA)
-        cv2.line(img, (x0, y0 + r), (x0, y1 - r), color, thickness, cv2.LINE_AA)
-        cv2.line(img, (x1, y0 + r), (x1, y1 - r), color, thickness, cv2.LINE_AA)
+    _draw_rounded_rect_shared(img, pt1, pt2, color, corner_radius, thickness=thickness)
 
 
 def _fit_into_circle_tile(
@@ -652,52 +452,20 @@ def _fit_into_circle_tile(
     label_outline_bgr: tuple[int, int, int],
     well_rim_thickness: int = 1,
 ) -> np.ndarray:
-    import cv2
-
-    d = int(2 * radius)
-    tile = np.zeros((d, d, 3), dtype=np.uint8)
-    tile[:, :] = np.array(outside_bgr, dtype=np.uint8)
-
-    # Build circle mask first
-    mask = np.zeros((d, d), dtype=np.uint8)
-    cv2.circle(mask, (radius, radius), int(radius - 1), 255, thickness=-1, lineType=cv2.LINE_AA)
-
-    # Fill well interior with well_fill_bgr
-    tile[mask > 0] = np.array(well_fill_bgr, dtype=np.uint8)
-
-    if snip_bgr is not None:
-        h, w = snip_bgr.shape[:2]
-        if h > 0 and w > 0:
-            scale = min(d / float(w), d / float(h))
-            new_w = max(1, int(round(w * scale)))
-            new_h = max(1, int(round(h * scale)))
-            resized = cv2.resize(snip_bgr, (int(new_w), int(new_h)), interpolation=cv2.INTER_AREA)
-            x0 = int((d - new_w) // 2)
-            y0 = int((d - new_h) // 2)
-            # Paste snip only within the circle mask
-            snip_mask = mask[y0 : y0 + new_h, x0 : x0 + new_w]
-            tile_region = tile[y0 : y0 + new_h, x0 : x0 + new_w]
-            tile_region[snip_mask > 0] = resized[snip_mask > 0]
-
-    # Faint inner circle for subtle embossed effect
-    if radius > 12:
-        inner_rim_bgr = tuple(max(0, min(255, c + 15)) for c in well_rim_bgr)
-        cv2.circle(tile, (radius, radius), max(1, int(radius - 3)), tuple(map(int, inner_rim_bgr)), thickness=1, lineType=cv2.LINE_AA)
-
-    # Well rim
-    cv2.circle(tile, (radius, radius), int(radius - 1), tuple(map(int, well_rim_bgr)), thickness=int(well_rim_thickness), lineType=cv2.LINE_AA)
-
-    if show_label and label:
-        _put_text_with_outline_colors(
-            tile,
-            label,
-            (8, d - 10),
-            font_scale=max(0.35, radius / 80.0),
-            fg_bgr=label_fg_bgr,
-            outline_bgr=label_outline_bgr,
-        )
-
-    return tile
+    return render_embryo_circle_tile(
+        snip_bgr,
+        EmbryoRenderStyle(
+            radius=radius,
+            show_label=show_label,
+            label=label,
+            outside_bgr=outside_bgr,
+            well_fill_bgr=well_fill_bgr,
+            well_rim_bgr=well_rim_bgr,
+            label_fg_bgr=label_fg_bgr,
+            label_outline_bgr=label_outline_bgr,
+            well_rim_thickness=well_rim_thickness,
+        ),
+    )
 
 
 def _plate_bbox(centers: dict[str, tuple[int, int]], wells: list[str], radius: int, pad: int) -> tuple[int, int, int, int]:
@@ -711,12 +479,7 @@ def _plate_bbox(centers: dict[str, tuple[int, int]], wells: list[str], radius: i
 
 
 def _read_snp(snip_path: Path) -> Optional[np.ndarray]:
-    import cv2
-
-    img = cv2.imread(str(snip_path), cv2.IMREAD_COLOR)
-    if img is None:
-        return None
-    return img
+    return read_snip_bgr(snip_path)
 
 
 def main() -> None:
