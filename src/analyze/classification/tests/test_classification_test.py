@@ -48,6 +48,27 @@ def test_all_rest_outputs_all_probability_columns_non_nan():
     assert "is_wrong" in emb.columns
 
 
+def test_legacy_verbose_default_multiclass_message(capsys):
+    df = _make_df()
+    run_classification_test(
+        df=df,
+        groupby="cluster",
+        groups="all",
+        reference="rest",
+        features=["z_mu_b_0", "z_mu_b_1"],
+        n_permutations=4,
+        n_jobs=1,
+        verbose=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Mode: multiclass problem" in out
+    assert "Default: yes" in out
+    assert "Reporting: one-vs-rest per class" in out
+    assert "Resolved: A vs rest, B vs rest, WT vs rest" in out
+    assert "Per-class lines below are one-vs-rest readouts from a multiclass model." in out
+
+
 def test_one_vs_one_reference_mode_still_works():
     df = _make_df()
     res = run_classification_test(
@@ -64,3 +85,23 @@ def test_one_vs_one_reference_mode_still_works():
     assert len(res.comparisons) > 0
     assert set(res.comparisons["positive"].unique()) == {"A"}
     assert set(res.comparisons["negative"].unique()) == {"WT"}
+
+
+def test_legacy_verbose_binary_message(capsys):
+    df = _make_df()
+    run_classification_test(
+        df=df,
+        groupby="cluster",
+        groups=["A"],
+        reference="WT",
+        features=["z_mu_b_0", "z_mu_b_1"],
+        n_permutations=4,
+        n_jobs=1,
+        verbose=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Mode: binary comparison problem" in out
+    assert "Default: no" in out
+    assert "Reporting: one AUROC series per resolved comparison" in out
+    assert "Resolved: A vs WT" in out

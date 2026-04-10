@@ -807,3 +807,136 @@ def test_save_contrast_coordinates_save_load_roundtrip(tmp_path):
         "probe_index",
     ]:
         pd.testing.assert_frame_equal(loaded.layers[layer_name], result.layers[layer_name])
+
+
+# ---------------------------------------------------------------------------
+# Classifier directions
+# ---------------------------------------------------------------------------
+
+
+def test_save_classifier_directions_all_pairs_roundtrip(tmp_path):
+    df = _make_df(n_classes=3, n_embryos=4, n_times=2, n_features=2)
+    save_path = tmp_path / "directions_run"
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        comparisons="all_pairs",
+        features={"emb": "z_mu_b"},
+        n_permutations=0,
+        n_jobs=1,
+        verbose=False,
+        save_classifier_directions=True,
+        save_dir=save_path,
+    )
+
+    from analyze.classification.engine.analysis import ClassificationAnalysis, ClassifierDirections
+
+    directions = result.layers["classifier_directions"]
+    assert isinstance(directions, ClassifierDirections)
+    assert (save_path / "classifier_directions.parquet").exists()
+    assert (save_path / "classifier_directions_vectors.npz").exists()
+    assert directions.feature_names["emb"] == ["z_mu_b_0", "z_mu_b_1"]
+
+    metadata = directions.metadata
+    assert set(metadata.columns) >= {
+        "feature_set",
+        "comparison_id",
+        "positive_label",
+        "negative_label",
+        "time_bin",
+        "time_bin_center",
+        "auroc_obs",
+        "pval",
+        "n_positive",
+        "n_negative",
+        "vector_id",
+        "vector_kind",
+        "coef_norm",
+        "intercept",
+        "sign_flipped",
+        "centroid_dot",
+        "direction_space",
+        "preprocess_fingerprint",
+        "refit_scope",
+        "cv_scope",
+        "estimator_solver",
+        "estimator_C",
+        "estimator_penalty",
+        "estimator_class_weight",
+        "estimator_max_iter",
+        "estimator_random_state",
+        "estimator_fit_intercept",
+        "estimator_multi_class",
+        "estimator_l1_ratio",
+        "estimator_tol",
+    }
+    assert set(metadata["direction_space"]) == {"raw_feature_space"}
+    assert set(metadata["vector_kind"]) == {"signed_unit_coef"}
+    assert set(metadata["refit_scope"]) == {"full_bin_after_cv"}
+    assert set(metadata["cv_scope"]) == {"as_scored"}
+    assert metadata["preprocess_fingerprint"].str.len().eq(64).all()
+
+    for _, row in metadata.iterrows():
+        vector = directions.vectors[row["vector_id"]]
+        assert len(vector) == len(directions.feature_names[row["feature_set"]])
+        np.testing.assert_allclose(np.linalg.norm(vector), 1.0)
+        assert row["centroid_dot"] >= 0.0
+
+    loaded = ClassificationAnalysis.load(save_path)
+    loaded_directions = loaded.layers["classifier_directions"]
+    pd.testing.assert_frame_equal(loaded_directions.metadata, directions.metadata)
+    assert loaded_directions.feature_names == directions.feature_names
+    for vector_id, vector in directions.vectors.items():
+        np.testing.assert_allclose(loaded_directions.vectors[vector_id], vector)
+
+
+def test_save_classifier_directions_rejects_multiclass():
+    df = _make_df()
+    with pytest.raises(ValueError, match="save_classifier_directions=True"):
+        run_classification(
+            df,
+            class_col="genotype",
+            id_col="embryo_id",
+            time_col="predicted_stage_hpf",
+            features={"emb": "z_mu_b"},
+            n_permutations=0,
+            n_jobs=1,
+            verbose=False,
+            save_classifier_directions=True,
+        )
+
+
+def test_save_classifier_directions_positive_orientation():
+    rows = []
+    for cls, offset in [("A", 4.0), ("B", -4.0)]:
+        for emb_i in range(4):
+            rows.append({
+                "embryo_id": f"{cls}_e{emb_i}",
+                "genotype": cls,
+                "predicted_stage_hpf": 24.0,
+                "z_mu_b_0": offset + emb_i * 0.1,
+                "z_mu_b_1": 0.1 * emb_i,
+            })
+    df = pd.DataFrame(rows)
+    result = run_classification(
+        df,
+        class_col="genotype",
+        id_col="embryo_id",
+        time_col="predicted_stage_hpf",
+        positive="A",
+        negative="B",
+        features={"emb": "z_mu_b"},
+        n_permutations=0,
+        n_jobs=1,
+        verbose=False,
+        save_classifier_directions=True,
+    )
+
+    directions = result.layers["classifier_directions"]
+    row = directions.metadata.iloc[0]
+    vector = directions.vectors[row["vector_id"]]
+    assert vector[0] > 0.0
+    assert row["centroid_dot"] >= 0.0
+    assert directions.feature_names["emb"] == ["z_mu_b_0", "z_mu_b_1"]

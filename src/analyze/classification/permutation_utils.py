@@ -1,4 +1,4 @@
-my c"""
+"""
 Shared utilities for permutation testing.
 
 This module provides the common infrastructure for all permutation tests:

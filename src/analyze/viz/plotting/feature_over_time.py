@@ -5,6 +5,7 @@ Plot feature over time with optional faceting.
 Caller provides color_lookup with domain-specific logic.
 """
 
+from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -13,7 +14,11 @@ from typing import Optional, List, Any, Union, Dict, Set, Tuple
 # Generic imports ONLY
 from analyze.utils.data_processing import get_trajectories_for_group, get_global_axis_ranges
 from analyze.utils.stats import compute_trend_line
-from analyze.viz.styling import STANDARD_PALETTE, resolve_color_lookup
+from analyze.viz.styling import (
+    STANDARD_PALETTE,
+    get_known_genotype_color,
+    resolve_color_lookup,
+)
 
 # Engine imports
 from .faceting_engine import (
@@ -21,6 +26,40 @@ from .faceting_engine import (
     FacetSpec, StyleSpec, render, default_style,
     iter_facet_cells, compute_error_band, resolve_linestyle,
 )
+
+
+@dataclass(frozen=True)
+class IdTraceStyle:
+    """Optional per-ID trace emphasis layered on top of group-level plotting."""
+
+    color: Optional[str] = None
+    alpha: float = 1.0
+    width: float = 2.8
+    linestyle: str = "-"
+    zorder: int = 8
+    label: Optional[str] = None
+
+
+EmbryoTraceStyle = IdTraceStyle
+
+
+def _coerce_embryo_trace_style(value: Any) -> IdTraceStyle:
+    """Normalize style config from a dataclass or plain dict."""
+    if isinstance(value, IdTraceStyle):
+        return value
+    if isinstance(value, dict):
+        return IdTraceStyle(
+            color=value.get("color"),
+            alpha=float(value.get("alpha", 1.0)),
+            width=float(value.get("width", 2.8)),
+            linestyle=str(value.get("linestyle", "-")),
+            zorder=int(value.get("zorder", 8)),
+            label=value.get("label"),
+        )
+    raise TypeError(
+        "id_style_lookup values must be IdTraceStyle instances or dicts with "
+        "keys like color/alpha/width/zorder/label."
+    )
 
 
 def _build_color_lookup(
@@ -42,6 +81,7 @@ def _build_color_lookup(
         unique_vals,
         color_lookup=color_lookup,
         palette=palette or STANDARD_PALETTE,
+        default_resolver=get_known_genotype_color,
         enforce_distinct=True,
         warn_on_collision=True,
     )
@@ -68,6 +108,8 @@ def _plot_features_over_time_subplot(
     bin_width: float = 0.5,
     smooth_method: Optional[str] = 'gaussian',
     smooth_params: Optional[Dict] = None,
+    highlight_ids: Optional[Set[str]] = None,
+    id_style_lookup: Optional[Dict[str, IdTraceStyle]] = None,
 ) -> SubplotData:
     """Plot Features Over Time Subplot (internal IR builder for one facet cell)."""
     # Determine color groups
@@ -80,6 +122,8 @@ def _plot_features_over_time_subplot(
         groups = [None]
     
     traces: List[TraceData] = []
+    highlight_ids = highlight_ids or set()
+    id_style_lookup = id_style_lookup or {}
     
     for group_val in groups:
         group_filter = filter_dict.copy()
@@ -154,6 +198,44 @@ def _plot_features_over_time_subplot(
                 show_legend=show_legend,
                 hover_meta={'header': f"{trend_statistic.capitalize()}: {label}", 'detail': f"<b>{y_col}:</b> %{{y:.3f}}"},
             ))
+
+        # Emphasized embryo traces are drawn last so they sit on top of the
+        # normal individual traces and group-level summaries.
+        for traj in trajectories:
+            embryo_id = str(traj['embryo_id'])
+            if embryo_id not in highlight_ids and embryo_id not in id_style_lookup:
+                continue
+
+            style_override = id_style_lookup.get(embryo_id, IdTraceStyle())
+            highlight_color = style_override.color or color
+            mpl_ls, _ = resolve_linestyle(style_override.linestyle)
+
+            highlight_label = style_override.label
+            show_highlight_legend = False
+            legend_group = None
+            if highlight_label:
+                legend_group = f"highlight_{highlight_label}"
+                if legend_group not in legend_tracker:
+                    legend_tracker.add(legend_group)
+                    show_highlight_legend = True
+
+            traces.append(
+                TraceData(
+                    x=traj['times'],
+                    y=traj['metrics'],
+                    style=TraceStyle(
+                        color=highlight_color,
+                        alpha=float(style_override.alpha),
+                        width=float(style_override.width),
+                        linestyle=mpl_ls,
+                        zorder=int(style_override.zorder),
+                    ),
+                    label=highlight_label,
+                    legend_group=legend_group,
+                    show_legend=show_highlight_legend,
+                    hover_meta={'header': f"ID: {embryo_id}", 'detail': f"<b>{y_col}:</b> %{{y:.3f}}"},
+                )
+            )
     
     return SubplotData(
         key=subplot_key,
@@ -203,6 +285,10 @@ def plot_feature_over_time(
     # Manual axis limits (blanket applied to all subplots)
     xlim: Optional[Tuple[float, float]] = None,
     ylim: Optional[Tuple[float, float]] = None,
+    include_ids: Optional[List[str]] = None,
+    exclude_ids: Optional[List[str]] = None,
+    highlight_ids: Optional[List[str]] = None,
+    id_style_lookup: Optional[Dict[str, Union[IdTraceStyle, Dict[str, Any]]]] = None,
 ) -> Any:
     """Plot feature(s) over time, optionally faceted.
     
@@ -264,6 +350,13 @@ def plot_feature_over_time(
         Repeat tick-label *numbers* on every subplot (useful with shared axes). Default True.
     xlim, ylim : (float, float), optional
         If provided, apply these limits to all subplots (useful for consistent scaling).
+    include_ids, exclude_ids : list[str], optional
+        Optional embryo ID filters applied before trajectory extraction.
+    highlight_ids : list[str], optional
+        Embryo IDs to emphasize with a second drawing pass.
+    id_style_lookup : dict[str, IdTraceStyle | dict], optional
+        Per-embryo styling overrides for highlighted traces. Supported fields:
+        `color`, `alpha`, `width`, `linestyle`, `zorder`, `label`.
     
     Returns
     -------
@@ -294,6 +387,20 @@ def plot_feature_over_time(
     else:
         feature_list = [features]
         facet_row_for_filter = facet_row
+
+    # Optional embryo-level filtering is separate from group-level coloring.
+    if include_ids is not None:
+        include_id_set = {str(x) for x in include_ids}
+        df = df[df[id_col].astype(str).isin(include_id_set)].copy()
+    if exclude_ids is not None:
+        exclude_id_set = {str(x) for x in exclude_ids}
+        df = df[~df[id_col].astype(str).isin(exclude_id_set)].copy()
+
+    normalized_highlight_ids: Set[str] = {str(x) for x in highlight_ids} if highlight_ids is not None else set()
+    normalized_id_styles: Dict[str, IdTraceStyle] = {}
+    if id_style_lookup:
+        normalized_id_styles = {str(k): _coerce_embryo_trace_style(v) for k, v in id_style_lookup.items()}
+        normalized_highlight_ids.update(normalized_id_styles.keys())
 
     # Build color lookup (generic or user-provided)
     color_lookup = _build_color_lookup(df, color_by, color_lookup, color_palette)
@@ -344,6 +451,8 @@ def plot_feature_over_time(
             bin_width=bin_width,
             smooth_method=smooth_method,
             smooth_params=smooth_params,
+            highlight_ids=normalized_highlight_ids,
+            id_style_lookup=normalized_id_styles,
         )
         if xlim is not None:
             subplot.xlim = tuple(float(v) for v in xlim)

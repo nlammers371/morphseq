@@ -278,8 +278,8 @@ def resolve_comparisons(
                 f"Cannot combine comparisons={comparisons!r} with scalar positive. "
                 "Use a list to scope: positive=['A', 'B']."
             )
-    if negative is not None and positive is None:
-        raise ValueError("Cannot set negative without positive.")
+    if negative is not None and positive is None and comparisons is not None:
+        raise ValueError("Cannot set negative without positive when comparisons is specified.")
 
     # -- Step 2: Mode detection and expansion --------------------------------
     pairs: list[tuple[ComparisonGroup, ComparisonGroup]]
@@ -315,7 +315,21 @@ def resolve_comparisons(
         pairs = [(a, b) for a, b in combinations(scope_labels, 2)]
 
     elif comparisons == "all_vs_rest" or comparisons is None:
-        if positive is not None and negative is not None:
+        if positive is None and negative is not None:
+            # Negative-only convenience mode: all remaining labels vs supplied
+            # negative group(s). Lists enumerate negatives; tuples pool them.
+            neg_list = _as_group_list(negative)
+            pairs = []
+            for neg in neg_list:
+                neg_members = _group_members(neg)
+                remaining = sorted(available_labels - neg_members)
+                if not remaining:
+                    raise ValueError(
+                        f"No labels left for positives after removing negative group {neg_members}"
+                    )
+                for pos in remaining:
+                    pairs.append((pos, neg))
+        elif positive is not None and negative is not None:
             # Explicit Cartesian: positive × negative
             pos_list = _as_group_list(positive)
             neg_list = _as_group_list(negative)

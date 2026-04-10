@@ -175,10 +175,42 @@ def test_mutual_exclusion_scheme_plus_scalar_positive():
         )
 
 
-def test_mutual_exclusion_negative_without_positive():
-    with pytest.raises(ValueError, match="Cannot set negative without positive"):
+def test_negative_only_default_resolves_all_others_vs_negative():
+    result = resolve_comparisons(
+        positive=None, negative="B", comparisons=None,
+        available_labels=LABELS_3, class_col="cls",
+    )
+    assert len(result) == 2
+    assert {r.positive_label for r in result} == {"A", "C"}
+    assert {r.negative_label for r in result} == {"B"}
+
+
+def test_negative_only_pooled_tuple_stays_binary_with_pooled_negative():
+    result = resolve_comparisons(
+        positive=None, negative=("B", "C"), comparisons=None,
+        available_labels=LABELS_4, class_col="cls",
+    )
+    assert len(result) == 2
+    assert {r.positive_label for r in result} == {"A", "D"}
+    assert {r.negative_label for r in result} == {"B+C"}
+    assert all(r.is_pooled_negative for r in result)
+
+
+def test_negative_only_list_enumerates_separate_negative_groups():
+    result = resolve_comparisons(
+        positive=None, negative=["B", "C"], comparisons=None,
+        available_labels=LABELS_4, class_col="cls",
+    )
+    assert len(result) == 6
+    assert {r.negative_label for r in result} == {"B", "C"}
+    assert ("A", "B") in {(r.positive_label, r.negative_label) for r in result}
+    assert ("A", "C") in {(r.positive_label, r.negative_label) for r in result}
+
+
+def test_negative_only_rejected_when_scheme_is_specified():
+    with pytest.raises(ValueError, match="Cannot combine comparisons='all_pairs' with negative argument"):
         resolve_comparisons(
-            positive=None, negative="B", comparisons=None,
+            positive=None, negative="B", comparisons="all_pairs",
             available_labels=LABELS_3, class_col="cls",
         )
 

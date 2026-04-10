@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .engine.analysis import ClassificationAnalysis, _LazyLayers
+from .engine.analysis import ClassificationAnalysis, ClassifierDirections, _LazyLayers
 from .engine.comparison_resolution import (
     ComparisonScheme,
     ResolvedComparison,
@@ -27,6 +27,7 @@ from .engine.loop import (
     _collect_binary_support,
     _collect_confusion,
     _collect_confusion_from_ovr,
+    _collect_classifier_directions,
     _collect_multiclass_predictions,
     _collect_scores,
     _collect_scores_from_ovr,
@@ -126,7 +127,9 @@ def run_classification(
     save_multiclass_predictions: bool = False,
     save_null_arrays: bool = False,
     save_contrast_coordinates: bool = False,
+    save_classifier_directions: bool = False,
     save_dir: str | Path | None = None,
+    overwrite: bool = False,
 ) -> ClassificationAnalysis:
     """Run classification comparisons and return a ``ClassificationAnalysis``.
 
@@ -164,6 +167,10 @@ def run_classification(
         raise ValueError(
             "save_contrast_coordinates=True is only supported for binary comparison runs."
         )
+    if save_classifier_directions and use_multiclass_fast_path:
+        raise ValueError(
+            "save_classifier_directions=True is only supported for binary comparison runs."
+        )
     if save_contrast_coordinates and n_permutations <= 0:
         raise ValueError(
             "save_contrast_coordinates=True requires n_permutations > 0 so the full raw + shrinkage stack can be emitted."
@@ -190,6 +197,9 @@ def run_classification(
     all_support_rows: list[dict[str, Any]] = []
     all_confusion_rows: list[dict[str, Any]] = []
     all_null_arrays: list[tuple[str, str, float, np.ndarray]] = []
+    all_direction_rows: list[dict[str, Any]] = []
+    direction_vectors: dict[str, np.ndarray] = {}
+    direction_feature_names: dict[str, list[str]] = {}
     multiclass_preds_df: pd.DataFrame | None = None
 
     for fs_name, feature_cols in resolved_features.items():
@@ -280,10 +290,26 @@ def run_classification(
                 n_jobs=n_jobs,
                 random_state=random_state,
                 class_weight=class_weight,
+                save_classifier_directions=save_classifier_directions,
                 verbose=verbose,
             )
 
             all_score_rows.extend(_collect_scores(bin_results, rc, fs_name))
+
+            if save_classifier_directions:
+                direction_rows, vectors, feature_names = _collect_classifier_directions(
+                    bin_results, rc, fs_name
+                )
+                all_direction_rows.extend(direction_rows)
+                direction_vectors.update(vectors)
+                for feature_set, names in feature_names.items():
+                    previous = direction_feature_names.get(feature_set)
+                    if previous is not None and previous != names:
+                        raise ValueError(
+                            "Classifier direction feature order changed across "
+                            f"feature set {feature_set!r}."
+                        )
+                    direction_feature_names[feature_set] = names
 
             if save_predictions:
                 all_pred_rows.extend(
@@ -360,6 +386,35 @@ def run_classification(
     if all_confusion_rows:
         layers.store("confusion", pd.DataFrame(all_confusion_rows))
 
+    if all_direction_rows:
+        layers.store(
+            "classifier_directions",
+            ClassifierDirections(
+                metadata=pd.DataFrame(all_direction_rows),
+                vectors=direction_vectors,
+                feature_names=direction_feature_names,
+            ),
+        )
+        uns["classifier_directions"] = {
+            "enabled": True,
+            "layer_keys": ["classifier_directions"],
+            "metadata_file": "classifier_directions.parquet",
+            "vectors_file": "classifier_directions_vectors.npz",
+            "direction_space": "raw_feature_space",
+            "direction_space_definition": (
+                "The numeric feature matrix X produced by the classification engine "
+                "immediately before estimator.fit, after feature resolution, bin "
+                "aggregation, filtering, and masking."
+            ),
+            "vector_kind": "signed_unit_coef",
+            "refit_scope": "full_bin_after_cv",
+            "cv_scope": "as_scored",
+            "preprocess": {
+                "kind": "identity",
+                "version": "classification_identity_v1",
+            },
+        }
+
     if all_null_arrays:
         n_rows = len(all_null_arrays)
         max_p = max(len(arr) for _, _, _, arr in all_null_arrays)
@@ -412,7 +467,7 @@ def run_classification(
         print(f"  Layers: {layers.cached()}")
 
     if save_dir is not None:
-        result.save(save_dir)
+        result.save(save_dir, overwrite=overwrite)
         if verbose:
             print(f"  Saved to {save_dir}")
 

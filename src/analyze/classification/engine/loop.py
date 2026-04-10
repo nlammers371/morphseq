@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import hashlib
+import json
+
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -42,6 +45,107 @@ def _make_logistic_classifier(
         class_weight=class_weight,
         random_state=random_state,
     )
+
+
+DIRECTION_SPACE_RAW = "raw_feature_space"
+REFIT_SCOPE_FULL_BIN = "full_bin_after_cv"
+CV_SCOPE_AS_SCORED = "as_scored"
+VECTOR_KIND_SIGNED_UNIT_COEF = "signed_unit_coef"
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def _estimator_config(clf: LogisticRegression) -> dict[str, Any]:
+    params = clf.get_params(deep=False)
+    keys = [
+        "solver",
+        "penalty",
+        "C",
+        "class_weight",
+        "max_iter",
+        "random_state",
+        "fit_intercept",
+        "multi_class",
+        "l1_ratio",
+        "tol",
+    ]
+    return {key: _json_safe(params.get(key)) for key in keys}
+
+
+def _preprocess_fingerprint(
+    *,
+    feature_names: list[str],
+    direction_space: str,
+    estimator_config: dict[str, Any],
+) -> str:
+    payload = {
+        "feature_names": list(feature_names),
+        "direction_space": direction_space,
+        "preprocess": {"kind": "identity", "version": "classification_identity_v1"},
+        "estimator_config": estimator_config,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _fit_classifier_direction(
+    *,
+    X: np.ndarray,
+    y_binary: np.ndarray,
+    feature_cols: list[str],
+    random_state: int,
+    class_weight: Any | None,
+) -> dict[str, Any] | None:
+    if X.shape[1] != len(feature_cols):
+        raise ValueError("Classifier direction feature column order does not match X shape.")
+    if len(np.unique(y_binary)) < 2:
+        return None
+
+    clf = _make_logistic_classifier(
+        n_classes=2,
+        random_state=random_state,
+        class_weight=class_weight,
+    )
+    clf.fit(X, y_binary)
+    coef = np.asarray(clf.coef_, dtype=float).ravel()
+    intercept = float(np.asarray(clf.intercept_, dtype=float).ravel()[0])
+
+    pos_mean = np.asarray(X[y_binary == 1], dtype=float).mean(axis=0)
+    neg_mean = np.asarray(X[y_binary == 0], dtype=float).mean(axis=0)
+    centroid_dot = float(np.dot(coef, pos_mean - neg_mean))
+    sign_flipped = centroid_dot < 0.0
+    if sign_flipped:
+        coef = -coef
+        intercept = -intercept
+        centroid_dot = -centroid_dot
+
+    coef_norm = float(np.linalg.norm(coef))
+    unit_coef = np.zeros_like(coef, dtype=float) if coef_norm == 0.0 else coef / coef_norm
+    estimator_config = _estimator_config(clf)
+    feature_names = list(feature_cols)
+    return {
+        "feature_names": feature_names,
+        "unit_coef": unit_coef,
+        "coef_norm": coef_norm,
+        "intercept": intercept,
+        "sign_flipped": bool(sign_flipped),
+        "centroid_dot": centroid_dot,
+        "direction_space": DIRECTION_SPACE_RAW,
+        "preprocess_fingerprint": _preprocess_fingerprint(
+            feature_names=feature_names,
+            direction_space=DIRECTION_SPACE_RAW,
+            estimator_config=estimator_config,
+        ),
+        "estimator_config": estimator_config,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +364,7 @@ def _score_binary_ovr_bin(
     *,
     X: np.ndarray,
     y_binary: np.ndarray,
+    feature_cols: list[str],
     id_col: str,
     bin_width: float,
     n_splits: int,
@@ -272,6 +377,7 @@ def _score_binary_ovr_bin(
     embryo_ids: np.ndarray | None = None,
     positive_label: str | None = None,
     require_positive_min_samples: int | None = None,
+    save_classifier_directions: bool = False,
     verbose: bool,
 ) -> dict[str, Any] | None:
     """Score one binary comparison within a single time bin."""
@@ -299,7 +405,7 @@ def _score_binary_ovr_bin(
             print(f"    Bin {time_bin}{label_text}: skipped (min_count={min_count} < 2)")
         return None
 
-    clf = _make_logistic_classifier(n_classes=2, random_state=random_state)
+    clf = _make_logistic_classifier(n_classes=2, random_state=random_state, class_weight=class_weight)
     cv = StratifiedKFold(n_splits=n_splits_actual, shuffle=True, random_state=random_state)
 
     try:
@@ -335,6 +441,16 @@ def _score_binary_ovr_bin(
     y_pred = (probs[:, 1] >= 0.5).astype(int)
     cm = confusion_matrix(y_binary, y_pred, labels=[0, 1])
 
+    classifier_direction = None
+    if save_classifier_directions:
+        classifier_direction = _fit_classifier_direction(
+            X=X,
+            y_binary=y_binary,
+            feature_cols=feature_cols,
+            random_state=random_state,
+            class_weight=class_weight,
+        )
+
     predictions = []
     if embryo_ids is not None:
         for row_idx in range(len(y_binary)):
@@ -361,6 +477,7 @@ def _score_binary_ovr_bin(
         "_null_array": null_aurocs,
         "_confusion_matrix": cm,
         "_predictions": predictions,
+        "_classifier_direction": classifier_direction,
     }
 
 
@@ -375,6 +492,7 @@ def _run_binary_classification_loop(
     n_jobs: int,
     random_state: int,
     class_weight: Any | None = "balanced",
+    save_classifier_directions: bool = False,
     verbose: bool,
 ) -> list[dict[str, Any]]:
     """Per-bin CV + AUROC + permutation test for a single binary comparison.
@@ -412,6 +530,7 @@ def _run_binary_classification_loop(
             {
                 "X": sub[feature_cols].to_numpy(),
                 "y_binary": sub["_y"].to_numpy().astype(int),
+                "feature_cols": feature_cols,
                 "embryo_ids": sub[id_col].astype(str).to_numpy(),
                 "id_col": id_col,
                 "bin_width": bin_width,
@@ -420,6 +539,7 @@ def _run_binary_classification_loop(
                 "n_jobs": 1,
                 "random_state": random_state,
                 "class_weight": class_weight,
+                "save_classifier_directions": save_classifier_directions,
                 "bin_index": i,
                 "time_bin": int(t),
                 "verbose": False,
@@ -522,6 +642,7 @@ def _run_multiclass_classification_loop(
                 entry = _score_binary_ovr_bin(
                     X=X,
                     y_binary=(y == class_idx).astype(int),
+                    feature_cols=feature_cols,
                     embryo_ids=None,
                     id_col=id_col,
                     bin_width=bin_width,
@@ -534,6 +655,7 @@ def _run_multiclass_classification_loop(
                     time_bin=int(t),
                     positive_label=class_label,
                     require_positive_min_samples=min_samples_per_class,
+                    save_classifier_directions=False,
                     verbose=verbose,
                 )
                 if entry is None:
@@ -706,6 +828,63 @@ def _collect_scores_from_ovr(
                 "n_permutations": br["n_permutations"],
             })
     return rows
+
+
+
+def _collect_classifier_directions(
+    bin_results: list[dict[str, Any]],
+    comparison: ResolvedComparison,
+    feature_set: str,
+) -> tuple[list[dict[str, Any]], dict[str, np.ndarray], dict[str, list[str]]]:
+    """Collect signed unit classifier direction vectors from per-bin results."""
+    rows: list[dict[str, Any]] = []
+    vectors: dict[str, np.ndarray] = {}
+    feature_names_by_set: dict[str, list[str]] = {}
+    for br in bin_results:
+        direction = br.get("_classifier_direction")
+        if direction is None:
+            continue
+        feature_names = list(direction["feature_names"])
+        previous = feature_names_by_set.get(feature_set)
+        if previous is not None and previous != feature_names:
+            raise ValueError(
+                f"Classifier direction feature order changed within feature set {feature_set!r}."
+            )
+        feature_names_by_set[feature_set] = feature_names
+        unit_coef = np.asarray(direction["unit_coef"], dtype=float)
+        if len(unit_coef) != len(feature_names):
+            raise ValueError("Classifier direction vector length does not match feature names.")
+
+        vector_id = f"{feature_set}__{comparison.comparison_id}__bin_{int(br['time_bin'])}"
+        vectors[vector_id] = unit_coef
+        estimator_config = dict(direction["estimator_config"])
+        row = {
+            "feature_set": feature_set,
+            "comparison_id": comparison.comparison_id,
+            "positive_label": comparison.positive_label,
+            "negative_label": comparison.negative_label,
+            "time_bin": int(br["time_bin"]),
+            "time_bin_center": float(br["time_bin_center"]),
+            "bin_width": float(br["bin_width"]),
+            "auroc_obs": float(br["auroc_obs"]),
+            "pval": float(br["pval"]),
+            "n_positive": int(br["n_positive"]),
+            "n_negative": int(br["n_negative"]),
+            "vector_id": vector_id,
+            "vector_kind": VECTOR_KIND_SIGNED_UNIT_COEF,
+            "coef_norm": float(direction["coef_norm"]),
+            "intercept": float(direction["intercept"]),
+            "sign_flipped": bool(direction["sign_flipped"]),
+            "centroid_dot": float(direction["centroid_dot"]),
+            "direction_space": direction["direction_space"],
+            "preprocess_fingerprint": direction["preprocess_fingerprint"],
+            "refit_scope": REFIT_SCOPE_FULL_BIN,
+            "cv_scope": CV_SCOPE_AS_SCORED,
+        }
+        for key, value in estimator_config.items():
+            row[f"estimator_{key}"] = value
+        rows.append(row)
+    return rows, vectors, feature_names_by_set
 
 
 # ---------------------------------------------------------------------------
