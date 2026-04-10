@@ -379,6 +379,101 @@ plot_cluster_feature_trends(
 
 ---
 
+## Emergence timeline
+
+**Algorithm module:** `src/analyze/classification/emergence/`
+**Viz file:** `src/analyze/classification/viz/emergence.py` *(static renderer not yet implemented)*
+
+Emergence answers: *in what order do classes become distinguishable from a reference set, and which classes co-emerge?* The algorithm takes a pairwise onset matrix (derived from `result.scores`) and produces a `EmergenceTimeline` — a reference-rooted tree of emergence blocks.
+
+### Pipeline to generate an `EmergenceTimeline`
+
+```python
+from analyze.classification.emergence import (
+    build_emergence_timeline,
+)
+from analyze.classification.emergence.onset import (
+    OnsetParams,
+    classify_pair_state_over_time,
+    compute_pair_onsets,
+    build_onset_matrix,
+)
+
+# 1. Load scores from a completed all-pairs classification run
+scores = pd.read_parquet("results/.../scores.parquet")
+scores = scores[scores["feature_set"] == "vae"].copy()
+
+# 2. Classify each (pair, time_bin) into tri-state: separated / not_separated / ambiguous
+params = OnsetParams(
+    p_sep=0.01,        # pval threshold for "separated"
+    auroc_sep=0.70,    # min AUROC for "separated"
+    p_ns=0.10,         # pval threshold for "not_separated"
+    subsequent_frac=0.75,  # fraction of remaining bins that must stay separated
+)
+classified = classify_pair_state_over_time(scores, params)
+
+# 3. Compute durable onset time per pair
+onset_df = compute_pair_onsets(classified, params)
+
+# 4. Build symmetric onset matrix (index=class, columns=class, values=hpf)
+all_classes = sorted(scores["positive_label"].unique())
+onset_matrix = build_onset_matrix(onset_df, all_classes)
+
+# 5. Build the emergence timeline
+reference = ["inj_ctrl", "wik_ab"]   # classes treated as the temporal reference
+timeline = build_emergence_timeline(
+    onset_matrix,
+    reference,
+    bin_width=4.0,
+    min_cross_support=0.5,
+)
+```
+
+### `EmergenceTimeline` structure
+
+```python
+timeline.reference_validation   # ReferenceValidation — coherence of the reference set
+timeline.scores                 # list[EmergenceScore] — per-class emergence timing
+timeline.blocks                 # list[EmergenceBlock] — co-emergent groups
+timeline.block_resolutions      # dict[block_id, ResolutionNode] — within-block tree
+timeline.all_classes            # list[str]
+timeline.reference              # list[str]
+```
+
+Key types:
+
+| type | fields |
+|---|---|
+| `ReferenceValidation` | `status` ("valid"/"ambiguous"/"invalid"), `coherence_score`, `offending_pairs` |
+| `EmergenceScore` | `class_name`, `emergence_time`, `emergence_min`, `emergence_max`, `n_resolved_refs` |
+| `EmergenceBlock` | `block_id`, `members`, `emergence_time`, `bin_key` |
+| `ResolutionNode` | `members`, `split_time`, `children`, `unresolved` |
+
+### Static rendering
+
+`render_emergence_timeline_static` in `analyze.classification.viz.emergence` is a **placeholder** — it raises `NotImplementedError`. The current live implementation is the interactive Dash/D3 explorer:
+
+```
+results/mcolon/20260407_pbx_analysis_cont/13_emergence_explorer.py
+```
+
+Static matplotlib figures should eventually move into `analyze.classification.viz.emergence` per the DESIGN.md boundary.
+
+### Onset data artifacts
+
+The script `12_phenotype_emergence.py` writes these to `results/.../emergence/`:
+
+| file | content |
+|---|---|
+| `onset_matrix.csv` | symmetric onset matrix (hpf) |
+| `onset_pairs.csv` | per-pair onset times + n_separated_bins |
+| `coherent_partitions.csv` | partition history over time |
+| `panel_A_onset_heatmap.png` | onset matrix as heatmap |
+| `panel_B_relation_snapshots.png` | edge state snapshots at key time bins |
+| `panel_C_partition_river.png` | alluvial partition river over time |
+
+---
+
 ## Validator utilities
 
 **File:** `src/analyze/classification/viz/utils.py`
