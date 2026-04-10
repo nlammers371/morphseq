@@ -137,7 +137,7 @@ def run_single_ot(
     # Solver stage: UOT is a pure consumer of canonical masks
     # ------------------------------------------------------------------
     working_cfg = WorkingGridConfig(
-        downsample_factor=4,
+        downsample_factor=1,
         padding_px=16,
         mass_mode=MassMode.UNIFORM,
     )
@@ -154,15 +154,9 @@ def run_single_ot(
         )
 
     if backend is None:
-        # Prefer OTT (JAX) by default; POT may pull in torch.
-        try:
-            from analyze.utils.optimal_transport.backends.ott_backend import OTTBackend
-
-            backend = OTTBackend()
-        except Exception:
-            from analyze.utils.optimal_transport.backends.pot_backend import POTBackend
-
-            backend = POTBackend()
+        # Use POT (CPU) backend — OTT requires GPU for reasonable speed.
+        from analyze.utils.optimal_transport.backends.pot_backend import POTBackend
+        backend = POTBackend()
 
     pair_work = prepare_working_grid_pair(src_canon_result, tgt_canon_result, working_cfg)
     result_work = run_uot_on_working_grid(pair_work, config=uot_config, backend=backend)
