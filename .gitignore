@@ -47,7 +47,7 @@ functions/.ipynb_checkpoints/
 src/functions/.ipynb_checkpoints/
 jupyter/.ipynb_checkpoints/
 src/functions/__pychache__/
-_Archive/visualization/__pychache__/
+visualization/__pychache__/
 .idea/
 src/__pycache__/
 src/functions/__pycache__/
@@ -63,7 +63,7 @@ src/_Archive/vae/trainers/__pycache__/
 src/_Archive/vae/auxiliary_scripts/__pycache__/
 src/_Archive/vae/trainers/base_trainer/__pycache__/
 
-_Archive/visualization/__pycache__/*
+visualization/__pycache__/*
 
 
 dev/seq/.RData
@@ -83,6 +83,8 @@ src/build/__pychache__/
 **/__pycache__/
 src/core/data/
 .aider*
+.codex
+.codex/
 
 # Ignore large test data files (but keep structure and documentation)
 test_data/**/*.tif
@@ -99,10 +101,10 @@ test_data/**/*.png
 *.pyc
 
 
-# `morphseq_playground/` is a large, machine-specific data root and should not be versioned.
-# We *do* track a small README inside it to document expected layout + symlink conventions.
-morphseq_playground/*
-!morphseq_playground/README.md
+morphseq_playground/**
+!morphseq_playground/**/
+!morphseq_playground/**/*.md
+!morphseq_playground/**/[Rr][Ee][Aa][Dd][Mm][Ee]*
 
 # Ignore log directories
 logs/
