@@ -8,9 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import hashlib
-import json
-
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -22,6 +19,18 @@ import analyze.utils.resampling as resample
 from .comparison_resolution import ComparisonGroup, ResolvedComparison
 from .margins import class_signed_margin, truth_signed_margin
 
+# Direction-specific helpers moved to classification/directions/.
+# loop.py orchestrates; it calls these, it does not define them.
+from analyze.classification.directions.fit import (
+    _make_logistic_classifier,
+    fit_classifier_direction as _fit_classifier_direction,
+    DIRECTION_SPACE_RAW,
+    REFIT_SCOPE_FULL_BIN,
+    VECTOR_KIND_SIGNED_UNIT_COEF,
+)
+from analyze.classification.directions.build_payload import build_classifier_directions_payload
+from analyze.classification.directions.ids import make_vector_id
+
 try:
     from joblib import Parallel, delayed, effective_n_jobs as joblib_effective_n_jobs
 except ImportError:
@@ -29,123 +38,7 @@ except ImportError:
     delayed = None
     joblib_effective_n_jobs = None
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_logistic_classifier(
-    n_classes: int,
-    random_state: int,
-    class_weight: Any | None = "balanced",
-) -> LogisticRegression:
-    return LogisticRegression(
-        max_iter=1000,
-        solver="liblinear",
-        class_weight=class_weight,
-        random_state=random_state,
-    )
-
-
-DIRECTION_SPACE_RAW = "raw_feature_space"
-REFIT_SCOPE_FULL_BIN = "full_bin_after_cv"
 CV_SCOPE_AS_SCORED = "as_scored"
-VECTOR_KIND_SIGNED_UNIT_COEF = "signed_unit_coef"
-
-
-def _json_safe(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {str(k): _json_safe(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(v) for v in value]
-    if isinstance(value, np.generic):
-        return value.item()
-    return value
-
-
-def _estimator_config(clf: LogisticRegression) -> dict[str, Any]:
-    params = clf.get_params(deep=False)
-    keys = [
-        "solver",
-        "penalty",
-        "C",
-        "class_weight",
-        "max_iter",
-        "random_state",
-        "fit_intercept",
-        "multi_class",
-        "l1_ratio",
-        "tol",
-    ]
-    return {key: _json_safe(params.get(key)) for key in keys}
-
-
-def _preprocess_fingerprint(
-    *,
-    feature_names: list[str],
-    direction_space: str,
-    estimator_config: dict[str, Any],
-) -> str:
-    payload = {
-        "feature_names": list(feature_names),
-        "direction_space": direction_space,
-        "preprocess": {"kind": "identity", "version": "classification_identity_v1"},
-        "estimator_config": estimator_config,
-    }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _fit_classifier_direction(
-    *,
-    X: np.ndarray,
-    y_binary: np.ndarray,
-    feature_cols: list[str],
-    random_state: int,
-    class_weight: Any | None,
-) -> dict[str, Any] | None:
-    if X.shape[1] != len(feature_cols):
-        raise ValueError("Classifier direction feature column order does not match X shape.")
-    if len(np.unique(y_binary)) < 2:
-        return None
-
-    clf = _make_logistic_classifier(
-        n_classes=2,
-        random_state=random_state,
-        class_weight=class_weight,
-    )
-    clf.fit(X, y_binary)
-    coef = np.asarray(clf.coef_, dtype=float).ravel()
-    intercept = float(np.asarray(clf.intercept_, dtype=float).ravel()[0])
-
-    pos_mean = np.asarray(X[y_binary == 1], dtype=float).mean(axis=0)
-    neg_mean = np.asarray(X[y_binary == 0], dtype=float).mean(axis=0)
-    centroid_dot = float(np.dot(coef, pos_mean - neg_mean))
-    sign_flipped = centroid_dot < 0.0
-    if sign_flipped:
-        coef = -coef
-        intercept = -intercept
-        centroid_dot = -centroid_dot
-
-    coef_norm = float(np.linalg.norm(coef))
-    unit_coef = np.zeros_like(coef, dtype=float) if coef_norm == 0.0 else coef / coef_norm
-    estimator_config = _estimator_config(clf)
-    feature_names = list(feature_cols)
-    return {
-        "feature_names": feature_names,
-        "unit_coef": unit_coef,
-        "coef_norm": coef_norm,
-        "intercept": intercept,
-        "sign_flipped": bool(sign_flipped),
-        "centroid_dot": centroid_dot,
-        "direction_space": DIRECTION_SPACE_RAW,
-        "preprocess_fingerprint": _preprocess_fingerprint(
-            feature_names=feature_names,
-            direction_space=DIRECTION_SPACE_RAW,
-            estimator_config=estimator_config,
-        ),
-        "estimator_config": estimator_config,
-    }
 
 
 # ---------------------------------------------------------------------------
