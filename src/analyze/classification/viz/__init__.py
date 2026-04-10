@@ -11,7 +11,7 @@ from .misclassification import (
     plot_confusion_profile,
     plot_embryo_deep_dive,
     plot_flagged_embryo_gallery,
-    plot_signed_margin_trends,
+    plot_margin_trends,
     plot_wrong_rate_distributions,
     plot_wrongness_heatmap,
 )
@@ -23,6 +23,7 @@ from .trajectory import (
     save_wrong_rate_null_diagnostics,
 )
 from .pairwise_coordinates import plot_pairwise_coordinate_heatmap
+from .emergence import render_emergence_timeline_static
 
 __all__ = [
     "plot_auroc_with_null",
@@ -35,7 +36,7 @@ __all__ = [
     "plot_confusion_profile",
     "plot_embryo_deep_dive",
     "plot_flagged_embryo_gallery",
-    "plot_signed_margin_trends",
+    "plot_margin_trends",
     "plot_wrong_rate_distributions",
     "plot_wrongness_heatmap",
     "save_pca_scatter",
@@ -44,4 +45,5 @@ __all__ = [
     "save_rolling_window_significance_counts",
     "save_rolling_destination_significance_counts",
     "plot_pairwise_coordinate_heatmap",
+    "render_emergence_timeline_static",
 ]

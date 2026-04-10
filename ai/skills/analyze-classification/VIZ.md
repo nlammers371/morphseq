@@ -1,39 +1,50 @@
-# analyze-classification — Misclassification Viz Reference
+# analyze-classification — Viz Reference
 
-## Module: `analyze.classification.viz.misclassification`
+All functions are importable from `analyze.classification.viz` or directly from their submodule.
 
-**File:** `src/analyze/classification/viz/misclassification.py`
+---
+
+## Margin conventions
+
+**File:** `src/analyze/classification/engine/margins.py`
+
+| function | range | sign meaning |
+|---|---|---|
+| `class_signed_margin(p_pos)` | [-1, 1] | +1 = strongest support for positive class; sign relative to decision boundary, not truth |
+| `truth_signed_margin(p_pos, y_true)` | [-1, 1] | +1 = most correct; sign relative to true label |
+| `coerce_margin_range(arr)` | [-1, 1] | rescales legacy [-0.5, 0.5] arrays; pass all loaded margins through this |
+
+`predictions.parquet` stores `truth_signed_margin`. `raw_contrast_scores_long` stores `class_signed_margin`.
 
 ---
 
 ## `plot_margin_trends`
 
-Per-embryo signed-margin trajectory plots for a binary comparison. One panel per group (negative left, positive right), each embryo is a line colored by mean `truth_signed_margin` on RdBu_r.
+**File:** `src/analyze/classification/viz/misclassification.py`
 
-### Generating the data
+Per-embryo signed-margin trajectory plots for a binary comparison. One panel per group (negative left, positive right), lines colored by mean margin on RdBu_r.
 
-Run classification with `save_predictions=True` (or `save_dir=`), then load `predictions.parquet`.
-See `COMMAND.md` for the full pipeline command.
+**Data source:** `predictions.parquet` — requires `save_predictions=True`.
 
-The predictions parquet produced by the pipeline has these columns:
+### Predictions parquet schema
 
 | column | type | notes |
 |---|---|---|
 | `comparison_id` | str | e.g. `"inj_ctrl__vs__pbx4_crispant"` |
-| `positive_label` | str | positive class label (y_true == 1) |
-| `negative_label` | str | negative class label (y_true == 0) |
-| `feature_set` | str | e.g. `"vae"`, `"shape"` |
+| `positive_label` | str | y_true == 1 |
+| `negative_label` | str | y_true == 0 |
+| `feature_set` | str | e.g. `"vae"` |
 | `embryo_id` | str | |
 | `time_bin` | int | bin start (hpf) |
-| `time_bin_center` | float | bin midpoint (hpf) — default x-axis |
-| `bin_width` | float | bin width in hpf |
-| `n_positive` | int | positive embryos in this bin |
-| `n_negative` | int | negative embryos in this bin |
+| `time_bin_center` | float | bin midpoint — default x-axis |
+| `bin_width` | float | |
+| `n_positive` | int | embryos in positive class this bin |
+| `n_negative` | int | embryos in negative class this bin |
 | `auroc_obs` | float | per-bin AUROC |
 | `y_true` | int | 0 or 1 |
-| `p_pos` | float | classifier probability of positive class |
-| `truth_signed_margin` | float | in [-1, 1]; +1 = most correct, -1 = most wrong |
-| `y_pred` | int | predicted class |
+| `p_pos` | float | classifier probability |
+| `truth_signed_margin` | float | [-1, 1] |
+| `y_pred` | int | |
 | `is_correct` | bool | |
 
 ### API
@@ -43,7 +54,7 @@ plot_margin_trends(
     df,
     *,
     # Selector — exactly one mode required
-    comparison_id: str | None = None,        # pipeline mode
+    comparison_id: str | None = None,        # pipeline mode: filter by comparison_id column
     positive_label: str | None = None,       # explicit mode: right panel
     negative_label: str | None = None,       # explicit mode: left panel
 
@@ -68,75 +79,302 @@ plot_margin_trends(
 ) -> matplotlib.figure.Figure
 ```
 
-### Validation
+### Usage
 
-The function enforces these in order:
-1. Exactly one selector mode (`comparison_id` xor `positive_label`+`negative_label`)
-2. Comparison filter applied; error if empty
-3. Feature filter applied if `feature_id` given; error if empty
-4. `embryo_col`, `x_col`, `margin_col` all present
-5. `margin_col` values in [-1, 1]
-6. One row per `(embryo_col, x_col)` pair — duplicate (embryo, x) raises immediately
-7. If explicit-label mode and df has `positive_label`/`negative_label` columns: verifies the
-   passed labels match the data. Will **not** swap silently — raises with a clear error.
-
-### Usage examples
-
-**Pipeline-native (comparison_id from predictions parquet):**
 ```python
-import pandas as pd
 from analyze.classification.viz.misclassification import plot_margin_trends
-
 predictions = pd.read_parquet("results/.../predictions.parquet")
 
-# All feature rows for this comparison
-fig = plot_margin_trends(
-    predictions,
-    comparison_id="inj_ctrl__vs__pbx4_crispant",
-    output_path="margin_trends.png",
-)
+# Pipeline mode
+plot_margin_trends(predictions, comparison_id="inj_ctrl__vs__pbx4_crispant",
+                   feature_id="vae", output_path="margin_trends.png")
 
-# Filter to one feature set
-fig = plot_margin_trends(
-    predictions,
-    comparison_id="inj_ctrl__vs__pbx4_crispant",
-    feature_id="vae",
-    output_path="margin_trends_vae.png",
-)
-```
+# Explicit-label mode
+plot_margin_trends(df, positive_label="pbx4_crispant", negative_label="inj_ctrl",
+                   output_path="margin_trends.png")
 
-**Explicit-label mode (ad hoc dataframe):**
-```python
-fig = plot_margin_trends(
-    df,
-    positive_label="pbx4_crispant",
-    negative_label="inj_ctrl",
-    feature_id="vae",
-    output_path="margin_trends.png",
-)
-```
-
-**Loop over all comparisons:**
-```python
+# Loop over all comparisons
 for cid in sorted(predictions["comparison_id"].unique()):
-    slug = cid.replace("__vs__", "_vs_")
-    plot_margin_trends(
-        predictions,
-        comparison_id=cid,
-        feature_id="vae",
-        max_embryos=50,
-        output_path=figures_dir / f"margin_{slug}.png",
-    )
+    plot_margin_trends(predictions, comparison_id=cid, feature_id="vae",
+                       output_path=figures_dir / f"margin_{cid}.png")
 ```
 
-**Custom x-axis (non-time):**
+---
+
+## `plot_pairwise_coordinate_heatmap`
+
+**File:** `src/analyze/classification/viz/pairwise_coordinates.py`
+
+Per-embryo phenotypic fingerprint: square upper-triangle heatmap showing where one embryo falls on every pairwise classifier simultaneously. Blue-white-red (RdBu_r), diverging at 0.
+
+- Rows = positive class (A), columns = negative class (B)
+- Cell = time-averaged `class_signed_margin` on the A-vs-B classifier
+- Lower triangle and diagonal are masked
+
+**Data source:** `raw_contrast_scores_long` — requires `save_contrast_coordinates=True`.
+
 ```python
-fig = plot_margin_trends(
-    df,
-    comparison_id="inj_ctrl__vs__pbx4_crispant",
-    x_col="pca_1",
-    margin_col="truth_signed_margin",
-)
+plot_pairwise_coordinate_heatmap(
+    df,           # embryo_id, positive_label, negative_label, time_bin, class_signed_margin
+    embryo_id,    # str
+    *,
+    label_order: list[str] | None = None,      # explicit axis order; None = alphabetical
+    positive_labels: list[str] | None = None,  # restrict rows (union logic)
+    negative_labels: list[str] | None = None,  # restrict cols (union logic)
+    time_bins: list | None = None,
+    vmin: float = -1.0,
+    vcenter: float = 0.0,
+    vmax: float = 1.0,
+    cmap: str = "RdBu_r",
+    title: str | None = None,
+    output_path: str | Path | None = None,
+) -> matplotlib.figure.Figure
+```
+
+```python
+from analyze.classification.viz.pairwise_coordinates import plot_pairwise_coordinate_heatmap
+scores_long = result.layers["raw_contrast_scores_long"]
+
+plot_pairwise_coordinate_heatmap(scores_long, "20260304_A01_e01",
+                                  output_path="pairwise_coords.png")
+```
+
+---
+
+## `plot_auroc_heatmaps`
+
+**File:** `src/analyze/classification/viz/heatmaps.py`
+
+Faceted heatmap of AUROC scores over time. Cells colored by AUROC; significant cells (p ≤ threshold) get a black border. Auto-infers facet axes from data when not specified.
+
+**Data source:** `result.scores` or any scores DataFrame — always available.
+
+```python
+plot_auroc_heatmaps(
+    results,                               # ClassificationAnalysis or scores DataFrame
+    *,
+    heatmap_row: str = "positive_label",   # y-axis within each panel
+    heatmap_col: str = "time_bin_center",  # x-axis within each panel
+    facet_row: str | None = None,          # None = auto-infer (feature_set if varies)
+    facet_col: str | None = None,          # None = auto-infer (negative_label if varies)
+    auroc_col: str = "auroc_obs",
+    pval_col: str = "pval",
+    show_significance: bool = True,
+    sig_threshold: float = 0.01,
+    cmap: str = "BuPu",
+    vcenter: float | None = None,
+    vmin: float = 0.4,
+    vmax: float = 1.0,
+    show_annotations: bool = False,
+    title: str = "AUROC Heatmap",
+    backend: str = "matplotlib",           # "matplotlib" | "plotly" | "both"
+    output_path: str | Path | None = None,
+) -> matplotlib.figure.Figure | plotly.Figure | dict
+```
+
+```python
+from analyze.classification.viz.heatmaps import plot_auroc_heatmaps
+
+plot_auroc_heatmaps(result, output_path="auroc_heatmap.png")
+plot_auroc_heatmaps(result, facet_row="feature_set", sig_threshold=0.05,
+                    output_path="auroc_by_feature.png")
+```
+
+---
+
+## `plot_aurocs_over_time`
+
+**File:** `src/analyze/classification/viz/auroc_over_time.py`
+
+AUROC curves over time for one or more comparisons. Optional null band, significance markers, chance line, and faceting.
+
+**Data source:** `result.scores` or any scores DataFrame.
+
+```python
+plot_aurocs_over_time(
+    results,                               # ClassificationAnalysis or scores DataFrame
+    *,
+    time_col: str = "time_bin_center",
+    auroc_col: str = "auroc_obs",
+    curve_col: str = "positive",           # column that identifies each curve
+    facet_row: str | None = None,
+    facet_col: str | None = None,
+    color_lookup: dict | None = None,
+    show_null_band: bool = False,
+    show_significance: bool = True,
+    pval_col: str = "pval",
+    sig_threshold: float = 0.01,
+    show_chance_line: bool = True,
+    ylim: tuple[float, float] = (0.3, 1.05),
+    backend: str = "plotly",               # "plotly" | "matplotlib" | "both"
+    output_path: str | Path | None = None,
+) -> plotly.Figure | matplotlib.figure.Figure | dict
+```
+
+---
+
+## `plot_confusion`
+
+**File:** `src/analyze/classification/viz/confusion.py`
+
+Confusion matrices from a ClassificationAnalysis run.
+
+**Data source:** `result.layers["confusion"]` — always computed.
+
+```python
+plot_confusion(
+    scores: pd.DataFrame,
+    confusion: pd.DataFrame,
+    *,
+    feature_set: str | None = None,
+    time_range: tuple[float, float] | None = None,
+    backend: str = "matplotlib",
+    output_path: str | Path | None = None,
+) -> matplotlib.figure.Figure | plotly.Figure
+```
+
+```python
+from analyze.classification.viz import plot_confusion
+plot_confusion(result.scores, result.layers["confusion"],
+               feature_set="vae", time_range=(24.0, 72.0),
+               output_path="confusion.png")
+```
+
+---
+
+## `plot_multiple_aurocs` / `plot_auroc_with_null`
+
+**File:** `src/analyze/classification/viz/classification.py`
+
+Low-level matplotlib AUROC curve primitives. Use `plot_aurocs_over_time` for most cases.
+
+```python
+# Overlay multiple comparisons on one axis
+plot_multiple_aurocs(
+    auroc_dfs_dict: dict[str, pd.DataFrame],  # {label: df}
+    colors_dict: dict[str, str],
+    styles_dict: dict[str, str] | None = None,
+    title: str = "AUROC Comparison",
+    ylim: tuple = (0.3, 1.05),
+    save_path: Path | None = None,
+    ax: plt.Axes | None = None,
+    show_null_band: bool = True,
+    show_significance: bool = True,
+    sig_threshold: float = 0.01,
+) -> plt.Figure
+
+# Single curve with null band on an existing axis
+plot_auroc_with_null(
+    ax: plt.Axes,
+    auroc_df: pd.DataFrame,
+    color: str,
+    label: str,
+    show_null_band: bool = True,
+    show_significance: bool = True,
+    sig_threshold: float = 0.01,
+) -> None
+```
+
+---
+
+## Misclassification deep-dive functions
+
+**File:** `src/analyze/classification/viz/misclassification.py`
+
+Diagnostic functions for inspecting which embryos are misclassified and when. Typically used together after running classification with predictions saved.
+
+```python
+# Wrong-rate heatmap: embryos × time bins
+plot_wrongness_heatmap(
+    embryo_predictions: pd.DataFrame,  # embryo_id, time_bin, pred_class, true_class
+    per_embryo_metrics: pd.DataFrame,
+    output_dir: Path,
+    row_order: str = "wrong_rate",
+    cmap: str = "Reds",
+) -> Path
+
+# Per-embryo prediction timeline + probability traces
+plot_embryo_deep_dive(
+    embryo_predictions: pd.DataFrame,
+    embryo_id: str,
+    output_dir: Path,
+    class_colors: dict[str, str] | None = None,
+) -> Path
+
+# Wrong-rate distributions by group (violin)
+plot_wrong_rate_distributions(
+    per_embryo_metrics: pd.DataFrame,
+    output_dir: Path,
+    group_by: str = "true_class",
+    show_flagged: bool = True,
+) -> Path
+
+# Confusion profile by true class (bar chart of misprediction targets)
+plot_confusion_profile(
+    embryo_predictions: pd.DataFrame,
+    flagged_embryos: pd.DataFrame,
+    output_dir: Path,
+) -> Path
+
+# Gallery of deep-dive plots for top-N most misclassified embryos
+plot_flagged_embryo_gallery(
+    embryo_predictions: pd.DataFrame,
+    flagged_embryos: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 20,
+) -> list[Path]
+```
+
+---
+
+## Trajectory diagnostics
+
+**File:** `src/analyze/classification/viz/trajectory.py`
+
+Diagnostics for cluster-level feature trends and rolling-window significance. Used in misclassification pipeline analysis.
+
+```python
+# PCA scatter colored by a column
+save_pca_scatter(
+    stage_table: pd.DataFrame,
+    color_col: str,
+    output_path: Path,
+    title: str,
+) -> Path
+
+# Wrong-rate observed vs permutation null
+save_wrong_rate_null_diagnostics(
+    stage_table: pd.DataFrame,
+    output_path: Path,
+    title: str = "Wrong-Rate Null Diagnostics",
+) -> Path
+
+# Significant embryo counts per rolling window
+save_rolling_window_significance_counts(
+    rolling_df: pd.DataFrame,
+    output_path: Path,
+    title: str = "Rolling-Window Wrong-Rate Significance",
+) -> Path
+
+# Destination-confusion significance counts by rolling window
+save_rolling_destination_significance_counts(
+    rolling_df: pd.DataFrame,
+    output_path: Path,
+    title: str = "Rolling Destination-Confusion Significance",
+) -> Path
+
+# Feature trends faceted by cluster
+plot_cluster_feature_trends(
+    raw_df: pd.DataFrame,
+    stage_table: pd.DataFrame,
+    cluster_col: str,
+    output_path: Path,
+    features: list[str],
+    time_col: str,
+    embryo_id_col: str,
+    group_color_by: str,
+    facet_col_override: str | None = None,
+) -> Path
 ```
 
 ---
@@ -153,5 +391,4 @@ from analyze.classification.viz.utils import (
 )
 ```
 
-These are called internally by `plot_margin_trends` but can be used standalone to validate
-a dataframe before passing it to the plotter.
+Called internally by `plot_margin_trends` but usable standalone.

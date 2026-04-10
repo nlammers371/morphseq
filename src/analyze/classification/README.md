@@ -108,4 +108,7 @@ Artifact keys: `"predictions"` (`save_predictions=True`), `"multiclass_predictio
 ## Further Reading
 
 - [`RUN_CLASSIFICATION_API.md`](RUN_CLASSIFICATION_API.md) — full function signature, argument semantics, schema tables, persistence, migration, architecture, tests
-- Visualization references — see `src/analyze/classification/viz/` for plotting helpers such as `plot_margin_trends` (per-embryo margin trajectories) and `plot_aurocs_over_time` (AUROC curves)
+- Visualization references — see `src/analyze/classification/viz/` for plotting helpers:
+  - `plot_margin_trends` — per-embryo signed-margin trajectories (`misclassification.py`); requires `predictions` layer
+  - `plot_pairwise_coordinate_heatmap` — per-embryo phenotypic fingerprint heatmap (`pairwise_coordinates.py`); requires `raw_contrast_scores_long` layer (`save_contrast_coordinates=True`)
+  - `plot_auroc_heatmaps` — faceted AUROC-over-time heatmap (`heatmaps.py`); reads from `result.scores`
