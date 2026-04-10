@@ -155,7 +155,7 @@ def _run_toy_sweep(
             run_dir.mkdir(parents=True, exist_ok=True)
             cfg = TemporalRunConfig(
                 sigma_frac=float(att_mult),
-                coherence_scale_mult=float(coh_mult),
+                temporal_cohere_bandwidth_mult=float(coh_mult),
                 k_attract=int(k_attract),
                 n_iter=int(n_iter),
                 lr=1e-4,
@@ -245,8 +245,8 @@ def _run_pbx_sweep(
         cfg = CondensationConfig(
             sigma=0.5,
             sigma_coh=None,
-            attract_scale_mult=float(att_mult),
-            coherence_scale_mult=float(coh_mult),
+            attract_bandwidth_mult=float(att_mult),
+            temporal_cohere_bandwidth_mult=float(coh_mult),
             temporal_cohere_mode="computed",
             delta=3,
             epsilon_r=0.005,

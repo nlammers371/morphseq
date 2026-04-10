@@ -22,8 +22,10 @@ class CondensationConfig:
     """
 
     # Public structural names
+    attract_bandwidth_mult: float | None = None
     attract_scale_mult: float | None = None
     attract_k: int | None = None
+    temporal_cohere_bandwidth_mult: float | None = None
     temporal_cohere_scale_mult: float | None = None
     temporal_cohere_window: int | None = None
     temporal_cohere_mode: str | None = None
@@ -68,13 +70,17 @@ class CondensationConfig:
     tol: float = 1e-4
 
     def __post_init__(self) -> None:
+        attract_bandwidth_public = self.attract_bandwidth_mult
+        if attract_bandwidth_public is None:
+            attract_bandwidth_public = self.attract_scale_mult
         self.attraction_scale_mult = self._resolve_alias(
-            public_value=self.attract_scale_mult,
+            public_value=attract_bandwidth_public,
             legacy_value=self.attraction_scale_mult,
-            public_name="attract_scale_mult",
+            public_name="attract_bandwidth_mult",
             legacy_name="attraction_scale_mult",
             legacy_default=None,
         )
+        self.attract_bandwidth_mult = self.attraction_scale_mult
         self.attract_scale_mult = self.attraction_scale_mult
 
         self.k_attract = self._resolve_alias(
@@ -86,13 +92,17 @@ class CondensationConfig:
         )
         self.attract_k = self.k_attract
 
+        temporal_cohere_bandwidth_public = self.temporal_cohere_bandwidth_mult
+        if temporal_cohere_bandwidth_public is None:
+            temporal_cohere_bandwidth_public = self.temporal_cohere_scale_mult
         self.coherence_scale_mult = self._resolve_alias(
-            public_value=self.temporal_cohere_scale_mult,
+            public_value=temporal_cohere_bandwidth_public,
             legacy_value=self.coherence_scale_mult,
-            public_name="temporal_cohere_scale_mult",
+            public_name="temporal_cohere_bandwidth_mult",
             legacy_name="coherence_scale_mult",
             legacy_default=None,
         )
+        self.temporal_cohere_bandwidth_mult = self.coherence_scale_mult
         self.temporal_cohere_scale_mult = self.coherence_scale_mult
 
         self.delta = self._resolve_alias(

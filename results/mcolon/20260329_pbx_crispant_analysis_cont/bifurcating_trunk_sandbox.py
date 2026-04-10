@@ -973,11 +973,11 @@ def plot_refactored_force_sweeps(
     n_frames: int = 72,
     sweep_overrides: dict[str, np.ndarray] | None = None,
 ) -> pd.DataFrame:
-    """Sweep the disentangled attraction/coherence scales on the bifurcating trunk benchmark.
+    """Sweep the disentangled attraction/coherence bandwidths on the bifurcating trunk benchmark.
 
     Two facets:
-      [0] attract_scale_mult              (sigma_att = mult * s_global)
-      [1] temporal_cohere_scale_mult      (sigma_coh = mult * s_local)
+      [0] attract_bandwidth_mult          (sigma_att = mult * s_global)
+      [1] temporal_cohere_bandwidth_mult (sigma_coh = mult * s_local)
 
     Each facet contains stacked branch_sep_late and trunk_linearity_early traces,
     matching the original force-family sweep style.
@@ -985,21 +985,21 @@ def plot_refactored_force_sweeps(
     sweep_specs = [
         (
             "sigma_frac",
-            "attract_scale_mult",
+            "attract_bandwidth_mult",
             np.array([0.10, 0.15, 0.20, 0.30, 0.40, 0.50, 0.70, 1.00, 1.50]),
             0.50,
             None,
-            dict(coherence_scale_mult=0.25, fidelity_init_strength=0.0, epsilon_void=0.0),
-            "sigma_att = c_att * s_global\n(cohere_scale_mult=0.25 fixed)",
+            dict(temporal_cohere_bandwidth_mult=0.25, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "sigma_att = c_att * s_global\n(temporal_cohere_bandwidth_mult=0.25 fixed)",
         ),
         (
-            "coherence_scale_mult",
-            "temporal_cohere_scale_mult",
+            "temporal_cohere_bandwidth_mult",
+            "temporal_cohere_bandwidth_mult",
             np.array([0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.70, 1.00]),
             0.25,
             None,
             dict(sigma_frac=0.50, fidelity_init_strength=0.0, epsilon_void=0.0),
-            "sigma_coh = c_coh * s_local\n(attract_scale_mult=0.50 fixed)",
+            "sigma_coh = c_coh * s_local\n(attract_bandwidth_mult=0.50 fixed)",
         ),
     ]
     if sweep_overrides:
@@ -1183,8 +1183,8 @@ def plot_refactored_weight_sweeps(
             np.array([0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]),
             1.0,
             None,
-            dict(sigma_frac=0.50, coherence_scale_mult=0.25, temporal_cohere_weight=1.0, fidelity_init_strength=0.0, epsilon_void=0.0),
-            "attract amplitude only\n(scales fixed: sigma_frac=0.50, cohere_scale_mult=0.25)",
+            dict(sigma_frac=0.50, temporal_cohere_bandwidth_mult=0.25, temporal_cohere_weight=1.0, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "attract amplitude only\n(scales fixed: sigma_frac=0.50, temporal_cohere_bandwidth_mult=0.25)",
         ),
         (
             "temporal_cohere_weight",
@@ -1192,8 +1192,8 @@ def plot_refactored_weight_sweeps(
             np.array([0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]),
             1.0,
             None,
-            dict(sigma_frac=0.50, coherence_scale_mult=0.25, attract_weight=1.0, fidelity_init_strength=0.0, epsilon_void=0.0),
-            "temporal gate strength only\n(scales fixed: sigma_frac=0.50, cohere_scale_mult=0.25)",
+            dict(sigma_frac=0.50, temporal_cohere_bandwidth_mult=0.25, attract_weight=1.0, fidelity_init_strength=0.0, epsilon_void=0.0),
+            "temporal gate strength only\n(scales fixed: sigma_frac=0.50, temporal_cohere_bandwidth_mult=0.25)",
         ),
     ]
     if sweep_overrides:
@@ -1214,7 +1214,7 @@ def plot_refactored_weight_sweeps(
                                   n_per_cluster=n_per_branch)
     pos_init_fixed = ds_base.positions.copy()
     cfg_base = TemporalRunConfig(
-        **base_kwargs, sigma_frac=0.50, coherence_scale_mult=0.25,
+        **base_kwargs, sigma_frac=0.50, temporal_cohere_bandwidth_mult=0.25,
         attract_weight=1.0, temporal_cohere_weight=1.0,
         fidelity_init_strength=0.0, epsilon_void=0.0,
     )
@@ -1378,9 +1378,9 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--refactored-scale-gif", action="store_true",
                    help="Also save 3D before/after GIFs for each refactored scale condition.")
     p.add_argument("--refactored-attract-values", type=str, default="",
-                   help="Comma-separated override for attract_scale_mult sweep values.")
+                   help="Comma-separated override for attract_bandwidth_mult sweep values.")
     p.add_argument("--refactored-cohere-values", type=str, default="",
-                   help="Comma-separated override for temporal_cohere_scale_mult sweep values.")
+                   help="Comma-separated override for temporal_cohere_bandwidth_mult sweep values.")
     p.add_argument("--refactored-weight-sweep", action="store_true",
                    help="Run disentangled attraction/coherence weight sweeps on the same benchmark")
     p.add_argument("--refactored-attract-weight-values", type=str, default="",
@@ -1527,12 +1527,12 @@ def main() -> None:
         )
 
     if args.refactored_scale_sweep:
-        print("\n=== Refactored scale sweeps ===")
+        print("\n=== Refactored bandwidth sweeps ===")
         sweep_overrides = {}
         if args.refactored_attract_values:
             sweep_overrides["sigma_frac"] = np.array([float(x) for x in args.refactored_attract_values.split(",") if x.strip()], dtype=float)
         if args.refactored_cohere_values:
-            sweep_overrides["coherence_scale_mult"] = np.array([float(x) for x in args.refactored_cohere_values.split(",") if x.strip()], dtype=float)
+            sweep_overrides["temporal_cohere_bandwidth_mult"] = np.array([float(x) for x in args.refactored_cohere_values.split(",") if x.strip()], dtype=float)
         plot_refactored_force_sweeps(
             init_path=init_path,
             base_kwargs=base_kwargs,

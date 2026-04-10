@@ -366,8 +366,9 @@ def gamma_from_half_life_iters(fidelity_half_life_iters: float | None) -> float:
 class TemporalRunConfig:
     # --- Structural / informational knobs (not force magnitudes) ---
     sigma_frac: float = 0.5       # attraction bandwidth: sigma = sigma_frac × s_global
+    temporal_cohere_bandwidth_mult: float | None = None
     coherence_scale_mult: float | None = None
-                                  # coherence kernel bandwidth: sigma_coh = mult × s_local
+                                  # temporal coherence bandwidth: sigma_coh = mult × s_local
                                   # None = use sigma (old behaviour, σ = inter-bundle scale)
                                   # Set e.g. 1.0 to anchor coherence to local spacing
     delta: int = 3                # coherence backward window (time bins)
