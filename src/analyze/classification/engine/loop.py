@@ -729,7 +729,13 @@ def _collect_classifier_directions(
     comparison: ResolvedComparison,
     feature_set: str,
 ) -> tuple[list[dict[str, Any]], dict[str, np.ndarray], dict[str, list[str]]]:
-    """Collect signed unit classifier direction vectors from per-bin results."""
+    """Collect signed unit classifier direction vectors from per-bin results.
+
+    Thin adapter: enriches each fit dict with AUROC / pval / metadata from the
+    bin result and delegates vector_id construction to directions.ids.make_vector_id.
+    The accumulated rows/vectors/feature_names_by_set are merged by run_classification
+    across comparisons before the final ClassifierDirections artifact is assembled.
+    """
     rows: list[dict[str, Any]] = []
     vectors: dict[str, np.ndarray] = {}
     feature_names_by_set: dict[str, list[str]] = {}
@@ -748,7 +754,11 @@ def _collect_classifier_directions(
         if len(unit_coef) != len(feature_names):
             raise ValueError("Classifier direction vector length does not match feature names.")
 
-        vector_id = f"{feature_set}__{comparison.comparison_id}__bin_{int(br['time_bin'])}"
+        vector_id = make_vector_id(
+            feature_set=feature_set,
+            comparison_id=comparison.comparison_id,
+            time_bin=int(br["time_bin"]),
+        )
         vectors[vector_id] = unit_coef
         estimator_config = dict(direction["estimator_config"])
         row = {
@@ -761,8 +771,8 @@ def _collect_classifier_directions(
             "bin_width": float(br["bin_width"]),
             "auroc_obs": float(br["auroc_obs"]),
             "pval": float(br["pval"]),
-            "n_positive": int(br["n_positive"]),
-            "n_negative": int(br["n_negative"]),
+            "n_pos": int(br["n_positive"]),
+            "n_neg": int(br["n_negative"]),
             "vector_id": vector_id,
             "vector_kind": VECTOR_KIND_SIGNED_UNIT_COEF,
             "coef_norm": float(direction["coef_norm"]),
