@@ -115,9 +115,14 @@ Per-embryo phenotypic fingerprint: square upper-triangle heatmap showing where o
 
 ```python
 plot_pairwise_coordinate_heatmap(
-    df,           # embryo_id, positive_label, negative_label, time_bin, class_signed_margin
-    embryo_id,    # str
+    df,           # long-form scores DataFrame
+    sample_id,    # str — value to match against id_col
     *,
+    id_col: str = "embryo_id",                 # column identifying samples
+    positive_label_col: str = "positive_label",
+    negative_label_col: str = "negative_label",
+    time_col: str = "time_bin",
+    margin_col: str = "class_signed_margin",
     label_order: list[str] | None = None,      # explicit axis order; None = alphabetical
     positive_labels: list[str] | None = None,  # restrict rows (union logic)
     negative_labels: list[str] | None = None,  # restrict cols (union logic)

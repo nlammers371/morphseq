@@ -37,22 +37,31 @@ from analyze.viz.plotting.faceting_engine import (
 
 __all__ = ["plot_pairwise_coordinate_heatmap"]
 
-# Required columns in the input long-form DataFrame
-_REQUIRED_COLS = {"embryo_id", "positive_label", "negative_label", "time_bin", "class_signed_margin"}
-
-
-def _validate_input(df: pd.DataFrame) -> None:
-    missing = _REQUIRED_COLS - set(df.columns)
+def _validate_input(
+    df: pd.DataFrame,
+    *,
+    id_col: str,
+    positive_label_col: str,
+    negative_label_col: str,
+    time_col: str,
+    margin_col: str,
+) -> None:
+    required = {id_col, positive_label_col, negative_label_col, time_col, margin_col}
+    missing = required - set(df.columns)
     if missing:
         raise ValueError(
             f"Input DataFrame is missing required columns: {sorted(missing)}. "
-            f"Required: {sorted(_REQUIRED_COLS)}"
+            f"Required: {sorted(required)}"
         )
 
 
 def _build_upper_triangle_long(
     df: pd.DataFrame,
     *,
+    positive_label_col: str,
+    negative_label_col: str,
+    time_col: str,
+    margin_col: str,
     time_bins: Optional[list] = None,
     label_order: Optional[list[str]] = None,
 ) -> tuple[pd.DataFrame, list[str]]:
@@ -77,16 +86,16 @@ def _build_upper_triangle_long(
         Ordered list of all genotype labels (shared row/col axis).
     """
     if time_bins is not None:
-        df = df[df["time_bin"].isin(time_bins)].copy()
+        df = df[df[time_col].isin(time_bins)].copy()
 
-    # Aggregate class_signed_margin over time bins for each (positive_label, negative_label) pair
+    # Aggregate margin over time bins for each (positive_label, negative_label) pair
     agg = (
-        df.groupby(["positive_label", "negative_label"])["class_signed_margin"]
+        df.groupby([positive_label_col, negative_label_col])[margin_col]
         .mean()
         .reset_index(name="value")
     )
 
-    all_labels_set = set(agg["positive_label"].unique()) | set(agg["negative_label"].unique())
+    all_labels_set = set(agg[positive_label_col].unique()) | set(agg[negative_label_col].unique())
     if label_order is not None:
         order = label_order
     else:
@@ -98,29 +107,29 @@ def _build_upper_triangle_long(
     # i.e. positive_label has a lower index than negative_label in label_order
     upper_rows = []
     for _, row in agg.iterrows():
-        pos = row["positive_label"]
-        neg = row["negative_label"]
+        pos = row[positive_label_col]
+        neg = row[negative_label_col]
         if pos not in order_idx or neg not in order_idx:
             continue
         pi = order_idx[pos]
         ni = order_idx[neg]
         if pi < ni:
             # Already upper triangle
-            upper_rows.append({"positive_label": pos, "negative_label": neg, "value": row["value"]})
+            upper_rows.append({positive_label_col: pos, negative_label_col: neg, "value": row["value"]})
         elif ni < pi:
             # Swap: the original (pos, neg) with pi > ni is lower-triangle;
             # place it in upper triangle as (neg, pos) with negated sign
-            upper_rows.append({"positive_label": neg, "negative_label": pos, "value": -row["value"]})
+            upper_rows.append({positive_label_col: neg, negative_label_col: pos, "value": -row["value"]})
         # pi == ni: diagonal, skip
 
     upper_df = pd.DataFrame(upper_rows) if upper_rows else pd.DataFrame(
-        columns=["positive_label", "negative_label", "value"]
+        columns=[positive_label_col, negative_label_col, "value"]
     )
 
     # Collapse any duplicates by mean (shouldn't happen after dedup above, but safe)
     if not upper_df.empty:
         upper_df = (
-            upper_df.groupby(["positive_label", "negative_label"])["value"]
+            upper_df.groupby([positive_label_col, negative_label_col])["value"]
             .mean()
             .reset_index()
         )
@@ -129,7 +138,7 @@ def _build_upper_triangle_long(
     # then overlay the upper-triangle values
     all_pairs = pd.DataFrame(
         [
-            {"positive_label": r, "negative_label": c, "value": np.nan}
+            {positive_label_col: r, negative_label_col: c, "value": np.nan}
             for r in order
             for c in order
         ]
@@ -139,7 +148,7 @@ def _build_upper_triangle_long(
         # Merge upper triangle values into the full grid
         all_pairs = all_pairs.merge(
             upper_df.rename(columns={"value": "value_upper"}),
-            on=["positive_label", "negative_label"],
+            on=[positive_label_col, negative_label_col],
             how="left",
         )
         mask = all_pairs["value_upper"].notna()
@@ -151,8 +160,13 @@ def _build_upper_triangle_long(
 
 def plot_pairwise_coordinate_heatmap(
     df: pd.DataFrame,
-    embryo_id: str,
+    sample_id: str,
     *,
+    id_col: str = "embryo_id",
+    positive_label_col: str = "positive_label",
+    negative_label_col: str = "negative_label",
+    time_col: str = "time_bin",
+    margin_col: str = "class_signed_margin",
     label_order: Optional[list[str]] = None,
     positive_labels: Optional[list[str]] = None,
     negative_labels: Optional[list[str]] = None,
@@ -164,41 +178,51 @@ def plot_pairwise_coordinate_heatmap(
     title: Optional[str] = None,
     output_path: Optional[Union[str, Path]] = None,
 ) -> "matplotlib.figure.Figure":
-    """Render the pairwise phenotypic coordinate heatmap for a single embryo.
+    """Render the pairwise phenotypic coordinate heatmap for a single sample.
 
     Only the upper-right triangle is filled: rows = positive class, columns =
-    negative class, cell value = time-averaged signed margin class_signed_margin.
+    negative class, cell value = time-averaged signed margin.
     The diagonal and lower triangle are NaN / masked.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Long-form data with columns:
-        ``embryo_id``, ``positive_label``, ``negative_label``, ``time_bin``, ``class_signed_margin``.
+        Long-form data. Required columns (customisable via the ``*_col`` params):
+        ``id_col``, ``positive_label_col``, ``negative_label_col``, ``time_col``, ``margin_col``.
         Typically comes from ``run_classification(save_contrast_coordinates=True)``
         → ``analysis.layers["raw_contrast_scores_long"]``.
-    embryo_id : str
-        The embryo to visualise.
+    sample_id : str
+        The sample to visualise (matched against ``id_col``).
+    id_col : str
+        Column identifying individual samples. Default ``"embryo_id"``.
+    positive_label_col : str
+        Column for the positive class label. Default ``"positive_label"``.
+    negative_label_col : str
+        Column for the negative class label. Default ``"negative_label"``.
+    time_col : str
+        Column for time bin values used to filter/aggregate. Default ``"time_bin"``.
+    margin_col : str
+        Column for the signed margin values. Default ``"class_signed_margin"``.
     positive_labels : list[str] | None
-        If provided, restricts the row axis to these genotype labels.  A comparison
-        is kept if either its positive_label or negative_label is in this set
+        If provided, restricts the row axis to these labels. A comparison
+        is kept if either its positive or negative label is in this set
         (so the upper-triangle flip is handled automatically).
     negative_labels : list[str] | None
-        If provided, restricts the column axis to these genotype labels.  Same
+        If provided, restricts the column axis to these labels. Same
         union logic as ``positive_labels``.
     label_order : list[str] | None
         Explicit display order for the axis labels that survive filtering.
-        Must be a subset of the labels present after filtering.  If None,
+        Must be a subset of the labels present after filtering. If None,
         sorted alphabetically.
     time_bins : list | None
-        Subset of ``time_bin`` values to include in the average.  If None,
-        all supported time bins for this embryo are used.
+        Subset of ``time_col`` values to include in the average. If None,
+        all time bins for this sample are used.
     vmin, vcenter, vmax : float
-        Colormap range.  Defaults are -0.5 / 0 / 0.5.
+        Colormap range. Defaults are -1 / 0 / 1.
     cmap : str
-        Matplotlib colormap name.  A diverging blue-white-red map is recommended.
+        Matplotlib colormap name. A diverging blue-white-red map is recommended.
     title : str | None
-        Figure title.  Defaults to ``"Pairwise phenotypic coordinates: <embryo_id>"``.
+        Figure title. Defaults to ``"Pairwise phenotypic coordinates: <sample_id>"``.
     output_path : str | Path | None
         If provided, saves to this path (PNG at 150 dpi) and closes the figure.
 
@@ -206,16 +230,23 @@ def plot_pairwise_coordinate_heatmap(
     -------
     matplotlib.figure.Figure
     """
-    _validate_input(df)
+    _validate_input(
+        df,
+        id_col=id_col,
+        positive_label_col=positive_label_col,
+        negative_label_col=negative_label_col,
+        time_col=time_col,
+        margin_col=margin_col,
+    )
 
-    embryo_df = df[df["embryo_id"].astype(str) == str(embryo_id)].copy()
+    embryo_df = df[df[id_col].astype(str) == str(sample_id)].copy()
     if embryo_df.empty:
-        raise ValueError(f"No rows found for embryo_id={embryo_id!r} in the provided DataFrame.")
+        raise ValueError(f"No rows found for {id_col}={sample_id!r} in the provided DataFrame.")
 
     # --- Resolve the axis label set ---
     # positive_labels / negative_labels define which labels appear on each axis.
-    # A row is kept if its positive_label is in the requested positive set OR
-    # its negative_label is in the requested negative set — the union ensures
+    # A row is kept if its positive label is in the requested positive set OR
+    # its negative label is in the requested negative set — the union ensures
     # no valid comparison is dropped just because the data stores it in the
     # opposite triangle orientation.
     pos_set = set(positive_labels) if positive_labels is not None else None
@@ -225,24 +256,24 @@ def plot_pairwise_coordinate_heatmap(
         mask = pd.Series(True, index=embryo_df.index)
         if pos_set is not None:
             mask = mask & (
-                embryo_df["positive_label"].isin(pos_set) |
-                embryo_df["negative_label"].isin(pos_set)
+                embryo_df[positive_label_col].isin(pos_set) |
+                embryo_df[negative_label_col].isin(pos_set)
             )
         if neg_set is not None:
             mask = mask & (
-                embryo_df["negative_label"].isin(neg_set) |
-                embryo_df["positive_label"].isin(neg_set)
+                embryo_df[negative_label_col].isin(neg_set) |
+                embryo_df[positive_label_col].isin(neg_set)
             )
         embryo_df = embryo_df[mask].copy()
 
     if embryo_df.empty:
         raise ValueError(
             f"No rows remain after filtering positive_labels={positive_labels!r} / "
-            f"negative_labels={negative_labels!r} for embryo_id={embryo_id!r}."
+            f"negative_labels={negative_labels!r} for {id_col}={sample_id!r}."
         )
 
     # The effective axis = union of both filter sets (or all present labels if unfiltered)
-    present = set(embryo_df["positive_label"].unique()) | set(embryo_df["negative_label"].unique())
+    present = set(embryo_df[positive_label_col].unique()) | set(embryo_df[negative_label_col].unique())
     axis_set = set()
     if pos_set is not None:
         axis_set |= pos_set & present
@@ -252,7 +283,6 @@ def plot_pairwise_coordinate_heatmap(
         axis_set = present  # no filters applied
 
     if label_order is not None:
-        # Caller-supplied order must be a subset of the axis set
         unknown = set(label_order) - present
         if unknown:
             raise ValueError(
@@ -264,6 +294,10 @@ def plot_pairwise_coordinate_heatmap(
 
     long_df, row_col_order = _build_upper_triangle_long(
         embryo_df,
+        positive_label_col=positive_label_col,
+        negative_label_col=negative_label_col,
+        time_col=time_col,
+        margin_col=margin_col,
         time_bins=time_bins,
         label_order=effective_order,
     )
@@ -278,14 +312,14 @@ def plot_pairwise_coordinate_heatmap(
         vcenter=vcenter,
         missing_color="#e0e0e0",
     )
-    colorbar = ColorbarSpec(label="Signed margin (class_signed_margin)", shrink=0.7)
+    colorbar = ColorbarSpec(label=f"Signed margin ({margin_col})", shrink=0.7)
 
-    fig_title = title or f"Pairwise phenotypic coordinates: {embryo_id}"
+    fig_title = title or f"Pairwise phenotypic coordinates: {sample_id}"
 
     fig_data = build_heatmap_figure(
         long_df,
-        heatmap_row="positive_label",
-        heatmap_col="negative_label",
+        heatmap_row=positive_label_col,
+        heatmap_col=negative_label_col,
         value_col="value",
         heatmap_row_order=row_col_order,
         heatmap_col_order=row_col_order,
