@@ -454,15 +454,46 @@ Key types:
 | `EmergenceBlock` | `block_id`, `members`, `emergence_time`, `bin_key` |
 | `ResolutionNode` | `members`, `split_time`, `children`, `unresolved` |
 
-### Static rendering
+### Interactive HTML explorer
 
-`render_emergence_timeline_static` in `analyze.classification.viz.emergence` is a **placeholder** — it raises `NotImplementedError`. The current live implementation is the interactive Dash/D3 explorer:
+The live emergence visualization is a fully standalone **HTML file with inline D3.js** — open in any browser, no server required.
 
+The rendering script uses the `analyze.classification.emergence` package to compute onset matrices and serialize them to JSON, then a client-side D3 renderer draws the tree interactively.
+
+**Controls:**
+- **Included genotypes** — checklist to toggle which classes appear in the tree
+- **Emergence reference** — checklist to switch which class set defines the baseline; tree recomputes instantly client-side
+- **AUROC threshold** — radio buttons: none | 0.60 | 0.65 | 0.70
+
+**Features:**
+- All tree computation (blocks, bipartition, resolution) runs client-side → instant reference switching
+- Two-layer tree: emergence from reference (blocks) + within-block resolution (recursive splits)
+- Reference coherence badge (valid / ambiguous / invalid) in status bar
+- Dashed borders mark unresolved composite blocks
+
+**Pattern for generating the HTML:**
+```python
+from analyze.classification.emergence.transitivity import (
+    TransitivityParams,
+    classify_pair_state_over_time,
+    compute_pair_onsets,
+    build_onset_matrix,
+)
+
+# Compute onset matrices for each AUROC threshold level
+params = TransitivityParams(p_sep=0.05, auroc_sep=0.70, p_ns=0.10, subsequent_frac=0.40)
+classified = classify_pair_state_over_time(scores_df, params)
+onset_df = compute_pair_onsets(classified, params)
+onset_matrix = build_onset_matrix(onset_df, all_classes)
+
+# Serialize onset_matrix to JSON → embed into HTML template with inline D3
 ```
-results/mcolon/20260407_pbx_analysis_cont/13_emergence_explorer.py
-```
 
-Static matplotlib figures should eventually move into `analyze.classification.viz.emergence` per the DESIGN.md boundary.
+The HTML template and D3 rendering logic live in the analysis script for this experiment. Future work should move the HTML renderer into `analyze.classification.viz.emergence` following the DESIGN.md boundary.
+
+### Static rendering (placeholder)
+
+`render_emergence_timeline_static` in `analyze.classification.viz.emergence` raises `NotImplementedError` — not yet implemented. Static matplotlib figures belong there when ready.
 
 ### Onset data artifacts
 
