@@ -522,3 +522,119 @@ def branch_results_to_df(results: list[BranchTestResult]) -> pd.DataFrame:
                                           for a in r.arm_ids}),
         })
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Segment extraction and traversal-based pruning
+# ---------------------------------------------------------------------------
+
+def extract_segments(
+    nodes_df: pd.DataFrame,
+    edges_df: pd.DataFrame,
+) -> list[list[tuple[int, int]]]:
+    """Decompose the tree into segments: paths between structural nodes.
+
+    A structural node is a branch node (degree >= 3) or a leaf (degree == 1).
+    A segment is a sequence of consecutive edges connecting two structural nodes,
+    passing only through degree-2 nodes in between.
+
+    Returns a list of segments, each segment being a list of (source, target)
+    edge tuples in traversal order.
+    """
+    adj: dict[int, list[int]] = defaultdict(list)
+    for _, e in edges_df.iterrows():
+        a, b = int(e["source"]), int(e["target"])
+        adj[a].append(b)
+        adj[b].append(a)
+
+    structural = set(nodes_df.loc[nodes_df["degree"] != 2, "node_id"].astype(int))
+
+    visited_edges: set[tuple[int, int]] = set()
+    segments: list[list[tuple[int, int]]] = []
+
+    def ek(a: int, b: int) -> tuple[int, int]:
+        return (min(a, b), max(a, b))
+
+    for start in sorted(structural):
+        for nb in adj[start]:
+            if ek(start, nb) in visited_edges:
+                continue
+            seg: list[tuple[int, int]] = []
+            prev, cur = start, nb
+            while True:
+                edge = ek(prev, cur)
+                if edge in visited_edges:
+                    break
+                visited_edges.add(edge)
+                seg.append((prev, cur))
+                if cur in structural:
+                    break
+                nexts = [n for n in adj[cur] if n != prev]
+                if not nexts:
+                    break
+                prev, cur = cur, nexts[0]
+            if seg:
+                segments.append(seg)
+
+    return segments
+
+
+def prune_phantom_segments(
+    segments: list[list[tuple[int, int]]],
+    proj_df: pd.DataFrame,
+    min_embryos: int = 1,
+) -> list[list[tuple[int, int]]]:
+    """Remove segments that no embryo genuinely traverses end-to-end.
+
+    A segment is real if at least `min_embryos` embryos have observations that
+    touch BOTH structural endpoints of the segment across their time series.
+    A bridge segment connecting two unrelated trunks will never have any embryo
+    with observations near both of its endpoints.
+
+    Parameters
+    ----------
+    segments    : from extract_segments — each is a list of (source, target) edges
+    proj_df     : observation_projections with nearest_edge_a, nearest_edge_b
+    min_embryos : embryos required to touch both endpoints
+    """
+    def ek(a: int, b: int) -> tuple[int, int]:
+        return (min(a, b), max(a, b))
+
+    # For each segment, identify the two structural endpoint nodes
+    # (first node of first edge, last node of last edge)
+    def seg_endpoints(seg: list[tuple[int, int]]) -> tuple[int, int]:
+        start = seg[0][0]
+        end   = seg[-1][1]
+        return start, end
+
+    kept = []
+    for seg in segments:
+        ep_a, ep_b = seg_endpoints(seg)
+        seg_edges = {ek(a, b) for a, b in seg}
+
+        # First edge in seg (adjacent to ep_a) and last edge (adjacent to ep_b)
+        first_edge = ek(*seg[0])
+        last_edge  = ek(*seg[-1])
+
+        # Embryos that land on the segment-internal edge adjacent to each endpoint
+        near_a: set = set()
+        near_b: set = set()
+        for _, row in proj_df.iterrows():
+            emb  = row["embryo_idx"]
+            edge = ek(int(row["nearest_edge_a"]), int(row["nearest_edge_b"]))
+            if edge == first_edge:
+                near_a.add(emb)
+            if edge == last_edge:
+                near_b.add(emb)
+
+        traversing = near_a & near_b
+        if len(traversing) >= min_embryos:
+            kept.append(seg)
+
+    return kept
+
+
+def segments_to_edges_df(segments: list[list[tuple[int, int]]]) -> pd.DataFrame:
+    """Flatten a list of segments back into a source/target edges DataFrame."""
+    rows = [{"source": a, "target": b} for seg in segments for a, b in seg]
+    return pd.DataFrame(rows)

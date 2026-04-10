@@ -115,7 +115,7 @@ def plot_tree_schematic(
     # 1. Background scatter
     # ------------------------------------------------------------------
     for emb_i in obs_df["embryo_idx"].unique():
-        geno = str(labels[emb_i])
+        geno = str(labels[int(emb_i)])
         color = color_map.get(geno, default_color) if color_map else default_color
         sub = obs_df[obs_df["embryo_idx"] == emb_i]
         ax.scatter(
@@ -160,13 +160,17 @@ def plot_tree_schematic(
         skip_annotation = (not is_sig and not annotate_ns) or \
                           (res.n_embryos < min_n_embryos)
 
+        # When annotate_ns=False, hide ns branch nodes entirely
+        if skip_annotation and not is_sig:
+            continue
+
         marker_color = "#C62828" if is_sig else "#757575"
-        ms = 180 if is_sig else (80 if not skip_annotation else 50)
+        ms = 180 if is_sig else 80
 
         ax.scatter(bx, by, marker="D",
                    c=marker_color, s=ms,
                    zorder=6, edgecolors="white", linewidths=1.0,
-                   alpha=1.0 if not skip_annotation else 0.4)
+                   alpha=1.0)
 
         if skip_annotation:
             continue
@@ -202,14 +206,17 @@ def plot_tree_schematic(
             short = geno.replace("_crispant", "").replace("_", " ")
             handles.append(mpatches.Patch(color=color, label=short))
 
-    handles += [
+    handles.append(
         Line2D([0], [0], marker="D", color="w",
                markerfacecolor="#C62828", markersize=8,
                label="Branch (p < 0.05)"),
-        Line2D([0], [0], marker="D", color="w",
-               markerfacecolor="#757575", markersize=7,
-               label="Branch (ns)"),
-    ]
+    )
+    if annotate_ns:
+        handles.append(
+            Line2D([0], [0], marker="D", color="w",
+                   markerfacecolor="#757575", markersize=7,
+                   label="Branch (ns)"),
+        )
     ax.legend(handles=handles, loc="upper left",
               fontsize=8, framealpha=0.9, edgecolor="#cccccc")
 
@@ -320,7 +327,7 @@ def plot_tree_3d(
     default_color = "#aaaaaa"
 
     for emb_i in obs_df["embryo_idx"].unique():
-        geno = str(labels[emb_i])
+        geno = str(labels[int(emb_i)])
         color = color_map.get(geno, default_color) if color_map else default_color
         sub = obs_df[obs_df["embryo_idx"] == emb_i]
         ax.scatter(
@@ -393,7 +400,7 @@ def save_tree_3d_gif(
 
     # Scatter per genotype
     for emb_i in obs_df["embryo_idx"].unique():
-        geno = str(labels[emb_i])
+        geno = str(labels[int(emb_i)])
         color = color_map.get(geno, default_color) if color_map else default_color
         sub = obs_df[obs_df["embryo_idx"] == emb_i]
         ax.scatter(
@@ -437,3 +444,309 @@ def save_tree_3d_gif(
     )
     anim.save(out_path, writer="pillow", fps=fps)
     plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Metro-map layout
+# ---------------------------------------------------------------------------
+
+def _assign_segment_tracks(
+    segments: list[list[tuple[int, int]]],
+    nodes_df: pd.DataFrame,
+    track_spacing: float = 1.0,
+) -> dict[int, float]:
+    """Assign a y-track to each segment index.
+
+    Strategy:
+    - Build a graph of segments connected at shared structural endpoints.
+    - Root connected components at the segment whose mean t_scaled is earliest.
+    - BFS from root: root segment gets y=0; at each branch node, child segments
+      fan out symmetrically around the parent's track.
+    - Disconnected components are stacked below the main component with a gap.
+
+    Returns
+    -------
+    dict mapping segment index -> y track position
+    """
+    from collections import defaultdict, deque
+
+    def ek(a: int, b: int) -> tuple[int, int]:
+        return (min(a, b), max(a, b))
+
+    # Structural endpoint nodes for each segment
+    def seg_endpoints(seg: list[tuple[int, int]]) -> tuple[int, int]:
+        return seg[0][0], seg[-1][1]
+
+    n = len(segments)
+    endpoints = [seg_endpoints(s) for s in segments]
+
+    # Mean t_scaled per segment (for rooting)
+    node_t = dict(zip(nodes_df["node_id"].astype(int), nodes_df["t_scaled"]))
+    seg_mean_t = [
+        np.mean([node_t.get(a, 0), node_t.get(b, 0)])
+        for a, b in endpoints
+    ]
+
+    # Build segment adjacency: two segments are adjacent if they share an endpoint
+    node_to_segs: dict[int, list[int]] = defaultdict(list)
+    for si, (a, b) in enumerate(endpoints):
+        node_to_segs[a].append(si)
+        node_to_segs[b].append(si)
+
+    seg_adj: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for node, segs in node_to_segs.items():
+        for i in range(len(segs)):
+            for j in range(i + 1, len(segs)):
+                seg_adj[segs[i]].append((segs[j], node))
+                seg_adj[segs[j]].append((segs[i], node))
+
+    # Find connected components of segments
+    visited = set()
+    components: list[list[int]] = []
+    for start in range(n):
+        if start in visited:
+            continue
+        comp = []
+        q = deque([start])
+        while q:
+            si = q.popleft()
+            if si in visited:
+                continue
+            visited.add(si)
+            comp.append(si)
+            for (nb, _) in seg_adj[si]:
+                if nb not in visited:
+                    q.append(nb)
+        components.append(comp)
+
+    track: dict[int, float] = {}
+    component_base = 0.0
+
+    for comp in components:
+        # Root = segment with earliest mean t_scaled
+        root_si = min(comp, key=lambda si: seg_mean_t[si])
+
+        # BFS to assign tracks within this component
+        # State: (seg_idx, parent_seg_idx, shared_node, parent_track)
+        visited_segs: set[int] = set()
+        # Map: branch_node -> list of child segment indices already assigned
+        branch_children: dict[int, list[int]] = defaultdict(list)
+
+        q: deque[tuple[int, float]] = deque([(root_si, component_base)])
+        # We'll collect all assignments then center them
+        raw_assignments: list[tuple[int, float]] = []
+
+        while q:
+            si, parent_y = q.popleft()
+            if si in visited_segs:
+                continue
+            visited_segs.add(si)
+            track[si] = parent_y
+            raw_assignments.append((si, parent_y))
+
+            # Find the shared node with parent (exit node of this segment)
+            ep_a, ep_b = endpoints[si]
+            neighbors = [(nb_si, shared_node) for nb_si, shared_node in seg_adj[si]
+                         if nb_si not in visited_segs]
+
+            # Group neighbors by which endpoint they share
+            by_node: dict[int, list[int]] = defaultdict(list)
+            for nb_si, shared_node in neighbors:
+                by_node[shared_node].append(nb_si)
+
+            for shared_node, children in by_node.items():
+                nc = len(children)
+                # Fan children symmetrically around parent_y
+                offsets = np.arange(nc) * track_spacing
+                offsets -= offsets.mean()
+                for child_si, offset in zip(children, offsets):
+                    q.append((child_si, parent_y + offset))
+
+        # Offset this component below the previous one
+        if track:
+            used_ys = [track[si] for si in comp if si in track]
+            component_base = min(used_ys) - track_spacing * 2.0
+
+    return track
+
+
+def plot_tree_metromap(
+    segments: list[list[tuple[int, int]]],
+    nodes_df: pd.DataFrame,
+    proj_df: pd.DataFrame,
+    labels: np.ndarray,
+    branch_results: list["BranchTestResult"] | None = None,
+    color_map: dict[str, str] | None = None,
+    t_min_hpf: float | None = None,
+    t_max_hpf: float | None = None,
+    t_weight: float = 3.0,
+    track_spacing: float = 1.0,
+    scatter_alpha: float = 0.4,
+    scatter_size: float = 8.0,
+    jitter_scale: float = 0.08,
+    figsize: tuple[float, float] = (14, 7),
+    title: str | None = None,
+    seed: int = 42,
+) -> tuple[plt.Figure, plt.Axes]:
+    """Metro-map layout: x=time (hpf), y=segment track.
+
+    Each pruned segment is a horizontal track. Embryo observations are
+    scattered along their segment's track with small vertical jitter.
+    Branch points are annotated if branch_results are provided.
+
+    Parameters
+    ----------
+    segments    : pruned segments from prune_phantom_segments
+    nodes_df    : tree nodes with t_scaled
+    proj_df     : observation_projections (nearest_edge_a/b, embryo_idx, t_hpf)
+    labels      : (N_e,) genotype strings
+    branch_results : optional — for annotating significant branch points
+    t_min_hpf, t_max_hpf : for converting t_scaled → hpf (inferred if None)
+    track_spacing : vertical distance between tracks
+    jitter_scale  : std of vertical jitter within a track
+    """
+    rng = np.random.default_rng(seed)
+    default_color = "#aaaaaa"
+
+    node_t = dict(zip(nodes_df["node_id"].astype(int), nodes_df["t_scaled"]))
+
+    # Infer time range from proj_df if not provided
+    if t_min_hpf is None:
+        t_min_hpf = float(proj_df["t_hpf"].min())
+    if t_max_hpf is None:
+        t_max_hpf = float(proj_df["t_hpf"].max())
+    t_range = (t_max_hpf - t_min_hpf) or 1.0
+
+    def t_scaled_to_hpf(ts: float) -> float:
+        return t_min_hpf + ts / t_weight * t_range
+
+    # Assign tracks
+    seg_track = _assign_segment_tracks(segments, nodes_df, track_spacing)
+
+    # Build lookup: edge -> segment index
+    def ek(a: int, b: int) -> tuple[int, int]:
+        return (min(a, b), max(a, b))
+
+    edge_to_seg: dict[tuple[int, int], int] = {}
+    for si, seg in enumerate(segments):
+        for a, b in seg:
+            edge_to_seg[ek(a, b)] = si
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # ------------------------------------------------------------------
+    # 1. Scatter embryo observations along tracks
+    # ------------------------------------------------------------------
+    for _, row in proj_df.iterrows():
+        emb_i = int(row["embryo_idx"])
+        edge = ek(int(row["nearest_edge_a"]), int(row["nearest_edge_b"]))
+        si = edge_to_seg.get(edge)
+        if si is None:
+            continue  # pruned edge — skip
+        y_track = seg_track.get(si, 0.0)
+        geno = str(labels[emb_i])
+        color = color_map.get(geno, default_color) if color_map else default_color
+        jitter = rng.normal(0, jitter_scale)
+        ax.scatter(
+            y_track + jitter, row["t_hpf"],
+            c=color, s=scatter_size, alpha=scatter_alpha,
+            linewidths=0, zorder=1,
+        )
+
+    # ------------------------------------------------------------------
+    # 2. Draw segment lines
+    # ------------------------------------------------------------------
+    for si, seg in enumerate(segments):
+        x_track = seg_track.get(si, 0.0)
+        node_ids_in_seg = [seg[0][0]] + [b for a, b in seg]
+        t_hpfs = [t_scaled_to_hpf(node_t[n]) for n in node_ids_in_seg]
+        t_start, t_end = min(t_hpfs), max(t_hpfs)
+        ax.plot([x_track, x_track], [t_start, t_end],
+                color="#333333", linewidth=2.0,
+                solid_capstyle="round", zorder=3)
+
+    # ------------------------------------------------------------------
+    # 3. Draw branch connections (horizontal lines at branch nodes)
+    # ------------------------------------------------------------------
+    from collections import defaultdict
+    node_to_segs: dict[int, list[int]] = defaultdict(list)
+    for si, seg in enumerate(segments):
+        ep_a, ep_b = seg[0][0], seg[-1][1]
+        node_to_segs[ep_a].append(si)
+        node_to_segs[ep_b].append(si)
+
+    branch_node_ids = set(nodes_df.loc[nodes_df["degree"] >= 3, "node_id"].astype(int))
+
+    for node_id in branch_node_ids:
+        connected_segs = node_to_segs.get(node_id, [])
+        if len(connected_segs) < 2:
+            continue
+        t_hpf_node = t_scaled_to_hpf(node_t[node_id])
+        xs = [seg_track[si] for si in connected_segs if si in seg_track]
+        if len(xs) < 2:
+            continue
+        ax.plot([min(xs), max(xs)], [t_hpf_node, t_hpf_node],
+                color="#333333", linewidth=1.5,
+                linestyle="--", zorder=2, alpha=0.6)
+
+    # ------------------------------------------------------------------
+    # 4. Annotate significant branch nodes
+    # ------------------------------------------------------------------
+    if branch_results:
+        br_map = {r.node_id: r for r in branch_results}
+        for node_id, res in br_map.items():
+            if node_id not in node_to_segs:
+                continue
+            connected_segs = node_to_segs[node_id]
+            xs = [seg_track[si] for si in connected_segs if si in seg_track]
+            if not xs:
+                continue
+            t_hpf_node = t_scaled_to_hpf(node_t[node_id])
+            x_mid = np.mean(xs)
+            is_sig = res.pval < 0.05
+            if not is_sig:
+                continue
+            color = "#C62828"
+            ax.scatter(x_mid, t_hpf_node, marker="D",
+                       c=color, s=180, zorder=6,
+                       edgecolors="white", linewidths=1.0)
+            star = _sig_star(res.pval)
+            ax.annotate(
+                f"{star}  {_pval_label(res.pval)}\nV={res.effect_size:.2f}  n={res.n_embryos}",
+                xy=(x_mid, t_hpf_node),
+                xytext=(8, -22), textcoords="offset points",
+                fontsize=7.5, color=color, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
+                          edgecolor=color, alpha=0.88, linewidth=0.8),
+                zorder=7,
+            )
+
+    # ------------------------------------------------------------------
+    # 5. Legend
+    # ------------------------------------------------------------------
+    handles = []
+    if color_map:
+        for geno, color in color_map.items():
+            short = geno.replace("_crispant", "").replace("_", " ")
+            handles.append(mpatches.Patch(color=color, label=short))
+    if branch_results:
+        handles.append(Line2D([0], [0], marker="D", color="w",
+                               markerfacecolor="#C62828", markersize=8,
+                               label="Branch (p < 0.05)"))
+    ax.legend(handles=handles, loc="upper left",
+              fontsize=8, framealpha=0.9, edgecolor="#cccccc")
+
+    # ------------------------------------------------------------------
+    # 6. Styling
+    # ------------------------------------------------------------------
+    ax.set_ylabel("Time (hpf)", fontsize=10)
+    ax.set_xlabel("Segment track", fontsize=10)
+    ax.set_xticks([])
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_visible(False)
+    ax.tick_params(labelsize=8)
+    if title:
+        ax.set_title(title, fontsize=11, pad=10)
+    fig.tight_layout()
+    return fig, ax
