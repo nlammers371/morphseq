@@ -21,15 +21,15 @@ from .margins import class_signed_margin, truth_signed_margin
 
 # Direction-specific helpers moved to classification/directions/.
 # loop.py orchestrates; it calls these, it does not define them.
-from analyze.classification.directions.fit import (
+from ..directions.fit import (
     _make_logistic_classifier,
     fit_classifier_direction as _fit_classifier_direction,
     DIRECTION_SPACE_RAW,
     REFIT_SCOPE_FULL_BIN,
     VECTOR_KIND_SIGNED_UNIT_COEF,
 )
-from analyze.classification.directions.build_payload import build_classifier_directions_payload
-from analyze.classification.directions.ids import make_vector_id
+from ..directions.ids import make_vector_id
+from .data_prep import _bin_and_aggregate, _build_binary_labels, _resolve_feature_columns
 
 try:
     from joblib import Parallel, delayed, effective_n_jobs as joblib_effective_n_jobs
@@ -39,95 +39,6 @@ except ImportError:
     joblib_effective_n_jobs = None
 
 CV_SCOPE_AS_SCORED = "as_scored"
-
-
-# ---------------------------------------------------------------------------
-# Step 1: Feature resolution
-# ---------------------------------------------------------------------------
-
-
-def _resolve_feature_columns(
-    df: pd.DataFrame,
-    features: dict[str, str | list[str]],
-) -> dict[str, list[str]]:
-    """Resolve user-facing feature spec into concrete column lists.
-
-    - ``str`` values: prefix-match against ``df.columns``
-    - ``list[str]`` values: passed through; missing columns error
-    """
-    resolved: dict[str, list[str]] = {}
-    for name, spec in features.items():
-        if isinstance(spec, str):
-            cols = [c for c in df.columns if c.startswith(spec)]
-            if not cols:
-                raise ValueError(
-                    f"Feature set {name!r}: no columns match prefix {spec!r}"
-                )
-            resolved[name] = sorted(cols)
-        elif isinstance(spec, list):
-            missing = [c for c in spec if c not in df.columns]
-            if missing:
-                raise ValueError(
-                    f"Feature set {name!r}: missing columns {missing}"
-                )
-            resolved[name] = list(spec)
-        else:
-            raise TypeError(
-                f"Feature set {name!r}: expected str or list[str], "
-                f"got {type(spec).__name__}"
-            )
-    return resolved
-
-
-# ---------------------------------------------------------------------------
-# Step 3: Binary labelling (THE pooling-aware function)
-# ---------------------------------------------------------------------------
-
-
-def _build_binary_labels(
-    df: pd.DataFrame,
-    class_col: str,
-    comparison: ResolvedComparison,
-) -> pd.DataFrame:
-    """Filter *df* to comparison members and assign ``_y`` column.
-
-    ``_y = 1`` for positive members, ``_y = 0`` for negative members.
-    Rows from unrelated classes are dropped.
-    """
-    pos_set = set(comparison.positive_members)
-    neg_set = set(comparison.negative_members)
-    all_members = pos_set | neg_set
-
-    mask = df[class_col].isin(all_members)
-    out = df.loc[mask].copy()
-
-    out["_y"] = out[class_col].map(
-        lambda x: 1 if x in pos_set else 0
-    )
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Step 4: Binning & aggregation
-# ---------------------------------------------------------------------------
-
-
-def _bin_and_aggregate(
-    df: pd.DataFrame,
-    id_col: str,
-    time_col: str,
-    feature_cols: list[str],
-    bin_width: float,
-) -> pd.DataFrame:
-    """Floor-bin by *time_col*, then mean-aggregate per (id, bin, label)."""
-    out = df.copy()
-    out["_time_bin"] = (np.floor(out[time_col] / bin_width) * bin_width).astype(int)
-    out["time_bin_center"] = out["_time_bin"].astype(float) + bin_width / 2.0
-
-    groupby_cols = [id_col, "_time_bin", "time_bin_center", "_y"]
-    agg_cols = [c for c in feature_cols if c in out.columns]
-    result = out.groupby(groupby_cols, as_index=False)[agg_cols].mean()
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -771,8 +682,8 @@ def _collect_classifier_directions(
             "bin_width": float(br["bin_width"]),
             "auroc_obs": float(br["auroc_obs"]),
             "pval": float(br["pval"]),
-            "n_pos": int(br["n_positive"]),
-            "n_neg": int(br["n_negative"]),
+            "n_positive": int(br["n_positive"]),
+            "n_negative": int(br["n_negative"]),
             "vector_id": vector_id,
             "vector_kind": VECTOR_KIND_SIGNED_UNIT_COEF,
             "coef_norm": float(direction["coef_norm"]),

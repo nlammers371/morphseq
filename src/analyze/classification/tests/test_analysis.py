@@ -13,10 +13,8 @@ from analyze.classification.engine.comparison_resolution import (
     ResolvedComparison,
     resolve_comparisons,
 )
-from analyze.classification.engine.loop import (
-    _build_binary_labels,
-    _collect_scores,
-)
+from analyze.classification.engine.data_prep import _build_binary_labels
+from analyze.classification.engine.loop import _collect_scores
 
 
 # ---------------------------------------------------------------------------

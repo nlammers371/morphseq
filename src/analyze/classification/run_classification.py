@@ -19,9 +19,8 @@ from .engine.comparison_resolution import (
     resolve_comparisons,
 )
 from .engine.contrast_coordinates import assemble_contrast_coordinates
+from .engine.data_prep import _bin_and_aggregate, _build_binary_labels, _resolve_feature_columns
 from .engine.loop import (
-    _bin_and_aggregate,
-    _build_binary_labels,
     _collect_binary_margins,
     _collect_binary_predictions,
     _collect_binary_support,
@@ -31,7 +30,6 @@ from .engine.loop import (
     _collect_multiclass_predictions,
     _collect_scores,
     _collect_scores_from_ovr,
-    _resolve_feature_columns,
     _run_binary_classification_loop,
     _run_multiclass_classification_loop,
 )

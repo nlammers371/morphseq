@@ -527,34 +527,37 @@ that functions now accept `ValidatedDirections`, not raw `ClassifierDirections`.
 ## Implementation order
 
 **Step 1 — Refactor A, part 1: create `classification/directions/` and move direction
-code into it, preserving behavior.**
-Create the 6 files. Move `ClassifierDirections` to `directions/artifact.py` and leave the
-re-export in `engine/analysis.py`. Move `_fit_classifier_direction` + its private
-helpers to `directions/fit.py` and rename to `fit_classifier_direction`. Extract
-`build_classifier_directions_payload` into `directions/build_payload.py` from the body
-of `_collect_classifier_directions`. Extract vector_id construction into `directions/ids.py`
-with `make_vector_id` / `parse_vector_id`. Update `engine/loop.py` to import from the new
-locations. **Run the existing classification test suite — zero behavior change.**
+code into it, preserving behavior.** ✅ DONE
+- Created `classification/directions/` with 6 files: `__init__.py`, `artifact.py`,
+  `fit.py`, `build_payload.py`, `ids.py`, `extract.py`.
+- `ClassifierDirections` moved to `directions/artifact.py`; `engine/analysis.py`
+  re-exports it with a comment.
+- `_fit_classifier_direction` + private helpers (`_make_logistic_classifier`,
+  `_estimator_config`, `_preprocess_fingerprint`, `_json_safe`) moved to `fit.py`
+  and renamed to `fit_classifier_direction` (public).
+- `build_classifier_directions_payload` created in `build_payload.py`.
+- `make_vector_id` / `parse_vector_id` in `ids.py`.
+- Shared data-prep helpers (`_resolve_feature_columns`, `_build_binary_labels`,
+  `_bin_and_aggregate`) extracted from `loop.py` into `engine/data_prep.py` — both
+  `loop.py` and `directions/extract.py` import from there; neither imports the other.
+- `loop.py` imports direction symbols from `directions/`; its definitions are gone.
+- **All 166 classification tests pass.**
 
-**Step 2 — Refactor A, part 2: `extract_classifier_directions`.**
-Implement in `directions/extract.py`. It composes classification-general helpers
-(`resolve_comparisons`, `_resolve_feature_columns`, `_build_binary_labels`,
-`_bin_and_aggregate`) with `fit_classifier_direction` and
-`build_classifier_directions_payload`. Test:
-- On a tiny fixture, `extract_classifier_directions(df, ..., save_dir=tmp)` produces an
-  artifact whose `metadata` (minus `auroc_obs`) and `vectors` are byte-identical to
-  `run_classification(df, ..., save_classifier_directions=True, n_permutations=0,
-  save_dir=tmp2)` — same `vector_id` set, same `unit_coef`, same `preprocess_fingerprint`,
-  same `feature_names`.
+**Step 2 — Refactor A, part 2: `extract_classifier_directions`.** ✅ DONE
+- Implemented in `directions/extract.py`.
+- Verified byte-identical vectors vs `run_classification(..., n_permutations=0,
+  save_classifier_directions=True)` on a synthetic fixture (same `vector_id` set,
+  same `unit_coef`, same `preprocess_fingerprint`, same `feature_names`).
 
-**Step 3 — Refactor B, part 1: `morphology_geometry/validation.py`.**
-Write `validate_classifier_directions`, `ValidatedDirections`,
-`ClassifierDirectionContractError`. Write `test_validation.py` with one failing-case
-fixture per failure mode listed above (missing column, missing npz key, wrong vector
-length, NaN, non-unit norm, missing `required_comparison_ids`, non-uniform bin centers,
-bin-width mismatch, preprocess fingerprint drift, zero-vector handling). **Then run the
-validator against the existing 20260409 PBX smoke artifact on disk — it must pass
-cleanly.** That's the first integration check.
+**Step 3 — Refactor B, part 1: `morphology_geometry/validation.py`.** 🔄 IN PROGRESS
+- `validation.py` written: `ClassifierDirectionContractError`, `ValidatedDirections`
+  (frozen dataclass), `validate_classifier_directions()` with all 10 checks:
+  feature_set present, required metadata columns, filter + sort, vector_id integrity,
+  vector stacking with shape/finite/unit-norm checks, direction_space, preprocess
+  fingerprint constancy, required_comparison_ids, bin uniformity + expected_bin_width,
+  has_auroc detection.
+- `tests/` directory created. `test_validation.py` to be written before committing the
+  next batch.
 
 **Step 4 — Refactor B, part 2: promote vectors + projection + io.**
 Copy the three prototype modules into `morphology_geometry/`. Rewire them to take

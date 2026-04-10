@@ -15,7 +15,7 @@ from .null import NullDistributions
 # ClassifierDirections has moved to classification/directions/artifact.py.
 # This re-export keeps existing imports working.
 # New code should import from: analyze.classification.directions.artifact
-from analyze.classification.directions.artifact import ClassifierDirections  # noqa: F401
+from ..directions.artifact import ClassifierDirections  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Scores validation

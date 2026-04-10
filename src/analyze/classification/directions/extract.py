@@ -22,9 +22,10 @@ import pandas as pd
 
 from ..engine.comparison_resolution import (
     ComparisonScheme,
+    UserComparisonSpec,
     resolve_comparisons,
 )
-from ..engine.loop import (
+from ..engine.data_prep import (
     _bin_and_aggregate,
     _build_binary_labels,
     _resolve_feature_columns,
@@ -41,6 +42,8 @@ def extract_classifier_directions(
     id_col: str,
     time_col: str,
     comparisons: ComparisonScheme,
+    positive: UserComparisonSpec | None = None,
+    negative: UserComparisonSpec | None = None,
     features: dict[str, str | list[str]],
     bin_width: float = 4.0,
     min_samples_per_group: int = 3,
@@ -83,7 +86,14 @@ def extract_classifier_directions(
     The geometry validator will accept this with has_auroc=False, and weight_mode
     will automatically fall back to "uniform" in run_morphology_geometry.
     """
-    resolved = resolve_comparisons(comparisons, class_col=class_col, df=df)
+    available_labels = set(df[class_col].dropna().unique())
+    resolved = resolve_comparisons(
+        positive=positive,
+        negative=negative,
+        comparisons=comparisons,
+        available_labels=available_labels,
+        class_col=class_col,
+    )
     feature_sets = _resolve_feature_columns(df, features)
 
     fits: list[dict[str, Any]] = []
