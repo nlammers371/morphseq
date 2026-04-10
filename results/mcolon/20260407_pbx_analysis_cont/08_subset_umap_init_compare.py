@@ -23,34 +23,54 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from analyze.classification.pairwise_outputs import subset_pairwise_cube
 from analyze.trajectory_condensation import init_embedding, schema
 from analyze.trajectory_condensation.viz import plotting
 
 from common import GENOTYPE_COLORS
 
 
+SUBSET_CONFIGS: dict[str, tuple[list[str], str]] = {
+    "all_5class": (
+        ["inj_ctrl", "pbx1b_crispant", "pbx4_crispant", "pbx1b_pbx4_crispant", "wik_ab"],
+        "All 5 classes",
+    ),
+    "all_except_wikab": (
+        ["inj_ctrl", "pbx1b_crispant", "pbx4_crispant", "pbx1b_pbx4_crispant"],
+        "All except wik_ab",
+    ),
+    "all_except_injctrl": (
+        ["pbx1b_crispant", "pbx4_crispant", "pbx1b_pbx4_crispant", "wik_ab"],
+        "All except inj_ctrl",
+    ),
+    "inj_ctrl_only": (
+        ["inj_ctrl"],
+        "inj_ctrl only",
+    ),
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compare aligned UMAP inits under row-subset conditions.")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--subsets",
+        nargs="+",
+        choices=sorted(SUBSET_CONFIGS),
+        default=["all_5class", "all_except_wikab", "all_except_injctrl"],
+    )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
 
-def _render_bundle(
-    *,
-    out_dir: Path,
-    title_prefix: str,
-    x0: np.ndarray,
-    data: schema.CondensationData,
-) -> None:
+def _render_bundle(*, out_dir: Path, title_prefix: str, x0: np.ndarray, data: schema.CondensationData) -> None:
     labels = np.asarray(data.labels, dtype=object)
     color_map = {g: GENOTYPE_COLORS.get(g, "#555555") for g in np.unique(labels)}
 
@@ -86,34 +106,41 @@ def _render_bundle(
     )
 
 
+
+def _subset_data(full_data: schema.CondensationData, keep_genotypes: list[str]) -> schema.CondensationData:
+    result = subset_pairwise_cube(
+        full_data.features,
+        full_data.mask,
+        full_data.embryo_ids,
+        full_data.time_values,
+        full_data.labels,
+        full_data.feature_names,
+        keep_genotypes,
+    )
+    data = schema.CondensationData(
+        features=result.features,
+        mask=result.mask,
+        embryo_ids=result.embryo_ids,
+        time_values=result.time_values,
+        labels=result.labels,
+        feature_names=result.feature_names,
+        embryo_index={str(e): i for i, e in enumerate(result.embryo_ids)},
+        time_index={float(t): i for i, t in enumerate(result.time_values)},
+    )
+    schema.validate(data)
+    return data
+
+
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    configs = [
-        (
-            "all_5class",
-            ["inj_ctrl", "pbx1b_crispant", "pbx4_crispant", "pbx1b_pbx4_crispant", "wik_ab"],
-            "All 5 classes",
-        ),
-        (
-            "all_except_wikab",
-            ["inj_ctrl", "pbx1b_crispant", "pbx4_crispant", "pbx1b_pbx4_crispant"],
-            "All except wik_ab",
-        ),
-        (
-            "all_except_injctrl",
-            ["pbx1b_crispant", "pbx4_crispant", "pbx1b_pbx4_crispant", "wik_ab"],
-            "All except inj_ctrl",
-        ),
-    ]
-
     full_data = schema.from_pairwise_margin_csv(args.input)
 
-    for slug, genotypes, title in configs:
+    for slug in args.subsets:
+        genotypes, title = SUBSET_CONFIGS[slug]
         run_dir = args.output_dir / slug
         run_dir.mkdir(parents=True, exist_ok=True)
-        data = schema.subset_pairwise(full_data, genotypes)
+        data = _subset_data(full_data, genotypes)
         x0 = init_embedding.aligned_umap_init(
             data.features,
             data.mask,
