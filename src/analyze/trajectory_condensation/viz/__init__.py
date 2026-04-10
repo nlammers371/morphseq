@@ -1,6 +1,7 @@
 """Visualization subpackage for trajectory condensation."""
 
-from . import animation, iteration_choice_plots, plotting
+from . import animation, iteration_choice_plots, condensed_time_slice_viewer, plotting
+from .condensed_time_slice_viewer import time_slice_html
 from .api import (
     VizConfig,
     RunDescriptor,
@@ -15,7 +16,9 @@ from .iteration_choice_plots import plot_iteration_scores, render_selected_itera
 __all__ = [
     "animation",
     "iteration_choice_plots",
+    "condensed_time_slice_viewer",
     "plotting",
+    "time_slice_html",
     "VizConfig",
     "RunDescriptor",
     "load_run",

@@ -363,6 +363,20 @@ def render_run(
     if skip_animations:
         return written
 
+    # ---- animation: time-slice scrubber ----
+    p = output_dir / "time_slice.gif"
+    tc_animation.animate_time_slice(
+        run.positions, run.mask, run.time_values,
+        labels=run.labels, color_map=run.color_map,
+        output_path=p,
+        fps=4, dpi=cfg.dpi, figsize=(cfg.figsize[0] * 1.75, cfg.figsize[1]),
+        point_size=cfg.point_size,
+        alpha_point=cfg.alpha_point, alpha_line=cfg.alpha_line,
+        linewidth=cfg.linewidth,
+        title=_title("time slice"),
+    )
+    written["time_slice.gif"] = p
+
     # ---- animation: rotation of final structure ----
     p = output_dir / "rotation.gif"
     tc_animation.animate_rotation(

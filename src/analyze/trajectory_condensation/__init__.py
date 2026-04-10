@@ -18,6 +18,7 @@ from .viz import (
     compare_runs,
     compare_run_grid,
     load_run,
+    time_slice_html,
 )
 from .schema import CondensationData, validate, from_multiclass_csv, from_pairwise_margin_csv, subset_pairwise
 from .force_diagnostics import ForceSnapshot, force_snapshot, force_target_table
@@ -78,6 +79,7 @@ __all__ = [
     "compare_runs",
     "compare_run_grid",
     "load_run",
+    "time_slice_html",
     "CondensationConfig",
     "CondensationResult",
     "CondensationState",

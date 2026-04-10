@@ -1,6 +1,6 @@
 # `trajectory_condensation/viz` — Visualization README
 
-Static comparison figures, stacked 3D plots, and GIF rendering for condensation runs.
+Static comparison figures, stacked 3D plots, GIF rendering, and the condensed time-slice HTML viewer for condensation runs.
 
 For force/config API details, see the root module:
 - [state.py](../condensation/state.py)
@@ -72,6 +72,11 @@ Standard outputs:
 - `init_vs_final_rotation.gif` if `x0` is present
 - `iterations.gif` if saved iteration history is available
 
+The interactive browser is not a generic Plotly utility. Use `tc.time_slice_html(...)`,
+implemented in [condensed_time_slice_viewer.py](condensed_time_slice_viewer.py),
+when you want the condensed trajectory viewer with the 3D trajectory context,
+highlighted current-time points, and the optional 2D current-slice panel.
+
 ### `compare_runs(runs, mode="trajectories", *, config=None, align_axes=True, figsize=None, output_path=None)`
 
 Side-by-side comparison for two or more runs.
@@ -91,6 +96,28 @@ tc.compare_runs([r1, r2], mode="stacked_3d", output_path="compare_3d.png")
 Grid comparison helper for sweep outputs (rows = method, columns = strength/condition).
 
 See [api.py](api.py) and [03_force_diagnostics.py](../../../../results/mcolon/20260407_pbx_analysis_cont/03_force_diagnostics.py).
+
+## Condensed Time-Slice Viewer
+
+### `condensed_time_slice_viewer.py`
+
+Owner file for `tc.time_slice_html(...)`. It writes a self-contained HTML viewer
+for condensed coordinates. It shows all trajectories as dimmed 3D context,
+highlights the selected time bin, and optionally shows the current time slice in
+a linked 2D panel. Keep this behavior here rather than in generic Plotly helpers
+or solver modules.
+
+```python
+tc.time_slice_html(
+    run.positions,
+    run.mask,
+    run.time_values,
+    labels=run.labels,
+    color_map=run.color_map,
+    embryo_ids=run.embryo_ids,
+    output_path="time_slice.html",
+)
+```
 
 ## Lower-Level API
 

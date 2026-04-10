@@ -3,7 +3,7 @@ animation.py
 ------------
 Video generation for ordered 2D coordinate slices across time.
 
-Two distinct videos, each answering a different question:
+Three distinct videos, each answering a different question:
 
   Video A — final structure, slow rotation
     animate_rotation(positions, mask, time_values, ...)
@@ -15,7 +15,14 @@ Two distinct videos, each answering a different question:
     "How did the structure form? Is it converging?"
     Use for: debugging, hyperparameter tuning, convergence assessment.
 
-Both accept the same minimal input contract as plotting.py:
+  Video C — time-slice scrubber
+    animate_time_slice(positions, mask, time_values, ...)
+    "What does the UMAP look like at each time bin?"
+    Left panel: stacked 3D overview with a highlighted z-plane sweeping through
+    time. Right panel: 2D scatter of just the current time bin's points.
+    Use for: presentations, inspecting how the cross-section evolves over time.
+
+All accept the same minimal input contract as plotting.py:
   positions : (N_e, T, 2)
   mask      : (N_e, T) bool
   time_values : (T,) float
@@ -191,6 +198,217 @@ def animate_iterations(
     _save_animation(anim, output_path, fps, dpi)
     plt.close(fig)
     print(f"Saved iteration video: {output_path}")
+
+
+def animate_time_slice(
+    positions: np.ndarray,
+    mask: np.ndarray,
+    time_values: np.ndarray,
+    labels: np.ndarray | None = None,
+    color_map: dict[str, str] | None = None,
+    output_path: str | Path = "time_slice.gif",
+    elev: float = 25.0,
+    azim: float = -60.0,
+    fps: int = 8,
+    n_interp: int = 3,
+    hold_frames: int = 6,
+    dpi: int = 120,
+    figsize: tuple[float, float] = (14, 6),
+    point_size: float = 18.0,
+    alpha_point: float = 0.75,
+    alpha_line: float = 0.15,
+    alpha_slice_plane: float = 0.18,
+    linewidth: float = 0.6,
+    min_obs: int = 2,
+    title: str = "",
+):
+    """Time-slice scrubber: stacked 3D overview (left) + 2D cross-section (right).
+
+    The animation sweeps through time bins with smooth interpolation between
+    consecutive bins. Between each pair of adjacent bins, ``n_interp`` sub-frames
+    are rendered where:
+      - The z-plane in the left panel glides continuously between the two hpf values.
+      - On the right, embryos present in *both* bins have their 2D positions
+        linearly interpolated. Embryos entering the next bin fade in; embryos
+        leaving the current bin fade out.
+
+    Parameters
+    ----------
+    positions : (N_e, T, 2)
+    mask : (N_e, T) bool
+    time_values : (T,) float — hpf values, used for z-axis and slice label
+    labels : (N_e,) str, optional
+    color_map : label → color string, auto-generated if None
+    output_path : .gif or .mp4
+    elev, azim : fixed 3D camera angles (degrees)
+    fps : frames per second (default 8)
+    n_interp : sub-frames rendered between each pair of real time bins.
+    hold_frames : extra frames to hold on each keyframe before transitioning.
+        Total frames = (T - 1) * (n_interp + hold_frames) + 1 + hold_frames.
+    alpha_slice_plane : opacity of the highlighted z-plane in the left panel
+    min_obs : minimum observations required to draw a trajectory line
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.animation as animation
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    _validate_inputs(positions, mask, time_values)
+    color_map = _resolve_color_map(labels, color_map)
+
+    T = positions.shape[1]
+
+    # Fixed axis limits computed once from all observed positions.
+    obs_xy = positions[mask]
+    xy_pad = 0.05
+    x_all, y_all = obs_xy[:, 0], obs_xy[:, 1]
+    x_range = x_all.max() - x_all.min() or 1.0
+    y_range = y_all.max() - y_all.min() or 1.0
+    xlim = (x_all.min() - xy_pad * x_range, x_all.max() + xy_pad * x_range)
+    ylim = (y_all.min() - xy_pad * y_range, y_all.max() + xy_pad * y_range)
+    zlim = (float(time_values[0]), float(time_values[-1]))
+
+    # Build the flat list of (t_lo, t_hi, alpha) for every rendered frame.
+    # alpha=0.0 → fully at bin t_lo; alpha=1.0 → fully at bin t_hi.
+    # Each keyframe is held for hold_frames before the transition begins.
+    frames_spec: list[tuple[int, int, float]] = []
+    for _ in range(hold_frames + 1):
+        frames_spec.append((0, 0, 0.0))
+    for t in range(T - 1):
+        for k in range(1, n_interp + 1):
+            frames_spec.append((t, t + 1, k / n_interp))
+        for _ in range(hold_frames):
+            frames_spec.append((t + 1, t + 1, 0.0))
+
+    n_frames_total = len(frames_spec)
+
+    fig = plt.figure(figsize=figsize)
+    ax3d = fig.add_subplot(121, projection="3d")
+    ax2d = fig.add_subplot(122)
+
+    # Static 3D background — all trajectories, dimmed.
+    _draw_stacked_3d(
+        ax3d, positions, mask, time_values, labels, color_map,
+        point_size=point_size * 0.4, alpha_point=alpha_point * 0.35,
+        alpha_line=alpha_line, linewidth=linewidth, min_obs=min_obs,
+    )
+    ax3d.set_xlim3d(*xlim)
+    ax3d.set_ylim3d(*ylim)
+    ax3d.set_zlim3d(*zlim)
+    ax3d.view_init(elev=elev, azim=azim)
+    ax3d.set_title("z = time (hpf)", fontsize=8)
+    if title:
+        fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+
+    slice_plane_artists: list = []
+    highlight_artists: list = []
+
+    def _make_slice_plane(z: float):
+        x0, x1 = xlim
+        y0, y1 = ylim
+        verts = [[(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)]]
+        return Poly3DCollection(
+            verts, alpha=alpha_slice_plane,
+            facecolor="gold", edgecolor="goldenrod", linewidth=0.8,
+        )
+
+    def update(frame_idx: int):
+        t_lo, t_hi, alpha = frames_spec[frame_idx]
+        z = float(time_values[t_lo]) * (1 - alpha) + float(time_values[t_hi]) * alpha
+
+        # --- Left: update slice plane ---
+        for art in slice_plane_artists:
+            art.remove()
+        slice_plane_artists.clear()
+        for art in highlight_artists:
+            art.remove()
+        highlight_artists.clear()
+
+        poly = _make_slice_plane(z)
+        ax3d.add_collection3d(poly)
+        slice_plane_artists.append(poly)
+
+        # Highlight points at the current z (only at keyframes for clarity).
+        if alpha == 0.0 or alpha == 1.0:
+            t_key = t_hi if alpha == 1.0 else t_lo
+            obs = np.where(mask[:, t_key])[0]
+            if len(obs):
+                groups = np.unique(labels[obs]) if labels is not None else [None]
+                for group in groups:
+                    idx = obs[labels[obs] == group] if group is not None else obs
+                    color = color_map.get(group, "steelblue") if group is not None else "steelblue"
+                    sc = ax3d.scatter(
+                        positions[idx, t_key, 0], positions[idx, t_key, 1],
+                        np.full(len(idx), z),
+                        color=color, s=point_size * 2.0, alpha=1.0,
+                        zorder=5, edgecolors="white", linewidths=0.4,
+                    )
+                    highlight_artists.append(sc)
+
+        # --- Right: interpolated 2D scatter ---
+        ax2d.cla()
+        ax2d.set_xlim(*xlim)
+        ax2d.set_ylim(*ylim)
+        ax2d.set_xlabel("dim 1", fontsize=8)
+        ax2d.set_ylabel("dim 2", fontsize=8)
+        ax2d.tick_params(labelsize=7)
+
+        obs_lo = set(np.where(mask[:, t_lo])[0].tolist())
+        obs_hi = set(np.where(mask[:, t_hi])[0].tolist())
+        shared = np.array(sorted(obs_lo & obs_hi), dtype=int)
+        only_lo = np.array(sorted(obs_lo - obs_hi), dtype=int)
+        only_hi = np.array(sorted(obs_hi - obs_lo), dtype=int)
+
+        def _scatter_group(idx: np.ndarray, t_src: int, point_alpha: float):
+            if len(idx) == 0:
+                return
+            groups = np.unique(labels[idx]) if labels is not None else [None]
+            for group in groups:
+                g_idx = idx[labels[idx] == group] if group is not None else idx
+                color = color_map.get(group, "steelblue") if group is not None else "steelblue"
+                ax2d.scatter(
+                    positions[g_idx, t_src, 0], positions[g_idx, t_src, 1],
+                    color=color, s=point_size, alpha=point_alpha,
+                    label=group, linewidths=0,
+                )
+
+        if len(shared):
+            # Interpolate positions for shared embryos.
+            xy = (1 - alpha) * positions[shared, t_lo, :] + alpha * positions[shared, t_hi, :]
+            groups = np.unique(labels[shared]) if labels is not None else [None]
+            for group in groups:
+                g_mask = labels[shared] == group if group is not None else np.ones(len(shared), bool)
+                color = color_map.get(group, "steelblue") if group is not None else "steelblue"
+                ax2d.scatter(
+                    xy[g_mask, 0], xy[g_mask, 1],
+                    color=color, s=point_size, alpha=alpha_point,
+                    label=group, linewidths=0,
+                )
+
+        # Fade out embryos leaving (only in t_lo): full alpha → 0 as alpha→1
+        _scatter_group(only_lo, t_lo, alpha_point * (1 - alpha))
+        # Fade in embryos entering (only in t_hi): 0 → full alpha as alpha→1
+        _scatter_group(only_hi, t_hi, alpha_point * alpha)
+
+        if labels is not None:
+            handles, lab_names = ax2d.get_legend_handles_labels()
+            seen: dict[str, object] = {}
+            for h, l in zip(handles, lab_names):
+                seen.setdefault(l, h)
+            ax2d.legend(seen.values(), seen.keys(), loc="best", fontsize=7, framealpha=0.7)
+
+        n_obs = len(obs_lo) if alpha < 0.5 else len(obs_hi)
+        ax2d.set_title(f"{z:.1f} hpf  (n={n_obs})", fontsize=9)
+
+        return []
+
+    anim = animation.FuncAnimation(
+        fig, update, frames=n_frames_total, interval=1000 / fps, blit=False,
+    )
+    _save_animation(anim, output_path, fps, dpi)
+    plt.close(fig)
+    print(f"Saved time-slice video: {output_path}")
 
 
 def animate_init_final_rotation(
