@@ -387,113 +387,153 @@ plot_cluster_feature_trends(
 ## Emergence timeline
 
 **Algorithm module:** `src/analyze/classification/emergence/`
-**Viz file:** `src/analyze/classification/viz/emergence.py` *(static renderer not yet implemented)*
+**Viz module:** `src/analyze/classification/viz/emergence.py`
 
-Emergence answers: *in what order do classes become distinguishable from a reference set, and which classes co-emerge?* The algorithm takes a pairwise onset matrix (derived from `result.scores`) and produces a `EmergenceTimeline` — a reference-rooted tree of emergence blocks.
+Emergence answers: *in what order do classes become distinguishable from a reference set, and which classes co-emerge?*
 
-### Pipeline to generate an `EmergenceTimeline`
+### Public API — `analyze.classification.viz.emergence`
+
+Three public functions + one dataclass:
 
 ```python
-from analyze.classification.emergence import (
-    build_emergence_timeline,
-)
-from analyze.classification.emergence.onset import (
-    OnsetParams,
-    classify_pair_state_over_time,
-    compute_pair_onsets,
-    build_onset_matrix,
-)
-
-# 1. Load scores from a completed all-pairs classification run
-scores = pd.read_parquet("results/.../scores.parquet")
-scores = scores[scores["feature_set"] == "vae"].copy()
-
-# 2. Classify each (pair, time_bin) into tri-state: separated / not_separated / ambiguous
-params = OnsetParams(
-    p_sep=0.01,        # pval threshold for "separated"
-    auroc_sep=0.70,    # min AUROC for "separated"
-    p_ns=0.10,         # pval threshold for "not_separated"
-    subsequent_frac=0.75,  # fraction of remaining bins that must stay separated
-)
-classified = classify_pair_state_over_time(scores, params)
-
-# 3. Compute durable onset time per pair
-onset_df = compute_pair_onsets(classified, params)
-
-# 4. Build symmetric onset matrix (index=class, columns=class, values=hpf)
-all_classes = sorted(scores["positive_label"].unique())
-onset_matrix = build_onset_matrix(onset_df, all_classes)
-
-# 5. Build the emergence timeline
-reference = ["inj_ctrl", "wik_ab"]   # classes treated as the temporal reference
-timeline = build_emergence_timeline(
-    onset_matrix,
-    reference,
-    bin_width=4.0,
-    min_cross_support=0.5,
+from analyze.classification.viz.emergence import (
+    EmergenceData,             # science result dataclass
+    compute_emergence_data,    # scores DataFrame → EmergenceData
+    plot_emergence_heatmap,    # EmergenceData → static matplotlib Figure
+    render_emergence_html,     # EmergenceData → standalone HTML string
+    render_emergence_html_from_scores,  # convenience: scores → HTML in one call
 )
 ```
 
-### `EmergenceTimeline` structure
+#### `EmergenceData` (public dataclass)
+
+The science result. Contains onset matrices across all AUROC levels, aligned to `class_order`. No rendering concerns (colors/labels are not stored here).
 
 ```python
-timeline.reference_validation   # ReferenceValidation — coherence of the reference set
-timeline.scores                 # list[EmergenceScore] — per-class emergence timing
-timeline.blocks                 # list[EmergenceBlock] — co-emergent groups
-timeline.block_resolutions      # dict[block_id, ResolutionNode] — within-block tree
-timeline.all_classes            # list[str]
-timeline.reference              # list[str]
+@dataclass(frozen=True)
+class EmergenceData:
+    onset_matrices_by_level: dict[str, dict[str, dict[str, float | None]]]
+    # {level_name: {class_a: {class_b: onset_hpf | None}}}
+    class_order: list[str]      # canonical axis order; defines row/col of every matrix
+    auroc_levels: list[str]     # ordered level names; keys of onset_matrices_by_level
+    color_scale_min: float      # global min finite onset across all levels
+    color_scale_max: float      # global max finite onset across all levels
 ```
 
-Key types:
+**Invariants:** square matrices aligned to `class_order`; `float | None` values only (no NaN); `color_scale_min <= color_scale_max`.
 
-| type | fields |
-|---|---|
-| `ReferenceValidation` | `status` ("valid"/"ambiguous"/"invalid"), `coherence_score`, `offending_pairs` |
-| `EmergenceScore` | `class_name`, `emergence_time`, `emergence_min`, `emergence_max`, `n_resolved_refs` |
-| `EmergenceBlock` | `block_id`, `members`, `emergence_time`, `bin_key` |
-| `ResolutionNode` | `members`, `split_time`, `children`, `unresolved` |
+#### `compute_emergence_data`
 
-### Interactive HTML explorer
+```python
+data = compute_emergence_data(
+    scores_df,                       # tidy pairwise scores DataFrame
+    class_order,                     # required — canonical ordered class list
+    auroc_levels=None,               # {name: threshold}; default: none/0.60/0.65/0.70
+    p_sep=0.05,
+    p_ns=0.10,
+    subsequent_frac=0.40,
+    # Column name overrides (defaults match run_classification output):
+    time_col="time_bin_center",
+    positive_class_col="positive_label",
+    negative_class_col="negative_label",
+    auroc_col="auroc_obs",
+    pvalue_col="pval",
+)
+```
 
-The live emergence visualization is a fully standalone **HTML file with inline D3.js** — open in any browser, no server required.
+`class_order` is **required** and never inferred from data. Input is validated: required columns, numeric time, finite AUROC, p-values in [0, 1], unique (time, pos, neg) triplets.
 
-The rendering script uses the `analyze.classification.emergence` package to compute onset matrices and serialize them to JSON, then a client-side D3 renderer draws the tree interactively.
+#### `plot_emergence_heatmap`
 
-**Controls:**
-- **Included genotypes** — checklist to toggle which classes appear in the tree
-- **Emergence reference** — checklist to switch which class set defines the baseline; tree recomputes instantly client-side
+Static matplotlib heatmap for a single AUROC level:
+
+```python
+fig = plot_emergence_heatmap(
+    data,                            # EmergenceData
+    level="0.70",                    # one of data.auroc_levels
+    class_labels=None,               # {class: display_name}; None → identity
+    title=None,
+    cmap="YlOrRd",
+    output_path=None,                # saves PNG at 150 dpi if given
+)
+```
+
+#### `render_emergence_html`
+
+Renders a fully standalone interactive HTML file with inline D3.js — open in any browser, no server required. Colors and labels are render-time kwargs, not stored in `EmergenceData`.
+
+```python
+html = render_emergence_html(
+    data,                            # EmergenceData
+    class_labels=None,               # {class: display_name}; None → identity
+    class_colors=None,               # {class: "#rrggbb"}; None → tab10 palette
+    bin_width=4.0,                   # JS block-grouping bin width (hpf)
+    min_cross_support=0.5,           # JS bipartition gate
+    output_path=None,                # writes file if given; always returns str
+)
+```
+
+**Controls in the HTML:**
+- **Included genotypes** — toggle which classes appear in the analysis
+- **Emergence reference** — defines the baseline; tree recomputes instantly client-side
 - **AUROC threshold** — radio buttons: none | 0.60 | 0.65 | 0.70
 
 **Features:**
-- All tree computation (blocks, bipartition, resolution) runs client-side → instant reference switching
+- All tree computation runs client-side → instant reference switching
 - Two-layer tree: emergence from reference (blocks) + within-block resolution (recursive splits)
 - Reference coherence badge (valid / ambiguous / invalid) in status bar
 - Dashed borders mark unresolved composite blocks
 
-**Pattern for generating the HTML:**
+#### `render_emergence_html_from_scores`
+
+Convenience one-step function — calls `compute_emergence_data` then `render_emergence_html`:
+
 ```python
-from analyze.classification.emergence.transitivity import (
-    TransitivityParams,
-    classify_pair_state_over_time,
-    compute_pair_onsets,
-    build_onset_matrix,
+html = render_emergence_html_from_scores(
+    scores_df, class_order,
+    auroc_levels=..., p_sep=..., p_ns=..., subsequent_frac=...,
+    class_labels=..., class_colors=...,
+    bin_width=4.0, min_cross_support=0.5,
+    output_path=...,
 )
-
-# Compute onset matrices for each AUROC threshold level
-params = TransitivityParams(p_sep=0.05, auroc_sep=0.70, p_ns=0.10, subsequent_frac=0.40)
-classified = classify_pair_state_over_time(scores_df, params)
-onset_df = compute_pair_onsets(classified, params)
-onset_matrix = build_onset_matrix(onset_df, all_classes)
-
-# Serialize onset_matrix to JSON → embed into HTML template with inline D3
 ```
 
-The HTML template and D3 rendering logic live in the analysis script for this experiment. Future work should move the HTML renderer into `analyze.classification.viz.emergence` following the DESIGN.md boundary.
+### Typical usage pattern
 
-### Static rendering (placeholder)
+```python
+from analyze.classification.viz.emergence import compute_emergence_data, render_emergence_html
 
-`render_emergence_timeline_static` in `analyze.classification.viz.emergence` raises `NotImplementedError` — not yet implemented. Static matplotlib figures belong there when ready.
+scores = pd.read_parquet("results/.../scores.parquet")
+scores = scores[scores["feature_set"] == "vae"].copy()
+
+data = compute_emergence_data(scores, ALL_CLASSES)
+
+# Static heatmap
+from analyze.classification.viz.emergence import plot_emergence_heatmap
+fig = plot_emergence_heatmap(data, level="0.70")
+
+# Interactive HTML
+render_emergence_html(
+    data,
+    class_labels={"inj_ctrl": "Inj. Ctrl", ...},
+    class_colors={"inj_ctrl": "#2166AC", ...},
+    output_path="emergence_explorer.html",
+)
+```
+
+### Low-level emergence algorithm (`analyze.classification.emergence`)
+
+For direct access to the emergence algorithm types and functions:
+
+```python
+from analyze.classification.emergence import (
+    build_emergence_timeline,
+    EmergenceTimeline, EmergenceScore, EmergenceBlock,
+    ReferenceValidation, ResolutionNode,
+)
+```
+
+`build_emergence_timeline(onset_matrix, reference, ...)` takes a pre-built onset matrix DataFrame and produces an `EmergenceTimeline` with reference validation, per-class scores, and block resolutions. Used internally by the viz layer but also usable standalone.
 
 ### Onset data artifacts
 
