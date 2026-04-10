@@ -13,9 +13,7 @@ from matplotlib.colors import Normalize
 import numpy as np
 import pandas as pd
 
-from common import BUILD06_DIR, REPO_ROOT, resolve_embedding_roots
-EXPERIMENT_IDS = ["20260304", "20260306"]
-EXPERIMENT_LABEL = "20260304_20260306"
+from common import BUILD06_DIR, EXPERIMENT_IDS, EXPERIMENT_LABEL, REPO_ROOT, resolve_embedding_roots
 DEFAULT_GROUP1 = "pbx4_crispant"
 DEFAULT_GROUP2 = "pbx1b_pbx4_crispant"
 DEFAULT_BIN_WIDTH = 2.0
@@ -62,9 +60,13 @@ def _pretty_label(label: str) -> str:
     return str(label).replace("_", " ")
 
 
-def _load_pbx_dataframe(project_root: Path) -> pd.DataFrame:
+def _format_experiment_label(experiment_ids: list[str]) -> str:
+    return "_".join(str(x) for x in experiment_ids)
+
+
+def _load_pbx_dataframe(project_root: Path, *, experiment_ids: list[str]) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
-    for exp_id in EXPERIMENT_IDS:
+    for exp_id in experiment_ids:
         data_path = BUILD06_DIR / f"df03_final_output_with_latents_{exp_id}.csv"
         if not data_path.exists():
             raise FileNotFoundError(f"Missing data file: {data_path}")
@@ -168,7 +170,7 @@ def _run_engine_pairwise_classification(
         ]
     ].copy()
     embryo_df = embryo_df.sort_values(["true_label", "embryo_id", "time_bin"]).reset_index(drop=True)
-    return auc_df, embryo_df
+    return score_df, auc_df, embryo_df
 
 
 def _compute_embryo_penetrance(df_embryo_probs: pd.DataFrame) -> pd.DataFrame:
@@ -518,8 +520,10 @@ def _write_summary(
     output_path: Path,
     group1: str,
     group2: str,
+    experiment_label: str,
 ) -> None:
     lines = [
+        f"experiments: {experiment_label}",
         f"pair: {group1} vs {group2}",
         "classifier: analyze.classification.run_classification (binary path, class_weight='balanced')",
         f"n_auc_bins: {len(auc_df)}",
@@ -553,12 +557,18 @@ def main() -> None:
     parser.add_argument("--n-jobs", type=int, default=8)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--max-embryos", type=int, default=30)
+    parser.add_argument("--experiment-ids", nargs="+", default=EXPERIMENT_IDS)
     args = parser.parse_args()
 
     project_root = REPO_ROOT
     sys.path.insert(0, str(project_root / "src"))
 
-    df = _load_pbx_dataframe(project_root)
+    experiment_ids = [str(x) for x in args.experiment_ids]
+    experiment_label = _format_experiment_label(experiment_ids)
+
+    from analyze.classification.viz.auroc_over_time import plot_aurocs_over_time
+
+    df = _load_pbx_dataframe(project_root, experiment_ids=experiment_ids)
     df = df[df["genotype"].isin([args.group1, args.group2])].copy()
     if df.empty:
         raise ValueError(f"No rows found for pair {args.group1} vs {args.group2}")
@@ -569,7 +579,7 @@ def main() -> None:
 
     df = df.dropna(subset=feature_cols + [args.time_col]).reset_index(drop=True)
 
-    auc_df, embryo_df = _run_engine_pairwise_classification(
+    score_df, auc_df, embryo_df = _run_engine_pairwise_classification(
         df,
         group1=str(args.group1),
         group2=str(args.group2),
@@ -591,13 +601,16 @@ def main() -> None:
     figures_dir = args.figures_dir
     results_dir = args.results_dir
     safe_name = f"{args.group1}_vs_{args.group2}"
+    scoped_name = f"{experiment_label}_{safe_name}"
 
-    figure_path = figures_dir / f"embryo_trajectories_signed_margin_{safe_name}.png"
-    split_compare_path = figures_dir / f"embryo_trajectories_signed_margin_{safe_name}_pbx4_split_compare.png"
-    auc_path = results_dir / f"classification_auroc_{safe_name}.csv"
-    embryo_path = results_dir / f"embryo_predictions_{safe_name}.csv"
-    pen_path = results_dir / f"embryo_penetrance_{safe_name}.csv"
-    summary_path = results_dir / f"summary_{safe_name}.txt"
+    figure_path = figures_dir / f"embryo_trajectories_signed_margin_{scoped_name}.png"
+    split_compare_path = figures_dir / f"embryo_trajectories_signed_margin_{scoped_name}_pbx4_split_compare.png"
+    auroc_plot_png_path = figures_dir / f"classification_over_time_{scoped_name}.png"
+    auroc_plot_html_path = figures_dir / f"classification_over_time_{scoped_name}.html"
+    auc_path = results_dir / f"classification_auroc_{scoped_name}.csv"
+    embryo_path = results_dir / f"embryo_predictions_{scoped_name}.csv"
+    pen_path = results_dir / f"embryo_penetrance_{scoped_name}.csv"
+    summary_path = results_dir / f"summary_{scoped_name}.txt"
 
     results_dir.mkdir(parents=True, exist_ok=True)
     auc_df.to_csv(auc_path, index=False)
@@ -609,6 +622,7 @@ def main() -> None:
         output_path=summary_path,
         group1=str(args.group1),
         group2=str(args.group2),
+        experiment_label=experiment_label,
     )
     _plot_signed_margin_trajectories(
         embryo_df,
@@ -619,6 +633,18 @@ def main() -> None:
         output_path=figure_path,
         discrete_class_lookup=discrete_class_lookup,
     )
+    auroc_fig = plot_aurocs_over_time(
+        score_df,
+        curve_col="positive_label",
+        title=f"Classification over time: {_pretty_label(str(args.group1))} vs {_pretty_label(str(args.group2))} ({experiment_label})",
+        backend="both",
+        show_null_band=True,
+        show_significance=True,
+        sig_threshold=0.01,
+    )
+    auroc_fig["plotly"].write_html(auroc_plot_html_path)
+    auroc_fig["matplotlib"].savefig(auroc_plot_png_path, dpi=300, bbox_inches="tight")
+    plt.close(auroc_fig["matplotlib"])
     if discrete_class_lookup:
         _plot_pbx4_split_comparison(
             embryo_df,
@@ -633,6 +659,8 @@ def main() -> None:
     print(f"Saved figure: {figure_path}")
     if discrete_class_lookup:
         print(f"Saved figure: {split_compare_path}")
+    print(f"Saved classification over time: {auroc_plot_png_path}")
+    print(f"Saved classification over time html: {auroc_plot_html_path}")
     print(f"Saved embryo predictions: {embryo_path}")
     print(f"Saved embryo penetrance: {pen_path}")
     print(f"Saved AUROC summary: {auc_path}")

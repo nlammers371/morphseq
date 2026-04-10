@@ -155,7 +155,12 @@ def _run_one(
         id_col="embryo_id",
         time_col="stage_hpf",
         comparisons="all_pairs",
-        features={"vae": "z_mu_b"},
+        features={
+            "vae": "z_mu_b",
+            "length": ["total_length_um"],
+            "curvature": ["baseline_deviation_um"],
+            "shape": ["total_length_um", "baseline_deviation_um"],
+        },
         bin_width=float(bin_width),
         n_permutations=n_permutations,
         n_jobs=int(n_jobs),
@@ -165,7 +170,9 @@ def _run_one(
         verbose=False,
         save_null_arrays=True,
         save_contrast_coordinates=True,
+        save_predictions=True,
         save_dir=resolved_output_dir,
+        overwrite=True,
     )
 
     for layer_name in LAYER_EXPORTS:

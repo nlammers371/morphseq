@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 RERUN_ID = "rerun_20260329_no_yolk_removed"
-EXPERIMENT_IDS = ["20260304", "20260306"]
+EXPERIMENT_IDS = ["20251207_pbx", "20260304", "20260306"]
 EXPERIMENT_LABEL = "_".join(EXPERIMENT_IDS)
 
 

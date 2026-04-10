@@ -44,11 +44,52 @@ def _comparison_record(metadata: dict[str, object], group1: str, group2: str) ->
     raise KeyError(f'No comparison found for {group1} vs {group2}')
 
 
-def _build_embryo_df(predictions: pd.DataFrame, comparison_id: str, group1: str, group2: str) -> pd.DataFrame:
-    df = predictions[predictions['comparison_id'].astype(str) == comparison_id].copy()
+def _build_embryo_df_from_predictions(predictions: pd.DataFrame, comparison_id: str, group1: str, group2: str) -> pd.DataFrame:
+    df = predictions[
+        (predictions['comparison_id'].astype(str) == comparison_id) &
+        (predictions['feature_set'].astype(str) == 'vae')
+    ].copy()
     if df.empty:
         raise ValueError(f'No predictions found for {comparison_id}')
     df = df[df['true_label'].astype(str).isin([group1, group2])].copy()
+    # truth_signed_margin is the canonical column; fall back to signed_margin for older files
+    if 'truth_signed_margin' in df.columns:
+        df['signed_margin'] = df['truth_signed_margin'].astype(float)
+    return df[[
+        'embryo_id',
+        'time_bin',
+        'time_bin_center',
+        'true_label',
+        'predicted_label',
+        'support_true',
+        'confidence',
+        'signed_margin',
+        'is_correct',
+    ]].sort_values(['true_label', 'embryo_id', 'time_bin_center']).reset_index(drop=True)
+
+
+def _build_embryo_df_from_contrast(raw_long: pd.DataFrame, comparison_id: str, group1: str, group2: str) -> pd.DataFrame:
+    """Fallback: reconstruct truth_signed_margin from raw_contrast_scores_long (vae only)."""
+    df = raw_long[
+        (raw_long['comparison_id'].astype(str) == comparison_id) &
+        (raw_long['feature_set'].astype(str) == 'vae')
+    ].copy()
+    if df.empty:
+        raise ValueError(f'No contrast rows found for {comparison_id}')
+    df['true_label'] = df['genotype'].astype(str)
+    df = df[df['true_label'].isin([group1, group2])].copy()
+    # class_signed_margin is directional; negate for negative-class embryos to get truth convention
+    csm_col = 'class_signed_margin' if 'class_signed_margin' in df.columns else 'signed_margin'
+    is_neg = df['true_label'].astype(str) == df['negative_label'].astype(str)
+    df['signed_margin'] = df[csm_col].astype(float)
+    df.loc[is_neg, 'signed_margin'] = -df.loc[is_neg, 'signed_margin']
+    df['predicted_label'] = df.apply(
+        lambda r: r['true_label'] if r['signed_margin'] >= 0 else (group2 if r['true_label'] == group1 else group1),
+        axis=1,
+    )
+    df['is_correct'] = (df['predicted_label'].astype(str) == df['true_label'].astype(str)).astype(float)
+    df['support_true'] = df['signed_margin'].abs()
+    df['confidence'] = df['signed_margin'].abs()
     return df[[
         'embryo_id',
         'time_bin',
@@ -86,7 +127,16 @@ def main() -> None:
     results_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    predictions = pd.read_parquet(args.pairwise_root / 'predictions.parquet')
+    pred_path = args.pairwise_root / 'predictions.parquet'
+    use_predictions = pred_path.exists()
+    if use_predictions:
+        predictions = pd.read_parquet(pred_path)
+        raw_long = None
+        print(f'Using predictions.parquet from {pred_path}')
+    else:
+        predictions = None
+        raw_long = pd.read_parquet(args.pairwise_root / 'raw_contrast_scores_long.parquet')
+        print(f'predictions.parquet not found — falling back to raw_contrast_scores_long')
     scores = pd.read_parquet(args.pairwise_root / 'scores.parquet')
     metadata = json.loads((args.pairwise_root / 'metadata.json').read_text())
 
@@ -95,7 +145,10 @@ def main() -> None:
         mod.GROUP1 = group1
         mod.GROUP2 = group2
         comparison_id, rec = _comparison_record(metadata, group1, group2)
-        embryo_df = _build_embryo_df(predictions, comparison_id, group1, group2)
+        if use_predictions:
+            embryo_df = _build_embryo_df_from_predictions(predictions, comparison_id, group1, group2)
+        else:
+            embryo_df = _build_embryo_df_from_contrast(raw_long, comparison_id, group1, group2)
         pen_df = mod._compute_penetrance(embryo_df)
         auc_df = _build_auc_df(scores, comparison_id)
         stem = f'{group1}_vs_{group2}'
