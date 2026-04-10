@@ -91,16 +91,13 @@ def main() -> None:
     df = df[df["embryo_id"].notna()].copy()
     df["genotype"] = df["genotype"].fillna("unknown").map(_normalize_genotype)
 
-    # Robust combined-analysis ID (avoid accidental cross-experiment collisions)
-    df["embryo_uid"] = df["experiment_id"].astype(str) + "::" + df["embryo_id"].astype(str)
-
-    embryo_df = df.drop_duplicates(subset="embryo_uid")[
-        ["embryo_uid", "embryo_id", "genotype", "experiment_id"]
+    embryo_df = df.drop_duplicates(subset="embryo_id")[
+        ["embryo_id", "genotype", "experiment_id"]
     ].copy()
-    total_embryos = embryo_df["embryo_uid"].nunique()
+    total_embryos = embryo_df["embryo_id"].nunique()
 
     genotype_counts = (
-        embryo_df.groupby("genotype", observed=True)["embryo_uid"]
+        embryo_df.groupby("genotype", observed=True)["embryo_id"]
         .nunique()
         .rename("n_embryos")
         .sort_values(ascending=False)
@@ -124,7 +121,7 @@ def main() -> None:
         "mutant",
     )
     class_counts = (
-        embryo_df.groupby("genotype_class", observed=True)["embryo_uid"]
+        embryo_df.groupby("genotype_class", observed=True)["embryo_id"]
         .nunique()
         .rename("n_embryos")
         .sort_values(ascending=False)
@@ -143,7 +140,7 @@ def main() -> None:
     figs = plot_feature_over_time(
         df,
         features=FEATURES,
-        id_col="embryo_uid",
+        id_col="embryo_id",
         color_by="genotype",
         color_lookup=color_lookup,
         facet_col="genotype",
@@ -165,7 +162,7 @@ def main() -> None:
     overlap_figs = plot_feature_over_time(
         df,
         features=OVERLAP_FEATURE,
-        id_col="embryo_uid",
+        id_col="embryo_id",
         color_by="genotype",
         color_lookup=color_lookup,
         show_individual=True,
@@ -187,7 +184,7 @@ def main() -> None:
     batch_figs = plot_feature_over_time(
         df,
         features=OVERLAP_FEATURE,
-        id_col="embryo_uid",
+        id_col="embryo_id",
         color_by="genotype",
         color_lookup=color_lookup,
         facet_col="experiment_id",
@@ -209,7 +206,7 @@ def main() -> None:
     fig = plot_proportions(
         embryo_df,
         color_by_grouping="genotype",
-        count_by="embryo_uid",
+        count_by="embryo_id",
         color_order=genotype_order,
         color_palette=color_lookup,
         normalize=True,
@@ -258,7 +255,7 @@ def main() -> None:
             groups="all",
             reference="rest",
             features=feat_spec,
-            embryo_id_col="embryo_uid",
+            embryo_id_col="embryo_id",
             n_jobs=-1,
             n_permutations=n_permutations,
             bin_width=bin_width,
@@ -306,7 +303,7 @@ def main() -> None:
                 groups=non_wt_genotypes,
                 reference=ref_genotype,
                 features=feat_spec,
-                embryo_id_col="embryo_uid",
+                embryo_id_col="embryo_id",
                 n_jobs=-1,
                 n_permutations=n_permutations,
                 bin_width=bin_width,
