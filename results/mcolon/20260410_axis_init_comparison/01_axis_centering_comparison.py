@@ -54,6 +54,7 @@ from analyze.trajectory_condensation import init_embedding, schema
 from analyze.trajectory_condensation.condensation import CondensationConfig, StoppingConfig, run_condensation
 from analyze.trajectory_condensation.viz import api as tc_viz
 from analyze.trajectory_condensation.viz import plotting as tc_plotting
+from analyze.trajectory_condensation.viz.condensed_time_slice_viewer import time_slice_html
 from phenotype_direction import (
     CENTERING_VARIANTS,
     center_metadata_row,
@@ -565,6 +566,16 @@ def _run_variant(
 
     run = tc_viz.load_run(run_dir / "condensed_positions.npz", title=variant, color_map=GENOTYPE_COLORS)
     tc_viz.render_run(run, run_dir, title_prefix=variant, skip_animations=skip_animations)
+    time_slice_html(
+        run.positions,
+        run.mask,
+        run.time_values,
+        labels=run.labels,
+        color_map=GENOTYPE_COLORS,
+        embryo_ids=run.embryo_ids,
+        output_path=run_dir / "time_slice.html",
+        title=variant,
+    )
     return run
 
 
