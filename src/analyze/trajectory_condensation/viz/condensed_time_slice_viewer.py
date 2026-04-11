@@ -110,6 +110,24 @@ def time_slice_html(
         ann.font.size = 18
 
     # -----------------------------------------------------------------------
+    # Legend proxy traces — keep clickable phenotype entries fully opaque even
+    # though the background trajectory cloud is intentionally dimmed.
+    # -----------------------------------------------------------------------
+    for lbl in unique_labels:
+        color = color_map.get(lbl, "#4C78A8") if lbl is not None else "#4C78A8"
+        fig.add_trace(go.Scatter3d(
+            x=[None], y=[None], z=[None],
+            mode="lines+markers",
+            name=str(lbl) if lbl is not None else "unknown",
+            legendgroup=str(lbl),
+            showlegend=True,
+            visible="legendonly",
+            line=dict(color=color, width=3),
+            marker=dict(color=color, size=6, opacity=1.0),
+            hoverinfo="skip",
+        ), row=1, col=1)
+
+    # -----------------------------------------------------------------------
     # Static background traces — all trajectories, dimmed.
     # -----------------------------------------------------------------------
     for lbl in unique_labels:
@@ -136,7 +154,7 @@ def time_slice_html(
             mode="lines+markers",
             name=str(lbl) if lbl is not None else "unknown",
             legendgroup=str(lbl),
-            showlegend=True,
+            showlegend=False,
             line=dict(color=color, width=1.5),
             marker=dict(color=color, size=marker_size_bg, opacity=alpha_bg_marker),
             opacity=alpha_bg,
@@ -230,7 +248,14 @@ def time_slice_html(
         template="plotly_white",
         width=width,
         height=height,
-        legend=dict(itemsizing="constant", tracegroupgap=2),
+        legend=dict(
+            itemsizing="constant",
+            tracegroupgap=2,
+            groupclick="togglegroup",
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor="rgba(40,40,40,0.45)",
+            borderwidth=1,
+        ),
         scene=scene_common,
         margin=dict(t=160, b=120),
         sliders=[dict(
