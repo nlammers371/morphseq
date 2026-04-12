@@ -14,6 +14,12 @@ The source of truth is:
 
 If a code change conflicts with those docs, the docs win unless a human updates them.
 
+## Implementation target
+
+- All new implementation code lives in `dev/particle_prediction/`.
+- Legacy code in `dev/dynamo/` is read-only reference material unless a human explicitly authorizes edits there.
+- Reuse by selective porting, not by extending the old architecture in place.
+
 ---
 
 ## 2. Project rules

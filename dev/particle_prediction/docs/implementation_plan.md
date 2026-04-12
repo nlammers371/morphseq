@@ -8,14 +8,15 @@ The core principles are:
 
 - keep the predictive core morphology-first,
 - make visualization central,
-- reuse legacy infrastructure where it still fits,
+- implement all new code in `dev/particle_prediction/`,
+- reuse legacy infrastructure from `dev/dynamo/` only where it still fits,
 - and replace the old time-centric dynamical core rather than extending it.
 
 ---
 
 ## 2. Proposed repo layout
 
-Recommended package layout inside `morphseq/dev/dynamo/`:
+Recommended package layout inside `morphseq/dev/particle_prediction/` (new implementation target):
 
 ```text
 data/

@@ -25,3 +25,8 @@ This folder is the starter documentation set for the beta predictive latent-spac
   - and an optional fast summary method based on recent mean position and direction.
 - Transition sampling is empirical and multimodal, with small tangent-aligned Gaussian jitter.
 - Visualization is a first-class deliverable at every stage.
+
+## Repo target
+
+- All new implementation code should live in `dev/particle_prediction/`.
+- Legacy code in `dev/dynamo/` is reference material only and should not be modified unless a task explicitly says so.

@@ -181,3 +181,10 @@ Do not do that. Build the new predictor cleanly around:
 - local transition windows,
 - history-aware matching,
 - and empirical multimodal rollouts.
+
+
+## Repo decision
+
+- The new implementation target is `dev/particle_prediction/`.
+- Legacy code under `dev/dynamo/` should be treated as donor/reference code only.
+- Reusable pieces should be ported selectively rather than extended in place.

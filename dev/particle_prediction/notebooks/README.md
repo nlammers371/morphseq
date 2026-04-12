@@ -4,6 +4,8 @@ These notebooks are intended to be the fastest path to intuition for the beta pr
 
 They should be lightweight, visual, and runnable in order.
 
+These notebooks should live under `dev/particle_prediction/notebooks/`.
+
 ---
 
 ## 01_loading_and_smoothing.ipynb

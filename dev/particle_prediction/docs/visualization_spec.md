@@ -12,7 +12,7 @@ This document defines the required visualization module and the minimum set of p
 
 ## 2. Module layout
 
-Recommended `viz/` structure:
+Recommended `dev/particle_prediction/viz/` structure:
 
 ```text
 viz/
