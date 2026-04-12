@@ -1,0 +1,66 @@
+# Stage 2: Orthogonal modes (S_m applied to nabla phi0)
+# See docs/model_spec.md §3.4, §7.1 (staged training), §15.2 step 6.
+#
+# Requires a Stage 1 checkpoint. Phi0 is frozen; modes redirect baseline flow.
+
+# --- Data ---
+build_dir: ""  # Path to build06 output directory
+experiment_ids: null
+n_components: 10
+scale: true
+min_trajectory_length: 3
+min_context: 3
+max_context: null
+horizons: [1, 2, 3, 4]
+gamma: 0.5
+n_targets: 1
+eval_fraction: 0.15
+batch_size: 64
+num_workers: 0
+
+# --- Stage 1 checkpoint ---
+stage1_checkpoint: ""  # Path to best.pt from Stage 1
+
+# --- Model (inherited from Stage 1 checkpoint) ---
+hidden_dim: 64
+n_hidden: 2
+activation: "softplus"
+
+# --- Orthogonal mode parameters ---
+n_modes: 5                # Number of antisymmetric mode matrices S_m
+lambda_c: 1.0             # L2 regularization on mode loadings c_e (§6.1)
+n_alternations: 2         # Alternating c_e/R_e solve iterations (§4.2)
+s_init_scale: 0.01        # Scale of random init for S_m entries (§5.3)
+n_forward_samples: 50
+rate_clamp_min: 1.0e-6
+normalize_rate: true       # Rate identifiability constraint (§6.6)
+alpha_0: 0.01              # Hessian penalty (monitoring only, phi0 frozen)
+hessian_n_points: 64
+
+# --- Temperature ---
+log_beta_T: null           # null = no temperature correction; set to e.g. -2.0 to enable
+T_ref: 28.5                # Reference temperature (C)
+
+# --- Optimizer ---
+lr: 5.0e-4                 # Lower than Stage 1 (modes are a refinement)
+weight_decay: 0.0
+scheduler: "cosine"
+grad_clip_norm: 10.0
+
+# --- Training ---
+n_epochs: 150
+epoch_length: 2000
+eval_every: 10
+eval_n_batches: 50
+
+# --- Checkpointing ---
+checkpoint_dir: "checkpoints/stage2_orthogonal"
+save_every: 50
+
+# --- Logging ---
+wandb_project: "morphseq-dynamo"
+wandb_run_name: null
+log_every: 1
+
+# --- Device ---
+device: "cpu"

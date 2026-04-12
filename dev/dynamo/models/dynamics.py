@@ -45,6 +45,11 @@ class Phi0OnlyModel(nn.Module):
         rate_clamp_min: Floor on R_e from closed-form solve.
         alpha_0: Weight for Hessian smoothness penalty R0 (spec §6.2).
         hessian_n_points: Number of points subsampled per batch for R0 (controls cost).
+        normalize_rate: Whether to apply batch-level R_e normalization
+            (rate identifiability constraint, spec §6.6).
+        log_beta_T: Initial log(β_T) for temperature dependence (spec §3.5).
+            None = no temperature correction.
+        T_ref: Reference temperature for Arrhenius term (°C).
     """
 
     def __init__(
@@ -59,6 +64,9 @@ class Phi0OnlyModel(nn.Module):
         rate_clamp_min: float = 1e-6,
         alpha_0: float = 0.01,
         hessian_n_points: int = 64,
+        normalize_rate: bool = True,
+        log_beta_T: Optional[float] = None,
+        T_ref: float = 28.5,
     ) -> None:
         super().__init__()
         self.phi0 = PotentialNetwork(input_dim, hidden_dim, n_hidden, activation)
@@ -68,6 +76,16 @@ class Phi0OnlyModel(nn.Module):
         self.rate_clamp_min = rate_clamp_min
         self.alpha_0 = alpha_0
         self.hessian_n_points = hessian_n_points
+        self.normalize_rate = normalize_rate
+        self.T_ref = T_ref
+
+        # Temperature dependence (optional, spec §3.5)
+        if log_beta_T is not None:
+            self.log_beta_T = nn.Parameter(
+                torch.tensor(log_beta_T, dtype=torch.float32)
+            )
+        else:
+            self.log_beta_T = None
 
     @property
     def beta(self) -> Tensor:
@@ -78,6 +96,26 @@ class Phi0OnlyModel(nn.Module):
     def D(self) -> Tensor:
         """Global diffusion coefficient (positive)."""
         return self.log_D.exp()
+
+    @property
+    def beta_T(self) -> Optional[Tensor]:
+        """Arrhenius temperature coefficient (positive), or None."""
+        if self.log_beta_T is not None:
+            return self.log_beta_T.exp()
+        return None
+
+    def _temperature_factor(self, temperature: Tensor) -> Tensor:
+        """Compute Arrhenius temperature correction factor (B,).
+
+        Factor = exp(-β_T * (T_ref - T_e)).  Returns 1.0 if no temp dependence.
+        """
+        if self.beta_T is None:
+            return torch.ones_like(temperature)
+        temp = torch.where(
+            torch.isnan(temperature), torch.full_like(temperature, self.T_ref),
+            temperature,
+        )
+        return torch.exp(-self.beta_T * (self.T_ref - temp))
 
     def compute_drift_direction(self, z: Tensor) -> Tensor:
         """Compute f_hat(z) = -beta * grad_phi0(z) (before R_e scaling).
@@ -93,6 +131,9 @@ class Phi0OnlyModel(nn.Module):
 
     def _extract_context_transitions(self, batch: FragmentBatch):
         """Extract transitions, drift directions, and R_e from context.
+
+        Applies temperature correction (spec §3.5) and rate identifiability
+        normalization (spec §6.6) when enabled.
 
         Returns:
             z_last: (B, d) last valid context frame per sample.
@@ -120,6 +161,16 @@ class Phi0OnlyModel(nn.Module):
         # Closed-form R_e from context transitions
         R_e = solve_rate(displacements, f_hat, dt_ctx, trans_mask,
                          clamp_min=self.rate_clamp_min)  # (B,)
+
+        # Temperature correction: R_e = λ_e * temp_factor
+        temp_factor = self._temperature_factor(batch.temperature)  # (B,)
+        lambda_e = R_e / temp_factor.clamp(min=1e-8)
+
+        # Rate identifiability: normalize so mean(λ_e) = 1 (spec §6.6)
+        if self.normalize_rate and self.training:
+            lambda_e = lambda_e / lambda_e.mean().clamp(min=1e-8)
+
+        R_e = lambda_e * temp_factor
 
         # Last valid context frame
         lengths = batch.context_mask.sum(dim=1).long()  # (B,)

@@ -1,20 +1,18 @@
-"""Stage 1 training loop for the phi0-only model.
+"""Stage 2 training loop for orthogonal modes model.
 
-Handles data loading, train/eval splitting, the epoch loop, checkpointing,
-and W&B logging. Produces the permanent Stage 1 checkpoint that serves as
-the baseline for all subsequent model stages.
+Loads a frozen Stage 1 checkpoint (phi0), introduces antisymmetric mode
+matrices S_m, and trains with the alternating c_e/R_e closed-form solve.
 
-Model spec references: §7.1 (staged training), §7.2 (data sampling),
-    §7.5 (forward pass), §15.2 step 5.
+Model spec references: §3.4 (orthogonal modes), §7.1 (staged training),
+    §15.2 step 6.
 """
 
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -24,7 +22,8 @@ from torch.utils.data import DataLoader
 from ..data.dataset import FragmentDataset, fragment_collate_fn, worker_init_fn
 from ..data.loading import TrajectoryDataset, load_trajectories
 from ..eval.evaluate import run_evaluation
-from ..models.dynamics import Phi0OnlyModel
+from ..models.orthogonal import OrthogonalModesModel
+from .trainer import Stage1Trainer, TrainConfig, _batch_to_device, _split_trajectories
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +33,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @dataclass
-class TrainConfig:
-    """Training configuration for Stage 1 (phi0-only model).
+class Stage2Config:
+    """Training configuration for Stage 2 (orthogonal modes).
 
-    All fields can be set from a YAML config file and/or CLI overrides.
+    Inherits data/training fields from TrainConfig where applicable.
     """
 
     # --- Data ---
@@ -55,34 +54,43 @@ class TrainConfig:
     batch_size: int = 64
     num_workers: int = 0
 
-    # --- Model ---
+    # --- Stage 1 checkpoint ---
+    stage1_checkpoint: str = ""
+
+    # --- Model (from Stage 1) ---
     hidden_dim: int = 64
     n_hidden: int = 2
     activation: str = "softplus"
-    init_log_beta: float = 0.0
-    init_log_D: float = -2.0
+
+    # --- Orthogonal mode parameters ---
+    n_modes: int = 5
+    lambda_c: float = 1.0
+    n_alternations: int = 2
+    s_init_scale: float = 0.01
     n_forward_samples: int = 50
     rate_clamp_min: float = 1e-6
+    normalize_rate: bool = True
     alpha_0: float = 0.01
     hessian_n_points: int = 64
-    normalize_rate: bool = True
+
+    # --- Temperature ---
     log_beta_T: Optional[float] = None
     T_ref: float = 28.5
 
     # --- Optimizer ---
-    lr: float = 1e-3
+    lr: float = 5e-4
     weight_decay: float = 0.0
     scheduler: str = "cosine"
     grad_clip_norm: float = 10.0
 
     # --- Training ---
-    n_epochs: int = 200
+    n_epochs: int = 150
     epoch_length: int = 2000
     eval_every: int = 10
     eval_n_batches: int = 50
 
     # --- Checkpointing ---
-    checkpoint_dir: str = "checkpoints/stage1"
+    checkpoint_dir: str = "checkpoints/stage2_orthogonal"
     save_every: int = 50
 
     # --- Logging ---
@@ -95,83 +103,36 @@ class TrainConfig:
 
 
 # ---------------------------------------------------------------------------
-# Train / eval split
-# ---------------------------------------------------------------------------
-
-def _split_trajectories(
-    dataset: TrajectoryDataset,
-    eval_fraction: float = 0.15,
-    seed: int = 42,
-) -> Tuple[TrajectoryDataset, TrajectoryDataset]:
-    """Split trajectories into train/eval sets, stratified by perturbation class.
-
-    The split is at the embryo level (not fragment level) to prevent data
-    leakage between train and eval.
-
-    Args:
-        dataset: Full TrajectoryDataset.
-        eval_fraction: Fraction of embryos to hold out for evaluation.
-        seed: Random seed for reproducibility.
-
-    Returns:
-        (train_dataset, eval_dataset) — new TrajectoryDataset instances
-        sharing the same PCA/scaler artifacts.
-    """
-    rng = np.random.default_rng(seed)
-
-    # Group trajectories by perturbation class
-    class_groups: Dict[str, list] = {}
-    for traj in dataset.trajectories:
-        class_groups.setdefault(traj.perturbation_class, []).append(traj)
-
-    train_trajs: list = []
-    eval_trajs: list = []
-
-    for cls, trajs in class_groups.items():
-        n_eval = max(1, int(len(trajs) * eval_fraction))
-        indices = rng.permutation(len(trajs))
-        eval_idx = set(indices[:n_eval].tolist())
-        for i, t in enumerate(trajs):
-            if i in eval_idx:
-                eval_trajs.append(t)
-            else:
-                train_trajs.append(t)
-
-    train_ds = TrajectoryDataset(
-        trajectories=train_trajs,
-        pca=dataset.pca,
-        scaler=dataset.scaler,
-        z_mu_cols=dataset.z_mu_cols,
-        class_to_idx=dataset.class_to_idx,
-    )
-    eval_ds = TrajectoryDataset(
-        trajectories=eval_trajs,
-        pca=dataset.pca,
-        scaler=dataset.scaler,
-        z_mu_cols=dataset.z_mu_cols,
-        class_to_idx=dataset.class_to_idx,
-    )
-    return train_ds, eval_ds
-
-
-# ---------------------------------------------------------------------------
 # Trainer
 # ---------------------------------------------------------------------------
 
-class Stage1Trainer:
-    """Training loop for the phi0-only model (Stage 1).
+class Stage2Trainer:
+    """Training loop for orthogonal modes model (Stage 2).
+
+    Loads a frozen Stage 1 phi0 checkpoint, introduces S_m matrices and
+    class-level priors, and trains via the alternating c_e/R_e solve.
 
     Args:
-        config: TrainConfig with all hyperparameters.
+        config: Stage2Config with all hyperparameters.
     """
 
-    def __init__(self, config: TrainConfig) -> None:
+    def __init__(self, config: Stage2Config) -> None:
         self.config = config
         self.device = torch.device(config.device)
 
     def train(self) -> Path:
-        """Run full training. Returns path to best checkpoint."""
+        """Run full Stage 2 training. Returns path to best checkpoint."""
         cfg = self.config
+
+        # ----- Load Stage 1 checkpoint -----
+        logger.info(f"Loading Stage 1 checkpoint: {cfg.stage1_checkpoint}")
+        s1_model, s1_config = Stage1Trainer.load_checkpoint(
+            Path(cfg.stage1_checkpoint), device=cfg.device
+        )
+        logger.info(
+            f"Stage 1 model loaded: beta={s1_model.beta.item():.4f}, "
+            f"D={s1_model.D.item():.6f}"
+        )
 
         # ----- Data -----
         logger.info("Loading trajectories...")
@@ -205,8 +166,8 @@ class Stage1Trainer:
             min_context=cfg.min_context,
             max_context=cfg.max_context,
             horizons=cfg.horizons,
-            gamma=0.0,  # No rebalancing for eval — use natural frequencies
-            n_targets=1,  # Single target for eval metrics
+            gamma=0.0,
+            n_targets=1,
         )
 
         train_loader = DataLoader(
@@ -218,26 +179,36 @@ class Stage1Trainer:
         )
 
         # ----- Model -----
-        model = Phi0OnlyModel(
+        n_classes = len(traj_dataset.class_to_idx)
+        model = OrthogonalModesModel(
+            phi0=s1_model.phi0,
             input_dim=traj_dataset.n_components,
-            hidden_dim=cfg.hidden_dim,
-            n_hidden=cfg.n_hidden,
-            activation=cfg.activation,
-            init_log_beta=cfg.init_log_beta,
-            init_log_D=cfg.init_log_D,
+            n_modes=cfg.n_modes,
+            n_classes=n_classes,
+            init_log_beta=s1_model.log_beta.item(),
+            init_log_D=s1_model.log_D.item(),
+            lambda_c=cfg.lambda_c,
             n_forward_samples=cfg.n_forward_samples,
             rate_clamp_min=cfg.rate_clamp_min,
-            alpha_0=cfg.alpha_0,
-            hessian_n_points=cfg.hessian_n_points,
+            n_alternations=cfg.n_alternations,
+            s_init_scale=cfg.s_init_scale,
             normalize_rate=cfg.normalize_rate,
             log_beta_T=cfg.log_beta_T,
             T_ref=cfg.T_ref,
+            alpha_0=cfg.alpha_0,
+            hessian_n_points=cfg.hessian_n_points,
         ).to(self.device)
-        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-        # ----- Optimizer -----
+        n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        n_total = sum(p.numel() for p in model.parameters())
+        logger.info(
+            f"Model parameters: {n_total:,} total, {n_trainable:,} trainable "
+            f"(phi0 frozen: {n_total - n_trainable:,})"
+        )
+
+        # ----- Optimizer (only trainable params) -----
         optimizer = torch.optim.Adam(
-            model.parameters(),
+            filter(lambda p: p.requires_grad, model.parameters()),
             lr=cfg.lr,
             weight_decay=cfg.weight_decay,
         )
@@ -265,7 +236,6 @@ class Stage1Trainer:
         best_path = ckpt_dir / "best.pt"
 
         for epoch in range(cfg.n_epochs):
-            # Train
             train_metrics = self._train_epoch(model, train_loader, optimizer, epoch)
 
             if scheduler is not None:
@@ -278,9 +248,8 @@ class Stage1Trainer:
                     f"Epoch {epoch+1:4d}/{cfg.n_epochs} | "
                     f"loss={train_metrics['loss']:.4f} | "
                     f"nll={train_metrics['nll']:.4f} | "
-                    f"R0={train_metrics['hessian_penalty']:.4f} | "
-                    f"beta={train_metrics['beta']:.4f} | "
                     f"D={train_metrics['D']:.6f} | "
+                    f"mean_c_norm={train_metrics['mean_c_norm']:.4f} | "
                     f"mean_R_e={train_metrics['mean_R_e']:.4f} | "
                     f"lr={lr:.2e}"
                 )
@@ -312,19 +281,21 @@ class Stage1Trainer:
                 if eval_nll < best_nll:
                     best_nll = eval_nll
                     self._save_checkpoint(model, optimizer, epoch, best_nll,
-                                          traj_dataset.n_components, best_path)
+                                          traj_dataset.n_components, n_classes,
+                                          best_path)
                     logger.info(f"  New best model saved (NLL={best_nll:.4f})")
 
             # Periodic checkpoint
             if (epoch + 1) % cfg.save_every == 0:
                 ckpt_path = ckpt_dir / f"epoch_{epoch+1:04d}.pt"
                 self._save_checkpoint(model, optimizer, epoch, best_nll,
-                                      traj_dataset.n_components, ckpt_path)
+                                      traj_dataset.n_components, n_classes,
+                                      ckpt_path)
 
         # Final checkpoint
         final_path = ckpt_dir / "final.pt"
         self._save_checkpoint(model, optimizer, cfg.n_epochs - 1, best_nll,
-                              traj_dataset.n_components, final_path)
+                              traj_dataset.n_components, n_classes, final_path)
         logger.info(f"Training complete. Best checkpoint: {best_path}")
 
         if use_wandb:
@@ -334,7 +305,7 @@ class Stage1Trainer:
 
     def _train_epoch(
         self,
-        model: Phi0OnlyModel,
+        model: OrthogonalModesModel,
         loader: DataLoader,
         optimizer: torch.optim.Optimizer,
         epoch: int,
@@ -345,8 +316,8 @@ class Stage1Trainer:
 
         total_loss = 0.0
         total_nll = 0.0
-        total_r0 = 0.0
         total_R_e = 0.0
+        total_c_norm = 0.0
         n_batches = 0
 
         for batch in loader:
@@ -358,31 +329,36 @@ class Stage1Trainer:
             optimizer.zero_grad()
             loss.backward()
             if cfg.grad_clip_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip_norm)
+                torch.nn.utils.clip_grad_norm_(
+                    filter(lambda p: p.requires_grad, model.parameters()),
+                    cfg.grad_clip_norm,
+                )
             optimizer.step()
 
             total_loss += loss.item()
             total_nll += result["nll"].mean().item()
-            total_r0 += result["hessian_penalty"].item()
             total_R_e += result["R_e"].mean().item()
+            total_c_norm += result["mean_c_norm"].item()
             n_batches += 1
 
+        n = max(n_batches, 1)
         return {
-            "loss": total_loss / max(n_batches, 1),
-            "nll": total_nll / max(n_batches, 1),
-            "hessian_penalty": total_r0 / max(n_batches, 1),
+            "loss": total_loss / n,
+            "nll": total_nll / n,
             "beta": model.beta.item(),
             "D": model.D.item(),
-            "mean_R_e": total_R_e / max(n_batches, 1),
+            "mean_R_e": total_R_e / n,
+            "mean_c_norm": total_c_norm / n,
         }
 
     def _save_checkpoint(
         self,
-        model: Phi0OnlyModel,
+        model: OrthogonalModesModel,
         optimizer: torch.optim.Optimizer,
         epoch: int,
         best_nll: float,
         input_dim: int,
+        n_classes: int,
         path: Path,
     ) -> None:
         """Save model + optimizer state."""
@@ -393,17 +369,23 @@ class Stage1Trainer:
             "config": asdict(self.config),
             "best_nll": best_nll,
             "input_dim": input_dim,
+            "n_classes": n_classes,
+            "stage": 2,
+            "model_type": "orthogonal",
         }, path)
 
     @staticmethod
     def load_checkpoint(
         path: Path,
+        stage1_checkpoint: Path,
         device: str = "cpu",
-    ) -> Tuple[Phi0OnlyModel, TrainConfig]:
-        """Load a saved checkpoint.
+    ) -> Tuple[OrthogonalModesModel, Stage2Config]:
+        """Load a saved Stage 2 checkpoint.
 
         Args:
-            path: Path to .pt checkpoint file.
+            path: Path to Stage 2 .pt checkpoint file.
+            stage1_checkpoint: Path to Stage 1 checkpoint (needed to
+                reconstruct the frozen phi0 network).
             device: Device to load model onto.
 
         Returns:
@@ -412,50 +394,34 @@ class Stage1Trainer:
         ckpt = torch.load(path, map_location=device, weights_only=False)
         cfg_dict = ckpt["config"]
 
-        # Reconstruct config (handle tuple fields)
+        # Handle tuple fields
         if "horizons" in cfg_dict and isinstance(cfg_dict["horizons"], list):
             cfg_dict["horizons"] = tuple(cfg_dict["horizons"])
-        config = TrainConfig(**cfg_dict)
+        config = Stage2Config(**cfg_dict)
 
-        model = Phi0OnlyModel(
+        # Load Stage 1 model for phi0
+        s1_model, _ = Stage1Trainer.load_checkpoint(stage1_checkpoint, device=device)
+
+        model = OrthogonalModesModel(
+            phi0=s1_model.phi0,
             input_dim=ckpt["input_dim"],
-            hidden_dim=config.hidden_dim,
-            n_hidden=config.n_hidden,
-            activation=config.activation,
-            init_log_beta=config.init_log_beta,
-            init_log_D=config.init_log_D,
+            n_modes=config.n_modes,
+            n_classes=ckpt.get("n_classes", 1),
+            init_log_beta=s1_model.log_beta.item(),
+            init_log_D=config.lr,  # Will be overwritten by state_dict
+            lambda_c=config.lambda_c,
             n_forward_samples=config.n_forward_samples,
             rate_clamp_min=config.rate_clamp_min,
-            alpha_0=getattr(config, "alpha_0", 0.01),
-            hessian_n_points=getattr(config, "hessian_n_points", 64),
-            normalize_rate=getattr(config, "normalize_rate", True),
-            log_beta_T=getattr(config, "log_beta_T", None),
-            T_ref=getattr(config, "T_ref", 28.5),
+            n_alternations=config.n_alternations,
+            s_init_scale=config.s_init_scale,
+            normalize_rate=config.normalize_rate,
+            log_beta_T=config.log_beta_T,
+            T_ref=config.T_ref,
+            alpha_0=config.alpha_0,
+            hessian_n_points=config.hessian_n_points,
         )
-        model.load_state_dict(ckpt["model_state_dict"], strict=False)
+        model.load_state_dict(ckpt["model_state_dict"])
         model.to(device)
         model.eval()
 
         return model, config
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _batch_to_device(batch, device: torch.device):
-    """Move all tensors in a FragmentBatch to the given device."""
-    from ..data.dataset import FragmentBatch
-    return FragmentBatch(
-        context=batch.context.to(device),
-        context_mask=batch.context_mask.to(device),
-        targets=batch.targets.to(device),
-        predecessors=batch.predecessors.to(device),
-        time_deltas=batch.time_deltas.to(device),
-        horizon_dts=batch.horizon_dts.to(device),
-        context_to_target_dts=batch.context_to_target_dts.to(device),
-        delta_t=batch.delta_t.to(device),
-        temperature=batch.temperature.to(device),
-        class_idx=batch.class_idx.to(device),
-        embryo_idx=batch.embryo_idx.to(device),
-    )
