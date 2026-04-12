@@ -22,6 +22,7 @@
 #   BUILD03_SKIP_GEOMETRY_QC=1  # skip geometry QC computation (fast mode, all embryos marked usable)
 #   RUN_SNIP_EXPORT=1           # export snips only (use existing Build03 metadata)
 #   RUN_BUILD04=0               # skip Build04 action
+#   MSEQ_SKIP_CURVATURE=1       # skip curvature metrics in Build04 (fast; keeps curvature cols NaN)
 #   RUN_BUILD06=0               # skip Build06 action
 #   SAM2_WORKERS=8              # SAM2 worker count (default 8)
 #   SAM2_CONFIDENCE=0.45        # SAM2 confidence threshold
@@ -31,13 +32,51 @@ set -euo pipefail
 
 # --- CONFIGURATION -----------------------------------------------------------
 REPO_ROOT="/net/trapnell/vol1/home/mdcolon/proj/morphseq"
-DATA_ROOT="${REPO_ROOT}/morphseq_playground"
+ALT_DATA_ROOT="${REPO_ROOT%/morphseq}/morphseq-docs/morphseq_playground"
+# Allow override.
+DATA_ROOT="${DATA_ROOT:-${REPO_ROOT}/morphseq_playground}"
 MODEL_NAME="20241107_ds_sweep01_optimum"
 ENV_NAME="segmentation_grounded_sam"
 PYTHON_EXEC="${PYTHON_EXEC:-/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/${ENV_NAME}/bin/python}"
 
+# Ensure the per-experiment well-metadata Excel is discoverable by Build01.
+# Build01 validation prefers:
+#   <data-root>/metadata/well_metadata/<exp>_well_metadata.xlsx
+#   <data-root>/metadata/plate_metadata/<exp>_well_metadata.xlsx
+# Some runs also keep a copy under:
+#   <data-root>/metadata/build03_output/<exp>_well_metadata.xlsx
+_ensure_well_metadata_excel() {
+  local exp_name="$1"
+
+  local dest_dir="${DATA_ROOT}/metadata/well_metadata"
+  local dest_path="${dest_dir}/${exp_name}_well_metadata.xlsx"
+
+  # If already in the standard place(s), nothing to do.
+  if [[ -f "${dest_path}" || -f "${DATA_ROOT}/metadata/plate_metadata/${exp_name}_well_metadata.xlsx" ]]; then
+    return 0
+  fi
+
+  # Try known alternate locations.
+  local -a candidates=(
+    "${DATA_ROOT}/metadata/build03_output/${exp_name}_well_metadata.xlsx"
+    "${DATA_ROOT}/metadata/build03_output/${exp_name}_well_metadata.xlsm"
+  )
+  for src in "${candidates[@]}"; do
+    if [[ -f "${src}" ]]; then
+      mkdir -p "${dest_dir}"
+      # Copy/update into the standard location so Build01 can validate and ingest it.
+      cp -u "${src}" "${dest_path}"
+      echo "[sam2-onwards] ✓ Well metadata Excel staged for Build01: ${dest_path} (from ${src})"
+      return 0
+    fi
+  done
+
+  # No-op if missing; Build01 will emit a detailed validation error.
+  return 0
+}
+
 # Default experiment list (used if not running as array job)
-DEFAULT_EXPERIMENTS="20251017_part1,20251106"
+DEFAULT_EXPERIMENTS="20251207_pbx,20260213,20260223,20260224,20260304,20260306,20260319,20260320"
 
 # Tunable defaults — override by exporting the variable before invoking this script.
 # Example: RUN_SAM2=0 SAM2_WORKERS=2 EXP_LIST=20250305 bash run_build03_onwards_force.sh
@@ -50,13 +89,19 @@ DEFAULT_EXPERIMENTS="20251017_part1,20251106"
 
 # Pipeline stage toggles (1=run, 0=skip)
 : "${RUN_METADATA_REBUILD:=0}"
-: "${RUN_BUILD02:=1}"
+: "${RUN_BUILD02:=0}"
 : "${RUN_SAM2:=0}"
 : "${RUN_BUILD03:=0}"
 : "${BUILD03_SKIP_GEOMETRY_QC:=0}"  # 0=compute full geometry QC (default), 1=fast mode (skip QC, mark all embryos usable)
 : "${RUN_BUILD04:=0}"
-: "${RUN_BUILD06:=0}"
+: "${RUN_BUILD06:=1}"
 : "${RUN_SNIP_EXPORT:=0}"
+
+# Build04 curvature knobs
+# Default to skipping curvature for quick reruns. Set MSEQ_SKIP_CURVATURE=0 to compute curvature.
+: "${MSEQ_SKIP_CURVATURE:=1}"
+: "${MSEQ_CURVATURE_WORKERS:=}"      # optional override (e.g. 8)
+: "${MSEQ_CURVATURE_FALLBACK:=skip}" # skip | sequential
 
 # Build02 knobs
 
@@ -67,7 +112,7 @@ DEFAULT_EXPERIMENTS="20251017_part1,20251106"
 # Snip export knobs (outscale fixed at 7.8 to match embedding expectations)
 : "${SNIP_WORKERS:=1}"
 : "${SNIP_DL_RAD_UM:=50}"
-: "${SNIP_OVERWRITE:=1}"
+: "${SNIP_OVERWRITE:=0}"
 # ----------------------------------------------------------------------------
 
 if [[ "${SNIP_OVERWRITE}" == "1" ]]; then
@@ -80,15 +125,19 @@ echo "[sam2-onwards] JOB_ID=${JOB_ID:-unknown} TASK=${SGE_TASK_ID:-0}"
 echo "[sam2-onwards] Repo root : ${REPO_ROOT}"
 echo "[sam2-onwards] Data root : ${DATA_ROOT}"
 
+if [[ ! -d "${DATA_ROOT}/raw_image_data" && -d "${ALT_DATA_ROOT}/raw_image_data" ]]; then
+  echo "[sam2-onwards] NOTE: Falling back to alternate playground: ${ALT_DATA_ROOT}"
+  DATA_ROOT="${ALT_DATA_ROOT}"
+fi
+
 echo "[sam2-onwards] Run flags - metadata:${RUN_METADATA_REBUILD} b02:${RUN_BUILD02} sam2:${RUN_SAM2} b03:${RUN_BUILD03} snip:${RUN_SNIP_EXPORT} b04:${RUN_BUILD04} b06:${RUN_BUILD06}"
 echo "[sam2-onwards] Build02 params - mode:${BUILD02_MODE} workers:${BUILD02_NUM_WORKERS} overwrite:${BUILD02_OVERWRITE}"
 echo "[sam2-onwards] Build03 flags - skip_geometry_qc:${BUILD03_SKIP_GEOMETRY_QC}"
 echo "[sam2-onwards] SAM2 params - workers:${SAM2_WORKERS} conf:${SAM2_CONFIDENCE} iou:${SAM2_IOU}"
 echo "[sam2-onwards] Snip params - workers:${SNIP_WORKERS} dl_rad:${SNIP_DL_RAD_UM} overwrite:${SNIP_OVERWRITE}"
 if [[ ! -x "${PYTHON_EXEC}" ]]; then
-  echo "[sam2-onwards] WARNING: PYTHON_EXEC not found/executable: ${PYTHON_EXEC}" >&2
-  echo "[sam2-onwards] WARNING: Falling back to 'python' on PATH" >&2
-  PYTHON_EXEC="python"
+  echo "[sam2-onwards] ERROR: PYTHON_EXEC not found/executable: ${PYTHON_EXEC}" >&2
+  exit 2
 fi
 
 # Support SGE array jobs: select one experiment per task using SGE_TASK_ID
@@ -114,7 +163,12 @@ if [[ -n "${SGE_TASK_ID:-}" ]]; then
   fi
 else
   # Running interactively or non-array job
-  EXPERIMENT="${DEFAULT_EXPERIMENTS}"
+  if [[ -n "${EXP_FILE:-}" && -f "${EXP_FILE}" ]]; then
+    mapfile -t _EXPS < "${EXP_FILE}"
+    EXPERIMENT="$(IFS=','; echo "${_EXPS[*]}")"
+  else
+    EXPERIMENT="${EXP_LIST:-${DEFAULT_EXPERIMENTS}}"
+  fi
 fi
 
 echo "[sam2-onwards] Processing experiment(s): ${EXPERIMENT}"
@@ -125,25 +179,7 @@ IFS=',' read -r -a SELECTED_EXPERIMENTS <<< "${EXPERIMENT}"
 # Create logs dir if running interactively
 mkdir -p logs
 
-# Activate conda environment (robust to libmamba issues)
-FALLBACK_CONDA_BASE="/net/trapnell/vol1/home/mdcolon/software/miniconda3"
-if ! command -v conda >/dev/null 2>&1; then
-  if [[ -f "${FALLBACK_CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
-    # shellcheck disable=SC1090
-    source "${FALLBACK_CONDA_BASE}/etc/profile.d/conda.sh"
-  fi
-fi
-if command -v conda >/dev/null 2>&1; then
-  CONDA_BASE="$(conda info --base 2>/dev/null || true)"
-  if [[ -n "${CONDA_BASE}" && -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
-    export CONDA_SOLVER=classic
-    # shellcheck disable=SC1090
-    source "${CONDA_BASE}/etc/profile.d/conda.sh"
-    conda activate "${ENV_NAME}" || echo "[sam2-onwards] WARNING: failed to activate ${ENV_NAME}; continuing"
-  fi
-else
-  echo "[sam2-onwards] WARNING: conda not found in PATH; proceeding without activation"
-fi
+# This script expects `PYTHON_EXEC` to point at the correct interpreter; avoid `conda activate`.
 
 # Prefer CUDA 11.8 toolkit to match PyTorch cu118 builds
 CUDA_MODULE="cuda/11.8.0"
@@ -209,6 +245,7 @@ echo "🚀 Starting SAM2 onwards pipeline for ${EXPERIMENT}..."
 
 if [[ "${RUN_METADATA_REBUILD}" == "1" ]]; then
   for exp_name in "${SELECTED_EXPERIMENTS[@]}"; do
+    _ensure_well_metadata_excel "${exp_name}"
     echo "🔄 Pre-step: Build01 metadata-only for ${exp_name}"
     "${PYTHON_EXEC}" -m src.run_morphseq_pipeline.cli build01 \
       --data-root "${DATA_ROOT}" \
@@ -296,6 +333,10 @@ fi
 
 if [[ "${RUN_BUILD04}" == "1" ]]; then
   echo "🔄 Step 3: Running Build04 for ${EXPERIMENT}..."
+  # Build04 can be very expensive if curvature is enabled; default to skipping it.
+  export MSEQ_SKIP_CURVATURE
+  export MSEQ_CURVATURE_FALLBACK
+  [[ -n "${MSEQ_CURVATURE_WORKERS}" ]] && export MSEQ_CURVATURE_WORKERS
   "${PYTHON_EXEC}" -m src.run_morphseq_pipeline.cli pipeline \
     --data-root "${DATA_ROOT}" \
     --experiments "${EXPERIMENT}" \
@@ -333,7 +374,7 @@ echo "🎉 SAM2 onwards pipeline completed for ${EXPERIMENT}!"
 
 # qsub /net/trapnell/vol1/home/mdcolon/proj/morphseq/src/run_morphseq_pipeline/run_build03_onwards_force.sh
 
-# qsub -t 1-13 -tc 1 /net/trapnell/vol1/home/mdcolon/proj/morphseq/src/run_morphseq_pipeline/run_build03_onwards_force.sh
+# qsub -t 1-4 -tc 3 /net/trapnell/vol1/home/mdcolon/proj/morphseq/src/run_morphseq_pipeline/run_build03_onwards_force.sh
 
 
   # # SAM2 regeneration (11 experiments)

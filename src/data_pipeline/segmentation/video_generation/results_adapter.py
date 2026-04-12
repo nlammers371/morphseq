@@ -34,17 +34,19 @@ def _derive_experiment_id_from_video(video_id: str) -> str:
 
 
 def _derive_video_id_from_image_stem(image_stem: str) -> str | None:
-    # Handles common ids like: 20260122_A01_ch00_t0001
-    m = re.match(r"^(.+_[A-H][0-9]{2})(?:_ch\d+)?_t\d+$", image_stem)
+    # Handles common ids like:
+    # - 20260122_A01_ch00_t0001
+    # - 20260122_A01_BF_f0001
+    m = re.match(r"^(.+_[A-H][0-9]{2})(?:_ch\d+)?_(?:t|f)\d+$", image_stem)
     if m:
         return m.group(1)
     # Fallback for simpler forms like <video_id>_t0001
-    m2 = re.match(r"^(.+)_t\d+$", image_stem)
+    m2 = re.match(r"^(.+)_(?:t|f)\d+$", image_stem)
     return m2.group(1) if m2 else None
 
 
 def _extract_frame_index(image_id: str, fallback: int) -> int:
-    m = re.search(r"_t(\d+)$", image_id)
+    m = re.search(r"_(?:t|f)(\d+)$", image_id)
     if m:
         return int(m.group(1))
     return fallback

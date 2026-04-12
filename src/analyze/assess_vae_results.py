@@ -12,7 +12,7 @@ import pandas as pd
 import os
 from omegaconf import OmegaConf
 import pickle
-from lightning.pl_wrappers import LitModel
+from src.core.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from data.dataset_configs import BaseDataConfig
 from pathlib import Path
@@ -589,7 +589,6 @@ if __name__ == "__main__":
 
     cfg = "/home/nick/projects/morphseq/src/config_files/morph_vae_test_run.yaml"
     assess_vae_results(cfg=cfg, overwrite_flag=True)
-
 
 
 

@@ -1,0 +1,1 @@
+../../ai/skills/analyze-trajectory/SKILL.md

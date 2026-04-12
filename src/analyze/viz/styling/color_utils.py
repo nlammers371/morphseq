@@ -6,9 +6,11 @@ across faceted, time-series, 3D, or other plot implementations.
 """
 
 import colorsys
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import matplotlib.colors as mcolors
+
+from .genotype_colors import get_known_genotype_color
 
 
 STANDARD_PALETTE = [
@@ -85,6 +87,7 @@ def resolve_color_lookup(
     unique_values: Sequence[Any],
     color_lookup: Optional[Mapping[Any, Any]] = None,
     palette: Optional[List[str]] = None,
+    default_resolver: Optional[Callable[[Any], Optional[Any]]] = get_known_genotype_color,
     enforce_distinct: bool = True,
     warn_on_collision: bool = True,
 ) -> Dict[Any, str]:
@@ -92,10 +95,12 @@ def resolve_color_lookup(
     Resolve per-value colors with optional collision handling.
 
     Rules:
-    - If `color_lookup` is missing, assign colors from `palette`.
-    - If `color_lookup` exists, use it where present and fill gaps from `palette`.
-    - If duplicate colors are present and `enforce_distinct=True`, reassign
-      duplicate entries to distinct fallback colors.
+    - Use explicit `color_lookup` entries first.
+    - Then try `default_resolver` if provided.
+    - Fill remaining values from `palette`.
+    - If `enforce_distinct=True`, ensure every final value gets a distinct color.
+      Explicit and default-resolved colors are treated as preferred starting
+      assignments, but later collisions are reassigned to unused colors.
     """
     values = list(unique_values)
     if not values:
@@ -115,10 +120,14 @@ def resolve_color_lookup(
 
     for val in values:
         provided = get_color(val) if get_color else None
-        if provided in (None, ""):
-            color = _next_unused_color(used_colors, palette_norm, palette_idx, generated_idx)
-        else:
+        if provided not in (None, ""):
             color = normalize_color(provided)
+        else:
+            default_color = default_resolver(val) if default_resolver else None
+            if default_color not in (None, ""):
+                color = normalize_color(default_color)
+            else:
+                color = _next_unused_color(used_colors, palette_norm, palette_idx, generated_idx)
         assigned[val] = color
         used_colors.add(color)
 
@@ -132,6 +141,7 @@ def resolve_color_lookup(
         if color not in seen:
             seen[color] = val
             continue
+        used_colors.discard(color)
         new_color = _next_unused_color(used_colors, palette_norm, palette_idx, generated_idx)
         assigned[val] = new_color
         used_colors.add(new_color)
@@ -139,11 +149,34 @@ def resolve_color_lookup(
 
     if reassign_count > 0 and warn_on_collision:
         print(
-            "Notice: provided color lookup reused colors across groups; "
-            f"reassigned {reassign_count} group(s) to distinct colors."
+            "Notice: reassigned "
+            f"{reassign_count} colliding group(s) to keep colors distinct."
         )
 
     return assigned
+
+
+def build_genotype_color_lookup(
+    genotypes: Sequence[Any],
+    color_lookup: Optional[Mapping[Any, Any]] = None,
+    palette: Optional[List[str]] = None,
+    enforce_distinct: bool = True,
+    warn_on_collision: bool = True,
+) -> Dict[Any, str]:
+    """
+    Build a genotype-aware color lookup for a set of labels.
+
+    This applies exact-match genotype defaults first, then breaks any color
+    collisions across the final mapping when ``enforce_distinct=True``.
+    """
+    return resolve_color_lookup(
+        genotypes,
+        color_lookup=color_lookup,
+        palette=palette,
+        default_resolver=get_known_genotype_color,
+        enforce_distinct=enforce_distinct,
+        warn_on_collision=warn_on_collision,
+    )
 
 
 __all__ = [
@@ -152,4 +185,5 @@ __all__ = [
     "to_rgba_string",
     "create_color_lookup",
     "resolve_color_lookup",
+    "build_genotype_color_lookup",
 ]

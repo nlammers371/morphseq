@@ -20,6 +20,7 @@ import pandas as pd
 from pathlib import Path
 from pytorch_lightning.loggers import WandbLogger
 import src.core.run.compat  # noqa: F401 — register legacy module aliases
+from src.core.models.arch_spec import save_arch_spec, load_encoder  # noqa: F401 — re-exported for convenience
 
 torch.set_float32_matmul_precision("medium")
 # good default
@@ -136,9 +137,7 @@ def train_vae(cfg):
     else:
         raise Exception("cfg argument dtype is not recognized")
     full_config = config.copy()
-    # dummy_config = config.copy()
     model, model_config, data_config, loss_fn, pips_fn, train_config = initialize_model(config)
-    # dummy_model, _, _, _, _, _= initialize_model(dummy_config)
 
     if hasattr(model_config, "ckpt_path"):
         model = load_from_checkpoint(model=model, ckpt_path=model_config.ckpt_path)
@@ -159,6 +158,12 @@ def train_vae(cfg):
     else:
         run_name = f"{model_config.name}_z{model_config.ddconfig.latent_dim:02}_e{train_config.max_epochs}_b{int(100 * loss_fn.kld_weight)}_percep"
         out_dir = os.path.join(data_config.root, "output", run_name, "")
+
+    # Save arch_spec.json so load_encoder() can reconstruct the model without Hydra
+    try:
+        save_arch_spec(model_config, run_dir=out_dir)
+    except Exception as exc:
+        warnings.warn(f"Could not save arch_spec.json ({exc}); inference will require load_trained_model().", stacklevel=2)
 
     # 3) create your logger with a human‐readable version label
     # — now swap in W&B:

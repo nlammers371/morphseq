@@ -1838,24 +1838,75 @@ def _compute_row_geometry_and_qc(row: Dict[str, str], root: Path, verbose: bool 
         row["centroid_x_px"] = f"{cx_px:.2f}"
         row["centroid_y_px"] = f"{cy_px:.2f}"
         
-        # Get pixel scale from SAM2 CSV data
+        # Get pixel scale from metadata.
+        #
+        # Historically we stored scale as snake_case columns (width_um/width_px etc), but some
+        # metadata sources provide "Width (um)" / "Width (px)" (and "Height (..)") instead.
+        # If the canonical columns are missing/blank, fall back to the parenthesized variants.
+        #
+        # Always seed the micron-geometry keys so output CSV columns exist even if scale is missing.
+        row.setdefault("area_um2", "")
+        row.setdefault("surface_area_um", "")
+        row.setdefault("perimeter_um", "")
+        row.setdefault("centroid_x_um", "")
+        row.setdefault("centroid_y_um", "")
+
+        def _as_float(v) -> float | None:
+            try:
+                if v is None:
+                    return None
+                if isinstance(v, (int, float)):
+                    fv = float(v)
+                    if not np.isfinite(fv):
+                        return None
+                    return fv
+                s = str(v).strip()
+                if not s or s.lower() in {"nan", "none", "null"}:
+                    return None
+                fv = float(s)
+                if not np.isfinite(fv):
+                    return None
+                return fv
+            except Exception:
+                return None
+
+        def _first_float(keys: list[str]) -> float | None:
+            for k in keys:
+                fv = _as_float(row.get(k))
+                if fv is not None:
+                    return fv
+            return None
+
+        width_um = _first_float(["width_um", "Width (um)"])
+        width_px = _first_float(["width_px", "Width (px)"])
+        height_um = _first_float(["height_um", "Height (um)"])
+        height_px = _first_float(["height_px", "Height (px)"])
+
+        # Backfill canonical columns when they are missing (helps downstream code that expects them).
+        if _as_float(row.get("width_um")) in (None, 0.0) and width_um is not None:
+            row["width_um"] = str(width_um)
+        if _as_float(row.get("width_px")) in (None, 0.0) and width_px is not None:
+            row["width_px"] = str(width_px)
+        if _as_float(row.get("height_um")) in (None, 0.0) and height_um is not None:
+            row["height_um"] = str(height_um)
+        if _as_float(row.get("height_px")) in (None, 0.0) and height_px is not None:
+            row["height_px"] = str(height_px)
+
         sx, sy = None, None
         try:
-            width_um = float(row.get("width_um", "") or 0)
-            width_px = float(row.get("width_px", "") or 0)
-            height_um = float(row.get("height_um", "") or 0)
-            height_px = float(row.get("height_px", "") or 0)
-            if width_um > 0 and width_px > 0 and height_um > 0 and height_px > 0:
-                sx = width_um / width_px   # um per pixel in X
-                sy = height_um / height_px # um per pixel in Y
-        except (ValueError, TypeError, ZeroDivisionError):
-            pass
+            if width_um and width_px and height_um and height_px and width_px > 0 and height_px > 0:
+                if width_um > 0 and height_um > 0:
+                    sx = width_um / width_px   # um per pixel in X
+                    sy = height_um / height_px # um per pixel in Y
+        except Exception:
+            sx, sy = None, None
             
         # Convert to microns if pixel scale available
         if sx and sy and sx > 0 and sy > 0:
             area_um2 = area_px * sx * sy
             per_um = perimeter_px * (sx + sy) / 2.0
             row["area_um2"] = f"{area_um2:.4f}"
+            row["surface_area_um"] = f"{area_um2:.4f}"
             row["perimeter_um"] = f"{per_um:.4f}"
             row["centroid_x_um"] = f"{cx_px * sx:.4f}"
             row["centroid_y_um"] = f"{cy_px * sy:.4f}"

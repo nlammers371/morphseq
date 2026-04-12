@@ -48,6 +48,12 @@ from .splitting import (
     get_split_info,
 )
 
+# Stats
+from .stats import (
+    compute_trend_line,
+    normalize_arbitrary_feature,
+)
+
 # PCA utilities
 from .pca import (
     fit_pca_on_embeddings,
@@ -82,6 +88,9 @@ __all__ = [
     "leave_one_out_by_group",
     "get_group_split_masks",
     "get_split_info",
+    # Stats
+    "compute_trend_line",
+    "normalize_arbitrary_feature",
     # PCA
     "fit_pca_on_embeddings",
     "transform_embeddings_to_pca",

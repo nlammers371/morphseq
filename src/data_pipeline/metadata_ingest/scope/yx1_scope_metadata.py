@@ -194,7 +194,7 @@ def extract_yx1_scope_metadata(
         rows = []
 
         for w_idx in range(n_w):
-            well_index = f"{w_idx:02d}"  # Will be mapped to well ID later
+            well_index = f"{w_idx:02d}"  # Will be mapped to canonical well_index later (e.g. A01).
 
             for t_idx in range(n_t):
                 time_s = timestamps[t_idx]
@@ -205,7 +205,8 @@ def extract_yx1_scope_metadata(
 
                     # Build IDs (temporary - will be refined by series mapper)
                     well_id = f"{experiment_id}_{well_index}"
-                    image_id = f"{well_id}_{channel}_t{t_idx:04d}"
+                    # Canonical convention: use frame_index suffix (_f) rather than time suffix (_t).
+                    image_id = f"{well_id}_{channel}_f{t_idx:04d}"
 
                     row = {
                         'experiment_id': experiment_id,

@@ -1,0 +1,1 @@
+../../ai/skills/analyze-viz/SKILL.md

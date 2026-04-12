@@ -15,10 +15,12 @@
 # ============================================================================
 # NumPy arrays
 **/*.npy
+**/*.npz
 
 # Pickled objects
 **/*.pkl
 **/*.pickle
+**/*.joblib
 
 # PyTorch models and checkpoints
 **/*.pt
@@ -58,6 +60,9 @@
 
 # Logs
 **/*.log
+
+# Generated plaintext summaries inside experiment result trees
+**/results/**/*.txt
 
 # Python cache
 **/__pycache__/

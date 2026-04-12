@@ -1,0 +1,37 @@
+Bidirectional morphology driver summary: pbx4_crispant vs pbx1b_pbx4_crispant
+
+n_embryos_pbx4_crispant: 49
+n_embryos_pbx1b_pbx4_crispant: 68
+n_below_min_time_bins: 36
+signed_margin_split_threshold: 0.000000
+
+rank_group_counts:
+- pbx1b_pbx4_crispant_like_true_pbx1b_pbx4_crispant: 38
+- pbx1b_pbx4_crispant_like_true_pbx4_crispant: 21
+- pbx4_crispant_like_true_pbx1b_pbx4_crispant: 30
+- pbx4_crispant_like_true_pbx4_crispant: 28
+
+pair_group_counts_by_experiment:
+- pbx1b_pbx4_crispant_like_true_pbx1b_pbx4_crispant / 20260304: 17
+- pbx1b_pbx4_crispant_like_true_pbx1b_pbx4_crispant / 20260306: 21
+- pbx4_crispant_like_true_pbx1b_pbx4_crispant / 20260304: 18
+- pbx4_crispant_like_true_pbx1b_pbx4_crispant / 20260306: 12
+- pbx1b_pbx4_crispant_like_true_pbx4_crispant / 20260304: 15
+- pbx1b_pbx4_crispant_like_true_pbx4_crispant / 20260306: 6
+- pbx4_crispant_like_true_pbx4_crispant / 20260304: 16
+- pbx4_crispant_like_true_pbx4_crispant / 20260306: 12
+
+inj_ctrl_counts_by_experiment:
+- inj_ctrl / 20260304: 20
+- inj_ctrl / 20260306: 11
+
+morphology_cross_minus_self_mean_deltas:
+- baseline_deviation_normalized / full: pbx4_crispant=0.045334, pbx1b_pbx4_crispant=-0.024680
+- baseline_deviation_normalized / post74: pbx4_crispant=0.040598, pbx1b_pbx4_crispant=-0.020715
+- baseline_deviation_normalized / pre74: pbx4_crispant=0.041919, pbx1b_pbx4_crispant=-0.041290
+- surface_area_um / full: pbx4_crispant=-63539.926658, pbx1b_pbx4_crispant=-44510.863888
+- surface_area_um / post74: pbx4_crispant=144772.943839, pbx1b_pbx4_crispant=-158182.605330
+- surface_area_um / pre74: pbx4_crispant=-72908.044535, pbx1b_pbx4_crispant=147957.712726
+- total_length_um / full: pbx4_crispant=-392.527852, pbx1b_pbx4_crispant=157.239756
+- total_length_um / post74: pbx4_crispant=-142.662044, pbx1b_pbx4_crispant=97.837203
+- total_length_um / pre74: pbx4_crispant=-327.026203, pbx1b_pbx4_crispant=494.788108

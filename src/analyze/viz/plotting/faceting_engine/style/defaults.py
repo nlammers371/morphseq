@@ -33,6 +33,23 @@ class StyleSpec:
     
     # Legend
     legend_fontsize: int = 12
+    legend_loc: str = 'upper right'  # any matplotlib loc string, or 'outside' to place right of axes
+
+    # Text (Matplotlib)
+    # If None, defer to backend defaults / rcParams.
+    axis_label_fontsize: int | None = None
+
+    # Axis labels
+    # By default, when axes are shared the engine shows labels only on outer axes.
+    # Set these to True to repeat labels on every subplot.
+    repeat_xlabels: bool = False
+    repeat_ylabels: bool = False
+
+    # Tick-label numbers
+    # When axes are shared, matplotlib/plotly typically hide inner tick labels by default.
+    # Set these to True to show tick labels on every subplot.
+    repeat_xticklabels: bool = True
+    repeat_yticklabels: bool = True
     
     # Grid
     show_grid: bool = True

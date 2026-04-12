@@ -78,6 +78,7 @@ def process_single_snip(
         yolk_mask = (yolk_mask > 0).astype(np.uint8)
     else:
         yolk_mask = np.zeros_like(mask)
+    rotation_used_yolk = bool(np.any(yolk_mask))
 
     # Step 1: Extract and rescale
     image_rescaled, mask_rescaled, yolk_rescaled = extract_embryo_crop(
@@ -90,7 +91,7 @@ def process_single_snip(
     )
 
     # Step 2: Rotate using PCA
-    image_rotated, mask_rotated, yolk_rotated, rotation_angle = apply_rotation_to_snip(
+    image_rotated, mask_rotated, yolk_rotated, rotation_angle_rad = apply_rotation_to_snip(
         image_rescaled,
         mask_rescaled,
         yolk_rescaled,
@@ -129,7 +130,9 @@ def process_single_snip(
     # Return metadata
     return {
         'snip_id': snip_id,
-        'rotation_angle': float(rotation_angle),
+        'rotation_angle_rad': float(rotation_angle_rad),
+        'rotation_angle_deg': float(np.rad2deg(rotation_angle_rad)),
+        'rotation_used_yolk': bool(rotation_used_yolk),
         'processed_path': str(processed_path) if processed_dir else None,
         'raw_crop_path': str(raw_path) if save_raw_crops and raw_crops_dir else None,
     }

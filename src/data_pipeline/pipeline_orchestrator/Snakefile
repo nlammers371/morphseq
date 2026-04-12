@@ -1,20 +1,12 @@
 """
 MorphSeq Pipeline - Snakemake Workflow
 
-Orchestrates the full morphological sequence analysis pipeline from raw microscopy
-data to analysis-ready features.
-
-Phases:
-  1. Metadata Alignment - Validate and align plate + scope metadata
-  2. Image Building - Stitch Z-stacks and tiles, generate manifest
-  3. Segmentation - GroundingDINO detection + SAM2 tracking
-  4. Snip Processing - Extract embryo regions and write manifest
-  5. QC Consolidation - Run quality checks and consolidate
-  6. Feature Extraction - Extract morphological features
-  7. Analysis Assembly - Prepare analysis-ready tables
-  8. Embeddings - Generate feature embeddings
-
-Current Status: Phase 1 rules implemented and tested
+Manifest-driven pipeline:
+  - Extract physical scope metadata (scope-specific)
+  - Build stitched FF images (scope-specific)
+  - Build a single physical frame manifest (source of truth)
+  - Segment+track per well from the manifest (GDINO + SAM2)
+  - Process snips per well from segmentation_tracking only
 """
 
 from pathlib import Path
@@ -28,6 +20,9 @@ configfile: "config.yaml"
 WORKFLOW_DIR = Path(workflow.basedir)
 PROJECT_ROOT = WORKFLOW_DIR.parent.parent.parent
 
+# Pinned interpreter (per repo rules).
+PYTHON = "/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python"
+
 # Data root from config
 DATA_ROOT = PROJECT_ROOT / config.get("data_root", "data_pipeline_output")
 INPUTS_DIR = DATA_ROOT / "inputs"
@@ -36,19 +31,24 @@ RAW_IMAGES_DIR = INPUTS_DIR / "raw_image_data"
 
 # Output directories (within data_root)
 EXPERIMENT_METADATA_DIR = DATA_ROOT / "experiment_metadata"
+BUILT_IMAGE_DATA_DIR = DATA_ROOT / "built_image_data"
+SEGMENTATION_DIR = DATA_ROOT / "segmentation_and_tracking"
+PROCESSED_SNIPS_DIR = DATA_ROOT / "processed_snips"
 
 # Experiment identifiers
 EXPERIMENTS = config.get("experiments", ["20250912"])
+MICROSCOPE = str(config.get("microscope", "YX1"))
 
 print(f"Project root: {PROJECT_ROOT}")
 print(f"Data root: {DATA_ROOT}")
 print(f"Experiments: {EXPERIMENTS}")
+print(f"Microscope: {MICROSCOPE}")
 
 # ============================================================================
-# PHASE 1: METADATA ALIGNMENT
+# Plate metadata (optional for build/segment/snips)
 # ============================================================================
 
-rule phase1_normalize_plate_metadata:
+rule normalize_plate_metadata:
     """
     Normalize and validate plate layout metadata.
 
@@ -63,7 +63,7 @@ rule phase1_normalize_plate_metadata:
         experiment_id = "{experiment}"
     shell:
         """
-        python << 'EOF'
+        "{PYTHON}" << 'EOF'
 import sys
 from pathlib import Path
 sys.path.insert(0, "{PROJECT_ROOT}/src")
@@ -91,7 +91,7 @@ EOF
         """
 
 
-rule phase1_extract_scope_metadata_yx1:
+rule extract_scope_metadata_yx1:
     """
     Extract scope metadata from YX1 ND2 files.
 
@@ -106,45 +106,19 @@ rule phase1_extract_scope_metadata_yx1:
     input:
         raw_images_dir = RAW_IMAGES_DIR / "YX1" / "{experiment}"
     output:
-        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata.csv"
+        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata__yx1.csv"
     params:
         experiment_id = "{experiment}"
     shell:
         """
-        python << 'EOF'
-import sys
-from pathlib import Path
-sys.path.insert(0, "{PROJECT_ROOT}/src")
-
-from data_pipeline.metadata_ingest.scope.yx1_scope_metadata import extract_yx1_scope_metadata
-
-raw_dir = Path("{input.raw_images_dir}")
-output_file = Path("{output.scope_csv}")
-experiment_id = "{params.experiment_id}"
-
-# Create output directory
-output_file.parent.mkdir(parents=True, exist_ok=True)
-
-try:
-    # Extract scope metadata
-    df = extract_yx1_scope_metadata(
-        raw_data_dir=raw_dir,
-        experiment_id=experiment_id,
-        output_csv=output_file
-    )
-    print(f"✅ Extracted YX1 scope metadata: {{output_file}}")
-    print(f"Columns: {{list(df.columns)}}")
-    print(f"Shape: {{df.shape}}")
-except Exception as e:
-    print(f"❌ ERROR extracting scope metadata: {{e}}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-EOF
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.scope.yx1.extract_scope_metadata \
+          --raw-yx1-experiment-dir "{input.raw_images_dir}" \
+          --experiment-id "{params.experiment_id}" \
+          --output-csv "{output.scope_csv}"
         """
 
 
-rule phase1_extract_scope_metadata_keyence:
+rule extract_scope_metadata_keyence:
     """
     Extract scope metadata from Keyence raw image files.
 
@@ -158,188 +132,270 @@ rule phase1_extract_scope_metadata_keyence:
     input:
         raw_images_dir = RAW_IMAGES_DIR / "Keyence" / "{experiment}"
     output:
-        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata.csv"
+        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata__keyence.csv"
     params:
         experiment_id = "{experiment}"
     shell:
         """
-        python << 'EOF'
-import sys
-from pathlib import Path
-sys.path.insert(0, "{PROJECT_ROOT}/src")
-
-from data_pipeline.metadata_ingest.scope.keyence_scope_metadata import extract_keyence_scope_metadata
-
-raw_dir = Path("{input.raw_images_dir}")
-output_file = Path("{output.scope_csv}")
-experiment_id = "{params.experiment_id}"
-
-# Create output directory
-output_file.parent.mkdir(parents=True, exist_ok=True)
-
-try:
-    # Extract scope metadata
-    df = extract_keyence_scope_metadata(
-        raw_data_dir=raw_dir,
-        experiment_id=experiment_id,
-        output_csv=output_file
-    )
-    print(f"✅ Extracted Keyence scope metadata: {{output_file}}")
-    print(f"Columns: {{list(df.columns)}}")
-    print(f"Shape: {{df.shape}}")
-except Exception as e:
-    print(f"⚠️  Could not extract scope metadata: {{e}}")
-    print("Creating placeholder scope metadata...")
-
-    # Create placeholder if no real data available
-    import pandas as pd
-    well_id = experiment_id + "_A01"
-    placeholder_df = pd.DataFrame({{
-        'experiment_id': [experiment_id],
-        'well_id': [well_id],
-        'series_number': [0],
-        'micrometers_per_pixel': [0.65],
-        'frame_interval_s': [300],
-        'absolute_start_time': ['2025-06-12 10:00:00'],
-        'image_width_px': [1280],
-        'image_height_px': [960],
-    }})
-    placeholder_df.to_csv(output_file, index=False)
-    print(f"✅ Created placeholder scope metadata: {{output_file}}")
-EOF
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.scope.keyence.extract_scope_metadata \
+          --raw-keyence-experiment-dir "{input.raw_images_dir}" \
+          --experiment-id "{params.experiment_id}" \
+          --output-csv "{output.scope_csv}"
         """
 
 
-rule phase1_map_series_to_wells:
+rule map_series_to_wells_yx1:
     """
-    Create series-to-well mapping.
-
-    Maps microscope series numbers to well identifiers, either:
-    - Using explicit mapping from plate layout (if provided)
-    - Using implicit mapping from scope metadata structure
-    - Creating deterministic mapping based on well ordering
+    Physical YX1 series-to-well mapping (ND2 stage positions + reference XY).
+    Does not depend on plate metadata.
     """
     input:
-        plate_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
-        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata.csv"
+        raw_images_dir = RAW_IMAGES_DIR / "YX1" / "{experiment}"
     output:
-        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv"
+        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
+        provenance_json = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.provenance.json"
     params:
         experiment_id = "{experiment}"
     shell:
         """
-        python << 'EOF'
-import sys
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.scope.yx1.map_series_to_wells \
+          --raw-yx1-experiment-dir "{input.raw_images_dir}" \
+          --experiment-id "{params.experiment_id}" \
+          --output-mapping-csv "{output.mapping_csv}" \
+          --output-provenance-json "{output.provenance_json}"
+        """
+
+
+rule apply_series_mapping_yx1:
+    """
+    Apply series mapping to raw scope metadata to produce canonical well_index/well_id/image_id.
+    """
+    input:
+        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata__yx1.csv",
+        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv"
+    output:
+        mapped_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".scope_metadata_mapped.validated"
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.scope.shared.apply_series_mapping \
+          --scope-metadata-csv "{input.scope_csv}" \
+          --series-well-mapping-csv "{input.mapping_csv}" \
+          --output-scope-metadata-mapped-csv "{output.mapped_csv}"
+        echo "ok" > "{output.validated}"
+        """
+
+# ============================================================================
+# Image building + physical frame manifest
+# ============================================================================
+
+rule build_stitched_images_yx1:
+    input:
+        raw_images_dir = RAW_IMAGES_DIR / "YX1" / "{experiment}",
+        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
+    output:
+        done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done"
+    params:
+        experiment_id = "{experiment}",
+        device = lambda wc: str(config.get("image_building", {}).get("device", "cuda")),
+        overwrite = lambda wc: int(bool(config.get("image_building", {}).get("overwrite", False))),
+        z_buffer = lambda wc: int(bool(config.get("image_building", {}).get("yx1", {}).get("z_buffer", False))),
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
 from pathlib import Path
 import pandas as pd
-sys.path.insert(0, "{PROJECT_ROOT}/src")
 
-plate_csv = Path("{input.plate_csv}")
-scope_csv = Path("{input.scope_csv}")
-output_file = Path("{output.mapping_csv}")
+from data_pipeline.image_building.yx1.stitched_ff_builder import compile_yx1_data
 
-# Read inputs
-plate_df = pd.read_csv(plate_csv)
-scope_df = pd.read_csv(scope_csv)
+raw_dir = Path("{input.raw_images_dir}")
+mapping_csv = Path("{input.mapping_csv}")
+out_root = Path("{BUILT_IMAGE_DATA_DIR}")
+exp_id = "{params.experiment_id}"
+device = "{params.device}"
+overwrite = bool(int("{params.overwrite}"))
+z_buffer = bool(int("{params.z_buffer}"))
 
-# For test data, create simple mapping
-mapping_data = []
-for _, row in plate_df.iterrows():
-    mapping_data.append({{
-        'experiment_id': row['experiment_id'],
-        'series_number': 0,  # Keyence typically uses series 0
-        'well_id': row['well_id'],
-        'well_index': row['well_index'],
-        'provenance': 'test_mapping'
-    }})
+df = pd.read_csv(mapping_csv)
+well_series_mapping = {}
+for _, r in df.iterrows():
+    well_series_mapping[str(r["well_index"])] = int(r["series_number"])
 
-mapping_df = pd.DataFrame(mapping_data)
-output_file.parent.mkdir(parents=True, exist_ok=True)
-mapping_df.to_csv(output_file, index=False)
-
-print(f"✅ Created series mapping: {{output_file}}")
-print(f"Columns: {{list(mapping_df.columns)}}")
-print(f"Shape: {{mapping_df.shape}}")
-EOF
-        """
-
-
-rule phase1_align_scope_and_plate:
-    """
-    Align scope and plate metadata.
-
-    Joins plate layout with scope metadata using:
-    - experiment_id
-    - well_id
-
-    Validates that all scope data has matching plate data.
-    Output is the single source of truth for Phase 2+.
-    """
-    input:
-        plate_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
-        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata.csv",
-        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv"
-    output:
-        aligned_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_and_plate_metadata.csv"
-    shell:
-        """
-        python << 'EOF'
-import sys
-from pathlib import Path
-sys.path.insert(0, "{PROJECT_ROOT}/src")
-
-from data_pipeline.metadata_ingest.mapping.align_scope_plate import align_scope_and_plate_metadata
-
-plate_csv = Path("{input.plate_csv}")
-scope_csv = Path("{input.scope_csv}")
-output_file = Path("{output.aligned_csv}")
-
-# Align metadata
-df = align_scope_and_plate_metadata(
-    plate_metadata_csv=plate_csv,
-    scope_metadata_csv=scope_csv,
-    output_csv=output_file
+compile_yx1_data(
+    raw_data_root=raw_dir.parent,
+    output_root=out_root,
+    exp_name=exp_id,
+    well_series_mapping=well_series_mapping,
+    overwrite=overwrite,
+    device=device,
+    z_buffer=z_buffer,
 )
 
-print(f"✅ Aligned metadata: {{output_file}}")
-print(f"Columns: {{list(df.columns)}}")
-print(f"Shape: {{df.shape}}")
-print("✅ PHASE 1 COMPLETE: Metadata validated and ready for Phase 2")
+Path("{output.done}").parent.mkdir(parents=True, exist_ok=True)
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
+
+rule build_frame_manifest:
+    input:
+        mapped_scope = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
+        stitched_done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done",
+    output:
+        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.parquet",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+    params:
+        channel_id = lambda wildcards: str(config.get("segmentation_and_tracking", {}).get("channel_id", "BF")),
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.microscope_data_ingest.frame_manifest.build_frame_manifest \
+          --scope-metadata-mapped-csv "{input.mapped_scope}" \
+          --built-image-data-root "{BUILT_IMAGE_DATA_DIR}" \
+          --output-parquet "{output.manifest}" \
+          --channel-id "{params.channel_id}"
+        """
+
+
+checkpoint discover_wells:
+    input:
+        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.parquet",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+    output:
+        wells_txt = EXPERIMENT_METADATA_DIR / "{experiment}" / "wells.txt"
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+
+manifest = Path("{input.manifest}")
+df = pd.read_parquet(manifest)
+wells = sorted(set(df["well_id"].astype(str).tolist()))
+out = Path("{output.wells_txt}")
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text("\\n".join(wells) + "\\n")
+EOF
+        """
+
+
+def wells_for_experiment(wildcards):
+    ck = checkpoints.discover_wells.get(experiment=wildcards.experiment)
+    p = ck.output.wells_txt
+    with open(p, "r", encoding="utf-8") as f:
+        return [ln.strip() for ln in f if ln.strip()]
+
+
+# ============================================================================
+# Segmentation + tracking (per well)
+# ============================================================================
+
+rule segment_and_track_per_well:
+    input:
+        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.parquet",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+    output:
+        out_csv = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
+        done = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segmentation_tracking.validated",
+    params:
+        channel_id = lambda wc: str(config.get("segmentation_and_tracking", {}).get("channel_id", "BF")),
+        device = lambda wc: str(config.get("segmentation_and_tracking", {}).get("device", "cuda")),
+        gdino_config = lambda wc: str(config.get("segmentation_and_tracking", {}).get("groundingdino", {}).get("config_path", "")),
+        gdino_weights = lambda wc: str(config.get("segmentation_and_tracking", {}).get("groundingdino", {}).get("weights_path", "")),
+        sam2_config = lambda wc: str(config.get("segmentation_and_tracking", {}).get("sam2", {}).get("config_path", "")),
+        sam2_ckpt = lambda wc: str(config.get("segmentation_and_tracking", {}).get("sam2", {}).get("checkpoint_path", "")),
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.segmentation.grounded_sam2.run_per_well \
+          --frame-manifest "{input.manifest}" \
+          --experiment-id "{wildcards.experiment}" \
+          --well-id "{wildcards.well_id}" \
+          --channel-id "{params.channel_id}" \
+          --output-root "{SEGMENTATION_DIR}" \
+          --device "{params.device}" \
+          --gdino-config "{params.gdino_config}" \
+          --gdino-weights "{params.gdino_weights}" \
+          --sam2-config "{params.sam2_config}" \
+          --sam2-checkpoint "{params.sam2_ckpt}"
+        """
+
+
+rule merge_segmentation_tracking:
+    input:
+        lambda wc: [
+            str(SEGMENTATION_DIR / wc.experiment / "per_well" / w / "contracts" / "segmentation_tracking.csv")
+            for w in wells_for_experiment(wc)
+        ]
+    output:
+        merged = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.segmentation.grounded_sam2.merge_segmentation_tracking \
+          --inputs {input} \
+          --output-csv "{output.merged}"
+        """
+
+
+# ============================================================================
+# Snip processing (per well, consumes segmentation_tracking only)
+# ============================================================================
+
+rule run_snip_processing_per_well:
+    input:
+        seg = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
+        seg_done = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segmentation_tracking.validated",
+    output:
+        manifest = PROCESSED_SNIPS_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "snip_manifest.parquet",
+        done = PROCESSED_SNIPS_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".snip_manifest.validated",
+    params:
+        out_h = lambda wc: int(config.get("snip_processing", {}).get("output_shape", [576, 256])[0]),
+        out_w = lambda wc: int(config.get("snip_processing", {}).get("output_shape", [576, 256])[1]),
+        target_um = lambda wc: float(config.get("snip_processing", {}).get("target_pixel_size_um", 7.8)),
+        save_raw = lambda wc: int(bool(config.get("snip_processing", {}).get("save_raw_crops", True))),
+        write_csv = lambda wc: int(bool(config.get("snip_processing", {}).get("write_manifest_csv", True))),
+        bg_n = lambda wc: int(config.get("snip_processing", {}).get("background_n_samples", 100)),
+        bg_seed = lambda wc: int(config.get("snip_processing", {}).get("background_seed", 309)),
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.snip_processing.run_from_segmentation_tracking \
+          --segmentation-tracking "{input.seg}" \
+          --output-root "{PROCESSED_SNIPS_DIR}" \
+          --output-shape {params.out_h} {params.out_w} \
+          --target-pixel-size-um {params.target_um} \
+          --save-raw-crops {params.save_raw} \
+          --write-manifest-csv {params.write_csv} \
+          --background-n-samples {params.bg_n} \
+          --background-seed {params.bg_seed}
+        """
+
+
+rule merge_snip_manifests:
+    input:
+        lambda wc: [
+            str(PROCESSED_SNIPS_DIR / wc.experiment / "per_well" / w / "contracts" / "snip_manifest.parquet")
+            for w in wells_for_experiment(wc)
+        ]
+    output:
+        merged = PROCESSED_SNIPS_DIR / "{experiment}" / "contracts" / "snip_manifest.parquet",
+        done = PROCESSED_SNIPS_DIR / "{experiment}" / "contracts" / ".snip_manifest_merged.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.snip_processing.merge_snip_manifests \
+          --inputs {input} \
+          --output-parquet "{output.merged}" \
+          --write-csv 1
+        """
 
 # ============================================================================
 # Workflow Targets
 # ============================================================================
 
-rule phase1_complete:
-    """
-    Target rule: Run all Phase 1 metadata alignment.
-
-    Usage: snakemake phase1_complete
-    """
-    input:
-        expand(
-            EXPERIMENT_METADATA_DIR / "{exp}" / "scope_and_plate_metadata.csv",
-            exp=EXPERIMENTS
-        )
-    shell:
-        """
-        echo "✅ PHASE 1 COMPLETE"
-        echo "Outputs:"
-        for file in {input}; do
-            echo "  - $file"
-        done
-        """
-
-
 rule all:
     """
-    Default target: Run current implemented phases.
+    Default target: build stitched images, manifest, segmentation, and snip processing.
     """
     input:
         expand(
-            EXPERIMENT_METADATA_DIR / "{exp}" / "scope_and_plate_metadata.csv",
+            PROCESSED_SNIPS_DIR / "{exp}" / "contracts" / ".snip_manifest_merged.validated",
             exp=EXPERIMENTS
         )

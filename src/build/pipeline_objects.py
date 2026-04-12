@@ -45,13 +45,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]   # adjust "2" if levels differ
 # Put that directory at the *front* of sys.path so Python looks there first
 sys.path.insert(0, str(REPO_ROOT))
 
-from src.build.build01A_compile_keyence_torch import stitch_ff_from_keyence, build_ff_from_keyence
-from src.build.build01AB_stitch_keyence_z_slices import stitch_z_from_keyence
-from src.build.build01B_compile_yx1_images_torch import build_ff_from_yx1
 import pandas as pd
 import multiprocessing
 from typing import Literal, Optional, Dict, List, Sequence, Union
-import torch
 from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime
@@ -62,7 +58,7 @@ import functools
 import os
 import logging
 import itertools
-from src.build.export_utils import PATTERNS, _match_files, has_output, newest_mtime, _mod_time
+from src.build.file_checks import PATTERNS, _match_files, has_output, newest_mtime, _mod_time
 from src.run_morphseq_pipeline.paths import (
     # Global/non-generated inputs
     get_stage_ref_csv,
@@ -88,8 +84,6 @@ from src.run_morphseq_pipeline.paths import (
     get_latents_csv,
     get_build06_output,
 )
-from src.build.build03A_process_images import segment_wells, compile_embryo_stats, extract_embryo_snips
-
 # Dependency simplification notes (comments only; no behavior change):
 # - glob2: used only to match files; replace with `Path.glob()` to drop glob2.
 # - pandas in this file is used primarily for IO; could be minimized if needed.
@@ -243,7 +237,11 @@ class Experiment:
         Returns True if PyTorch can see at least one CUDA device.
         Falls back to False if torch isn’t installed.
         """
-        return torch.cuda.is_available()
+        try:
+            import torch  # type: ignore
+        except Exception:
+            return False
+        return bool(torch.cuda.is_available())
     
     @property
     def gpu_names(self) -> List[str]:
@@ -251,6 +249,10 @@ class Experiment:
         Returns a list of device names, e.g. ['Tesla V100', ...].
         Empty if no GPUs or torch unavailable.
         """
+        try:
+            import torch  # type: ignore
+        except Exception:
+            return []
         if not torch.cuda.is_available():
             return []
         return [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
@@ -1008,16 +1010,20 @@ class Experiment:
         overwrite_env = _as_bool(os.environ.get("MSEQ_OVERWRITE_BUILD01", "0"))
         if self.microscope == "Keyence":
             # Default resume-by-skip; enable full recompute with MSEQ_OVERWRITE_BUILD01=1
+            from src.build.build01A_compile_keyence_torch import build_ff_from_keyence
             build_ff_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=overwrite_env)
         else:
             # For YX1, overwrite=False skips existing frames; set MSEQ_OVERWRITE_BUILD01=1 to recompute
+            from src.build.build01B_compile_yx1_images_torch import build_ff_from_yx1
             build_ff_from_yx1(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=overwrite_env)
 
     @record("meta_built")
     def export_metadata(self):
         if self.microscope == "Keyence":
+            from src.build.build01A_compile_keyence_torch import build_ff_from_keyence
             build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, metadata_only=True)
         else:
+            from src.build.build01B_compile_yx1_images_torch import build_ff_from_yx1
             build_ff_from_yx1(
                 data_root=self.data_root,
                 repo_root=self.repo_root,
@@ -1037,10 +1043,12 @@ class Experiment:
         if self.microscope == "Keyence":
             # Default is resume mode; set MSEQ_OVERWRITE_STITCH=1 to force restitch
             print("       ↳ Build01: FF stitch (Keyence) — required for SAM2")
+            from src.build.build01A_compile_keyence_torch import stitch_ff_from_keyence
             stitch_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=overwrite_stitch, n_workers=self.num_cpu_workers)
             print("       ↳ Build01: FF stitch complete")
             if not skip_z_stitch:
                 print("       ↳ Build01: Z-stitch (Keyence) — optional, not required for SAM2")
+                from src.build.build01AB_stitch_keyence_z_slices import stitch_z_from_keyence
                 stitch_z_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
                 print("       ↳ Build01: Z-stitch complete")
         else:
@@ -1049,6 +1057,7 @@ class Experiment:
     # @record("stitch")
     def stitch_z_images(self):
         if self.microscope == "Keyence":
+            from src.build.build01AB_stitch_keyence_z_slices import stitch_z_from_keyence
             # stitch_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
             stitch_z_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, n_workers=self.num_cpu_workers)
         else:
@@ -1078,6 +1087,12 @@ class Experiment:
 
     # @record()
     def process_image_masks(self, force_update: bool=False):
+        from src.build.build03A_process_images import (
+            segment_wells,
+            compile_embryo_stats,
+            extract_embryo_snips,
+        )
+
         tracked_df = segment_wells(root=self.data_root, exp_name=self.date)
         stats_df = compile_embryo_stats(root=self.data_root, tracked_df=tracked_df)
         extract_embryo_snips(root=self.data_root, stats_df=stats_df, overwrite_flag=force_update)
@@ -1245,10 +1260,19 @@ class ExperimentManager:
         exp_dir: Path to experiment state files (metadata/experiments/)
         experiments: Dict mapping experiment dates to Experiment objects
     """
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, experiments: Optional[Sequence[str]] = None):
         self.root = Path(root)
+        raw = self.root / "raw_image_data"
+        if not raw.exists():
+            raise FileNotFoundError(
+                f"Expected raw image directory at '{raw}'. "
+                "Set --data-root to a morphseq_playground-style directory that contains raw_image_data/Keyence and/or raw_image_data/YX1."
+            )
         self.exp_dir = self.root / "metadata" / "experiments"
         self.experiments: dict[str, Experiment] = {}
+        self._requested_experiments: Optional[set[str]] = (
+            {str(e).strip() for e in experiments if str(e).strip()} if experiments else None
+        )
         self.discover_experiments()
         self.update_experiment_status()
 
@@ -1436,8 +1460,17 @@ class ExperimentManager:
 
 
     def discover_experiments(self):
-        # scan "raw_image_data" subfolders for dates
+        # Scan "raw_image_data" subfolders for dates.
+        #
+        # If a caller provides an explicit experiment allow-list, avoid a full directory
+        # walk of (potentially huge) raw_image_data trees.
         raw = self.root / "raw_image_data"
+        if self._requested_experiments:
+            for date in sorted(self._requested_experiments):
+                # Accept either microscope layout; Experiment will resolve microscope on demand.
+                if (raw / "Keyence" / date).exists() or (raw / "YX1" / date).exists():
+                    self.experiments[date] = Experiment(date, self.root)
+            return
         # collect all the dates first
         dates = []
         for mic in raw.iterdir():

@@ -5,7 +5,7 @@ from src.core.models.model_utils import deep_merge, prune_empty
 from omegaconf import OmegaConf, DictConfig
 # from src.losses.legacy_loss_functions import VAELossBasic
 from src.core.losses.loss_configs import BasicLoss
-from src.core.data.dataset_configs import BaseDataConfig
+from data.dataset_configs import BaseDataConfig
 from src.core.models.model_components.arch_configs import SplitArchitectureAELDM, ArchitectureAELDM
 from src.core.lightning.train_config import LitTrainConfig
 

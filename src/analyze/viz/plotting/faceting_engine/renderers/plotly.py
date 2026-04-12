@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Dict, Any
 
-from ..ir import FigureData, TraceData, FacetSpec
+from ..ir import FigureData, TraceData, FacetSpec, resolve_linestyle
 from ..style.defaults import StyleSpec
 from analyze.viz.styling.color_utils import to_rgba_string
 from ..utils import calculate_grid_map, compute_figure_size
@@ -24,6 +24,8 @@ def render_plotly(
     fig = make_subplots(
         rows=n_rows,
         cols=n_cols,
+        shared_xaxes="all" if facet.sharex else False,
+        shared_yaxes="rows" if facet.sharey else False,
         vertical_spacing=style.vertical_spacing,
         horizontal_spacing=style.horizontal_spacing,
     )
@@ -36,15 +38,31 @@ def render_plotly(
         for trace in sub.traces:
             if trace.render_as == 'band' and trace.band_lower is not None:
                 _add_band_trace(fig, trace, pos['row'], pos['col'], style)
+            elif trace.render_as == 'scatter':
+                _add_scatter_trace(fig, trace, pos['row'], pos['col'])
             else:
                 _add_line_trace(fig, trace, pos['row'], pos['col'])
         
         # Axis config
-        x_title = sub.x_label if pos['show_x'] else None
-        y_title = sub.y_label if pos['show_y'] else None
+        show_x = bool(pos['show_x'] or getattr(style, "repeat_xlabels", False))
+        show_y = bool(pos['show_y'] or getattr(style, "repeat_ylabels", False))
+        x_title = sub.x_label if show_x else None
+        y_title = sub.y_label if show_y else None
         
-        fig.update_xaxes(range=sub.xlim, title_text=x_title, row=pos['row'], col=pos['col'])
-        fig.update_yaxes(range=sub.ylim, title_text=y_title, row=pos['row'], col=pos['col'])
+        fig.update_xaxes(
+            range=sub.xlim,
+            title_text=x_title,
+            showticklabels=True if getattr(style, "repeat_xticklabels", False) else None,
+            row=pos['row'],
+            col=pos['col'],
+        )
+        fig.update_yaxes(
+            range=sub.ylim,
+            title_text=y_title,
+            showticklabels=True if getattr(style, "repeat_yticklabels", False) else None,
+            row=pos['row'],
+            col=pos['col'],
+        )
     
     _add_facet_labels(fig, data, n_rows, n_cols)
     
@@ -71,7 +89,7 @@ def render_plotly(
 
 def _add_line_trace(fig, trace: TraceData, row: int, col: int):
     """Add a line trace."""
-    line_dash = 'dash' if trace.style.linestyle == '--' else 'solid'
+    _, line_dash = resolve_linestyle(trace.style.linestyle)
     
     hovertemplate = None
     if trace.hover_meta:
@@ -92,6 +110,32 @@ def _add_line_trace(fig, trace: TraceData, row: int, col: int):
             hovertemplate=hovertemplate,
         ),
         row=row, col=col
+    )
+
+
+def _add_scatter_trace(fig, trace: TraceData, row: int, col: int):
+    """Add a marker-only trace."""
+    symbol = "circle-open" if str(trace.style.marker_facecolor).lower() in {"none", "transparent"} else "circle"
+    edge = trace.style.marker_edgecolor or trace.style.color
+    fig.add_trace(
+        go.Scatter(
+            x=trace.x,
+            y=trace.y,
+            mode="markers",
+            marker=dict(
+                symbol=symbol,
+                size=float(trace.style.marker_size),
+                line=dict(color=edge, width=float(trace.style.marker_edgewidth)),
+                color=edge,
+            ),
+            opacity=trace.style.alpha,
+            name=trace.label,
+            legendgroup=trace.legend_group,
+            showlegend=trace.show_legend,
+            hoverinfo="skip",
+        ),
+        row=row,
+        col=col,
     )
 
 

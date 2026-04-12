@@ -6,9 +6,9 @@ from .lookup import ColorLookup
 
 
 GENOTYPE_SUFFIX_COLORS = {
-    'wildtype': '#2E7D32',      # Green
-    'heterozygous': '#FFA500',  # Orange
-    'homozygous': '#D32F2F',    # Red
+    'wildtype': '#2166AC',      # Cool blue (colorblind-safe)
+    'heterozygous': '#F7B267',  # Soft amber (colorblind-safe)
+    'homozygous': '#B2182B',    # Deep crimson (colorblind-safe)
     'crispant': '#9467bd',      # Purple
     'unknown': '#808080',       # Gray
 }

@@ -261,7 +261,8 @@ def extract_keyence_scope_metadata(
                 'well_id': f"{experiment_id}_{well_index}",
                 'time_int': time_int,
                 'frame_index': time_int,  # For Keyence, time_int == frame_index
-                'image_id': f"{experiment_id}_{well_index}_{normalized_channel}_t{time_int:04d}",
+                # Canonical convention: use frame_index suffix (_f) rather than time suffix (_t).
+                'image_id': f"{experiment_id}_{well_index}_{normalized_channel}_f{time_int:04d}",
 
                 # Spatial calibration
                 'micrometers_per_pixel': micrometers_per_pixel,

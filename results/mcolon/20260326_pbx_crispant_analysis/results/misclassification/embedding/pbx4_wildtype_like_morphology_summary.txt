@@ -1,0 +1,30 @@
+PBX4 morphology driver summary
+
+n_pbx4_embryos_total: 49
+n_below_min_time_bins: 13
+signed_margin_split_threshold: 0.000000
+
+rank_group_counts:
+- pbx4_like_pbx4: 29
+- wildtype_like_pbx4: 20
+
+pbx4_group_counts_by_experiment:
+- pbx4_like_pbx4 / 20260304: 18
+- pbx4_like_pbx4 / 20260306: 11
+- wildtype_like_pbx4 / 20260304: 13
+- wildtype_like_pbx4 / 20260306: 7
+
+inj_ctrl_counts_by_experiment:
+- inj_ctrl / 20260304: 20
+- inj_ctrl / 20260306: 11
+
+morphology_mean_deltas:
+- baseline_deviation_normalized / full: -0.027049
+- baseline_deviation_normalized / post74: -0.029689
+- baseline_deviation_normalized / pre74: -0.026120
+- surface_area_um / full: -14179.164388
+- surface_area_um / post74: -235935.887147
+- surface_area_um / pre74: 122941.257155
+- total_length_um / full: 282.310327
+- total_length_um / post74: 106.768341
+- total_length_um / pre74: 421.557732

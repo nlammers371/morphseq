@@ -598,8 +598,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         root = resolve_root(args)
+        requested_experiments = None
+        if getattr(args, "experiments", None):
+            exp_list = [e.strip() for e in args.experiments.split(",") if e.strip()]
+            if exp_list and not (len(exp_list) == 1 and exp_list[0].lower() == "all"):
+                requested_experiments = exp_list
         try:
-            manager = ExperimentManager(root)
+            manager = ExperimentManager(root, experiments=requested_experiments)
         except Exception as e:
             print(f"ERROR: Failed to initialize ExperimentManager: {e}")
             return 1
@@ -705,8 +710,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         root = resolve_root(args)
+        requested_experiments = None
+        if getattr(args, "experiments", None) and not getattr(args, "later_than", None):
+            exp_list = [e.strip() for e in args.experiments.split(",") if e.strip()]
+            if exp_list and not (len(exp_list) == 1 and exp_list[0].lower() == "all"):
+                requested_experiments = exp_list
         try:
-            manager = ExperimentManager(root)
+            manager = ExperimentManager(root, experiments=requested_experiments)
         except Exception as e:
             print(f"ERROR: Failed to initialize ExperimentManager: {e}")
             return 1
@@ -922,22 +932,28 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     print("    5️⃣ ✅ Per-exp QC & staging (Build04) → per-exp df02 complete")
 
-                # Step 6: Latent embeddings
+                # Step 6: Latent embeddings (pre-generation via Py3.9 subprocess)
+                # NOTE: Step 7 (run_build06) will also generate missing latents
+                # as a fallback. Both paths call generate_embeddings_py39.py.
+                # TODO: Consolidate — remove Step 6, let Step 7 handle everything.
                 if args.force or not exp.has_latents(args.model_name):
                     if args.dry_run:
                         print("    6️⃣ 🔄 Latent embeddings - would generate")
                     else:
-                        print("    6️⃣ 🔄 Generating latent embeddings...")
+                        print("    6️⃣ 🔄 Generating latent embeddings (Py3.9 subprocess)...")
                         lat_kwargs = {"model_name": args.model_name}
                         if args.force:
                             # Force latent regeneration for this experiment
                             lat_kwargs.update({"overwrite": True, "generate_missing": True})
-                        exp.generate_latents(**lat_kwargs)
+                        success = exp.generate_latents(**lat_kwargs)
+                        if not success:
+                            print(f"    6️⃣ ⚠️  Step 6 failed for {exp.date} — Step 7 will retry latent generation")
                 else:
                     print("    6️⃣ ✅ Latent embeddings exist")
 
                 # Step 7: Build06 (per-experiment: Build04 + latents)
-                # Use run_build06 service but restrict to this experiment; allow overwrite on --force
+                # Also generates missing latents via calculate_morph_embeddings fallback.
+                # TODO: This is redundant with Step 6 — consolidate into one step.
                 if args.dry_run:
                     print(f"    7️⃣ 🔄 Build06 (merge per-exp Build04 + latents) for {exp.date} - would run")
                 else:

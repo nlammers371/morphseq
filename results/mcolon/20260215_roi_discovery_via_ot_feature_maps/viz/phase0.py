@@ -20,6 +20,8 @@ from scipy.ndimage import gaussian_filter
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
 
 from viz import contract
@@ -36,6 +38,24 @@ def _apply_mask_nan(field: np.ndarray, mask_ref: np.ndarray) -> np.ndarray:
     return np.where(mask_ref.astype(bool), field, np.nan)
 
 
+def _masked_gaussian_smooth(field: np.ndarray, mask_ref: np.ndarray, sigma: float) -> np.ndarray:
+    """
+    Smooth inside the embryo without zero-padding bias from the background.
+
+    gaussian_filter(field * mask) alone treats pixels outside the embryo as zero,
+    which pulls edge values inward and makes high-sigma contours look like the
+    embryo geometry changed. Normalize by a blurred mask to keep the smoothing
+    local to the embryo support.
+    """
+    mask_float = mask_ref.astype(np.float32)
+    numer = gaussian_filter(field * mask_float, sigma=sigma)
+    denom = gaussian_filter(mask_float, sigma=sigma)
+    smoothed = np.zeros_like(numer, dtype=np.float32)
+    valid = denom > 1e-6
+    smoothed[valid] = numer[valid] / denom[valid]
+    return _apply_mask_nan(smoothed, mask_ref)
+
+
 # ---------------------------------------------------------------------------
 # 3.1 Cost density maps
 # ---------------------------------------------------------------------------
@@ -48,15 +68,38 @@ def plot_cost_density_suite(
     sigma_grid: Tuple[float, ...] = (1.0, 2.0, 4.0),
     label_names: Dict[int, str] = None,
     save_dir: Optional[str | Path] = None,
+    contour_linewidth: float = 0.3,
+    outline_linewidth: float = 1.5,
+    contour_level_count: int = 12,
+    diff_level_count: int = 15,
+    save_suffix: str = "",
+    save_dpi: int = 150,
+    contour_background: str = "filled",
+    mean_cmap="hot",
+    diff_cmap="RdBu_r",
+    show_contour_colorbars: bool = False,
 ) -> Dict[str, plt.Figure]:
     """
     Figs A1–A6: Mean cost density maps (raw + smoothed contour versions).
     """
+    if contour_level_count < 2:
+        raise ValueError(f"contour_level_count must be >= 2, got {contour_level_count}")
+    if diff_level_count < 2:
+        raise ValueError(f"diff_level_count must be >= 2, got {diff_level_count}")
+    if contour_background not in {"filled", "raw"}:
+        raise ValueError(
+            f"contour_background must be 'filled' or 'raw', got {contour_background!r}"
+        )
+
     if label_names is None:
         label_names = {0: "WT", 1: "cep290"}
     if save_dir:
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
+
+    save_suffix = save_suffix.strip()
+    if save_suffix and not save_suffix.startswith("_"):
+        save_suffix = f"_{save_suffix}"
 
     valid = ~outlier_flag
     X_valid = X[valid]
@@ -84,7 +127,7 @@ def plot_cost_density_suite(
     for idx, (label_str, mean_map) in enumerate(means.items()):
         ax = axes[idx]
         display = _apply_mask_nan(mean_map, mask_ref)
-        im = contract.imshow(ax, display, cmap="hot", vmin=0, vmax=vmax_raw, interpolation="bilinear")
+        im = contract.imshow(ax, display, cmap=mean_cmap, vmin=0, vmax=vmax_raw, interpolation="bilinear")
         contract.embryo_outline(mask_ref, ax)
         ax.set_title(f"Fig A{idx+1}: Mean Cost — {label_str}")
         ax.axis("off")
@@ -93,7 +136,7 @@ def plot_cost_density_suite(
     # A3: difference
     diff_display = _apply_mask_nan(diff, mask_ref)
     vabs = np.nanmax(np.abs(diff_display)) if np.any(np.isfinite(diff_display)) else 1.0
-    im = contract.imshow(axes[2], diff_display, cmap="RdBu_r", vmin=-vabs, vmax=vabs, interpolation="bilinear")
+    im = contract.imshow(axes[2], diff_display, cmap=diff_cmap, vmin=-vabs, vmax=vabs, interpolation="bilinear")
     contract.embryo_outline(mask_ref, axes[2], color="black")
     axes[2].set_title(f"Fig A3: Difference ({label_names[1]} − {label_names[0]})")
     axes[2].axis("off")
@@ -102,7 +145,11 @@ def plot_cost_density_suite(
     fig_raw.tight_layout()
     figs["cost_raw"] = fig_raw
     if save_dir:
-        fig_raw.savefig(save_dir / "fig_A1_A3_cost_density_raw.png", dpi=150, bbox_inches="tight")
+        fig_raw.savefig(
+            save_dir / f"fig_A1_A3_cost_density_raw{save_suffix}.png",
+            dpi=save_dpi,
+            bbox_inches="tight",
+        )
 
     # A4-A6: Smoothed contour versions
     for sigma in sigma_grid:
@@ -110,33 +157,75 @@ def plot_cost_density_suite(
 
         for idx, (label_str, mean_map) in enumerate(means.items()):
             ax = axes_s[idx]
-            smoothed = gaussian_filter(mean_map * mask_bool, sigma=sigma)
-            smoothed = _apply_mask_nan(smoothed, mask_ref)
-            levels = np.linspace(0, vmax_raw, 12)
+            smoothed = _masked_gaussian_smooth(mean_map, mask_ref, sigma=sigma)
+            levels = np.linspace(0, vmax_raw, contour_level_count)
 
-            contract.contourf(ax, smoothed, levels=levels, cmap="hot")
-            contract.contour(ax, smoothed, levels=levels, colors="k", linewidths=0.3)
-            contract.embryo_outline(mask_ref, ax, color="white", lw=1.5)
+            if contour_background == "raw":
+                display = _apply_mask_nan(mean_map, mask_ref)
+                contour_mappable = contract.imshow(
+                    ax,
+                    display,
+                    cmap=mean_cmap,
+                    vmin=0,
+                    vmax=vmax_raw,
+                    interpolation="bilinear",
+                )
+            else:
+                contour_mappable = contract.contourf(ax, smoothed, levels=levels, cmap=mean_cmap)
+            contract.contour(ax, smoothed, levels=levels, colors="k", linewidths=contour_linewidth)
+            contract.embryo_outline(mask_ref, ax, color="white", lw=outline_linewidth)
             ax.set_title(f"{label_str} (σ={sigma})")
             ax.axis("off")
+            if show_contour_colorbars:
+                if contour_background == "raw":
+                    plt.colorbar(contour_mappable, ax=ax, fraction=0.046, pad=0.04, label="cost")
+                else:
+                    sm = ScalarMappable(norm=Normalize(vmin=0, vmax=vmax_raw), cmap=mean_cmap)
+                    sm.set_array([])
+                    plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04, label="cost")
 
         # Difference contour
-        diff_smoothed = gaussian_filter(diff * mask_bool, sigma=sigma)
-        diff_smoothed = _apply_mask_nan(diff_smoothed, mask_ref)
-        levels_diff = np.linspace(-vabs, vabs, 15)
+        diff_smoothed = _masked_gaussian_smooth(diff, mask_ref, sigma=sigma)
+        levels_diff = np.linspace(-vabs, vabs, diff_level_count)
 
-        contract.contourf(axes_s[2], diff_smoothed, levels=levels_diff, cmap="RdBu_r")
-        contract.contour(axes_s[2], diff_smoothed, levels=levels_diff, colors="k", linewidths=0.3)
-        contract.embryo_outline(mask_ref, axes_s[2], color="black", lw=1.5)
+        if contour_background == "raw":
+            diff_mappable = contract.imshow(
+                axes_s[2],
+                diff_display,
+                cmap=diff_cmap,
+                vmin=-vabs,
+                vmax=vabs,
+                interpolation="bilinear",
+            )
+        else:
+            diff_mappable = contract.contourf(axes_s[2], diff_smoothed, levels=levels_diff, cmap=diff_cmap)
+        contract.contour(
+            axes_s[2],
+            diff_smoothed,
+            levels=levels_diff,
+            colors="k",
+            linewidths=contour_linewidth,
+        )
+        contract.embryo_outline(mask_ref, axes_s[2], color="black", lw=outline_linewidth)
         axes_s[2].set_title(f"Diff ({label_names[1]}−{label_names[0]}) σ={sigma}")
         axes_s[2].axis("off")
+        if show_contour_colorbars:
+            if contour_background == "raw":
+                plt.colorbar(diff_mappable, ax=axes_s[2], fraction=0.046, pad=0.04, label="Δ cost")
+            else:
+                sm = ScalarMappable(norm=Normalize(vmin=-vabs, vmax=vabs), cmap=diff_cmap)
+                sm.set_array([])
+                plt.colorbar(sm, ax=axes_s[2], fraction=0.046, pad=0.04, label="Δ cost")
 
         fig_smooth.suptitle(f"Fig A4+: Smoothed Contours (σ={sigma})", fontsize=12)
         fig_smooth.tight_layout(rect=[0, 0, 1, 0.95])
         figs[f"cost_contour_sigma{sigma}"] = fig_smooth
         if save_dir:
-            fig_smooth.savefig(save_dir / f"fig_A_cost_contour_sigma{sigma:.0f}.png",
-                               dpi=150, bbox_inches="tight")
+            fig_smooth.savefig(
+                save_dir / f"fig_A_cost_contour_sigma{sigma:.0f}{save_suffix}.png",
+                dpi=save_dpi,
+                bbox_inches="tight",
+            )
 
     return figs
 

@@ -23,7 +23,7 @@ import os
 from omegaconf import OmegaConf
 import pickle
 from typing import List, Literal, Optional, Any, Union
-from lightning.pl_wrappers import LitModel
+from src.core.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from data.data_transforms import basic_transform
 from data.dataset_configs import EvalDataConfig
@@ -119,14 +119,13 @@ def calculate_morph_embeddings(data_root: Union[str, Path],
     import os
     import sys
     import subprocess
+    import json
     
     if (model_class == "legacy" and
         sys.version_info[:2] != (3, 9)):
         
         print(f"⚠️  Legacy model requires Python 3.9, current version: {sys.version_info[0]}.{sys.version_info[1]}")
-        print("🔄 Switching to vae-env-cluster environment...")
-        print(f"🔍 Current CONDA_EXE: {os.environ.get('CONDA_EXE', 'Not set')}")
-        print(f"🔍 Current PATH contains conda: {'conda' in os.environ.get('PATH', '')}")
+        print("🔄 Switching to Python 3.9 subprocess...")
         
         # Build command to run this function in Python 3.9 environment
         current_script = __file__
@@ -134,56 +133,24 @@ def calculate_morph_embeddings(data_root: Union[str, Path],
         
         # Use dedicated Python 3.9 script to avoid import compatibility issues
         script_path = repo_root / "src" / "run_morphseq_pipeline" / "services" / "generate_embeddings_py39.py"
-        experiments_json = str(experiments).replace("'", '"')  # Convert to JSON format
-        
-        # Try different conda/mamba paths
-        conda_paths = [
-            "/net/trapnell/vol1/home/mdcolon/software/miniconda3/bin/conda",
-            "/net/trapnell/vol1/home/mdcolon/software/miniconda3/condabin/conda", 
-            "/usr/bin/conda",
-            "conda"
-        ]
-        
-        mamba_paths = [
-            "/net/trapnell/vol1/home/mdcolon/software/miniconda3/bin/mamba",
-            "/usr/bin/mamba", 
-            "mamba"
-        ]
-        
-        # Try to find working conda/mamba command
-        cmd_base = None
-        for conda_path in conda_paths:
-            try:
-                subprocess.run([conda_path, "--version"], capture_output=True, check=True)
-                cmd_base = [conda_path, "run", "-p", "/net/trapnell/vol1/home/nlammers/micromamba/envs/vae-env-cluster", "--no-capture-output"]
-                print(f"✅ Found conda at: {conda_path}")
-                break
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                continue
-        
-        if cmd_base is None:
-            for mamba_path in mamba_paths:
-                try:
-                    subprocess.run([mamba_path, "--version"], capture_output=True, check=True)
-                    cmd_base = [mamba_path, "run", "-p", "/net/trapnell/vol1/home/nlammers/micromamba/envs/vae-env-cluster", "--no-capture-output"]
-                    print(f"✅ Found mamba at: {mamba_path}")
-                    break
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                    continue
-        
-        if cmd_base is None:
-            raise RuntimeError("❌ Could not find conda or mamba executable. Please ensure conda/mamba is installed and accessible.")
-        
-        cmd = cmd_base + ["python", str(script_path), str(data_root), model_name, model_class, experiments_json, str(batch_size)]
+        experiments_json = json.dumps(experiments)
+
+        py39_python = os.environ.get(
+            "MORPHSEQ_PY39_PYTHON",
+            "/net/trapnell/vol1/home/nlammers/micromamba/envs/vae-env-cluster/bin/python",
+        )
+        if not os.path.isfile(py39_python):
+            raise RuntimeError(
+                "❌ Python 3.9 executable not found for legacy embedding generation.\n"
+                f"Looked for: {py39_python}\n"
+                "Set MORPHSEQ_PY39_PYTHON to override."
+            )
+
+        cmd = [py39_python, str(script_path), str(data_root), model_name, model_class, experiments_json, str(batch_size)]
         
         try:
             # Ensure subprocess inherits conda environment variables
             env = os.environ.copy()
-            # Add conda paths if they're not already there
-            if 'CONDA_EXE' not in env and os.path.exists("/net/trapnell/vol1/home/mdcolon/software/miniconda3/condabin/conda"):
-                env['CONDA_EXE'] = "/net/trapnell/vol1/home/mdcolon/software/miniconda3/condabin/conda"
-            if 'CONDA_PREFIX' not in env:
-                env['CONDA_PREFIX'] = "/net/trapnell/vol1/home/mdcolon/software/miniconda3"
             
             # Run subprocess from repo root so script can use sys.path.insert(0, ".")
             result = subprocess.run(cmd, check=True, capture_output=True, text=True, env=env, cwd=repo_root)

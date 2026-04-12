@@ -146,6 +146,11 @@ class LitModel(pl.LightningModule):
 
         self.manual_backward(loss_output.loss)
 
+        if self.train_cfg.grad_clip_norm > 0:
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.train_cfg.grad_clip_norm
+            )
+
         gn_G = self._grad_norm(module=self.model)
         self.log(f"train/grad_G", gn_G, on_step=True, on_epoch=self.log_epoch, rank_zero_only=True)
 
@@ -180,21 +185,13 @@ class LitModel(pl.LightningModule):
 
             self.log("train/loss_D", loss_D, prog_bar=True, on_step=True, on_epoch=self.log_epoch)
 
-            # --- Feature Matching Loss (optional) ---
-            # featmatch_loss = 0.0
-            # d = 0
-            # for real_scale_feats, fake_scale_feats in zip(feats_real, feats_fake):  # 4 scales
-            #     for fr, ff in zip(real_scale_feats, fake_scale_feats):  # 3 layers per scale
-            #         featmatch_loss += F.l1_loss(ff, fr)
-            #         d += 1
-
-            # Optional: normalize or weight
-            # featmatch_loss = featmatch_loss / d # avg over all features
-            # self.log("train/featmatch_loss", featmatch_loss, prog_bar=False, on_step=True, on_epoch=self.log_epoch)
-
             # --- Combine and backward ---
-            total_loss_D = loss_D #+ self.loss_fn.lambda_feat_match * featmatch_loss  # lambda_featmatch: a tunable scalar, e.g. 10.0
-            self.manual_backward(total_loss_D)
+            self.manual_backward(loss_D)
+
+            if self.train_cfg.grad_clip_norm > 0:
+                torch.nn.utils.clip_grad_norm_(
+                    self.loss_fn.D.parameters(), self.train_cfg.grad_clip_norm
+                )
 
             gn_D = self._grad_norm(module=self.loss_fn.D)
 

@@ -3,86 +3,56 @@ Python 3.9 subprocess orchestration for embedding generation.
 
 Handles the execution of embedding generation in a Python 3.9 subprocess
 to maintain compatibility with legacy models that require specific Python versions.
+
+Uses the standalone generate_embeddings_py39.py script which imports from
+src.legacy.vae — matching the BaseDecoder hierarchy the pickled models expect.
+
+REDUNDANCY NOTE (2026-03-23):
+  This module is called by Step 6 of the e2e pipeline via:
+    exp.generate_latents()
+      → pipeline_integration.ensure_embeddings_for_experiments()
+        → run_embedding_generation_subprocess()  [THIS FILE]
+
+  Step 7 (run_build06) ALSO generates missing latents via a separate path:
+    run_build06()
+      → services.gen_embeddings.ensure_latents_for_experiments()
+        → calculate_morph_embeddings()  [analysis_utils.py]
+          → (detects Python != 3.9) → generate_embeddings_py39.py
+
+  Both paths ultimately call generate_embeddings_py39.py for Py3.9 models.
+  If Step 6 fails, Step 7 silently regenerates the same latents.
+
+  TODO: Consolidate Steps 6 and 7 into a single embedding generation path.
+  The recommended approach is to remove Step 6 entirely and let run_build06
+  handle both latent generation and df03 merging.
 """
 
+import json
 import subprocess
 from pathlib import Path
 from typing import List, Optional
+
+REPO_ROOT = Path(__file__).parent.parent.parent.parent
+EMBEDDING_SCRIPT = REPO_ROOT / "src" / "run_morphseq_pipeline" / "services" / "generate_embeddings_py39.py"
 
 
 def validate_python39_environment(py39_env_path: str) -> bool:
     """
     Validate that Python 3.9 environment exists and is accessible.
-    
+
     Args:
         py39_env_path: Path to Python 3.9 environment
-        
+
     Returns:
         True if environment is valid, False otherwise
     """
     py39_python = Path(py39_env_path) / "bin" / "python"
-    
+
     if not py39_python.exists():
         print(f"❌ Error: Python 3.9 environment not found: {py39_python}")
         return False
-    
+
     return True
-
-
-def build_subprocess_command(
-    data_root: str,
-    experiment: str,
-    model_name: str,
-    model_class: str,
-    repo_root: Optional[str] = None
-) -> str:
-    """
-    Build Python script content for subprocess execution.
-    
-    Args:
-        data_root: Data root directory
-        experiment: Experiment name
-        model_name: Model name
-        model_class: Model class
-        repo_root: Repository root path (auto-detected if None)
-        
-    Returns:
-        Python script content as string
-    """
-    if repo_root is None:
-        repo_root = str(Path(__file__).parent.parent.parent.parent)
-    
-    script_content = f'''
-import sys
-from pathlib import Path
-
-# Add src/ to path
-repo_root = Path("{repo_root}")
-src_root = repo_root / "src"
-sys.path.insert(0, str(src_root))
-
-print("Python version:", sys.version_info)
-
-from analyze.analysis_utils import calculate_morph_embeddings
-
-print("Calling calculate_morph_embeddings...")
-
-try:
-    result = calculate_morph_embeddings(
-        data_root="{data_root}",
-        model_name="{model_name}",
-        model_class="{model_class}",
-        experiments=["{experiment}"]
-    )
-    print("✅ Success:", result)
-except Exception as e:
-    print("❌ Error:", e)
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-'''
-    
-    return script_content
 
 
 def handle_subprocess_output(result: subprocess.CompletedProcess, 
@@ -108,7 +78,19 @@ def handle_subprocess_output(result: subprocess.CompletedProcess,
         return True
     else:
         print(f"❌ Failed to generate embeddings for {experiment}")
-        print("Error output:", result.stderr)
+        # Show concise error summary — full traceback only in verbose mode
+        stderr = result.stderr or ""
+        if "BadInheritanceError" in stderr:
+            print(f"   Root cause: BadInheritanceError — pickle BaseDecoder mismatch")
+            print(f"   The Py3.9 subprocess loaded the wrong AutoModel (src.vae instead of src.legacy.vae)")
+            print(f"   This is a known bug in the inline -c script path. Step 7 will retry correctly.")
+        elif verbose:
+            print("Error output:", stderr)
+        else:
+            # Show just the last meaningful line
+            lines = [l for l in stderr.strip().splitlines() if l.strip()]
+            if lines:
+                print(f"   Error: {lines[-1].strip()}")
         return False
 
 
@@ -170,22 +152,25 @@ def run_embedding_generation_subprocess(
                 continue
         
         print(f"⚙️  Generating embeddings for {experiment}...")
-        
-        # Create Python 3.9 subprocess script
-        script_content = build_subprocess_command(
-            data_root=data_root,
-            experiment=experiment,
-            model_name=model_name,
-            model_class=model_class
-        )
-        
+
+        experiments_json = json.dumps([experiment])
+        batch_size = 64
+
         try:
-            # Run subprocess
             result = subprocess.run(
-                [str(py39_python), "-c", script_content],
+                [
+                    str(py39_python),
+                    str(EMBEDDING_SCRIPT),
+                    data_root,
+                    model_name,
+                    model_class,
+                    experiments_json,
+                    str(batch_size),
+                ],
                 capture_output=True,
                 text=True,
-                timeout=900  # 15 minutes
+                timeout=900,  # 15 minutes
+                cwd=str(REPO_ROOT),
             )
             
             if handle_subprocess_output(result, experiment, verbose):

@@ -59,6 +59,16 @@ def process_plate_layout(
     else:
         raise ValueError(f"Unsupported file format: {input_file.suffix}. Use .xlsx, .xls, or .csv")
 
+    # Normalize common "no treatment" cases so plate metadata validation is usable for untreated runs.
+    # Legacy exports often leave chem_perturbation empty; represent that explicitly as "none".
+    if 'treatment' in df.columns:
+        s = df['treatment']
+        # Keep real strings as-is; coerce missing/blank/"nan" to "none".
+        s = s.where(pd.notna(s), "")
+        s = s.astype(str).str.strip()
+        s = s.mask(s.eq("") | s.str.lower().isin({"nan", "none", "null"}), "none")
+        df['treatment'] = s
+
     # Generate well_id (format: experiment_id_well_index)
     if 'well_id' not in df.columns:
         df['well_id'] = df['experiment_id'] + '_' + df['well_index']
@@ -99,8 +109,9 @@ def _parse_plate_metadata_excel(xlsx_path: Path, exp_name: str) -> tuple[pd.Data
     # Sheets to skip (not 8×12 plate format)
     skip_sheets = ['Export Summary']
 
-    # Numeric sheets (will be parsed as float)
-    numeric_sheets = ['temperature', 'embryos_per_well']
+    # Numeric sheets (will be parsed as float). Other sheets are kept as object
+    # so that missing cells remain NaN instead of the string "nan".
+    numeric_sheets = ['temperature', 'embryos_per_well', 'start_age_hpf', 'start_age_morph', 'tricane']
 
     series_map_df = None
 
@@ -112,8 +123,18 @@ def _parse_plate_metadata_excel(xlsx_path: Path, exp_name: str) -> tuple[pd.Data
                 # Handle series_number_map separately (not 8×12 format)
                 if sheet_name == 'series_number_map':
                     try:
+                        # Keep the full sheet for debugging/inspection.
                         series_map_df = xlf.parse(sheet_name)
                         print(f"✅ Found series_number_map with {len(series_map_df)} rows")
+
+                        # Also attempt to parse the sheet as a standard 8x12 grid so downstream
+                        # mapping code can use it as a per-well column (if present/valid).
+                        df_grid = series_map_df
+                        if df_grid.shape[0] >= 8 and df_grid.shape[1] >= 13:
+                            plate_data = df_grid.iloc[:8, 1:13]
+                            arr = plate_data.to_numpy(dtype=float).ravel()
+                            plate_df[sheet_name] = arr
+                            valid_sheets.append(sheet_name)
                     except Exception as e:
                         print(f"⚠️  Could not parse series_number_map: {e}")
                     continue
@@ -138,7 +159,8 @@ def _parse_plate_metadata_excel(xlsx_path: Path, exp_name: str) -> tuple[pd.Data
                     if sheet_name in numeric_sheets:
                         arr = plate_data.to_numpy(dtype=float).ravel()
                     else:
-                        arr = plate_data.to_numpy(dtype=str).ravel()
+                        # Preserve missing values as NaN rather than the string "nan".
+                        arr = plate_data.to_numpy().ravel()
 
                     plate_df[sheet_name] = arr
                     valid_sheets.append(sheet_name)
@@ -152,10 +174,13 @@ def _parse_plate_metadata_excel(xlsx_path: Path, exp_name: str) -> tuple[pd.Data
 
             print(f"✅ Loaded {len(valid_sheets)} plate sheets: {', '.join(valid_sheets)}")
 
-        # Remove wells lacking start_age_hpf (empty string or NaN)
+        # Remove wells lacking start_age_hpf (empty string or NaN).
+        # Use numeric coercion so "nan" strings and other non-numeric values are treated as missing.
         if 'start_age_hpf' in plate_df.columns:
-            mask = plate_df["start_age_hpf"].astype(str).str.strip() != ""
+            age = pd.to_numeric(plate_df["start_age_hpf"], errors="coerce")
+            mask = age.notna()
             plate_df = plate_df.loc[mask].reset_index(drop=True)
+            plate_df["start_age_hpf"] = age.loc[mask].to_numpy()
 
         # Normalize column names
         plate_df = _normalize_column_names(plate_df)

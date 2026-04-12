@@ -22,6 +22,7 @@ from .hpf_coverage import (
 
 __all__ = [
     'plotting',
+    'embryo_renderer',
     'plot_experiment_time_coverage',
     'experiment_hpf_coverage',
     'longest_interval_where',
@@ -38,6 +39,10 @@ def __getattr__(name: str):
                 "Optional plotting utilities require extra dependencies (e.g., seaborn). "
                 "Install the viz extras or import specific modules that avoid seaborn."
             ) from exc
+        globals()[name] = module
+        return module
+    if name == "embryo_renderer":
+        module = importlib.import_module(f"{__name__}.embryo_renderer")
         globals()[name] = module
         return module
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

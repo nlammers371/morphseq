@@ -19,7 +19,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from analyze.viz.styling import resolve_color_lookup
+from analyze.viz.styling import get_known_genotype_color, resolve_color_lookup
 from ..results import MulticlassOVRResults
 
 __all__ = [
@@ -133,12 +133,31 @@ def plot_auroc_with_null(
 # ---------------------------------------------------------------------------
 
 
-def _format_auroc_axis(ax: plt.Axes, title: str, ylim: Tuple[float, float], sig_threshold: float=0.01) -> None:
-    ax.axhline(y=0.5, color="gray", linestyle=":", alpha=0.5, label="Chance (0.5)")
-    ax.scatter(
-        [], [], s=200, facecolors="none", edgecolors="black",
-        linewidths=2.5, label=f"p ≤ {sig_threshold}",
-    )
+def _format_auroc_axis(
+    ax: plt.Axes,
+    title: str,
+    ylim: Tuple[float, float],
+    sig_threshold: float = 0.01,
+    *,
+    show_chance_line: bool = True,
+    chance_y: float = 0.5,
+    chance_label: str = "Chance (0.5)",
+    chance_linestyle: str = ":",
+    show_sig_legend: bool = True,
+) -> None:
+    if show_chance_line:
+        ax.axhline(
+            y=chance_y,
+            color="gray",
+            linestyle=str(chance_linestyle),
+            alpha=0.5,
+            label=chance_label,
+        )
+    if show_sig_legend:
+        ax.scatter(
+            [], [], s=200, facecolors="none", edgecolors="black",
+            linewidths=2.5, label=f"p ≤ {sig_threshold}",
+        )
     ax.set_xlabel("Hours Post Fertilization (hpf)", fontsize=12)
     ax.set_ylabel("AUROC", fontsize=12)
     ax.set_title(title, fontsize=14)
@@ -160,6 +179,13 @@ def plot_multiple_aurocs(
     save_path: Optional[Union[str, Path]] = None,
     ax: Optional[plt.Axes] = None,
     sig_threshold: float = 0.01,
+    show_null_band: bool = True,
+    show_significance: bool = True,
+    show_chance_line: bool = True,
+    chance_y: float = 0.5,
+    chance_label: str = "Chance (0.5)",
+    chance_linestyle: str = ":",
+    show_sig_legend: bool = True,
 ) -> plt.Figure:
     """Overlay multiple AUROC curves on one axis.
 
@@ -190,6 +216,7 @@ def plot_multiple_aurocs(
     resolved_colors = resolve_color_lookup(
         labels,
         color_lookup=colors_dict,
+        default_resolver=get_known_genotype_color,
         enforce_distinct=True,
         warn_on_collision=True,
     )
@@ -204,10 +231,22 @@ def plot_multiple_aurocs(
             label=label,
             style=styles_dict.get(label, "-"),
             time_col=time_col,
+            show_null_band=bool(show_null_band),
+            show_significance=bool(show_significance),
             sig_threshold=sig_threshold,
         )
 
-    _format_auroc_axis(ax, title, ylim, sig_threshold)
+    _format_auroc_axis(
+        ax,
+        title,
+        ylim,
+        sig_threshold,
+        show_chance_line=bool(show_chance_line),
+        chance_y=float(chance_y),
+        chance_label=str(chance_label),
+        chance_linestyle=str(chance_linestyle),
+        show_sig_legend=bool(show_sig_legend),
+    )
     fig.tight_layout()
 
     if save_path:

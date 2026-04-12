@@ -5,7 +5,7 @@ Pure numerical operations with no domain-specific logic.
 """
 
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 from scipy.ndimage import gaussian_filter1d
 
 
@@ -112,3 +112,71 @@ def compute_trend_line(
         bin_stats = bin_stats.tolist()
 
     return bin_times, bin_stats
+
+
+def normalize_arbitrary_feature(
+    values: Union[np.ndarray, "pd.Series"],
+    *,
+    low_percentile: float = 0.0,
+    high_percentile: float = 95.0,
+    low: Optional[float] = None,
+    high: Optional[float] = None,
+    clip: bool = True,
+    eps: float = 1e-12,
+) -> np.ndarray:
+    """
+    Normalize an arbitrary 1D feature to approximately [0, 1] using percentile scaling.
+
+    Intended for plotting/feature engineering when a metric has an arbitrary scale
+    (e.g., ~0..0.2) and you want a stable 0..1 range without being dominated by outliers.
+
+    By default:
+    - low is the 0th percentile (min)
+    - high is the 95th percentile
+    - values above `high` are clipped to 1.0 (if clip=True)
+
+    Parameters
+    ----------
+    values
+        1D array-like of feature values (NaNs allowed).
+    low_percentile, high_percentile
+        Percentiles used when `low`/`high` are not provided.
+    low, high
+        Optional explicit bounds. If provided, overrides the corresponding percentile.
+        Common use: `low=0.0, high_percentile=95`.
+    clip
+        If True, clamp output to [0, 1].
+    eps
+        Minimum denominator to avoid division-by-zero.
+
+    Returns
+    -------
+    np.ndarray
+        Normalized float array (NaNs preserved).
+    """
+    arr = np.asarray(values, dtype=float)
+    out = np.full_like(arr, np.nan, dtype=float)
+    finite = np.isfinite(arr)
+    if not finite.any():
+        return out
+
+    finite_vals = arr[finite]
+
+    lo = float(low) if low is not None else float(np.nanpercentile(finite_vals, float(low_percentile)))
+    hi = float(high) if high is not None else float(np.nanpercentile(finite_vals, float(high_percentile)))
+
+    if not np.isfinite(lo):
+        lo = float(np.nanmin(finite_vals))
+    if not np.isfinite(hi):
+        hi = float(np.nanmax(finite_vals))
+
+    denom = hi - lo
+    if not np.isfinite(denom) or denom <= float(eps):
+        out[finite] = 0.0
+        return out
+
+    scaled = (arr - lo) / denom
+    if clip:
+        scaled = np.clip(scaled, 0.0, 1.0)
+    out[finite] = scaled[finite]
+    return out

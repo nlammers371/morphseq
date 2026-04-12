@@ -1,0 +1,38 @@
+PBX all-pairs overlap analysis
+
+genotypes: inj_ctrl, wik_ab, pbx1b_crispant, pbx4_crispant, pbx1b_pbx4_crispant
+n_pairs: 10
+
+anchor_hypothesis:
+- set_a: inj_ctrl-like | inj_ctrl vs pbx4
+- set_b: pbx1b+4-like | pbx4 vs pbx1b+4
+- observed_overlap: 2
+- expected_overlap: 8.571
+- observed_minus_expected: -6.571
+- overlap_over_expected: 0.233
+- p_depletion: 0.0001027
+- q_depletion: 0.0003594
+
+top_depleted_overlaps:
+- pbx1b+4-like | pbx4 vs pbx1b+4 vs pbx4-like | pbx4 vs pbx1b+4: obs=0, exp=12.00, q_depletion=3.301e-13
+- inj_ctrl-like | inj_ctrl vs pbx4 vs pbx4-like | inj_ctrl vs pbx4: obs=0, exp=11.84, q_depletion=3.301e-13
+- pbx1b-like | pbx1b vs pbx4 vs pbx4-like | pbx1b vs pbx4: obs=0, exp=11.84, q_depletion=3.301e-13
+- pbx4-like | wik_ab vs pbx4 vs wik_ab-like | wik_ab vs pbx4: obs=0, exp=11.10, q_depletion=1.077e-12
+- pbx4-like | inj_ctrl vs pbx4 vs wik_ab-like | wik_ab vs pbx4: obs=1, exp=10.06, q_depletion=1.017e-07
+- inj_ctrl-like | inj_ctrl vs pbx4 vs pbx4-like | wik_ab vs pbx4: obs=4, exp=13.06, q_depletion=1.017e-07
+- pbx4-like | inj_ctrl vs pbx4 vs pbx4-like | pbx4 vs pbx1b+4: obs=10, exp=16.57, q_depletion=0.0003594
+- inj_ctrl-like | inj_ctrl vs pbx4 vs pbx1b+4-like | pbx4 vs pbx1b+4: obs=2, exp=8.57, q_depletion=0.0003594
+- pbx1b-like | pbx1b vs pbx4 vs pbx4-like | wik_ab vs pbx4: obs=7, exp=13.06, q_depletion=0.000857
+- pbx4-like | pbx1b vs pbx4 vs wik_ab-like | wik_ab vs pbx4: obs=4, exp=10.06, q_depletion=0.000857
+
+pairwise_mean_auroc:
+- inj_ctrl_vs_pbx1b_pbx4_crispant: mean_auroc=0.817, n_time_bins=51
+- wik_ab_vs_pbx1b_pbx4_crispant: mean_auroc=0.798, n_time_bins=50
+- wik_ab_vs_pbx4_crispant: mean_auroc=0.716, n_time_bins=50
+- inj_ctrl_vs_pbx4_crispant: mean_auroc=0.692, n_time_bins=51
+- inj_ctrl_vs_pbx1b_crispant: mean_auroc=0.628, n_time_bins=46
+- pbx1b_crispant_vs_pbx1b_pbx4_crispant: mean_auroc=0.619, n_time_bins=47
+- pbx1b_crispant_vs_pbx4_crispant: mean_auroc=0.614, n_time_bins=47
+- wik_ab_vs_pbx1b_crispant: mean_auroc=0.558, n_time_bins=46
+- pbx4_crispant_vs_pbx1b_pbx4_crispant: mean_auroc=0.524, n_time_bins=54
+- inj_ctrl_vs_wik_ab: mean_auroc=0.513, n_time_bins=48

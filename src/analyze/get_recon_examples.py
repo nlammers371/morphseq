@@ -11,7 +11,7 @@ from omegaconf import OmegaConf
 from vae.models.auto_model import AutoModel
 from typing import Union
 import pickle
-from lightning.pl_wrappers import LitModel
+from src.core.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from data.dataset_configs import BaseDataConfig, EvalDataConfig
 import shutil
@@ -198,4 +198,3 @@ def assess_image_reconstructions(
                 fpath = os.path.join(out_dir, f"{snip_name}_loss{int(p['recon_loss'][i]):05}.png")
                 grid = torch.stack([p["orig"][i], p["recon"][i]], dim=0)
                 save_image(grid, fpath, nrow=2, pad_value=1)
-

@@ -11,10 +11,14 @@ Usage:
 from pathlib import Path
 from typing import Optional, Union, Any
 
-from .ir import TraceData, TraceStyle, SubplotData, FigureData, FacetSpec
+from .ir import (
+    TraceData, TraceStyle, SubplotData, FigureData, FacetSpec, resolve_linestyle,
+    HeatmapData, HeatmapStyle, ColorbarSpec,
+)
 from .style.defaults import StyleSpec, default_style, paper_style
 from .stats import validate_error_type, compute_error_band, compute_linear_fit
 from .utils import iter_facet_cells, calculate_grid_map, compute_figure_size
+from .heatmap import resolve_axis_order, prepare_heatmap_panel, build_heatmap_figure
 
 
 def render(
@@ -54,10 +58,20 @@ def render(
 
 
 __all__ = [
+    # Trace-based IR
     'TraceData', 'TraceStyle', 'SubplotData', 'FigureData',
     'FacetSpec',
+    'resolve_linestyle',
+    # Heatmap IR
+    'HeatmapData', 'HeatmapStyle', 'ColorbarSpec',
+    # Style
     'StyleSpec', 'default_style', 'paper_style',
+    # Stats
     'validate_error_type', 'compute_error_band', 'compute_linear_fit',
+    # Layout utilities
     'iter_facet_cells', 'calculate_grid_map', 'compute_figure_size',
+    # Heatmap builder
+    'resolve_axis_order', 'prepare_heatmap_panel', 'build_heatmap_figure',
+    # Render
     'render',
 ]

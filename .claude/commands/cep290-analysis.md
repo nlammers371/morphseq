@@ -1,0 +1,1 @@
+../../ai/skills/cep290-analysis/COMMAND.md

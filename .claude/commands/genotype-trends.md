@@ -1,0 +1,1 @@
+../../ai/skills/genotype-trends/COMMAND.md

@@ -1,30 +1,43 @@
+# ---------------------------------------------------------------------------
+# base.yaml — root Hydra configuration for morphseq VAE training
+#
+# Output directory
+# ----------------
+# Set the MORPHSEQ_OUTPUT_ROOT environment variable to control where all
+# training runs and sweeps are written.  If the variable is not set, you
+# must override hydra.run.dir / hydra.sweep.dir on the command line or in
+# a job-specific shell script.
+#
+# Example:
+#   export MORPHSEQ_OUTPUT_ROOT=/data/morphseq/training_outputs
+#   python -m src.core.run.training
+#
+# ---------------------------------------------------------------------------
+
 defaults:
   - _self_
   - model: vae_timm
 
 hydra:
   run:
-    # top‐level directory under which *all* runs go
-    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    dir: "${oc.env:MORPHSEQ_OUTPUT_ROOT}/runs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
 
   sweep:
-    dir: "/media/nick/hdd021/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick/morphseq/training_data/20241107_ds/training_outputs/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
-    subdir: ${hydra.job.num}
+    dir:    "${oc.env:MORPHSEQ_OUTPUT_ROOT}/sweeps/${hydra.job.name}_${now:%Y%m%d_%H%M%S}"
+    subdir: "${hydra.job.num}"
 
 wandb:
   project: sweep03
-  #entity: nlammers-trap-zf-ml
-  # RUN NAMING & GROUPING
-  run_name: ${hydra:job.name}_${now:%Y%m%d_%H%M%S}_${hydra:job.num}
-  group: ${hydra:job.name}  # groups related runs (e.g. for a sweep)
-  job_type: train             # free‐form tag, e.g. "train", "eval", "debug"
-  tags: [ ]                # list of strings, e.g. ["vae","baseline"]
-  notes: ""                # markdown‐friendly notes about the run
-  # ───────────────────────────────────────────────────────────────────────
-  # BEHAVIOR
-  offline: false             # if true, logs only locally (sync later)
-  save_dir: ~/wandb           # where to write wandb files (overrides default)
-  log_model: true              # whether to upload your model checkpoint as an Artifact
-  reinit: false             # allow multiple wandb.init() in one process
-  anonymous: false             # “must” / “allow” / “never”—when you don’t want login
-  # ───────────────────────────────────────────────────────────────────────
+  # entity: <your-wandb-entity>    # uncomment and set if needed
+  # ── Run naming & grouping ──────────────────────────────────────────────
+  run_name: "${hydra:job.name}_${now:%Y%m%d_%H%M%S}_${hydra:job.num}"
+  group:    "${hydra:job.name}"
+  job_type: train
+  tags:     []
+  notes:    ""
+  # ── Behaviour ──────────────────────────────────────────────────────────
+  offline:   false
+  save_dir:  "~/wandb"
+  log_model: true
+  reinit:    false
+  anonymous: false

@@ -406,8 +406,8 @@ def generate_latents_with_repo_images(
         from torch.utils.data import DataLoader
         from src.analyze.analysis_utils import extract_embeddings_legacy
         from src.legacy.vae import AutoModel
-        from src.core.data.data_transforms import basic_transform
-        from src.core.data.dataset_configs import EvalDataConfig
+        from data.data_transforms import basic_transform
+        from data.dataset_configs import EvalDataConfig
     except Exception as e:
         logger.error(f"Failed to import dependencies for latent generation: {e}")
         raise

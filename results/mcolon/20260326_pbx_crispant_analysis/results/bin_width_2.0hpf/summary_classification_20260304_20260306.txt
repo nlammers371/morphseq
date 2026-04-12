@@ -1,0 +1,24 @@
+experiment_ids: ['20260304', '20260306']
+experiment_label: 20260304_20260306
+total_rows: 9771
+total_embryos: 222
+
+classification_control: wik_ab (non-injected wildtype)
+comparison: all crispants vs wik_ab
+
+genotype_raw_proportions:
+- pbx1b_pbx4_crispant: n=68, proportion=0.306306, percent=30.63
+- pbx1b_crispant: n=49, proportion=0.220721, percent=22.07
+- pbx4_crispant: n=49, proportion=0.220721, percent=22.07
+- inj_ctrl: n=31, proportion=0.139640, percent=13.96
+- wik_ab: n=25, proportion=0.112613, percent=11.26
+
+classification_top_hits_all_crispants_vs_wik_ab:
+- none
+
+classification_top_hits_all_genotypes_vs_inj_ctrl:
+- [curvature] pbx1b_pbx4_crispant vs inj_ctrl: max_auroc=1.000, min_pval=0.0020
+- [embedding] pbx1b_pbx4_crispant vs inj_ctrl: max_auroc=1.000, min_pval=0.0020
+- [length] pbx1b_pbx4_crispant vs inj_ctrl: max_auroc=1.000, min_pval=0.0020
+- [embedding] pbx4_crispant vs inj_ctrl: max_auroc=1.000, min_pval=0.0040
+- [embedding] pbx1b_crispant vs inj_ctrl: max_auroc=1.000, min_pval=0.0060

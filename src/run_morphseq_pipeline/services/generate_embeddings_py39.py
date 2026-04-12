@@ -45,16 +45,20 @@ def main():
         import pandas as pd
         from torch.utils.data import DataLoader
         
-        # Add repo to Python path - assumes script is run from morphseq repo root
-        # (subprocess caller sets cwd=repo_root)
+        # Add repo + src/ to Python path - subprocess caller sets cwd=repo_root.
+        # Many legacy modules expect `data.*` / `models.*` to be importable after adding src/.
+        repo_root = Path(".").resolve()
+        src_root = repo_root / "src"
         if verbose:
-            print("🔍 Running from repo root, adding '.' to Python path")
-        sys.path.insert(0, ".")
+            print(f"🔍 Running from repo root: {repo_root}")
+            print(f"🔍 Adding to sys.path: {src_root} and {repo_root}")
+        sys.path.insert(0, str(src_root))
+        sys.path.insert(0, str(repo_root))
         
         # Now import the specific modules we need (without the problematic imports)
         from src.legacy.vae import AutoModel
-        from src.core.data.dataset_configs import EvalDataConfig
-        from src.core.data.data_transforms import basic_transform
+        from data.dataset_configs import EvalDataConfig
+        from data.data_transforms import basic_transform
         from src.analyze.analysis_utils import extract_embeddings_legacy
         
         if verbose:

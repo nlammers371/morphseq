@@ -1,0 +1,1 @@
+../../ai/skills/analyze-utils/COMMAND.md

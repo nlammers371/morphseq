@@ -1,0 +1,37 @@
+feature_set: embedding
+stage2_dir: /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260326_pbx_crispant_analysis/results/consistent_misclassification/bin_width_2.0hpf/embedding/stage2_misclassification
+
+per_genotype_summary:
+- pbx1b_pbx4_crispant: n_embryos=67, mean_wrong_rate=0.460, n_flagged=11
+- pbx4_crispant: n_embryos=49, mean_wrong_rate=0.800, n_flagged=8
+- inj_ctrl: n_embryos=31, mean_wrong_rate=0.708, n_flagged=7
+- pbx1b_crispant: n_embryos=48, mean_wrong_rate=0.739, n_flagged=2
+- wik_ab: n_embryos=25, mean_wrong_rate=0.675, n_flagged=2
+
+top_flagged_embryos:
+- 20260306_D06_e01 [pbx4_crispant -> pbx1b_pbx4_crispant]: wrong_rate=1.000, n_wrong=11, top_confused_frac=1.000
+- 20260306_H06_e01 [pbx4_crispant -> pbx1b_pbx4_crispant]: wrong_rate=1.000, n_wrong=10, top_confused_frac=1.000
+- 20260306_E06_e01 [pbx4_crispant -> pbx1b_pbx4_crispant]: wrong_rate=1.000, n_wrong=8, top_confused_frac=1.000
+- 20260304_C11_e02 [inj_ctrl -> pbx1b_pbx4_crispant]: wrong_rate=1.000, n_wrong=6, top_confused_frac=1.000
+- 20260306_E12_e01 [wik_ab -> inj_ctrl]: wrong_rate=1.000, n_wrong=4, top_confused_frac=1.000
+- 20260304_B06_e01 [pbx4_crispant -> pbx1b_pbx4_crispant]: wrong_rate=1.000, n_wrong=3, top_confused_frac=1.000
+- 20260306_D03_e01 [pbx1b_pbx4_crispant -> wik_ab]: wrong_rate=1.000, n_wrong=3, top_confused_frac=1.000
+- 20260304_F02_e02 [pbx1b_crispant -> pbx4_crispant]: wrong_rate=1.000, n_wrong=7, top_confused_frac=0.714
+- 20260304_E11_e03 [inj_ctrl -> pbx1b_pbx4_crispant]: wrong_rate=1.000, n_wrong=3, top_confused_frac=0.667
+- 20260306_A11_e01 [inj_ctrl -> wik_ab]: wrong_rate=1.000, n_wrong=3, top_confused_frac=0.667
+- 20260306_C05_e01 [pbx1b_pbx4_crispant -> wik_ab]: wrong_rate=1.000, n_wrong=3, top_confused_frac=0.667
+- 20260306_C10_e01 [inj_ctrl -> wik_ab]: wrong_rate=1.000, n_wrong=3, top_confused_frac=0.667
+
+confusion_enrichment_top_rows:
+- pbx1b_pbx4_crispant -> inj_ctrl: observed_frac=0.373, expected_frac=0.116, n_flagged=28, qval=0.0001
+- inj_ctrl -> pbx1b_pbx4_crispant: observed_frac=0.255, expected_frac=0.042, n_flagged=12, qval=0.0013
+- pbx4_crispant -> pbx1b_pbx4_crispant: observed_frac=0.597, expected_frac=0.358, n_flagged=37, qval=0.0052
+- pbx1b_pbx4_crispant -> pbx1b_crispant: observed_frac=0.147, expected_frac=0.342, n_flagged=11, qval=0.0127
+- pbx1b_pbx4_crispant -> pbx4_crispant: observed_frac=0.213, expected_frac=0.400, n_flagged=16, qval=0.0252
+- pbx1b_pbx4_crispant -> wik_ab: observed_frac=0.267, expected_frac=0.142, n_flagged=20, qval=0.0769
+- pbx4_crispant -> inj_ctrl: observed_frac=0.113, expected_frac=0.255, n_flagged=7, qval=0.0769
+- inj_ctrl -> pbx4_crispant: observed_frac=0.106, expected_frac=0.250, n_flagged=5, qval=0.1647
+- inj_ctrl -> wik_ab: observed_frac=0.383, expected_frac=0.542, n_flagged=18, qval=0.2099
+- wik_ab -> pbx4_crispant: observed_frac=0.000, expected_frac=0.221, n_flagged=0, qval=0.2879
+- pbx4_crispant -> wik_ab: observed_frac=0.129, expected_frac=0.215, n_flagged=8, qval=0.3104
+- wik_ab -> pbx1b_crispant: observed_frac=0.500, expected_frac=0.287, n_flagged=6, qval=0.3637

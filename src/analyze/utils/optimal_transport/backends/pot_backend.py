@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Dict
 
 import numpy as np
-import ot
 
 from analyze.utils.optimal_transport.backends.base import UOTBackend, BackendResult
 from analyze.utils.optimal_transport.config import UOTSupport, UOTConfig
@@ -15,6 +14,9 @@ class POTBackend(UOTBackend):
     """Unbalanced OT backend using POT's Sinkhorn implementation."""
 
     def solve(self, src: UOTSupport, tgt: UOTSupport, config: UOTConfig) -> BackendResult:
+        # Lazy import: POT may import optional heavy deps (e.g. torch) at import time.
+        import ot  # type: ignore
+
         coords_src = src.coords_yx.astype(np.float64) * float(config.coord_scale)
         coords_tgt = tgt.coords_yx.astype(np.float64) * float(config.coord_scale)
         weights_src = src.weights.astype(np.float64)

@@ -1,0 +1,13 @@
+experiment_id: 20260210
+total_rows: 5993
+total_embryo_ids: 82
+
+genotype_counts (embryos):
+- cep290_homozygous: n=30
+- cep290_heterozygous: n=25
+- cep290_wildtype: n=24
+- cep290_unknown: n=3
+
+pair_counts (embryos):
+- cep290_pair_2_F1s: n=53
+- cep290_pair_3_F1s: n=29

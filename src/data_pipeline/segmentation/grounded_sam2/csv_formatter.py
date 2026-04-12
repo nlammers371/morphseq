@@ -63,9 +63,83 @@ import pandas as pd
 
 # Import centralized schema
 from ...schemas.segmentation import REQUIRED_COLUMNS_SEGMENTATION_TRACKING
+from ...io.frame_snapshot_hash import compute_frame_snapshot_hash, SNAPSHOT_COLUMNS_ORDER
 
 # Use centralized schema (more authoritative than local copy)
 REQUIRED_CSV_COLUMNS = REQUIRED_COLUMNS_SEGMENTATION_TRACKING
+
+
+def mint_segmentation_tracking_snapshot(
+    df: pd.DataFrame,
+    *,
+    frame_snapshot_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Mint a self-contained segmentation_tracking snapshot suitable for downstream stages.
+
+    This stamps physical inventory fields (scale/channel/dims) into the snip-level table so downstream
+    stages (snip processing) do not need to join frame manifests.
+
+    Args:
+        df: V1 segmentation_tracking DataFrame.
+        frame_snapshot_df: One row per image_id with at least:
+            image_id, source_image_path, channel_id, micrometers_per_pixel, image_width_px, image_height_px
+    """
+    if df.empty:
+        return df
+
+    required_snapshot = [
+        "image_id",
+        "channel_id",
+        "micrometers_per_pixel",
+        "image_width_px",
+        "image_height_px",
+    ]
+    missing = [c for c in required_snapshot if c not in frame_snapshot_df.columns]
+    if missing:
+        raise ValueError(f"frame_snapshot_df missing required columns: {missing}")
+
+    # Avoid column collision: segmentation_tracking already carries source_image_path.
+    snap = frame_snapshot_df.loc[:, required_snapshot].copy()
+    snap = snap.rename(columns={"micrometers_per_pixel": "source_micrometers_per_pixel"})
+
+    out = df.merge(snap, on="image_id", how="left", validate="many_to_one")
+    if out["channel_id"].isna().any():
+        raise ValueError("channel_id missing after joining frame_snapshot_df")
+    if out["source_micrometers_per_pixel"].isna().any():
+        raise ValueError("source_micrometers_per_pixel missing after joining frame_snapshot_df")
+    if out["image_width_px"].isna().any() or out["image_height_px"].isna().any():
+        raise ValueError("image_width_px/image_height_px missing after joining frame_snapshot_df")
+
+    # Canonicalize mask columns and identity.
+    out["schema_version"] = 2
+    out["instance_id"] = out["embryo_id"].astype(str)
+    out["embryo_mask_rle"] = out["mask_rle"]
+    # Do NOT set embryo_mask_path to a frame-level labeled mask path. Downstream snip processing expects
+    # embryo_mask_path (if non-empty) to point to a snip-specific binary mask. Leave empty so snip processing
+    # materializes a correct per-snip PNG from RLE.
+    out["embryo_mask_path"] = ""
+
+    # Canonical snip_id format: embryo_id_{channel_id}_f{frame_index:04d}
+    fi = pd.to_numeric(out["frame_index"], errors="raise").astype(int)
+    out["snip_id"] = (
+        out["embryo_id"].astype(str)
+        + "_"
+        + out["channel_id"].astype(str)
+        + "_f"
+        + fi.map(lambda x: f"{x:04d}")
+    )
+
+    # Compute per-(well_id, channel_id) hash based on unique frames.
+    out["frame_snapshot_hash"] = ""
+    for (well_id, channel_id), g in out.groupby(["well_id", "channel_id"], sort=False):
+        frames = g.drop_duplicates("image_id").copy()
+        # Ensure the hash uses the segmentation-tracking source_image_path (single canonical column).
+        frames = frames.loc[:, SNAPSHOT_COLUMNS_ORDER].copy()
+        h = compute_frame_snapshot_hash(frames)
+        out.loc[g.index, "frame_snapshot_hash"] = h
+
+    return out
 
 
 def extract_well_index(well_id: str) -> int:
@@ -116,7 +190,8 @@ def extract_time_int(image_id: str) -> int:
     """
     Extract time index from image identifier.
 
-    Typically image_id format is: "exp_well_tXXXX" where XXXX is time index.
+    Legacy image_id format was commonly: "..._tXXXX".
+    Newer pipelines may use: "..._fXXXX" (frame index) instead.
 
     Args:
         image_id: Image identifier (e.g., "exp_A01_t0000")
@@ -130,14 +205,12 @@ def extract_time_int(image_id: str) -> int:
         >>> extract_time_int("exp_A01_t0042")
         42
     """
-    if '_t' not in image_id:
-        return 0
-
     try:
-        # Extract the part after 't'
-        time_part = image_id.split('_t')[-1]
-        # Convert to int (handle leading zeros)
-        return int(time_part)
+        if "_t" in image_id:
+            return int(image_id.split("_t")[-1])
+        if "_f" in image_id:
+            return int(image_id.split("_f")[-1])
+        return 0
     except (ValueError, IndexError):
         return 0
 
@@ -204,13 +277,15 @@ def flatten_sam2_json_to_csv(
             seed_frame_info = video_data.get("seed_frame_info", {})
             seed_frame_id = seed_frame_info.get("seed_frame")
 
-            # Extract well_id from video_id (last part after underscore)
-            well_id = video_id.split("_")[-1] if "_" in video_id else video_id
+            # Keep well_id as the full video_id when it is already namespaced by experiment.
+            # We treat the last token as well_index (e.g. 20250912_A01 -> well_index=A01).
+            well_id = str(video_id)
+            well_index = video_id.split("_")[-1] if "_" in video_id else video_id
 
             image_ids = video_data.get("image_ids", {})
 
             for image_id, image_data in image_ids.items():
-                frame_index = image_data.get("frame_index", 0)
+                frame_index = int(image_data.get("frame_index", 0))
                 is_seed_frame = (image_id == seed_frame_id)
 
                 # Get source image path if available
@@ -233,12 +308,10 @@ def flatten_sam2_json_to_csv(
                     # Generate exported mask path
                     exported_mask_path = f"{image_id}_masks.png"
 
-                    # Extract well_index from well_id (e.g., "A01" -> 1, "B01" -> 13)
-                    # Standard 96-well plate: rows A-H, columns 01-12
-                    well_index = extract_well_index(well_id)
-
-                    # Extract time_int from image_id (last numerical component after 't')
-                    time_int = extract_time_int(image_id)
+                    # time_int: keep a numeric time axis for compatibility. We do not parse it from image_id.
+                    # If you have a true wall-clock mapping, join it upstream in frame_manifest; for now,
+                    # we default time_int == frame_index.
+                    time_int = frame_index
 
                     # Calculate centroid from bounding box
                     centroid_x_px = (bbox[0] + bbox[2]) / 2.0 if len(bbox) >= 4 else 0.0

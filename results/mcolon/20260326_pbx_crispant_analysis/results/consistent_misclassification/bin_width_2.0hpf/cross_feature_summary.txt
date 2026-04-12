@@ -1,0 +1,43 @@
+cross_feature_overlap:
+- 20260304_C06_e02 [pbx4_crispant]: n_feature_sets=2, feature_sets=embedding,length, max_wrong_rate=1.000, top_confused=pbx1b_crispant,wik_ab
+- 20260304_H08_e01 [pbx1b_pbx4_crispant]: n_feature_sets=2, feature_sets=embedding,length, max_wrong_rate=1.000, top_confused=pbx1b_crispant
+- 20260306_D06_e01 [pbx4_crispant]: n_feature_sets=2, feature_sets=embedding,length, max_wrong_rate=1.000, top_confused=pbx1b_pbx4_crispant
+- 20260306_H06_e01 [pbx4_crispant]: n_feature_sets=2, feature_sets=embedding,length, max_wrong_rate=1.000, top_confused=pbx1b_pbx4_crispant
+- 20260306_A12_e01 [wik_ab]: n_feature_sets=2, feature_sets=embedding,length, max_wrong_rate=1.000, top_confused=pbx1b_crispant,pbx1b_pbx4_crispant
+- 20260304_E09_e02 [pbx1b_pbx4_crispant]: n_feature_sets=2, feature_sets=curvature,embedding, max_wrong_rate=1.000, top_confused=inj_ctrl,pbx1b_crispant
+- 20260304_A11_e02 [inj_ctrl]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=pbx1b_crispant
+- 20260304_B06_e01 [pbx4_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=pbx1b_pbx4_crispant
+- 20260304_C06_e01 [pbx4_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=inj_ctrl
+- 20260304_C08_e01 [pbx1b_pbx4_crispant]: n_feature_sets=1, feature_sets=curvature, max_wrong_rate=1.000, top_confused=pbx4_crispant
+- 20260304_C11_e02 [inj_ctrl]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=pbx1b_pbx4_crispant
+- 20260304_D07_e01 [pbx1b_pbx4_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=inj_ctrl
+- 20260304_E07_e01 [pbx1b_pbx4_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=inj_ctrl
+- 20260304_E08_e01 [pbx1b_pbx4_crispant]: n_feature_sets=1, feature_sets=length, max_wrong_rate=1.000, top_confused=pbx4_crispant
+- 20260304_E11_e03 [inj_ctrl]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=pbx1b_pbx4_crispant
+- 20260304_F02_e02 [pbx1b_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=pbx4_crispant
+- 20260304_F08_e01 [pbx1b_pbx4_crispant]: n_feature_sets=1, feature_sets=length, max_wrong_rate=1.000, top_confused=pbx4_crispant
+- 20260304_G03_e02 [pbx1b_crispant]: n_feature_sets=1, feature_sets=length, max_wrong_rate=1.000, top_confused=wik_ab
+- 20260304_H05_e01 [pbx4_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=pbx1b_pbx4_crispant
+- 20260306_A09_e01 [pbx1b_crispant]: n_feature_sets=1, feature_sets=embedding, max_wrong_rate=1.000, top_confused=wik_ab
+
+top_cross_feature_pairs:
+- [embedding] pbx4_crispant -> pbx1b_pbx4_crispant: n_flagged=5, mean_wrong_rate=1.000
+- [embedding] pbx1b_pbx4_crispant -> inj_ctrl: n_flagged=5, mean_wrong_rate=0.860
+- [length] pbx4_crispant -> pbx1b_pbx4_crispant: n_flagged=4, mean_wrong_rate=1.000
+- [embedding] inj_ctrl -> pbx1b_pbx4_crispant: n_flagged=3, mean_wrong_rate=1.000
+- [embedding] inj_ctrl -> wik_ab: n_flagged=3, mean_wrong_rate=0.985
+- [embedding] pbx1b_pbx4_crispant -> wik_ab: n_flagged=3, mean_wrong_rate=0.889
+- [length] pbx1b_pbx4_crispant -> pbx4_crispant: n_flagged=2, mean_wrong_rate=1.000
+- [length] pbx4_crispant -> pbx1b_crispant: n_flagged=2, mean_wrong_rate=0.792
+- [embedding] pbx1b_pbx4_crispant -> pbx4_crispant: n_flagged=2, mean_wrong_rate=0.500
+- [curvature] pbx1b_pbx4_crispant -> pbx4_crispant: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] inj_ctrl -> pbx1b_crispant: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] pbx1b_crispant -> pbx4_crispant: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] pbx1b_crispant -> wik_ab: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] pbx1b_pbx4_crispant -> pbx1b_crispant: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] pbx4_crispant -> inj_ctrl: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] pbx4_crispant -> wik_ab: n_flagged=1, mean_wrong_rate=1.000
+- [embedding] wik_ab -> inj_ctrl: n_flagged=1, mean_wrong_rate=1.000
+- [length] inj_ctrl -> pbx1b_pbx4_crispant: n_flagged=1, mean_wrong_rate=1.000
+- [length] pbx1b_crispant -> wik_ab: n_flagged=1, mean_wrong_rate=1.000
+- [length] pbx1b_pbx4_crispant -> pbx1b_crispant: n_flagged=1, mean_wrong_rate=1.000

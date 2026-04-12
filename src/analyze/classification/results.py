@@ -95,8 +95,14 @@ class ComparisonSpec:
     positive_members: List[str]
     negative_members: List[str]
     negative_mode: str  # "rest", "single", "pooled"
-    
+
     def __post_init__(self):
+        warnings.warn(
+            "ComparisonSpec is deprecated. "
+            "Use ResolvedComparison from analyze.classification.engine instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if self.negative_mode not in ("rest", "single", "pooled"):
             raise ValueError(
                 f"negative_mode must be 'rest', 'single', or 'pooled', "
@@ -205,6 +211,12 @@ class MulticlassOVRResults:
     
     def __post_init__(self):
         """Validate that required columns exist."""
+        warnings.warn(
+            "MulticlassOVRResults is deprecated. "
+            "Use ClassificationAnalysis from analyze.classification instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         required = {'positive', 'negative', 'comparison_id'}
         missing = required - set(self.comparisons.columns)
         if missing:

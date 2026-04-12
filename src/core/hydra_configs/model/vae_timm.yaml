@@ -1,4 +1,4 @@
-config_target: src.models.model_configs.VAEConfig
+config_target: src.core.models.model_configs.VAEConfig
 
 ddconfig:
   name: "Swin-Tiny" #"Efficient-B0-RA"

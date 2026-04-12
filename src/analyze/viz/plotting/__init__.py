@@ -23,13 +23,15 @@ For domain-specific trajectory visualizations (genotype styling, phenotype color
 see: src.analyze.trajectory_analysis.viz.plotting
 """
 
-from .feature_over_time import plot_feature_over_time
+from .feature_over_time import EmbryoTraceStyle, IdTraceStyle, plot_feature_over_time
 from .proportions import plot_proportions
 from .plotting_3d import plot_3d_scatter
 
 __all__ = [
     # Generic API
     'plot_feature_over_time',
+    'IdTraceStyle',
+    'EmbryoTraceStyle',
     'plot_3d_scatter',
     'plot_proportions',
 ]

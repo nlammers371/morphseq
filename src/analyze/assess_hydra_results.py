@@ -11,7 +11,7 @@ import pandas as pd
 import os
 from omegaconf import OmegaConf
 import pickle
-from lightning.pl_wrappers import LitModel
+from src.core.lightning.pl_wrappers import LitModel
 from torch.utils.data import DataLoader
 from data.dataset_configs import BaseDataConfig
 from pathlib import Path
@@ -503,7 +503,6 @@ if __name__ == "__main__":
         overwrite_flag=True, #args.overwrite_flag,
         run_type="run" #args.run_type
     )
-
 
 
 

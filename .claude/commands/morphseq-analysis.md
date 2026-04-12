@@ -1,0 +1,1 @@
+../../ai/skills/morphseq-analysis/COMMAND.md

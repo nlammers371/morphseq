@@ -116,6 +116,12 @@ def load_groundingdino_model(config: Dict, device: str = "cuda") -> "torch.nn.Mo
         from groundingdino.util.inference import load_model
         import torch
         import argparse
+
+        # PyTorch >= 2.6 defaults torch.load(..., weights_only=True), which can reject
+        # older checkpoints that contain argparse.Namespace in their pickled metadata.
+        # Allowlist it globally so GroundingDINO's internal torch.load succeeds.
+        if hasattr(torch.serialization, "add_safe_globals"):
+            torch.serialization.add_safe_globals([argparse.Namespace])
         
         model_config_path = SANDBOX_ROOT / config["models"]["groundingdino"]["config"]
         
@@ -129,6 +135,42 @@ def load_groundingdino_model(config: Dict, device: str = "cuda") -> "torch.nn.Mo
         # Load model with standard GroundingDINO interface
         model = load_model(str(model_config_path), str(model_weights_path), device=device)
         print(f"GroundedDINO model loaded successfully on {device}.")
+
+        # If the custom GroundingDINO C++/CUDA ops aren't available (groundingdino._C),
+        # some builds will crash at inference-time with:
+        #   NameError: name '_C' is not defined
+        # Patch the module to use the pure PyTorch fallback even on CUDA.
+        try:
+            from groundingdino import _C as _gdino_C  # noqa: F401
+        except Exception as _c_err:
+            try:
+                from groundingdino.models.GroundingDINO import ms_deform_attn as _msda
+
+                class _FallbackMultiScaleDeformableAttnFunction:
+                    @staticmethod
+                    def apply(
+                        value,
+                        spatial_shapes,
+                        level_start_index,  # noqa: ARG001
+                        sampling_locations,
+                        attention_weights,
+                        im2col_step,  # noqa: ARG001
+                    ):
+                        return _msda.multi_scale_deformable_attn_pytorch(
+                            value, spatial_shapes, sampling_locations, attention_weights
+                        )
+
+                _msda.MultiScaleDeformableAttnFunction = _FallbackMultiScaleDeformableAttnFunction  # type: ignore[attr-defined]
+                warnings.warn(
+                    "GroundingDINO: compiled ops (groundingdino._C) are unavailable/incompatible; "
+                    "using pure-PyTorch ms_deform_attn fallback (slower). "
+                    f"Import error: {_c_err}"
+                )
+            except Exception as _e:
+                warnings.warn(
+                    f"GroundingDINO: failed to install PyTorch fallback for ms_deform_attn; "
+                    f"you may hit NameError('_C'). Error: {_e}"
+                )
         
         # Store model metadata for annotations
         model._annotation_metadata = {

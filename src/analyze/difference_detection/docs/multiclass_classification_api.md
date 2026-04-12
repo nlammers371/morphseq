@@ -134,6 +134,20 @@ print(loaded.metadata['groupby'])
 print(loaded.metadata['n_permutations'])
 ```
 
+## Cross-metric plotting (curvature vs length vs embeddings)
+
+If you run multiple classification analyses (different feature sets) and want a single faceted plot, use the
+accumulator in `analyze.classification`:
+
+```python
+from analyze.classification import ClassificationResults, run_classification_test
+
+acc = ClassificationResults()
+acc.add("curvature", run_classification_test(df, groupby="cluster", groups=["CE"], reference="WT", features=["curvature"]))
+acc.add("length", run_classification_test(df, groupby="cluster", groups=["CE"], reference="WT", features=["total_length_um"]))
+acc.plot_aurocs_over_time(backend="plotly", facet_col="metric")
+```
+
 ## Advanced: Filtering Before Plotting
 
 ```python

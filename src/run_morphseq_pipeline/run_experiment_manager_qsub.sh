@@ -16,13 +16,17 @@ set -euo pipefail
 
 # --- EDIT THESE DEFAULTS (simple assignments) -------------------------------
 REPO_ROOT="/net/trapnell/vol1/home/mdcolon/proj/morphseq"
-DATA_ROOT="${REPO_ROOT}/morphseq_playground"
+ALT_DATA_ROOT="${REPO_ROOT%/morphseq}/morphseq-docs/morphseq_playground"
+# Allow override via qsub `-v DATA_ROOT=...`.
+DATA_ROOT="${DATA_ROOT:-${REPO_ROOT}/morphseq_playground}"
 # EXPERIMENTS="all"
-EXPERIMENTS="20260202" #"20250305,20230531,20230525,20230615" #"20250711,20250519"
+EXPERIMENTS=" 20260319, 20260320,20260213,20260304, 20260306,20260228" #"20250305,20230531,20230525,20230615" #"20250711,20250519"
 ACTION="${ACTION:-e2e}"     # default to e2e, but can be overridden with -v ACTION=build03
 DRY_RUN="0"                 # set to 1 to enable --dry-run
-FORCE_OVERWRITE="1"         # set to 1 to enable --force (regenerates FF files AND reruns steps)
+FORCE_OVERWRITE="0"         # set to 1 to enable --force (regenerates FF files AND reruns steps)
 ENV_NAME="segmentation_grounded_sam"
+# Prefer an explicit interpreter over `conda activate` (which is often unavailable/broken on compute nodes).
+PYTHON_EXEC="${PYTHON_EXEC:-/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/${ENV_NAME}/bin/python}"
 # Note: With --force, the CLI automatically sets MSEQ_OVERWRITE_BUILD01=1 and MSEQ_OVERWRITE_STITCH=1
 # See src/run_morphseq_pipeline/cli.py for details.
 # If you need to set these WITHOUT using --force, uncomment below:
@@ -69,24 +73,29 @@ echo "[morphseq] Experiments: ${EXPERIMENTS}"
 # Create logs dir if running interactively without SGE stdout redirection
 mkdir -p logs
 
-# Activate conda environment (robust to libmamba issues)
-if command -v conda >/dev/null 2>&1; then
-  CONDA_BASE="$(conda info --base 2>/dev/null || true)"
-  if [[ -n "${CONDA_BASE}" && -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]]; then
-    # Work around libmamba solver issues by forcing classic solver
-    export CONDA_SOLVER=classic
-    # shellcheck disable=SC1090
-    source "${CONDA_BASE}/etc/profile.d/conda.sh"
-    conda activate "${ENV_NAME}" || echo "[morphseq] WARNING: failed to activate ${ENV_NAME}; continuing"
-  fi
-else
-  echo "[morphseq] WARNING: conda not found in PATH; proceeding without activation"
+if [[ ! -x "${PYTHON_EXEC}" ]]; then
+  echo "[morphseq] ERROR: PYTHON_EXEC not found/executable: ${PYTHON_EXEC}" >&2
+  exit 2
+fi
+
+# If the default playground is missing/incomplete, fall back to the shared docs playground.
+if [[ ! -d "${DATA_ROOT}/raw_image_data" && -d "${ALT_DATA_ROOT}/raw_image_data" ]]; then
+  echo "[morphseq] NOTE: Falling back to alternate playground: ${ALT_DATA_ROOT}"
+  DATA_ROOT="${ALT_DATA_ROOT}"
+fi
+
+# Validate expected data-root layout early (clearer than Python stacktraces)
+if [[ ! -d "${DATA_ROOT}/raw_image_data" ]]; then
+  echo "[morphseq] ERROR: Missing ${DATA_ROOT}/raw_image_data" >&2
+  echo "[morphseq] Hint: --data-root should point at a morphseq_playground-style directory." >&2
+  echo "[morphseq] Hint: If the playground was deleted, see docs/recovery/restore_morphseq_playground.sh" >&2
+  exit 2
 fi
 
 # Ensure Python can import the repo
 export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
 
-CMD=( python -m src.run_morphseq_pipeline.cli pipeline \
+CMD=( "${PYTHON_EXEC}" -m src.run_morphseq_pipeline.cli pipeline \
       --data-root "${DATA_ROOT}" \
       --experiments "${EXPERIMENTS}" \
       --action "${ACTION}" \
@@ -128,6 +137,6 @@ echo "[morphseq] Done."
 #   src/run_morphseq_pipeline/run_experiment_manager_qsub.sh
 
 
-# qsub -t 1-2 -tc 2 src/run_morphseq_pipeline/run_experiment_manager_qsub.sh
+# qsub -t 1-6 -tc 3 src/run_morphseq_pipeline/run_experiment_manager_qsub.sh
 
 # qsub src/run_morphseq_pipeline/run_experiment_manager_qsub.sh

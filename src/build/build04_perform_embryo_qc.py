@@ -74,6 +74,60 @@ def _compute_curvature_for_row(row_idx: int, df: pd.DataFrame, root: Path) -> di
         return (row_idx, None)
 
 
+def _hydrate_curvature_from_body_axis_summary(df: pd.DataFrame, root: Path, exp: str) -> pd.DataFrame:
+    """
+    Rehydrate the 3 df03 curvature columns from an existing per-experiment body_axis summary file.
+
+    Expected file:
+      <root>/metadata/body_axis/summary/curvature_metrics_<exp>.csv
+    """
+    root = Path(root)
+    summary_path = root / "metadata" / "body_axis" / "summary" / f"curvature_metrics_{exp}.csv"
+    if not summary_path.exists():
+        return df
+    if "snip_id" not in df.columns:
+        return df
+
+    try:
+        curv = pd.read_csv(
+            summary_path,
+            usecols=lambda c: c in {"snip_id", "total_length_um", "baseline_deviation_um"},
+        )
+    except Exception:
+        return df
+    if curv.empty or "snip_id" not in curv.columns:
+        return df
+
+    curv = curv.dropna(subset=["snip_id"]).drop_duplicates(subset=["snip_id"]).copy()
+    curv["total_length_um"] = pd.to_numeric(curv.get("total_length_um"), errors="coerce")
+    curv["baseline_deviation_um"] = pd.to_numeric(curv.get("baseline_deviation_um"), errors="coerce")
+
+    merged = df.merge(curv, on="snip_id", how="left", suffixes=("", "_curv"))
+
+    if "total_length_um_curv" in merged.columns:
+        merged["total_length_um"] = merged["total_length_um"].where(merged["total_length_um"].notna(), merged["total_length_um_curv"])
+        merged = merged.drop(columns=["total_length_um_curv"])
+    if "baseline_deviation_um_curv" in merged.columns:
+        merged["baseline_deviation_um"] = merged["baseline_deviation_um"].where(
+            merged["baseline_deviation_um"].notna(), merged["baseline_deviation_um_curv"]
+        )
+        merged = merged.drop(columns=["baseline_deviation_um_curv"])
+
+    denom = pd.to_numeric(merged.get("total_length_um"), errors="coerce")
+    numer = pd.to_numeric(merged.get("baseline_deviation_um"), errors="coerce")
+    norm = np.where((denom > 0) & np.isfinite(denom) & np.isfinite(numer), numer / denom, np.nan)
+    norm = pd.Series(norm, index=merged.index, dtype="float64")
+    if "baseline_deviation_normalized" in merged.columns:
+        existing = pd.to_numeric(merged["baseline_deviation_normalized"], errors="coerce")
+        merged["baseline_deviation_normalized"] = existing.where(existing.notna(), norm)
+    else:
+        merged["baseline_deviation_normalized"] = norm
+
+    filled = int(pd.to_numeric(merged["baseline_deviation_normalized"], errors="coerce").notna().sum())
+    print(f"✅ Rehydrated curvature from {summary_path.name}: {filled}/{len(merged)} rows non-NaN (baseline_deviation_normalized)")
+    return merged
+
+
 def _add_curvature_metrics(df: pd.DataFrame, root: Path, exp: str, n_workers: int = 4) -> pd.DataFrame:
     """
     Add curvature metrics to Build04 dataframe for all rows.
@@ -106,16 +160,41 @@ def _add_curvature_metrics(df: pd.DataFrame, root: Path, exp: str, n_workers: in
         if col not in df.columns:
             df[col] = np.nan
 
+    # Allow skipping curvature computation (but rehydrate if body_axis summary exists).
+    skip_curv = str(os.environ.get("MSEQ_SKIP_CURVATURE", "0")).strip().lower() in {"1", "true", "t", "yes", "y"}
+    if skip_curv:
+        print("⏭️  Skipping curvature metrics (MSEQ_SKIP_CURVATURE=1)")
+        return _hydrate_curvature_from_body_axis_summary(df, root=root, exp=exp)
+
     # Compute curvature for all rows in parallel
     compute_func = partial(_compute_curvature_for_row, df=df, root=root)
 
-    results = process_map(
-        compute_func,
-        range(len(df)),
-        max_workers=n_workers,
-        desc="Computing curvature",
-        chunksize=max(1, len(df) // (n_workers * 10))
-    )
+    workers_override = os.environ.get("MSEQ_CURVATURE_WORKERS")
+    if workers_override:
+        try:
+            n_workers = int(workers_override)
+        except Exception:
+            print(f"⚠️  Invalid MSEQ_CURVATURE_WORKERS={workers_override!r}; using n_workers={n_workers}")
+
+    try:
+        results = process_map(
+            compute_func,
+            range(len(df)),
+            max_workers=n_workers,
+            desc="Computing curvature",
+            chunksize=max(1, len(df) // (max(n_workers, 1) * 10))
+        )
+    except PermissionError as e:
+        fallback = str(os.environ.get("MSEQ_CURVATURE_FALLBACK", "skip")).strip().lower()
+        if fallback in {"sequential", "single", "1", "true", "t", "yes", "y"}:
+            print(f"⚠️  Curvature multiprocessing unavailable ({e}); falling back to single-process computation")
+            results = [compute_func(i) for i in tqdm(range(len(df)), desc="Computing curvature")]
+        else:
+            print(
+                f"⚠️  Curvature multiprocessing unavailable ({e}); skipping curvature metrics. "
+                "Set MSEQ_CURVATURE_FALLBACK=sequential to force a single-process run."
+            )
+            return _hydrate_curvature_from_body_axis_summary(df, root=root, exp=exp)
 
     # Process results: add to DF03 and collect for body_axis files
     successful_count = 0
@@ -1072,6 +1151,59 @@ def _print_sa_qc_summary(df: pd.DataFrame) -> None:
 
 def _validate_and_prepare_inputs(df: pd.DataFrame) -> pd.DataFrame:
     """Fail-loud validation and dtype coercion for critical columns."""
+    # Build03 outputs may omit surface_area_um (or include it as empty); infer it from pixel area + pixel size if possible.
+    if "surface_area_um" in df.columns:
+        surface_area_um = pd.to_numeric(df["surface_area_um"], errors="coerce")
+        missing_sa = surface_area_um.isna()
+    else:
+        missing_sa = pd.Series([True] * len(df), index=df.index)
+
+    if missing_sa.any():
+        if "area_px" not in df.columns:
+            raise ValueError(
+                "Missing required column 'surface_area_um' (or it is empty) and cannot infer it "
+                "because 'area_px' is also missing."
+            )
+
+        def _ratio(um_col: str, px_col: str) -> pd.Series | None:
+            if um_col not in df.columns or px_col not in df.columns:
+                return None
+            um = pd.to_numeric(df[um_col], errors="coerce")
+            px = pd.to_numeric(df[px_col], errors="coerce")
+            with np.errstate(divide="ignore", invalid="ignore"):
+                r = um / px
+            r = r.where(np.isfinite(r), np.nan)
+            return r
+
+        um_per_px_y = _ratio("Height (um)", "Height (px)")
+        if um_per_px_y is None:
+            um_per_px_y = _ratio("height_um", "height_px")
+
+        um_per_px_x = _ratio("Width (um)", "Width (px)")
+        if um_per_px_x is None:
+            um_per_px_x = _ratio("width_um", "width_px")
+
+        area_px = pd.to_numeric(df["area_px"], errors="coerce")
+        if um_per_px_y is not None and um_per_px_x is not None:
+            um2_per_px2 = um_per_px_y * um_per_px_x
+        elif um_per_px_y is not None:
+            um2_per_px2 = um_per_px_y ** 2
+        elif um_per_px_x is not None:
+            um2_per_px2 = um_per_px_x ** 2
+        else:
+            raise ValueError(
+                "Missing required column 'surface_area_um' and cannot infer pixel size. "
+                "Expected one of: "
+                "('Height (um)' and 'Height (px)') or ('height_um' and 'height_px') or "
+                "('Width (um)' and 'Width (px)') or ('width_um' and 'width_px')."
+            )
+
+        inferred = (area_px * um2_per_px2).astype(float)
+        if "surface_area_um" not in df.columns:
+            df["surface_area_um"] = inferred
+        else:
+            df.loc[missing_sa, "surface_area_um"] = inferred.loc[missing_sa]
+
     required = [
         "embryo_id",
         "predicted_stage_hpf",

@@ -7,44 +7,64 @@ data_root: "data_pipeline_output"
 experiments:
   - 20250912
 
-# Phase 1: Metadata Alignment
-phase1:
-  # Input file patterns
-  plate_metadata_pattern: "{experiment}_plate_layout.csv"
-  raw_images_keyence_pattern: "Keyence/{experiment}"
-  raw_images_yx1_pattern: "YX1/{experiment}"
+# Microscope selection.
+# If you need per-experiment microscope selection, add:
+# microscope_by_experiment:
+#   20250912: "YX1"
+microscope: "YX1"
 
-  # Keyence-specific settings
-  keyence:
-    typical_micrometers_per_pixel: 0.65
-    typical_frame_interval_s: 300
-    typical_image_width: 1280
-    typical_image_height: 960
+# Plate metadata is optional for build/segment/snips, but kept for later biology/QC/analysis.
+plate_metadata:
+  enabled: true
+  # Expected input path:
+  #   {data_root}/inputs/plate_metadata/{experiment}_well_metadata.xlsx
 
-  # YX1-specific settings
+# Scope metadata (physical) extraction.
+scope_metadata:
   yx1:
-    typical_micrometers_per_pixel: 0.195
-    typical_frame_interval_s: 600
-    typical_image_width: 2048
-    typical_image_height: 2048
+    raw_images_pattern: "YX1/{experiment}"
+  keyence:
+    raw_images_pattern: "Keyence/{experiment}"
 
-# Phase 2: Image Building (placeholder)
-phase2:
-  stitch_method: "tile_stitching"
-  z_collapse_method: "max_projection"
+# Image building (stitched FF images).
+image_building:
+  device: "cuda"
+  overwrite: false
+  yx1:
+    z_buffer: false
+  # Keyence support depends on having FF tiles/inputs wired; leave disabled for now.
+  keyence:
+    enabled: false
 
-# Phase 3: Segmentation (placeholder)
-phase3:
-  model: "SAM2"
-  gdino_threshold: 0.5
+# Segmentation + tracking (GroundingDINO + SAM2).
+segmentation_and_tracking:
+  device: "cuda"
+  channel_id: "BF"
+  tracking_mode: "bidirectional"
+  groundingdino:
+    text_prompt: "individual embryo"
+    box_threshold: 0.35
+    text_threshold: 0.25
+    confidence_threshold: 0.45
+    iou_threshold: 0.5
+    config_path: ""
+    weights_path: ""
+  sam2:
+    config_path: ""
+    checkpoint_path: ""
 
-# Phase 4: Snip Processing (placeholder)
-phase4:
-  target_pixel_size_um: 0.5
-  target_shape: [256, 256]
+# Snip processing (crop + rotate + augment).
+snip_processing:
+  # Legacy downstream models expect (H, W) = (576, 256).
+  output_shape: [576, 256]
+  target_pixel_size_um: 7.8
+  save_raw_crops: true
+  write_manifest_csv: true
+  background_n_samples: 100
+  background_seed: 309
 
 # Phase 5: QC (placeholder)
-phase5:
+qc:
   edge_margin_pixels: 2
   death_fraction_threshold: 0.9
 
