@@ -20,6 +20,8 @@ class TransitionWindow:
     embryo_id: str
     experiment_id: str
     perturbation_class: str
+    source_segment_id: int
+    touches_interpolated_gap: bool
     resampled_index: int
     arc_length_value: float
     source_time_estimate: float | None = None
@@ -39,6 +41,56 @@ def _validate_resampled_trajectory(trajectory: ResampledTrajectory) -> None:
         raise ValueError("trajectory.arc_length contains non-finite values")
     if np.any(np.diff(trajectory.arc_length) < 0):
         raise ValueError("trajectory.arc_length must be monotone nondecreasing")
+
+
+def _compute_point_gap_annotations(
+    trajectory: ResampledTrajectory,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    source = trajectory.source
+    source_times = np.asarray(source.time_seconds, dtype=np.float64)
+    point_times = np.asarray(trajectory.source_time_interp, dtype=np.float64)
+
+    if len(source_times) != len(point_times) and len(source_times) == 1:
+        point_segment_ids = np.zeros(len(point_times), dtype=np.int64)
+        point_interpolated_gap_mask = np.zeros(len(point_times), dtype=bool)
+        point_hard_gap_mask = np.zeros(len(point_times), dtype=bool)
+        return point_segment_ids, point_interpolated_gap_mask, point_hard_gap_mask
+
+    source_segment_ids = (
+        np.asarray(source.segment_ids, dtype=np.int64)
+        if source.segment_ids is not None
+        else np.zeros(len(source_times), dtype=np.int64)
+    )
+    hard_gap_mask = (
+        np.asarray(source.hard_gap_mask, dtype=bool)
+        if source.hard_gap_mask is not None
+        else np.zeros(max(len(source_times) - 1, 0), dtype=bool)
+    )
+    interpolatable_gap_mask = (
+        np.asarray(source.interpolatable_gap_mask, dtype=bool)
+        if source.interpolatable_gap_mask is not None
+        else np.zeros(max(len(source_times) - 1, 0), dtype=bool)
+    )
+
+    if len(source_times) == 1:
+        point_segment_ids = np.zeros(len(point_times), dtype=np.int64)
+        point_interpolated_gap_mask = np.zeros(len(point_times), dtype=bool)
+        point_hard_gap_mask = np.zeros(len(point_times), dtype=bool)
+        return point_segment_ids, point_interpolated_gap_mask, point_hard_gap_mask
+
+    left_indices = np.searchsorted(source_times, point_times, side="right") - 1
+    left_indices = np.clip(left_indices, 0, len(source_times) - 2)
+    right_indices = left_indices + 1
+
+    dist_left = np.abs(point_times - source_times[left_indices])
+    dist_right = np.abs(point_times - source_times[right_indices])
+    nearest_indices = np.where(dist_right < dist_left, right_indices, left_indices)
+
+    point_segment_ids = source_segment_ids[nearest_indices]
+    inside_interval = (point_times > source_times[left_indices]) & (point_times < source_times[right_indices])
+    point_interpolated_gap_mask = inside_interval & interpolatable_gap_mask[left_indices]
+    point_hard_gap_mask = inside_interval & hard_gap_mask[left_indices]
+    return point_segment_ids, point_interpolated_gap_mask, point_hard_gap_mask
 
 
 def build_transition_windows(
@@ -62,9 +114,16 @@ def build_transition_windows(
         return []
 
     segments = np.diff(points, axis=0)
+    point_segment_ids, point_interpolated_gap_mask, point_hard_gap_mask = _compute_point_gap_annotations(trajectory)
     windows: List[TransitionWindow] = []
 
     for state_index in range(history_length, len(points) - 1):
+        involved_indices = np.arange(state_index - history_length, state_index + 2)
+        if np.any(point_hard_gap_mask[involved_indices]):
+            continue
+        if len(np.unique(point_segment_ids[involved_indices])) != 1:
+            continue
+
         source_time_estimate = None
         if trajectory.source_time_interp is not None:
             source_time_estimate = float(trajectory.source_time_interp[state_index])
@@ -77,6 +136,8 @@ def build_transition_windows(
                 embryo_id=trajectory.source.embryo_id,
                 experiment_id=trajectory.source.experiment_id,
                 perturbation_class=trajectory.source.perturbation_class,
+                source_segment_id=int(point_segment_ids[state_index]),
+                touches_interpolated_gap=bool(np.any(point_interpolated_gap_mask[involved_indices])),
                 resampled_index=state_index,
                 arc_length_value=float(trajectory.arc_length[state_index]),
                 source_time_estimate=source_time_estimate,
