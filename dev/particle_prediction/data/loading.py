@@ -30,6 +30,11 @@ class EmbryoTrajectory:
     experiment_id: str
     metadata: Dict[str, object] = field(default_factory=dict)
     frame_index: Optional[np.ndarray] = None
+    observed_dts: Optional[np.ndarray] = None
+    missing_frame_counts: Optional[np.ndarray] = None
+    interpolatable_gap_mask: Optional[np.ndarray] = None
+    hard_gap_mask: Optional[np.ndarray] = None
+    segment_ids: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -118,6 +123,30 @@ def _compute_experiment_delta_t(df: pd.DataFrame) -> Dict[str, float]:
                 diffs.extend(np.diff(time_seconds).tolist())
         delta_t_by_experiment[experiment_id] = float(np.median(diffs)) if diffs else np.nan
     return delta_t_by_experiment
+
+
+def _compute_gap_metadata(time_seconds: np.ndarray, nominal_dt: float) -> Dict[str, np.ndarray]:
+    observed_dts = np.diff(time_seconds)
+    missing_frame_counts = np.zeros(len(observed_dts), dtype=np.int64)
+
+    if np.isfinite(nominal_dt) and nominal_dt > 0 and len(observed_dts) > 0:
+        approx_frame_counts = np.rint(observed_dts / nominal_dt).astype(np.int64)
+        missing_frame_counts = np.maximum(approx_frame_counts - 1, 0)
+
+    interpolatable_gap_mask = (missing_frame_counts >= 1) & (missing_frame_counts <= 5)
+    hard_gap_mask = missing_frame_counts > 5
+
+    segment_ids = np.zeros(len(time_seconds), dtype=np.int64)
+    if len(segment_ids) > 1:
+        segment_ids[1:] = np.cumsum(hard_gap_mask.astype(np.int64))
+
+    return {
+        "observed_dts": observed_dts.astype(np.float64),
+        "missing_frame_counts": missing_frame_counts,
+        "interpolatable_gap_mask": interpolatable_gap_mask,
+        "hard_gap_mask": hard_gap_mask,
+        "segment_ids": segment_ids,
+    }
 
 
 def _fit_pca(
@@ -222,6 +251,11 @@ def load_trajectories(
         if np.any(~np.isfinite(time_seconds)):
             continue
 
+        gap_metadata = _compute_gap_metadata(
+            time_seconds=time_seconds,
+            nominal_dt=float(delta_t_by_experiment.get(experiment_id, np.nan)),
+        )
+
         trajectories.append(
             EmbryoTrajectory(
                 embryo_id=str(embryo_id),
@@ -233,6 +267,11 @@ def load_trajectories(
                 experiment_id=str(experiment_id),
                 metadata=_extract_metadata(group),
                 frame_index=frame_index,
+                observed_dts=gap_metadata["observed_dts"],
+                missing_frame_counts=gap_metadata["missing_frame_counts"],
+                interpolatable_gap_mask=gap_metadata["interpolatable_gap_mask"],
+                hard_gap_mask=gap_metadata["hard_gap_mask"],
+                segment_ids=gap_metadata["segment_ids"],
             )
         )
 
