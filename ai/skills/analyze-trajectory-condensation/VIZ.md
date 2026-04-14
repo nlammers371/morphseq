@@ -93,6 +93,15 @@ tc.time_slice_html(
     run.mask,
     run.time_values,
     labels=run.labels,
+    color_map=run.color_map,
+    embryo_ids=run.embryo_ids,
+    trajectory_trace_alpha=0.16,
+    current_time_marker_alpha=1.0,
+    slice_marker_alpha=0.75,
+    trajectory_marker_alpha=0.15,
+    current_time_marker_size=6,
+    slice_marker_size=6,
+    trajectory_marker_size=2,
     output_path="time_slice.html",
 )
 ```
@@ -102,6 +111,26 @@ a dimmed 3D trajectory context, highlighted current-time points, and an optional
 2D current-slice panel driven by the time slider. Keep this behavior in
 `src/analyze/trajectory_condensation/viz/condensed_time_slice_viewer.py`
 instead of adding Plotly logic to solver files.
+
+Important current behavior:
+
+- `color_map` is the public phenotype color hook. Pass a label-to-color dict to
+  override the default palette.
+- `trajectory_trace_alpha` controls the connecting 3D trajectory lines.
+- `current_time_marker_*` controls the highlighted current-time points.
+- `slice_marker_*` controls the right-panel 2D slice points.
+- `trajectory_marker_*` controls the small dimmed background trajectory markers.
+- The clickable phenotype legend uses fully opaque proxy traces so it remains
+  readable even when the background trajectories are dimmed.
+- The legend should toggle phenotype groups on the first click; do not use
+  `visible="legendonly"` for the proxy traces.
+- Legacy args like `alpha_bg`, `alpha_bg_marker`, `alpha_highlight`, `alpha_2d`,
+  `marker_size_bg`, `marker_size_highlight`, and `marker_size_2d` are backward-
+  compatible aliases, but new callers should prefer the user-facing names above.
+
+For quick visual inspection during iteration, it is fine to add a tiny local
+results-side preview script that loads a real `condensed_positions.npz` and
+writes a single `time_slice.html` next to the run figures.
 
 ## Iteration Choice
 

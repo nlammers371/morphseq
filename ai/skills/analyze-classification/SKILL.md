@@ -47,10 +47,13 @@ def run_classification(
 |---|---|---|---|
 | `None` | `None` | `None` | All-vs-rest (default) |
 | `["A","B"]` | `None` | `None` | Each of A, B vs rest |
-| `None` | `None` | `"all_pairs"` | Every C(n,2) pair |
+| `None` | `None` | `"all_pairs"` | Every C(n,2) pair across all labels in `class_col` |
+| `["A","B","C"]` | `None` | `"all_pairs"` | Scoped all-pairs — only C(n,2) pairs within the given list |
 | `"A"` | `"B"` | `None` | Single pair A vs B |
 | `("A","B")` | `"C"` | `None` | Pooled (A+B) vs C |
 | `None` | `None` | `[{"positive":"A","negative":"B"},...]` | Explicit design table |
+
+> **`all_pairs` + `positive` (scoped pool):** `positive` scopes *which labels enter the pairwise pool* — every C(n,2) within that list is run. Pre-filter `df` to the labels you want instead of passing `positive` — the available labels autoresolve from `df[class_col]`. Pooled tuples are not allowed in this mode.
 
 **Feature detection:** `features={"emb": "z_mu_b"}` auto-expands to all columns matching `z_mu_b_*`. Pass a list for explicit columns. Multiple keys run all comparisons for each feature set.
 

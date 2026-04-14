@@ -31,13 +31,20 @@ def time_slice_html(
     add_slice_panel: bool = True,
     width: int = 1500,
     height: int = 700,
-    alpha_bg: float = 0.08,
-    alpha_bg_marker: float = 0.15,
-    alpha_highlight: float = 1.0,
-    alpha_2d: float = 0.75,
-    marker_size_bg: int = 2,
-    marker_size_highlight: int = 6,
-    marker_size_2d: int = 6,
+    trajectory_trace_alpha: float = 0.16,
+    current_time_marker_alpha: float = 1.0,
+    slice_marker_alpha: float = 0.75,
+    trajectory_marker_alpha: float = 0.15,
+    current_time_marker_size: int = 6,
+    slice_marker_size: int = 6,
+    trajectory_marker_size: int = 2,
+    alpha_bg: float | None = None,
+    alpha_bg_marker: float | None = None,
+    alpha_highlight: float | None = None,
+    alpha_2d: float | None = None,
+    marker_size_bg: int | None = None,
+    marker_size_highlight: int | None = None,
+    marker_size_2d: int | None = None,
 ) -> "go.Figure":
     """Build an interactive Plotly figure with a time-bin slider.
 
@@ -54,12 +61,15 @@ def time_slice_html(
     add_slice_panel : if True (default), show a 2D cross-section panel on the
         right that updates with the slider. If False, only the 3D overview is
         shown, filling the full figure width.
-    alpha_bg / alpha_bg_marker : opacity of the background trajectory cloud
-    alpha_highlight : opacity of highlighted current-bin points (left panel)
-    alpha_2d : opacity of 2D scatter points (right panel, add_slice_panel only)
-    marker_size_bg : size of background trajectory markers
-    marker_size_highlight : size of highlighted current-bin markers
-    marker_size_2d : size of 2D scatter markers (add_slice_panel only)
+    trajectory_trace_alpha : opacity of the background trajectory lines in the 3D overview
+    current_time_marker_alpha : opacity of highlighted current-time points in the 3D overview
+    slice_marker_alpha : opacity of points in the 2D slice panel
+    trajectory_marker_alpha : opacity of small background trajectory markers in the 3D overview
+    current_time_marker_size : size of highlighted current-time points in the 3D overview
+    slice_marker_size : size of points in the 2D slice panel
+    trajectory_marker_size : size of small background trajectory markers in the 3D overview
+    alpha_bg / alpha_bg_marker / alpha_highlight / alpha_2d : deprecated opacity aliases
+    marker_size_bg / marker_size_highlight / marker_size_2d : deprecated size aliases
 
     Returns
     -------
@@ -75,9 +85,33 @@ def time_slice_html(
     mask = np.asarray(mask, dtype=bool)
     time_values = np.asarray(time_values, dtype=float)
     N_e, T, _ = positions.shape
+    if alpha_bg is not None:
+        trajectory_trace_alpha = float(alpha_bg)
+    if alpha_bg_marker is not None:
+        trajectory_marker_alpha = float(alpha_bg_marker)
+    if alpha_highlight is not None:
+        current_time_marker_alpha = float(alpha_highlight)
+    if alpha_2d is not None:
+        slice_marker_alpha = float(alpha_2d)
+    if marker_size_bg is not None:
+        trajectory_marker_size = int(marker_size_bg)
+    if marker_size_highlight is not None:
+        current_time_marker_size = int(marker_size_highlight)
+    if marker_size_2d is not None:
+        slice_marker_size = int(marker_size_2d)
 
     color_map = _resolve_color_map(labels, color_map)
-    unique_labels = sorted(color_map.keys()) if labels is not None else [None]
+    unique_labels = list(color_map.keys()) if labels is not None else [None]
+
+    def _hover_text(i: int, z: float | None = None) -> str:
+        parts: list[str] = []
+        if labels is not None:
+            parts.append(f"<b>{str(labels[i])}</b>")
+        eid = str(embryo_ids[i]) if embryo_ids is not None else str(i)
+        parts.append(f"embryo: {eid}")
+        if z is not None:
+            parts.append(f"age: {z:.1f} hpf")
+        return "<br>".join(parts)
 
     # Fixed axis limits.
     obs_xy = positions[mask]
@@ -110,6 +144,24 @@ def time_slice_html(
         ann.font.size = 18
 
     # -----------------------------------------------------------------------
+    # Legend proxy traces — keep clickable phenotype entries fully opaque even
+    # though the background trajectory cloud is intentionally dimmed.
+    # -----------------------------------------------------------------------
+    for lbl in unique_labels:
+        color = color_map.get(lbl, "#4C78A8") if lbl is not None else "#4C78A8"
+        fig.add_trace(go.Scatter3d(
+            x=[None], y=[None], z=[None],
+            mode="lines+markers",
+            name=str(lbl) if lbl is not None else "unknown",
+            legendgroup=str(lbl),
+            showlegend=True,
+            visible=True,
+            line=dict(color=color, width=3),
+            marker=dict(color=color, size=6, opacity=1.0),
+            hoverinfo="skip",
+        ), row=1, col=1)
+
+    # -----------------------------------------------------------------------
     # Static background traces — all trajectories, dimmed.
     # -----------------------------------------------------------------------
     for lbl in unique_labels:
@@ -120,7 +172,7 @@ def time_slice_html(
             emb_idx = np.arange(N_e)
             color = "#4C78A8"
 
-        xs, ys, zs, ids_hover = [], [], [], []
+        xs, ys, zs, hover_texts = [], [], [], []
         for i in emb_idx:
             obs_t = np.where(mask[i])[0]
             if len(obs_t) < 2:
@@ -128,20 +180,23 @@ def time_slice_html(
             xs.extend(positions[i, obs_t, 0].tolist() + [None])
             ys.extend(positions[i, obs_t, 1].tolist() + [None])
             zs.extend(time_values[obs_t].tolist() + [None])
-            eid = str(embryo_ids[i]) if embryo_ids is not None else str(i)
-            ids_hover.extend([eid] * len(obs_t) + [""])
+            hover_texts.extend([_hover_text(i, float(time_values[t])) for t in obs_t] + [""])
 
         fig.add_trace(go.Scatter3d(
             x=xs, y=ys, z=zs,
             mode="lines+markers",
             name=str(lbl) if lbl is not None else "unknown",
             legendgroup=str(lbl),
-            showlegend=True,
+            showlegend=False,
             line=dict(color=color, width=1.5),
-            marker=dict(color=color, size=marker_size_bg, opacity=alpha_bg_marker),
-            opacity=alpha_bg,
-            text=ids_hover,
-            hovertemplate="<b>%{text}</b><br>dim1=%{x:.3f}<br>dim2=%{y:.3f}<br>time=%{z:.1f} hpf<extra></extra>",
+            marker=dict(
+                color=color,
+                size=trajectory_marker_size,
+                opacity=min(trajectory_marker_alpha / max(trajectory_trace_alpha, 1e-6), 1.0),
+            ),
+            opacity=trajectory_trace_alpha,
+            text=hover_texts,
+            hovertemplate="%{text}<extra></extra>",
         ), row=1, col=1)
 
     n_bg = len(fig.data)
@@ -155,10 +210,10 @@ def time_slice_html(
             x=xs, y=ys, z=zs, mode="markers",
             name=str(lbl) if lbl is not None else "unknown",
             legendgroup=str(lbl), showlegend=False,
-            marker=dict(color=color, size=marker_size_highlight, opacity=alpha_highlight,
+            marker=dict(color=color, size=current_time_marker_size, opacity=current_time_marker_alpha,
                         line=dict(color="white", width=0.5)),
             text=ids_h,
-            hovertemplate="<b>%{text}</b><br>dim1=%{x:.3f}<br>dim2=%{y:.3f}<br>time=%{z:.1f} hpf<extra></extra>",
+            hovertemplate="%{text}<extra></extra>",
         )
 
     def _make_scatter2d_trace(lbl, xs, ys, ids_h) -> "go.Scatter":
@@ -167,9 +222,9 @@ def time_slice_html(
             x=xs, y=ys, mode="markers",
             name=str(lbl) if lbl is not None else "unknown",
             legendgroup=str(lbl), showlegend=False,
-            marker=dict(color=color, size=marker_size_2d, opacity=alpha_2d, line=dict(width=0)),
+            marker=dict(color=color, size=slice_marker_size, opacity=slice_marker_alpha, line=dict(width=0)),
             text=ids_h,
-            hovertemplate="<b>%{text}</b><br>dim1=%{x:.3f}<br>dim2=%{y:.3f}<extra></extra>",
+            hovertemplate="%{text}<extra></extra>",
         )
 
     def _frame_traces(t_idx: int) -> list:
@@ -180,7 +235,7 @@ def time_slice_html(
             idx = obs[labels[obs] == lbl] if lbl is not None else obs
             xs = positions[idx, t_idx, 0].tolist()
             ys = positions[idx, t_idx, 1].tolist()
-            ids_h = [str(embryo_ids[i]) if embryo_ids is not None else str(i) for i in idx]
+            ids_h = [_hover_text(i, z) for i in idx]
             zs = [z] * len(idx)
             hl.append(_make_highlight_trace(lbl, xs, ys, zs, ids_h))
             if add_slice_panel:
@@ -230,7 +285,14 @@ def time_slice_html(
         template="plotly_white",
         width=width,
         height=height,
-        legend=dict(itemsizing="constant", tracegroupgap=2),
+        legend=dict(
+            itemsizing="constant",
+            tracegroupgap=2,
+            groupclick="togglegroup",
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor="rgba(40,40,40,0.45)",
+            borderwidth=1,
+        ),
         scene=scene_common,
         margin=dict(t=160, b=120),
         sliders=[dict(
@@ -319,3 +381,4 @@ def _resolve_color_map(
                    "#EECA3B", "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC"]
     unique = sorted(np.unique(labels).tolist())
     return {lbl: palette[i % len(palette)] for i, lbl in enumerate(unique)}
+

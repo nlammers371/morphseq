@@ -24,7 +24,7 @@ def aligned_umap_init(
     alignment_window_size: int = 3,
     random_state: int = 42,
 ) -> np.ndarray:
-    """Fit AlignedUMAP on the feature tensor and return initial positions.
+    """Return the standard NaN-aware UMAP initialization.
 
     Parameters
     ----------
@@ -34,39 +34,25 @@ def aligned_umap_init(
     Returns
     -------
     x0 : (N_e, T, 2) float array — NaN where mask is False
+
+    Notes
+    -----
+    This is the default public entry point for trajectory-condensation
+    initialization in this repo. It routes through the NaN-aware path even when
+    the current dataset happens not to contain NaNs in observed rows. That keeps
+    initialization behavior consistent across dense and sparse representations.
+
+    ``alignment_regularisation`` and ``alignment_window_size`` are retained in
+    the signature for backward compatibility, but are not used by the current
+    implementation.
     """
-    if _has_missing_features(features, mask):
-        return nan_aware_aligned_umap_init(
-            features,
-            mask,
-            n_neighbors=n_neighbors,
-            min_dist=min_dist,
-            random_state=random_state,
-        )
-
-    try:
-        import umap
-    except ImportError:
-        raise ImportError("umap-learn is required for aligned_umap_init")
-
-    N_e, T, _ = features.shape
-    slice_indices = _slice_embryo_indices(mask)
-    slices, relations = _build_aligned_umap_inputs(features, mask, slice_indices)
-
-    model = umap.AlignedUMAP(
+    return nan_aware_aligned_umap_init(
+        features,
+        mask,
         n_neighbors=n_neighbors,
         min_dist=min_dist,
-        alignment_regularisation=alignment_regularisation,
-        alignment_window_size=alignment_window_size,
-        n_components=2,
         random_state=random_state,
-    ).fit(slices, relations=relations)
-
-    x0 = np.full((N_e, T, 2), np.nan)
-    for t, (emb, idx) in enumerate(zip(model.embeddings_, slice_indices)):
-        x0[idx, t, :] = emb
-
-    return x0
+    )
 
 
 def nan_aware_aligned_umap_init(
@@ -178,11 +164,15 @@ def _nan_aware_umap_slice(
 
     dist = _nan_aware_distance_matrix(X, min_shared_features=min_shared_features)
     neighbors = max(2, min(n_neighbors, n_obs - 1))
+    # Spectral init requires the graph to have > n_components connected nodes;
+    # fall back to random init when the slice is too small to guarantee this.
+    init = "spectral" if n_obs >= 4 * 2 else "random"
     return umap.UMAP(
         metric="precomputed",
         n_neighbors=neighbors,
         min_dist=min_dist,
         n_components=2,
+        init=init,
         random_state=random_state,
     ).fit_transform(dist)
 
