@@ -21,9 +21,32 @@ If a field is important enough to be used by more than one module, it belongs he
 
 - Every derived object must preserve lineage back to a source embryo and experiment.
 - Raw, smoothed, and resampled trajectories are distinct objects.
+- Gap handling is canonical data, not an implementation detail.
 - History is stored canonically as ordered recent segments.
 - Fast summary history features are optional derived fields, not replacements for canonical history.
 - Time metadata is preserved for visualization and later stage work, even though it is not central to the v1 transition kernel.
+
+---
+
+## 2.1 Canonical gap semantics
+
+Irregular sampling and missing frames materially affect smoothing, resampling, and transition-window validity. They are therefore part of the canonical contract.
+
+### Definitions
+
+- `observed_dts[i] = time_seconds[i + 1] - time_seconds[i]`
+- `missing_frame_counts[i]` is the estimated number of missing nominal frames between samples `i` and `i + 1`
+- `interpolatable_gap_mask[i]` marks a small gap that may be linearly filled for smoothing support
+- `hard_gap_mask[i]` marks a gap large enough to break continuity for smoothing and transition extraction
+- `segment_ids[j]` identifies the contiguous source segment containing sample `j`
+
+### Default beta policy
+
+- Small gaps may be interpolated for local smoothing support only.
+- Hard gaps must break trajectory continuity.
+- Transition windows must never cross a hard gap.
+- Transition windows should record whether they touch an interpolated gap region so downstream weighting or filtering can use that information.
+- Gap-aware annotations should survive through resampling so visual inspection and support diagnostics can explain why windows were kept or dropped.
 
 ---
 
@@ -49,12 +72,23 @@ This is the current base object and should remain close to the existing `loading
 - `metadata: dict[str, Any]`  
   for experiment-specific extra fields
 - `frame_index: np.ndarray` if needed for debugging / round-tripping
+- `observed_dts: np.ndarray` of shape `(T-1,)`
+- `missing_frame_counts: np.ndarray` of shape `(T-1,)`
+- `interpolatable_gap_mask: np.ndarray` of shape `(T-1,)`
+- `hard_gap_mask: np.ndarray` of shape `(T-1,)`
+- `segment_ids: np.ndarray` of shape `(T,)`
 
 ### Invariants
 
 - `trajectory.shape[0] == time_seconds.shape[0]`
 - `time_seconds` is monotone nondecreasing
 - all rows of `trajectory` are finite
+- if present, `observed_dts.shape[0] == T - 1`
+- if present, `missing_frame_counts.shape[0] == T - 1`
+- if present, `interpolatable_gap_mask.shape[0] == T - 1`
+- if present, `hard_gap_mask.shape[0] == T - 1`
+- if present, `segment_ids.shape[0] == T`
+- `segment_ids` must increment only when continuity is broken by a hard gap or equivalent explicit segment boundary
 
 ---
 
@@ -85,6 +119,7 @@ Represents one smoothed latent trajectory.
 - same number of samples as the raw source trajectory
 - no NaNs or infs
 - source lineage preserved exactly
+- diagnostics should report any gap interpolation or segment-wise smoothing adjustments that materially changed the smoothing support
 
 ---
 
@@ -109,6 +144,7 @@ Represents one smoothed trajectory reparameterized by arc length and resampled a
 - `source_frame_interp: np.ndarray` of shape `(S,)`  
   interpolated original frame index
 - `increment_norms: np.ndarray` of shape `(S-1,)`
+- gap-aware point annotations derived from the raw source when needed for filtering or diagnostics
 
 ### Invariants
 
@@ -116,6 +152,7 @@ Represents one smoothed trajectory reparameterized by arc length and resampled a
 - `arc_length` is monotone increasing
 - adjacent resampled points are approximately `delta_s` apart except near the end
 - source lineage preserved exactly
+- any propagated gap annotations must remain traceable back to the raw source intervals or segments that generated them
 
 ---
 
@@ -136,6 +173,8 @@ This is the canonical modeling unit.
 - `embryo_id: str`
 - `experiment_id: str`
 - `perturbation_class: str`
+- `source_segment_id: int`
+- `touches_interpolated_gap: bool`
 - `resampled_index: int`
 - `arc_length_value: float`
 
@@ -152,6 +191,8 @@ This is the canonical modeling unit.
 - `increment` must correspond to the transition from `resampled_index` to `resampled_index + 1`
 - `history_segments` must be ordered oldest to newest
 - the last history segment must terminate at `state`
+- the window must lie entirely within one contiguous source segment
+- windows that cross a hard gap are invalid and must not be created
 - all lineage fields must agree with the source trajectory
 
 ---
@@ -172,6 +213,8 @@ Collection of all windows plus lookup structures.
 - `class_labels: np.ndarray` of shape `(N,)`
 - `embryo_ids: list[str]`
 - `experiment_ids: list[str]`
+- `segment_ids: np.ndarray` of shape `(N,)`
+- `touches_interpolated_gap: np.ndarray` of shape `(N,)`
 
 ### Optional fast-search fields
 
@@ -182,6 +225,7 @@ Collection of all windows plus lookup structures.
 
 - all stacked arrays agree on first dimension `N`
 - bank search structures must be refreshable from canonical stored windows
+- bank-level gap flags must agree exactly with the underlying windows
 
 ---
 

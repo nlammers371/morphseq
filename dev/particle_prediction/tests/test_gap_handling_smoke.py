@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 
 from dev.particle_prediction.data.loading import load_trajectories
+from dev.particle_prediction.data.resampling import resample_smoothed_trajectory
 from dev.particle_prediction.data.smoothing import smooth_trajectory
+from dev.particle_prediction.data.transition_bank import build_transition_bank
+from dev.particle_prediction.data.transition_windows import build_transition_windows
 
 
 def test_gap_classification_and_segmentwise_smoothing_smoke(tmp_path: Path) -> None:
@@ -47,6 +50,7 @@ def test_gap_classification_and_segmentwise_smoothing_smoke(tmp_path: Path) -> N
     )
 
     gap_trajectory = next(traj for traj in dataset.trajectories if traj.embryo_id == "emb_gap")
+    regular_trajectory = next(traj for traj in dataset.trajectories if traj.embryo_id == "emb_regular")
 
     assert gap_trajectory.observed_dts is not None
     assert gap_trajectory.missing_frame_counts is not None
@@ -60,9 +64,22 @@ def test_gap_classification_and_segmentwise_smoothing_smoke(tmp_path: Path) -> N
     assert np.array_equal(gap_trajectory.hard_gap_mask, np.array([False, False, True, False]))
     assert np.array_equal(gap_trajectory.segment_ids, np.array([0, 0, 0, 1, 1]))
 
-    smoothed = smooth_trajectory(gap_trajectory, window_seconds=50.0, poly_order=1)
+    smoothed_gap = smooth_trajectory(gap_trajectory, window_seconds=50.0, poly_order=1)
+    smoothed_regular = smooth_trajectory(regular_trajectory, window_seconds=50.0, poly_order=1)
 
-    assert smoothed.diagnostics["n_segments"] == 2
-    assert smoothed.diagnostics["n_interpolated_points"] == 2
-    assert smoothed.diagnostics["n_hard_gaps"] == 1
-    assert np.linalg.norm(smoothed.smoothed[2] - smoothed.smoothed[3]) > 20.0
+    assert smoothed_gap.diagnostics["n_segments"] == 2
+    assert smoothed_gap.diagnostics["n_interpolated_points"] == 2
+    assert smoothed_gap.diagnostics["n_hard_gaps"] == 1
+    assert np.linalg.norm(smoothed_gap.smoothed[2] - smoothed_gap.smoothed[3]) > 20.0
+
+    resampled_gap = resample_smoothed_trajectory(smoothed_gap, delta_s=1.0)
+    resampled_regular = resample_smoothed_trajectory(smoothed_regular, delta_s=1.0)
+    gap_windows = build_transition_windows(resampled_gap, history_length=2)
+    regular_windows = build_transition_windows(resampled_regular, history_length=2)
+    bank = build_transition_bank([resampled_gap, resampled_regular], history_length=2, use_state_index=False)
+
+    assert len(gap_windows) == 0
+    assert len(regular_windows) > 0
+    assert len(bank.windows) == len(regular_windows)
+    assert all(window.embryo_id == "emb_regular" for window in bank.windows)
+    assert not np.any(bank.touches_interpolated_gap)

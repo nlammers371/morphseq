@@ -2,6 +2,14 @@
 
 This folder is the starter documentation set for the beta predictive latent-space model.
 
+## Local working rules
+
+- For work scoped to `dev/particle_prediction/`, treat this doc set as the local source of truth.
+- Operate only inside `dev/particle_prediction/` unless a task explicitly says otherwise.
+- The correct conda environment for commands in this subtree is `morphseq-env`.
+- When running Python or pytest for this subtree, use `conda run -n morphseq-env --no-capture-output ...`.
+- Do not inherit environment assumptions from unrelated repo areas when working in `dev/particle_prediction/`.
+
 ## Documents
 
 - `model_spec.md` — source of truth for the beta model.

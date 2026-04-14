@@ -1,4 +1,4 @@
-"""Transition-bank construction plus state/history matching and weighting."""
+"""Transition-bank construction plus compatibility wrappers for matching."""
 
 from __future__ import annotations
 
@@ -39,6 +39,10 @@ class TransitionBank:
     experiment_ids: List[str]
     segment_ids: np.ndarray
     touches_interpolated_gap: np.ndarray
+    mean_recent_position_matrix: np.ndarray | None = None
+    mean_recent_direction_matrix: np.ndarray | None = None
+    total_recent_displacement_matrix: np.ndarray | None = None
+    summary_feature_matrix: np.ndarray | None = None
     nearest_neighbor_index: object | None = None
     quality_flags: Dict[str, np.ndarray] = field(default_factory=dict)
 
@@ -93,6 +97,16 @@ def build_transition_bank(
     experiment_ids = [window.experiment_id for window in windows]
     segment_ids = np.asarray([window.source_segment_id for window in windows], dtype=np.int64)
     touches_interpolated_gap = np.asarray([window.touches_interpolated_gap for window in windows], dtype=bool)
+    mean_recent_position_matrix = np.vstack([window.mean_recent_position for window in windows]).astype(np.float64)
+    mean_recent_direction_matrix = np.vstack([window.mean_recent_direction for window in windows]).astype(np.float64)
+    total_recent_displacement_matrix = np.vstack([window.total_recent_displacement for window in windows]).astype(np.float64)
+    summary_feature_matrix = np.column_stack(
+        [
+            mean_recent_position_matrix,
+            mean_recent_direction_matrix,
+            total_recent_displacement_matrix,
+        ]
+    )
 
     nearest_neighbor_index = None
     if use_state_index and NearestNeighbors is not None:
@@ -110,6 +124,10 @@ def build_transition_bank(
         experiment_ids=experiment_ids,
         segment_ids=segment_ids,
         touches_interpolated_gap=touches_interpolated_gap,
+        mean_recent_position_matrix=mean_recent_position_matrix,
+        mean_recent_direction_matrix=mean_recent_direction_matrix,
+        total_recent_displacement_matrix=total_recent_displacement_matrix,
+        summary_feature_matrix=summary_feature_matrix,
         nearest_neighbor_index=nearest_neighbor_index,
         quality_flags={"touches_interpolated_gap": touches_interpolated_gap},
     )
@@ -121,45 +139,11 @@ def retrieve_state_candidates(
     k_state: int = DEFAULT_K_STATE,
     method: str = "nn",
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Retrieve candidates by Euclidean distance on current state only."""
+    """Compatibility wrapper for the model-layer candidate retrieval."""
 
-    query_state = np.asarray(query_state, dtype=np.float64)
-    if query_state.ndim != 1:
-        raise ValueError("query_state must be a 1D array")
-    if k_state < 1:
-        raise ValueError("k_state must be at least 1")
+    from dev.particle_prediction.models.matching import retrieve_state_candidates as _retrieve_state_candidates
 
-    n_candidates = min(k_state, len(bank))
-    if n_candidates == 0:
-        raise ValueError("TransitionBank is empty")
-
-    if method == "nn" and bank.nearest_neighbor_index is not None:
-        distances, indices = bank.nearest_neighbor_index.kneighbors(query_state.reshape(1, -1), n_neighbors=n_candidates)
-        return indices[0].astype(np.int64), np.square(distances[0].astype(np.float64))
-
-    if method not in {"nn", "brute"}:
-        raise ValueError("method must be 'nn' or 'brute'")
-
-    d_state_sq = np.sum((bank.state_matrix - query_state[None, :]) ** 2, axis=1)
-    indices = np.argsort(d_state_sq)[:n_candidates].astype(np.int64)
-    return indices, d_state_sq[indices]
-
-
-def _resolve_alpha(history_length: int, alpha: Optional[Sequence[float]]) -> np.ndarray:
-    if alpha is None:
-        if history_length == DEFAULT_HISTORY_LENGTH:
-            return DEFAULT_ALPHA.copy()
-        weights = np.arange(1, history_length + 1, dtype=np.float64)
-        return weights / weights.sum()
-
-    alpha_array = np.asarray(alpha, dtype=np.float64)
-    if alpha_array.shape != (history_length,):
-        raise ValueError("alpha must have shape (history_length,)")
-    if np.any(alpha_array < 0):
-        raise ValueError("alpha must be non-negative")
-    if np.sum(alpha_array) <= 0:
-        raise ValueError("alpha must have positive sum")
-    return alpha_array / np.sum(alpha_array)
+    return _retrieve_state_candidates(bank=bank, query_state=query_state, k_state=k_state, method=method)
 
 
 def compute_history_distance_sq(
@@ -168,43 +152,22 @@ def compute_history_distance_sq(
     offset_radius: int = DEFAULT_OFFSET_RADIUS,
     alpha: Optional[Sequence[float]] = None,
 ) -> float:
-    """Compute shifted ordered-history distance with recency weighting."""
+    """Compatibility wrapper for the model-layer history distance."""
 
-    query_history_segments = np.asarray(query_history_segments, dtype=np.float64)
-    candidate_history_segments = np.asarray(candidate_history_segments, dtype=np.float64)
+    from dev.particle_prediction.models.matching import compute_history_distance_sq as _compute_history_distance_sq
 
-    if query_history_segments.ndim != 2 or candidate_history_segments.ndim != 2:
-        raise ValueError("query and candidate histories must be 2D arrays")
-    if query_history_segments.shape[1] != candidate_history_segments.shape[1]:
-        raise ValueError("query and candidate histories must have the same feature dimension")
-    if offset_radius < 0:
-        raise ValueError("offset_radius must be non-negative")
-
-    history_length = query_history_segments.shape[0]
-    alpha_array = _resolve_alpha(history_length, alpha)
-
-    if candidate_history_segments.shape[0] < required_bank_history_length(history_length, offset_radius):
-        raise ValueError("candidate history is too short for the requested history_length and offset_radius")
-
-    center_start = (candidate_history_segments.shape[0] - history_length) // 2
-    distances = []
-    for offset in range(-offset_radius, offset_radius + 1):
-        start = center_start + offset
-        stop = start + history_length
-        if start < 0 or stop > candidate_history_segments.shape[0]:
-            continue
-        diff = query_history_segments - candidate_history_segments[start:stop]
-        distances.append(float(np.sum(alpha_array[:, None] * (diff ** 2))))
-
-    if not distances:
-        raise ValueError("No valid shifted history comparisons available")
-    return float(min(distances))
+    return _compute_history_distance_sq(
+        query_history_segments=query_history_segments,
+        candidate_history_segments=candidate_history_segments,
+        offset_radius=offset_radius,
+        alpha=alpha,
+    )
 
 
 def match_query_to_bank(
     bank: TransitionBank,
     query_state: np.ndarray,
-    query_history_segments: np.ndarray,
+    query_history_segments: np.ndarray | None,
     k_state: int = DEFAULT_K_STATE,
     offset_radius: int = DEFAULT_OFFSET_RADIUS,
     alpha: Optional[Sequence[float]] = None,
@@ -214,81 +177,26 @@ def match_query_to_bank(
     class_priors: Optional[Dict[str, float]] = None,
     quality_factor_fn: Optional[Callable[[TransitionWindow], float]] = None,
     retrieval_method: str = "nn",
+    history_mode: str = "ordered_segments",
 ) -> MatchResult:
-    """Retrieve, rerank, and weight bank candidates for one query."""
+    """Compatibility wrapper for model-layer matching."""
 
-    if sigma_z <= 0 or sigma_h <= 0:
-        raise ValueError("sigma_z and sigma_h must be positive")
-    if lambda_h < 0:
-        raise ValueError("lambda_h must be non-negative")
+    from dev.particle_prediction.models.matching import match_query_to_bank as _match_query_to_bank
 
-    query_history_segments = np.asarray(query_history_segments, dtype=np.float64)
-    history_length = query_history_segments.shape[0]
-    if bank.history_length < required_bank_history_length(history_length, offset_radius):
-        raise ValueError("TransitionBank history_length is too short for the requested matching configuration")
-
-    candidate_indices, d_state_sq = retrieve_state_candidates(
+    return _match_query_to_bank(
         bank=bank,
         query_state=query_state,
+        query_history_segments=query_history_segments,
         k_state=k_state,
-        method=retrieval_method,
-    )
-
-    d_hist_sq = np.asarray(
-        [
-            compute_history_distance_sq(
-                query_history_segments=query_history_segments,
-                candidate_history_segments=bank.history_tensor[index],
-                offset_radius=offset_radius,
-                alpha=alpha,
-            )
-            for index in candidate_indices
-        ],
-        dtype=np.float64,
-    )
-    scores = d_state_sq / (2.0 * sigma_z ** 2) + lambda_h * d_hist_sq / (2.0 * sigma_h ** 2)
-
-    unnormalized_weights = np.exp(-scores)
-    candidate_windows = [bank.windows[index] for index in candidate_indices]
-
-    class_factors = np.ones(len(candidate_indices), dtype=np.float64)
-    if class_priors is not None:
-        class_factors = np.asarray(
-            [float(class_priors.get(window.perturbation_class, 1.0)) for window in candidate_windows],
-            dtype=np.float64,
-        )
-
-    quality_factors = np.ones(len(candidate_indices), dtype=np.float64)
-    if quality_factor_fn is not None:
-        quality_factors = np.asarray([float(quality_factor_fn(window)) for window in candidate_windows], dtype=np.float64)
-
-    unnormalized_weights = unnormalized_weights * class_factors * quality_factors
-    total_weight = float(np.sum(unnormalized_weights))
-    if total_weight <= 0:
-        raise ValueError("All candidate weights are zero after applying priors and quality factors")
-    normalized_weights = unnormalized_weights / total_weight
-
-    order = np.argsort(scores)
-    candidate_indices = candidate_indices[order]
-    d_state_sq = d_state_sq[order]
-    d_hist_sq = d_hist_sq[order]
-    scores = scores[order]
-    class_factors = class_factors[order]
-    quality_factors = quality_factors[order]
-    unnormalized_weights = unnormalized_weights[order]
-    normalized_weights = normalized_weights[order]
-    candidate_windows = [candidate_windows[index] for index in order]
-
-    return MatchResult(
-        candidate_indices=candidate_indices,
-        candidate_windows=candidate_windows,
-        d_state_sq=d_state_sq,
-        d_hist_sq=d_hist_sq,
-        scores=scores,
-        class_factors=class_factors,
-        quality_factors=quality_factors,
-        unnormalized_weights=unnormalized_weights,
-        normalized_weights=normalized_weights,
+        offset_radius=offset_radius,
+        alpha=alpha,
+        sigma_z=sigma_z,
+        sigma_h=sigma_h,
+        lambda_h=lambda_h,
+        class_priors=class_priors,
+        quality_factor_fn=quality_factor_fn,
+        retrieval_method=retrieval_method,
+        history_mode=history_mode,
     )
 
 
@@ -302,6 +210,7 @@ __all__ = [
     "DEFAULT_SIGMA_Z",
     "MatchResult",
     "TransitionBank",
+    "TransitionWindow",
     "build_transition_bank",
     "compute_history_distance_sq",
     "match_query_to_bank",

@@ -19,10 +19,19 @@ If a code change conflicts with those docs, the docs win unless a human updates 
 - All new implementation code lives in `dev/particle_prediction/`.
 - Legacy code in `dev/dynamo/` is read-only reference material unless a human explicitly authorizes edits there.
 - Reuse by selective porting, not by extending the old architecture in place.
+- For commands scoped to this subtree, use `conda run -n morphseq-env --no-capture-output ...`.
+- Do not borrow environment rules from other repo areas when the task is explicitly scoped to `dev/particle_prediction/`.
 
 ---
 
 ## 2. Project rules
+
+
+## 2.0 Stay inside the subtree
+
+- If a user scopes the task to `dev/particle_prediction/`, do not inspect, execute against, or infer workflow rules from sibling projects unless the user asks for cross-repo comparison.
+- If repo-level instructions conflict with the local docs for this subtree, stop and prefer the local `dev/particle_prediction/docs/` source of truth for this workstream.
+
 
 ## 2.1 Do not reintroduce time into the predictive kernel
 

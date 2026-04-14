@@ -12,6 +12,124 @@ The core principles are:
 - reuse legacy infrastructure from `dev/dynamo/` only where it still fits,
 - and replace the old time-centric dynamical core rather than extending it.
 
+## Current status snapshot
+
+As of the current `dev/particle_prediction/` implementation:
+
+- implemented: loading, SG smoothing, arc-length resampling, transition-window extraction, transition-bank construction, query/task helpers, ordered-history matching, fast-summary matching, tangent-aligned one-step kernel sampling, and the corresponding smoothing / bank / matching / one-step visualization helpers
+- partially implemented: notebook walkthroughs, with `01` and `02` materially populated and `03` / `04` still mostly scaffolded
+- not yet implemented: rollout prediction, `eval/` modules, rollout/evaluation visualizations, baseline suite, and notebook-backed evaluation workflow
+
+This plan below remains the source of truth, but the immediate work queue should prioritize the missing pieces from the current state rather than repeating already-landed milestones.
+
+---
+
+## Immediate priority roadmap
+
+## Priority 1 — rollout predictor and result container
+
+### Why first
+
+The current code has a good one-step local kernel but stops before the core beta user-facing task: multi-step forecast rollouts.
+
+### Required deliverables
+
+- extend `models/local_transition_pf.py` from one-step prediction to `n_steps` particle rollout
+- add canonical rollout result containers in `eval/predictions.py` or an equivalent documented location
+- update particle histories after each step
+- surface per-step support diagnostics, not just one-step summaries
+
+### Done when
+
+- snapshot and history queries can both roll forward for configurable horizons
+- outputs include per-horizon means, covariance summaries, and particle clouds
+- weak-support behavior is visible rather than silently collapsed
+
+## Priority 2 — rollout visualization
+
+### Why second
+
+The docs make visual inspection a gating requirement, and rollout behavior cannot be trusted without it.
+
+### Required deliverables
+
+- add `plot_prediction_fan(...)`
+- add `plot_rollout_against_truth(...)`
+- add `plot_support_diagnostics_along_rollout(...)`
+- keep these in notebook-friendly figure-returning helpers
+
+### Done when
+
+- one can inspect both successful and failing rollouts directly from notebook `03`
+
+## Priority 3 — evaluation package and baselines
+
+### Why third
+
+Once rollouts exist, the next bottleneck is comparative evaluation. The docs explicitly require interpretable geometry-first reporting and early baselines.
+
+### Required deliverables
+
+- create `eval/metrics.py`
+- create `eval/evaluate.py`
+- implement persistence and linear extrapolation baselines
+- implement no-history, ordered-history, and fast-summary local-model variants as comparable evaluators
+- report endpoint error by horizon, ADE, and optional truth-in-cloud distance
+
+### Done when
+
+- a single evaluation runner can compare all planned baselines on held-out tasks
+
+## Priority 4 — evaluation visualization
+
+### Why fourth
+
+Numbers alone are not enough for this project, especially for multimodal forecast behavior.
+
+### Required deliverables
+
+- add `viz/evaluation.py`
+- implement `plot_error_vs_horizon(...)`
+- implement `plot_model_comparison_table(...)`
+- implement `plot_error_vs_support(...)`
+- implement `plot_failure_gallery(...)`
+
+### Done when
+
+- evaluation outputs can be read both numerically and visually without custom ad hoc plotting
+
+## Priority 5 — notebook completion
+
+### Why fifth
+
+The notebook sequence is meant to be the primary onboarding and debugging path, and it is currently incomplete in the highest-value stages.
+
+### Required deliverables
+
+- convert notebook `03_matching_and_prediction.ipynb` from scaffold to executable walkthrough
+- convert notebook `04_evaluation.ipynb` from scaffold to executable walkthrough
+- ensure the notebook sequence reflects the actual package API rather than legacy placeholders
+
+### Done when
+
+- a contributor can run notebooks `01` through `04` in order and inspect the full pipeline
+
+## Priority 6 — hardening and contract-alignment cleanup
+
+### Why sixth
+
+Gap handling is now critical and should be made more explicit in tests, diagnostics, and docs-driven checks.
+
+### Required deliverables
+
+- expand tests around hard gaps, interpolatable gaps, and segment-boundary filtering
+- add contract checks that window lineage and gap flags remain consistent through bank construction
+- make sure package exports and docstrings reflect the canonical gap-aware objects
+
+### Done when
+
+- gap-aware behavior is treated as first-class, not incidental
+
 ---
 
 ## 2. Proposed repo layout

@@ -1,4 +1,4 @@
-"""Minimal transition-window extraction for resampled trajectories."""
+"""Transition-window extraction for resampled trajectories."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Dict, List, Sequence
 
 import numpy as np
 
+from .dataset import history_summary_features_from_segments
 from .resampling import ResampledTrajectory
 
 
@@ -24,6 +25,9 @@ class TransitionWindow:
     touches_interpolated_gap: bool
     resampled_index: int
     arc_length_value: float
+    mean_recent_position: np.ndarray | None = None
+    mean_recent_direction: np.ndarray | None = None
+    total_recent_displacement: np.ndarray | None = None
     source_time_estimate: float | None = None
     support_metadata: Dict[str, object] = field(default_factory=dict)
 
@@ -97,12 +101,7 @@ def build_transition_windows(
     trajectory: ResampledTrajectory,
     history_length: int,
 ) -> List[TransitionWindow]:
-    """Build transition windows for one resampled trajectory.
-
-    For current state index ``i``, the window stores ``state = z_i``,
-    ``increment = z_{i+1} - z_i``, and the previous ``history_length`` ordered
-    resampled segments ending at ``z_i``.
-    """
+    """Build transition windows for one resampled trajectory."""
 
     if history_length < 1:
         raise ValueError("history_length must be at least 1")
@@ -124,6 +123,12 @@ def build_transition_windows(
         if len(np.unique(point_segment_ids[involved_indices])) != 1:
             continue
 
+        history_segments = segments[state_index - history_length : state_index].copy()
+        summary = history_summary_features_from_segments(
+            current_state=points[state_index].copy(),
+            history_segments=history_segments,
+        )
+
         source_time_estimate = None
         if trajectory.source_time_interp is not None:
             source_time_estimate = float(trajectory.source_time_interp[state_index])
@@ -132,7 +137,7 @@ def build_transition_windows(
             TransitionWindow(
                 state=points[state_index].copy(),
                 increment=(points[state_index + 1] - points[state_index]).copy(),
-                history_segments=segments[state_index - history_length : state_index].copy(),
+                history_segments=history_segments,
                 embryo_id=trajectory.source.embryo_id,
                 experiment_id=trajectory.source.experiment_id,
                 perturbation_class=trajectory.source.perturbation_class,
@@ -140,6 +145,9 @@ def build_transition_windows(
                 touches_interpolated_gap=bool(np.any(point_interpolated_gap_mask[involved_indices])),
                 resampled_index=state_index,
                 arc_length_value=float(trajectory.arc_length[state_index]),
+                mean_recent_position=summary["mean_recent_position"],
+                mean_recent_direction=summary["mean_recent_direction"],
+                total_recent_displacement=summary["total_recent_displacement"],
                 source_time_estimate=source_time_estimate,
                 support_metadata=dict(trajectory.source.metadata),
             )
