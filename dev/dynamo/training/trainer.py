@@ -65,6 +65,9 @@ class TrainConfig:
     rate_clamp_min: float = 1e-6
     alpha_0: float = 0.01
     hessian_n_points: int = 64
+    normalize_rate: bool = True
+    log_beta_T: Optional[float] = None
+    T_ref: float = 28.5
 
     # --- Optimizer ---
     lr: float = 1e-3
@@ -226,6 +229,9 @@ class Stage1Trainer:
             rate_clamp_min=cfg.rate_clamp_min,
             alpha_0=cfg.alpha_0,
             hessian_n_points=cfg.hessian_n_points,
+            normalize_rate=cfg.normalize_rate,
+            log_beta_T=cfg.log_beta_T,
+            T_ref=cfg.T_ref,
         ).to(self.device)
         logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -420,8 +426,13 @@ class Stage1Trainer:
             init_log_D=config.init_log_D,
             n_forward_samples=config.n_forward_samples,
             rate_clamp_min=config.rate_clamp_min,
+            alpha_0=getattr(config, "alpha_0", 0.01),
+            hessian_n_points=getattr(config, "hessian_n_points", 64),
+            normalize_rate=getattr(config, "normalize_rate", True),
+            log_beta_T=getattr(config, "log_beta_T", None),
+            T_ref=getattr(config, "T_ref", 28.5),
         )
-        model.load_state_dict(ckpt["model_state_dict"])
+        model.load_state_dict(ckpt["model_state_dict"], strict=False)
         model.to(device)
         model.eval()
 

@@ -1,1 +1,1 @@
-from .closed_form import solve_rate
+from .closed_form import solve_rate, solve_loadings
