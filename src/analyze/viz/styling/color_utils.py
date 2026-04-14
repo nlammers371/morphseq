@@ -136,21 +136,25 @@ def resolve_color_lookup(
 
     seen: Dict[str, Any] = {}
     reassign_count = 0
+    colliders: list = []
     for val in values:
         color = assigned[val]
         if color not in seen:
             seen[color] = val
             continue
-        used_colors.discard(color)
+        # Color already taken by another value — pick a new distinct color.
+        # Do NOT discard the original color; it is still held by the first owner.
         new_color = _next_unused_color(used_colors, palette_norm, palette_idx, generated_idx)
         assigned[val] = new_color
         used_colors.add(new_color)
+        seen[new_color] = val
         reassign_count += 1
+        colliders.append(val)
 
     if reassign_count > 0 and warn_on_collision:
         print(
-            "Notice: reassigned "
-            f"{reassign_count} colliding group(s) to keep colors distinct."
+            f"Warning: {reassign_count} group(s) shared a default color and were "
+            f"reassigned to keep colors distinct: {colliders}"
         )
 
     return assigned
