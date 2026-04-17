@@ -1,13 +1,126 @@
 # Trajectory Condensation Algorithm
 
+## Problem Statement
+The package solves the following problem:
+- Given embryo feature vectors observed across developmental time,
+- with missing observations represented by a mask,
+- find a shared 2D coordinate system in which embryos form interpretable developmental trajectories.
+
+The intended output is not just a scatterplot. It is a time-aware arrangement of embryo paths that preserves local structure while remaining smooth and readable over time.
+
 ## TL;DR
 - Input is a masked embryo-by-time feature tensor plus time values and labels.
-- Build an initial 2D trajectory layout with aligned UMAP or PCA.
-- Calibrate geometry-dependent reference scales from the current layout.
-- Optimize embryo trajectories in 2D using a weighted sum of attraction, coherence, elasticity, fidelity, and repulsion-style forces.
+- Build an initial 2D trajectory layout with the NaN-aware aligned UMAP default.
+- Resolve geometry-dependent scales for each force from the current layout.
+- Optimize embryo trajectories with a coherence-gated attraction term plus elasticity, fidelity, repulsion, local-scale, outlier, and void corrections.
 - Save intermediate snapshots and metrics during optimization.
 - Select a representative iteration for inspection when the literal final iterate is not the most interpretable.
 - Treat principal-tree fitting as downstream analysis on the condensed coordinates, not part of the solver itself.
+
+## Dynamic Parameters
+
+The user-facing knobs are strength-based, not raw weights.
+
+### API Nomenclature
+
+- `attract_*` is the attraction family; the current code still exposes `attract_weight` as the legacy field name for the attraction strength
+- `temporal_cohere_*` is the temporal coherence family; the current code still exposes `temporal_cohere_weight` as the legacy field name for the coherence strength
+- `elastic_*` controls stretch/bend regularization
+- `fidelity_*` controls the decaying anchor to `x0`
+- `local_scale_*` controls local neighborhood scale preservation
+- `outlier_*` controls slice-relative outlier suppression
+- `void_*` controls broad occupancy / density repulsion
+- `solver_*` controls the optimizer
+
+Internal resolved quantities are geometry-calibrated and are not meant to be set directly:
+
+- `sigma` / `sigma_coh`
+- `epsilon_r`
+- `lambda_stretch` / `lambda_bend`
+- `mu`
+
+### Local Geometry
+
+The solver estimates the geometry scales once from the initialization `x0` and reuses them throughout the run. That means users do not need to specify a separate scale for each force every time.
+
+The main geometry references are:
+
+- `s_local`: local neighbor spacing
+- `s_step`: per-step trajectory displacement
+- `s_bend`: trajectory curvature
+- `s_global`: slice-wide / inter-bundle spread
+
+How they are used:
+
+- attraction uses `s_global` for its baseline bandwidth, with `attract_bandwidth_mult` as an optional override
+- temporal coherence uses `s_local` for its bandwidth, with `temporal_cohere_bandwidth_mult` as an optional override
+- repulsion is normalized from the local spacing scale via `epsilon_r`
+- elasticity uses `s_step` for stretch and `s_bend` for bend
+- fidelity is anchored to the local spacing scale and decays over iterations
+- local-scale preservation uses the fixed neighbor graph and radii estimated from `x0`
+- slice outlier handling uses per-slice centers and cutoffs measured from `x0`
+- void repulsion uses `s_global` as the broad occupancy scale
+
+### Strength vs Mult
+
+This is the key distinction:
+
+- `mult` chooses the geometric distance or bandwidth the force operates on
+- `strength` chooses how much energy or gradient that force contributes once the scale is fixed
+
+Example:
+
+- suppose `s_local = 2.0`
+- if `attract_bandwidth_mult = 1.5`, then `sigma_att = 3.0`
+- if `void_strength = 0.5`, then the void term is just scaled by `0.5`
+
+So `mult` changes the question “what geometric distance does this force reach?”, while `strength` changes “how hard does it push or pull at that bandwidth?”
+
+### Equation
+
+At a high level, the objective is assembled as
+
+```text
+E_total = E_attr + E_rep + E_void + E_elastic + E_fidelity + E_scale + E_outlier
+```
+
+where attraction is gated by temporal coherence:
+
+```text
+E_attr = - sum_t sum_{i<j} C_ijt * K_ijt * G_ijt
+```
+
+- `C_ijt` is the temporal coherence field
+- `K_ijt` is the spatial Gaussian kernel
+- `G_ijt` is the optional kNN gate
+
+The rest of the terms stabilize the solve, preserve local geometry, and prevent collapse.
+
+### Forces
+
+For the full force breakdown and the scale-determination details, see [FORCES.md](FORCES.md).
+
+At a glance:
+
+- attraction pulls together pairs that the coherence field says belong together
+- elasticity keeps each embryo trajectory smooth over time
+- fidelity keeps the early solve near the initialization and then decays
+- local-scale preservation stops dense and sparse neighborhoods from being treated identically
+- repulsion prevents local collapse
+- void repulsion creates broader occupancy pressure
+- slice outlier handling suppresses detached time-slice strays
+- anisotropy is currently a stub for future directional shaping
+
+### Solver
+
+The runtime loop applies SGD with momentum to the resolved total gradient. In practice it:
+
+- recomputes or refreshes coherence as needed
+- resolves force scales from geometry calibration
+- evaluates the total energy and gradient
+- updates positions with the configured learning rate and momentum
+- records metrics and optional snapshots
+- stops based on the configured convergence monitor or iteration cap
 
 ## Core Intuition
 Trajectory condensation turns high-dimensional embryo features into a shared 2D developmental movie.
@@ -16,13 +129,9 @@ The solver tries to satisfy two demands at once: preserve biologically meaningfu
 That means the objective is not a plain embedding loss. It is a balance of forces that pull similar observations together, keep paths smooth, resist collapse, and preserve useful structure from the initialization.
 The result is a condensed spacetime layout that can be inspected directly or passed downstream to principal-tree analysis.
 
-## Problem Statement
-The package solves the following problem:
-- Given embryo feature vectors observed across developmental time,
-- with missing observations represented by a mask,
-- find a shared 2D coordinate system in which embryos form interpretable developmental trajectories.
+For the original concept note that motivated this package, see
+[INITIAL_INSPIRATION.md](INITIAL_INSPIRATION.md).
 
-The intended output is not just a scatterplot. It is a time-aware arrangement of embryo paths that preserves local structure while remaining smooth and readable over time.
 
 ## Data Model
 The canonical input object is `CondensationData` from [schema.py](schema.py).
@@ -44,10 +153,8 @@ The mask is part of the method, not bookkeeping. Missing observations are expect
 ## Stage 1: Initialization
 Initialization lives in [init_embedding.py](init_embedding.py).
 
-Available initializers:
+Recommended initializers:
 - `aligned_umap_init(...)`
-- `nan_aware_aligned_umap_init(...)`
-- `pca_init(...)`
 
 Role in the algorithm:
 - provide a first low-dimensional layout `x0`
@@ -58,6 +165,13 @@ Why this matters:
 - condensation is not initialization-free
 - bad `x0` can distort the final geometry even if the force system is reasonable
 - the NaN-aware path exists because missing features are common in this data regime
+
+Repository note:
+- `aligned_umap_init(...)` is the standard public entry point and now routes
+  through the NaN-aware UMAP path by default.
+- `pca_init(...)` still exists as a debug helper, but it should not be treated
+  as part of the working pipeline here. It has not produced acceptable
+  trajectory layouts in practice.
 
 ## Stage 2: Geometry Calibration
 Geometry calibration lives in [condensation/geometry_refs.py](condensation/geometry_refs.py).
@@ -70,115 +184,31 @@ This stage estimates reference quantities from the current layout, including:
 These are not user-facing biological parameters. They normalize the force system so that a given force strength means something comparable across datasets and initializations.
 
 ## Stage 3: Force System
-The force terms live in [condensation/forces](condensation/forces).
+The force terms live in [FORCES.md](FORCES.md), with implementation in [condensation/forces](condensation/forces).
 
-### Attraction
-File: [condensation/forces/attraction.py](condensation/forces/attraction.py)
+The main force classes are:
 
-Purpose:
-- pull observations with strong support or similarity toward each other
-- preserve local neighborhood structure from the input features
+- attraction in [condensation/forces/attraction.py](condensation/forces/attraction.py)
+- elasticity in [condensation/forces/elasticity.py](condensation/forces/elasticity.py)
+- fidelity in [condensation/forces/fidelity.py](condensation/forces/fidelity.py)
+- local scale in [condensation/forces/local_scale.py](condensation/forces/local_scale.py)
+- repulsion in [condensation/forces/repulsion.py](condensation/forces/repulsion.py)
+- slice outlier handling in [condensation/forces/slice_outlier.py](condensation/forces/slice_outlier.py)
+- void repulsion in [condensation/forces/void.py](condensation/forces/void.py)
+- anisotropy in [condensation/forces/anisotropy.py](condensation/forces/anisotropy.py)
+- total assembly in [condensation/forces/total.py](condensation/forces/total.py)
 
-Main config knobs:
-- `attract_k`
-- `attract_weight`
-- `attract_bandwidth_mult`
+Temporal coherence is not a force module in the same directory, but it is the gate that makes attraction selective instead of unconditional:
 
-### Temporal Coherence
-Files:
 - [condensation/coherence/compute.py](condensation/coherence/compute.py)
 - [condensation/coherence/kernels.py](condensation/coherence/kernels.py)
 - [condensation/coherence/neighborhoods.py](condensation/coherence/neighborhoods.py)
 
-Purpose:
-- make each embryo trajectory temporally coherent
-- define how nearby time bins influence one another
-- prevent jagged, discontinuous path behavior that is inconsistent with developmental time
+The practical takeaway is:
 
-Main config knobs:
-- `temporal_cohere_window`
-- `temporal_cohere_mode`
-- `temporal_cohere_weight`
-- `temporal_cohere_bandwidth_mult`
-
-### Elasticity
-File: [condensation/forces/elasticity.py](condensation/forces/elasticity.py)
-
-Purpose:
-- regularize path shape over time
-- penalize excessive stretching and bending
-- stabilize trajectories when attraction alone is too noisy
-
-Main config knobs:
-- `elastic_strength`
-- `elastic_mix`
-- `elastic_kernel`
-
-### Fidelity to Initialization
-File: [condensation/forces/fidelity.py](condensation/forces/fidelity.py)
-
-Purpose:
-- keep early optimization near the initialization
-- reduce the chance that the solver immediately destroys meaningful coarse geometry
-- allow that anchor to decay over time
-
-Main config knobs:
-- `fidelity_init_strength`
-- `fidelity_half_life`
-
-### Local Scale
-File: [condensation/forces/local_scale.py](condensation/forces/local_scale.py)
-
-Purpose:
-- adapt force behavior to local neighborhood scale
-- reduce pathologies where dense and sparse regions are treated identically
-
-Main config knob:
-- `local_scale_strength`
-
-### Slice Outlier Handling
-File: [condensation/forces/slice_outlier.py](condensation/forces/slice_outlier.py)
-
-Purpose:
-- correct or suppress pathological per-slice outliers
-- keep a few extreme observations from dominating local geometry
-
-Main config knobs:
-- `outlier_strength`
-- `outlier_cutoff_mode`
-- `outlier_cutoff_value`
-
-### Repulsion and Void Control
-Files:
-- [condensation/forces/repulsion.py](condensation/forces/repulsion.py)
-- [condensation/forces/void.py](condensation/forces/void.py)
-
-Purpose:
-- prevent collapse into degenerate overlap
-- control occupancy of space
-- keep paths from unrealistically piling into the same region
-
-Main config knobs:
-- `void_strength`
-- `void_bandwidth`
-
-### Anisotropy
-File: [condensation/forces/anisotropy.py](condensation/forces/anisotropy.py)
-
-Purpose:
-- apply directional regularization where needed
-- discourage geometries that violate the intended directional structure of the layout
-
-This is a more specialized term than attraction or coherence and should be treated as a shaping term, not the main organizing signal.
-
-### Total Force / Objective Assembly
-File: [condensation/forces/total.py](condensation/forces/total.py)
-
-Purpose:
-- combine all active terms into one energy and gradient
-- serve as the single aggregation point for the solver loop
-
-This file is the mathematical join point of the method.
+- coherence decides which pairs are allowed to matter
+- attraction turns that gating field into a spatial pull
+- the remaining terms keep the solver from breaking the intended trajectory geometry
 
 ## Stage 4: Optimization Loop
 The main runtime lives in [condensation/engine/run.py](condensation/engine/run.py).

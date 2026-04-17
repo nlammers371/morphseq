@@ -7,8 +7,8 @@ Keeps argument lists clean throughout condensation/*.
 
 Naming conventions
 ------------------
-- ``attract_*``         : attraction force parameters
-- ``temporal_cohere_*`` : temporal coherence parameters
+- ``attract_*``         : attraction force parameters; the current code still uses ``attract_weight`` as the strength field
+- ``temporal_cohere_*`` : temporal coherence parameters; the current code still uses ``temporal_cohere_weight`` as the strength field
 - ``elastic_*``         : elasticity force parameters
 - ``outlier_*``         : slice outlier correction parameters
 - ``void_*``            : void/occupancy repulsion parameters
@@ -39,7 +39,7 @@ class CondensationConfig:
     attract_k : int
         Number of nearest neighbors for the attraction force.
     attract_weight : float
-        Overall weight of the attraction term.
+        Overall attraction strength.
     attract_bandwidth_mult : float or None
         Multiplier on the geometry-calibrated attraction bandwidth.
 
@@ -50,14 +50,14 @@ class CondensationConfig:
     temporal_cohere_mode : str
         Coherence computation mode. Default ``"computed"``.
     temporal_cohere_weight : float
-        Weight of the temporal coherence term.
+        Overall temporal-coherence strength.
     temporal_cohere_bandwidth_mult : float or None
         Multiplier on the geometry-calibrated coherence bandwidth.
 
     Elasticity
     ----------
     elastic_strength : float or None
-        Overall elasticity weight (resolved against geometry refs at runtime).
+        Overall elasticity strength (resolved against geometry refs at runtime).
     elastic_mix : float or None
         Split between stretch and bend. ``0`` = all stretch, ``1`` = all bend.
     elastic_kernel : str
@@ -66,7 +66,7 @@ class CondensationConfig:
     Outlier correction
     ------------------
     outlier_strength : float
-        Weight of the slice-relative outlier correction term.
+        Strength of the slice-relative outlier correction term.
     outlier_cutoff_mode : str
         How outliers are defined: ``"quantile"`` or ``"robust"``.
     outlier_cutoff_value : float
@@ -75,7 +75,7 @@ class CondensationConfig:
     Void / occupancy
     ----------------
     void_strength : float
-        Weight of the broad void repulsion term.
+        Strength of the broad void repulsion term.
     void_bandwidth : float or None
         Spatial bandwidth for the void force.
 
@@ -93,14 +93,14 @@ class CondensationConfig:
     Fidelity
     --------
     fidelity_init_strength : float
-        Initial weight of the fidelity (anchor-to-x0) term.
+        Initial strength of the fidelity (anchor-to-x0) term.
     fidelity_half_life : float
-        Per-iteration decay factor for fidelity weight.
+        Per-iteration decay factor for fidelity strength.
 
     Local scale
     -----------
     local_scale_strength : float
-        Weight of the local neighborhood scale preservation term.
+        Strength of the local neighborhood scale preservation term.
 
     Internal geometry scales (set by calibration, not user-facing)
     --------------------------------------------------------------
@@ -124,6 +124,7 @@ class CondensationConfig:
     temporal_cohere_mode: str = "computed"
     temporal_cohere_weight: float = 1.0
     temporal_cohere_bandwidth_mult: float | None = None
+    coherence_cache_every: int = 1
 
     # Elasticity
     elastic_strength: float | None = None
