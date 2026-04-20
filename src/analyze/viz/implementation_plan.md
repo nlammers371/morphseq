@@ -47,6 +47,150 @@ That maps cleanly onto three buckets:
   scripts rewrite legends, annotations, and figure titles after render because
   the library does not expose those controls directly
 
+## API Examples
+
+These are the concrete API examples that should end up in the user-facing
+markdown files. They are intentionally short and biased toward the minimal
+path.
+
+### Generic feature plots
+
+Old:
+
+```python
+fig = plot_feature_over_time(
+    df,
+    features="curvature",
+    color_by="genotype",
+    color_lookup={"cep290_homozygous": "#B2182B"},
+    show_individual=True,
+    show_trend=True,
+    backend="matplotlib",
+    ylim=(0, 1),
+    legend_loc="outside",
+)
+fig.set_size_inches(7.6, 6.9, forward=True)
+```
+
+New:
+
+```python
+from analyze.viz.plotting import plot_feature_over_time, presentation_style
+
+fig = plot_feature_over_time(
+    df,
+    features="curvature",
+    color_by="genotype",
+    color_lookup={"cep290_homozygous": "#B2182B"},
+    label_map={
+        "cep290_homozygous": "Homozygous",
+        "cep290_wildtype": "Wildtype",
+    },
+    style=presentation_style(),
+    backend="matplotlib",
+    ylim=(0, 1),
+)
+```
+
+### Condensation time-slice viewer
+
+Old:
+
+```python
+fig = tc.time_slice_html(
+    run.positions,
+    run.mask,
+    run.time_values,
+    labels=labels,
+    embryo_ids=run.embryo_ids,
+    color_map=color_map,
+    title="",
+)
+fig.update_layout(title="")
+for ann in fig.layout.annotations:
+    ...
+```
+
+New:
+
+```python
+fig = tc.time_slice_html(
+    run.positions,
+    run.mask,
+    run.time_values,
+    labels=labels,
+    label_map=DISPLAY_NAME_MAP,
+    embryo_ids=run.embryo_ids,
+    color_map=color_map,
+    title="<b>3D</b> Trajectories",
+    subplot_titles=("<b>3D</b> Trajectories", "Current time slice"),
+)
+```
+
+### Condensation animations
+
+Old:
+
+```python
+animate_rotation(
+    run.positions,
+    run.mask,
+    run.time_values,
+    labels=labels,
+    color_map=resolved_cmap,
+    output_path=OUT_DIR / "final_rotation.gif",
+    n_frames=120,
+    elev=25.0,
+    azim_start=-60.0,
+    azim_end=300.0,
+    fps=6,
+    dpi=120,
+    figsize=(8, 7),
+    point_size=10.0,
+    alpha_point=0.65,
+    alpha_line=0.2,
+    linewidth=0.7,
+)
+```
+
+New:
+
+```python
+animate_rotation(
+    run.positions,
+    run.mask,
+    run.time_values,
+    labels=labels,
+    label_map=DISPLAY_NAME_MAP,
+    color_map=resolved_cmap,
+    output_path=OUT_DIR / "final_rotation.gif",
+    n_frames=120,
+    elev=25.0,
+    azim_start=-60.0,
+    azim_end=300.0,
+    fps=6,
+    dpi=120,
+    figsize=(8, 7),
+    point_size=10.0,
+    alpha_point=0.65,
+    alpha_line=0.2,
+    linewidth=0.7,
+)
+```
+
+### Style presets
+
+```python
+from analyze.viz.plotting import default_style, paper_style, presentation_style
+
+base = default_style()
+paper = paper_style()
+talk = presentation_style()
+```
+
+If a caller needs a direct override, they can still construct `StyleSpec`
+explicitly, but the named presets should cover the common paths.
+
 ## Phase 1: Minimal Default Fixes
 
 These should be done first. They remove repeated script boilerplate without

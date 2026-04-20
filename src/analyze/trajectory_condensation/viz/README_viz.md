@@ -59,6 +59,9 @@ cfg = tc.VizConfig(
 )
 ```
 
+For the common presentation bundle, `VizConfig` is the lightest way to control
+the repeated size and alpha defaults without touching lower-level helpers.
+
 ### `render_run(run, output_dir, *, config=None, title_prefix="", snapshot_idx=None, skip_animations=False)`
 
 Writes the standard figure/GIF bundle for a single run.
@@ -76,6 +79,29 @@ The interactive browser is not a generic Plotly utility. Use `tc.time_slice_html
 implemented in [condensed_time_slice_viewer.py](condensed_time_slice_viewer.py),
 when you want the condensed trajectory viewer with the 3D trajectory context,
 highlighted current-time points, and the optional 2D current-slice panel.
+
+### Example API: time slice viewer
+
+```python
+tc.time_slice_html(
+    run.positions,
+    run.mask,
+    run.time_values,
+    labels=run.labels,
+    label_map={
+        "ab": "wildtype",
+        "wik_ab": "wildtype",
+        "inj_ctrl": "inj. ctrl",
+        "pbx1b_crispant": "pbx1b",
+        "pbx4_crispant": "pbx4",
+    },
+    color_map=run.color_map,
+    embryo_ids=run.embryo_ids,
+    title="<b>3D</b> Trajectories",
+    subplot_titles=("<b>3D</b> Trajectories", "Current time slice"),
+    output_path="time_slice.html",
+)
+```
 
 ### `compare_runs(runs, mode="trajectories", *, config=None, align_axes=True, figsize=None, output_path=None)`
 
@@ -136,6 +162,10 @@ Lower-level GIF/animation helpers:
 - `animate_iterations(...)`
 - `animate_init_final_rotation(...)`
 
+The common presentation path now also accepts `label_map` so callers can
+normalize labels at the API boundary instead of rewriting labels before and
+after rendering.
+
 ```python
 from analyze.trajectory_condensation.viz import animation
 
@@ -143,6 +173,11 @@ animation.animate_rotation(
     positions,
     mask,
     time_values,
+    label_map={
+        "ab": "wildtype",
+        "wik_ab": "wildtype",
+        "inj_ctrl": "inj. ctrl",
+    },
     output_path="rotation.gif",
     n_frames=120,
     fps=24,
