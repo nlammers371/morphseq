@@ -84,6 +84,25 @@ Checks:
 - required reducer inputs are present by level
 - required bin floor is feasible for selected bins
 
+### 2b) Add calculated features (minimal API)
+
+```python
+bo.add_feature(
+    level="binned",          # or "cross_bin"
+    values=series_or_df,      # Series keyed by grain, or single-column DataFrame
+    key="bin__vae__0__mean__minus_ref_wt",
+    overwrite=False,
+)
+```
+
+Rules:
+
+- `values` must match target level grain exactly:
+  - `binned`/`raw`/`bin_meta`: (`embryo_id`, `bin_id`)
+  - `cross_bin`/`embryo_meta`: (`embryo_id`)
+- duplicate grain rows are rejected
+- overwrite contract is enforced (see below)
+
 ### 3) Cross-bin reduction (single feature)
 
 ```python

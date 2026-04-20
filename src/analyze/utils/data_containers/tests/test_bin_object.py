@@ -179,3 +179,46 @@ def test_overwrite_contract_disallows_cross_level_takeover() -> None:
             bin_fract=0.5,
             overwrite=True,
         )
+
+
+def test_add_feature_accepts_series_for_cross_bin() -> None:
+    bo = BinObject.from_raw(_toy_raw(), bin_width=2.0)
+    embryo_ids = bo.levels.embryo_meta["embryo_id"].copy()
+    values = pd.Series([0.1, 0.2, 0.3], index=embryo_ids, name="tmp")
+    values.index.name = "embryo_id"
+
+    bo.add_feature(level="cross_bin", values=values, key="xbin__toy__score", overwrite=False)
+    assert "xbin__toy__score" in bo.levels.cross_bin.columns
+    assert set(bo.levels.cross_bin["embryo_id"]) == set(embryo_ids)
+
+
+def test_add_feature_accepts_dataframe_for_binned() -> None:
+    bo = BinObject.from_raw(_toy_raw(), bin_width=2.0)
+    subset = bo.levels.binned[["embryo_id", "bin_id"]].copy()
+    subset["tmp"] = 1.0
+
+    bo.add_feature(level="binned", values=subset, key="bin__toy__constant", overwrite=False)
+    assert "bin__toy__constant" in bo.levels.binned.columns
+    assert bo.levels.binned["bin__toy__constant"].notna().all()
+
+
+def test_add_feature_enforces_overwrite_contract() -> None:
+    bo = BinObject.from_raw(_toy_raw(), bin_width=2.0)
+    values = bo.levels.embryo_meta[["embryo_id"]].copy()
+    values["score"] = 1.0
+    bo.add_feature(level="cross_bin", values=values, key="xbin__toy__score", overwrite=False)
+
+    with pytest.raises(ValueError):
+        bo.add_feature(level="cross_bin", values=values, key="xbin__toy__score", overwrite=False)
+
+    values2 = bo.levels.embryo_meta[["embryo_id"]].copy()
+    values2["score"] = 2.0
+    bo.add_feature(level="cross_bin", values=values2, key="xbin__toy__score", overwrite=True)
+    assert set(bo.levels.cross_bin["xbin__toy__score"].dropna().unique()) == {2.0}
+
+
+def test_add_feature_rejects_wrong_grain() -> None:
+    bo = BinObject.from_raw(_toy_raw(), bin_width=2.0)
+    bad = pd.DataFrame({"embryo_id": ["e1", "e2"], "value": [1.0, 2.0]})
+    with pytest.raises(KeyError):
+        bo.add_feature(level="binned", values=bad, key="bin__bad", overwrite=False)

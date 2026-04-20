@@ -189,6 +189,13 @@ class BinObject:
                 return level
         return None
 
+    def _normalize_level(self, level: str | LevelName) -> str:
+        level_name = str(level)
+        valid = {"raw", "binned", "bin_meta", "embryo_meta", "cross_bin"}
+        if level_name not in valid:
+            raise ValueError(f"Unknown level {level!r}; expected one of {sorted(valid)}")
+        return level_name
+
     def _level_grain_columns(self, level: str) -> list[str]:
         if level in {"raw", "binned", "bin_meta"}:
             return [self.embryo_id_col, "bin_id"]
@@ -245,6 +252,72 @@ class BinObject:
 
         merged = base.merge(incoming, on=grain_cols, how="outer")
         setattr(self.levels, level, merged)
+
+    def add_feature(
+        self,
+        *,
+        level: str | LevelName,
+        values: pd.Series | pd.DataFrame,
+        key: str,
+        overwrite: bool = False,
+    ) -> None:
+        """Add one calculated feature to a target level with strict grain validation.
+
+        Parameters
+        ----------
+        level
+            Target level name (e.g., "binned", "cross_bin").
+        values
+            Feature values as either:
+              - pd.Series indexed by the target level grain, or
+              - single-column pd.DataFrame containing grain columns (or grain index).
+        key
+            Output feature column name.
+        overwrite
+            Whether replacing an existing key in the same level is allowed.
+        """
+        level_name = self._normalize_level(level)
+        grain_cols = self._level_grain_columns(level_name)
+
+        if isinstance(values, pd.Series):
+            if values.name is None:
+                series = values.rename(key)
+            else:
+                series = values.rename(key)
+            incoming = series.reset_index()
+            if key not in incoming.columns:
+                incoming[key] = series.to_numpy()
+        elif isinstance(values, pd.DataFrame):
+            incoming = values.copy()
+            if all(c in incoming.columns for c in grain_cols):
+                pass
+            elif isinstance(incoming.index, pd.MultiIndex) and list(incoming.index.names) == grain_cols:
+                incoming = incoming.reset_index()
+            elif incoming.index.name == grain_cols[0] and len(grain_cols) == 1:
+                incoming = incoming.reset_index()
+            else:
+                raise KeyError(
+                    f"DataFrame values must include grain columns {grain_cols} as columns or index names"
+                )
+
+            value_cols = [c for c in incoming.columns if c not in grain_cols]
+            if key in incoming.columns:
+                incoming = incoming[grain_cols + [key]].copy()
+            else:
+                if len(value_cols) != 1:
+                    raise ValueError(
+                        f"DataFrame values must contain exactly one feature column when key {key!r} is absent"
+                    )
+                incoming = incoming.rename(columns={value_cols[0]: key})
+        else:
+            raise TypeError("values must be a pandas Series or DataFrame")
+
+        self._upsert_level_features(
+            level=level_name,
+            values_df=incoming,
+            feature_cols=[key],
+            overwrite=overwrite,
+        )
 
     def _resolve_reducer(self, reducer: str | ReducerSpec) -> ReducerSpec:
         return get_reducer(reducer)
