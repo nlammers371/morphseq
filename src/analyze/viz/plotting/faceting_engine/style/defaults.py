@@ -2,7 +2,8 @@
 Style specification for faceted plots.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
+from typing import Any
 
 
 @dataclass
@@ -102,3 +103,24 @@ def dense_facet_style() -> StyleSpec:
         repeat_xticklabels=False,
         repeat_yticklabels=False,
     )
+
+
+def update_style(base: StyleSpec | None = None, **overrides: Any) -> StyleSpec:
+    """Return a copy of StyleSpec with selected fields overridden.
+
+    This is the ergonomic path for "start from a preset, tweak one or two
+    fields" without requiring callers to know the full dataclass layout.
+    """
+    style = replace(base) if base is not None else StyleSpec()
+    valid_fields = {f.name for f in fields(StyleSpec)}
+    unknown = sorted(set(overrides) - valid_fields)
+    if unknown:
+        raise TypeError(
+            "Unknown StyleSpec override(s): "
+            + ", ".join(unknown)
+            + ". Valid fields are: "
+            + ", ".join(sorted(valid_fields))
+        )
+    for key, value in overrides.items():
+        setattr(style, key, value)
+    return style

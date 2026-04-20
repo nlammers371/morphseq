@@ -39,6 +39,8 @@ from pathlib import Path
 
 import numpy as np
 
+from analyze.viz.styling.color_utils import apply_label_map
+
 
 # ---------------------------------------------------------------------------
 # Video A: final structure, slow rotation
@@ -85,7 +87,7 @@ def animate_rotation(
     from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
     _validate_inputs(positions, mask, time_values)
-    labels = _apply_label_map(labels, label_map)
+    labels = apply_label_map(labels, label_map)
     color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     fig = plt.figure(figsize=figsize)
@@ -165,7 +167,7 @@ def animate_iterations(
 
     n_iters = position_history.shape[0]
     _validate_inputs(position_history[0], mask, time_values)
-    labels = _apply_label_map(labels, label_map)
+    labels = apply_label_map(labels, label_map)
     color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     if snapshot_iters is None:
@@ -259,7 +261,7 @@ def animate_time_slice(
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
     _validate_inputs(positions, mask, time_values)
-    labels = _apply_label_map(labels, label_map)
+    labels = apply_label_map(labels, label_map)
     color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     T = positions.shape[1]
@@ -447,7 +449,7 @@ def animate_init_final_rotation(
 
     _validate_inputs(x0, mask, time_values)
     _validate_inputs(positions, mask, time_values)
-    labels = _apply_label_map(labels, label_map)
+    labels = apply_label_map(labels, label_map)
     color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     fig = plt.figure(figsize=figsize)
@@ -591,11 +593,3 @@ def _resolve_color_map(
     cmap = plt.get_cmap("tab10")
     return {l: cmap(i % 10) for i, l in enumerate(unique)}
 
-
-def _apply_label_map(
-    labels: np.ndarray | None,
-    label_map: dict[str, str] | None,
-) -> np.ndarray | None:
-    if labels is None or not label_map:
-        return labels
-    return np.asarray([label_map.get(str(label), str(label)) for label in labels], dtype=object)

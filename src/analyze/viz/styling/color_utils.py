@@ -9,6 +9,7 @@ import colorsys
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import matplotlib.colors as mcolors
+import numpy as np
 
 from .genotype_colors import get_known_genotype_color
 
@@ -51,6 +52,67 @@ def create_color_lookup(
     """Create a value->color mapping from a list of category values."""
     palette = [normalize_color(c) for c in (palette or STANDARD_PALETTE)]
     return {v: palette[i % len(palette)] for i, v in enumerate(unique_values)}
+
+
+def apply_label_map(
+    values: Sequence[Any],
+    label_map: Optional[Mapping[Any, Any]] = None,
+) -> np.ndarray:
+    """Remap values through a display-name map while preserving order."""
+    if not label_map:
+        return np.asarray(values, dtype=object)
+    return np.asarray(
+        [label_map.get(str(value), label_map.get(value, str(value))) for value in values],
+        dtype=object,
+    )
+
+
+def ordered_present_values(
+    values: Sequence[Any],
+    preferred_order: Optional[Sequence[Any]] = None,
+    label_map: Optional[Mapping[Any, Any]] = None,
+) -> List[Any]:
+    """Return unique values in preferred order, then remaining values in encounter order."""
+    remapped = apply_label_map(values, label_map=label_map)
+    seen: set[Any] = set()
+    ordered: List[Any] = []
+
+    def _add(value: Any) -> None:
+        if value in seen:
+            return
+        seen.add(value)
+        ordered.append(value)
+
+    if preferred_order is not None:
+        preferred = apply_label_map(preferred_order, label_map=label_map)
+        for value in preferred:
+            if value in remapped:
+                _add(value)
+
+    for value in remapped:
+        _add(value)
+
+    return ordered
+
+
+def build_ordered_color_lookup(
+    values: Sequence[Any],
+    preferred_order: Optional[Sequence[Any]] = None,
+    label_map: Optional[Mapping[Any, Any]] = None,
+    color_lookup: Optional[Mapping[Any, Any]] = None,
+    palette: Optional[List[str]] = None,
+) -> Dict[Any, str]:
+    """Build an ordered value->color mapping with optional remapping and palette fallback."""
+    ordered_values = ordered_present_values(
+        values,
+        preferred_order=preferred_order,
+        label_map=label_map,
+    )
+    assigned = create_color_lookup(ordered_values, palette=palette)
+    if color_lookup:
+        for key, value in color_lookup.items():
+            assigned[label_map.get(str(key), label_map.get(key, key)) if label_map else key] = normalize_color(value)
+    return assigned
 
 
 def _generate_distinct_color(index: int) -> str:
@@ -188,6 +250,9 @@ __all__ = [
     "normalize_color",
     "to_rgba_string",
     "create_color_lookup",
+    "apply_label_map",
+    "ordered_present_values",
+    "build_ordered_color_lookup",
     "resolve_color_lookup",
     "build_genotype_color_lookup",
 ]

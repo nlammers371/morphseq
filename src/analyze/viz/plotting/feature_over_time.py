@@ -2,7 +2,8 @@
 Plot feature over time with optional faceting.
 
 100% DOMAIN-AGNOSTIC: No trajectory_analysis imports.
-Caller provides color_lookup with domain-specific logic.
+Optional label and color lookups can be supplied by the caller, but the
+default behavior stays palette-first.
 """
 
 from dataclasses import dataclass
@@ -16,8 +17,7 @@ from analyze.utils.data_processing import get_trajectories_for_group, get_global
 from analyze.utils.stats import compute_trend_line
 from analyze.viz.styling import (
     STANDARD_PALETTE,
-    get_known_genotype_color,
-    resolve_color_lookup,
+    build_ordered_color_lookup,
 )
 
 # Engine imports
@@ -65,10 +65,11 @@ def _coerce_embryo_trace_style(value: Any) -> IdTraceStyle:
 def _build_color_lookup(
     df: pd.DataFrame,
     color_by: Optional[str],
+    label_map: Optional[Dict[Any, str]] = None,
     color_lookup: Optional[Dict[Any, str]] = None,
     palette: Optional[List[str]] = None,
 ) -> Dict[Any, str]:
-    """Build or use provided color lookup (NO domain logic).
+    """Build or use provided color lookup (palette-first).
     
     Private helper. If color_lookup provided, use it.
     Otherwise, auto-assign from palette.
@@ -77,13 +78,11 @@ def _build_color_lookup(
         return {}
     
     unique_vals = list(df[color_by].dropna().unique())
-    return resolve_color_lookup(
+    return build_ordered_color_lookup(
         unique_vals,
+        label_map=label_map,
         color_lookup=color_lookup,
         palette=palette or STANDARD_PALETTE,
-        default_resolver=get_known_genotype_color,
-        enforce_distinct=True,
-        warn_on_collision=True,
     )
 
 
@@ -142,8 +141,9 @@ def _plot_features_over_time_subplot(
         if not trajectories:
             continue
 
-        color = color_lookup.get(group_val, STANDARD_PALETTE[0])
         label_value = label_map.get(str(group_val), str(group_val)) if label_map else str(group_val)
+        color_key = label_value if label_map else group_val
+        color = color_lookup.get(color_key, STANDARD_PALETTE[0])
         
         # Individual traces
         if show_individual:
@@ -407,8 +407,8 @@ def plot_feature_over_time(
         normalized_id_styles = {str(k): _coerce_embryo_trace_style(v) for k, v in id_style_lookup.items()}
         normalized_highlight_ids.update(normalized_id_styles.keys())
 
-    # Build color lookup (generic or user-provided)
-    color_lookup = _build_color_lookup(df, color_by, color_lookup, color_palette)
+    # Build color lookup (palette-first unless caller provides overrides)
+    color_lookup = _build_color_lookup(df, color_by, label_map, color_lookup, color_palette)
 
     # Determine facet values
     if isinstance(features, (list, tuple)):

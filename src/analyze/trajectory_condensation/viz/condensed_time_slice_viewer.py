@@ -18,6 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
+from analyze.viz.styling.color_utils import apply_label_map
+
 
 def time_slice_html(
     positions: np.ndarray,
@@ -105,7 +107,7 @@ def time_slice_html(
     if marker_size_2d is not None:
         slice_marker_size = int(marker_size_2d)
 
-    labels = _apply_label_map(labels, label_map)
+    labels = apply_label_map(labels, label_map)
     color_map = _resolve_color_map(labels, color_map, label_map=label_map)
     unique_labels = list(color_map.keys()) if labels is not None else [None]
 
@@ -403,11 +405,3 @@ def _resolve_color_map(
     unique = sorted(np.unique(labels).tolist())
     return {lbl: palette[i % len(palette)] for i, lbl in enumerate(unique)}
 
-
-def _apply_label_map(
-    labels: np.ndarray | None,
-    label_map: dict[str, str] | None,
-) -> np.ndarray | None:
-    if labels is None or not label_map:
-        return labels
-    return np.asarray([label_map.get(str(label), str(label)) for label in labels], dtype=object)
