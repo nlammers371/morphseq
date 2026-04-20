@@ -67,3 +67,38 @@ def paper_style() -> StyleSpec:
         trend_width=2.0,
         legend_fontsize=10,
     )
+
+
+def presentation_style() -> StyleSpec:
+    return StyleSpec(
+        height_per_row=320,
+        width_per_col=360,
+        min_height=420,
+        min_width=640,
+        individual_alpha=0.18,
+        individual_width=0.8,
+        trend_alpha=1.0,
+        trend_width=2.4,
+        band_alpha=0.18,
+        legend_fontsize=10,
+        legend_loc='outside',
+        repeat_xlabels=False,
+        repeat_ylabels=False,
+        repeat_xticklabels=False,
+        repeat_yticklabels=False,
+    )
+
+
+def dense_facet_style() -> StyleSpec:
+    return StyleSpec(
+        height_per_row=300,
+        width_per_col=320,
+        min_height=360,
+        min_width=520,
+        legend_fontsize=10,
+        legend_loc='outside',
+        repeat_xlabels=False,
+        repeat_ylabels=False,
+        repeat_xticklabels=False,
+        repeat_yticklabels=False,
+    )

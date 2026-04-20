@@ -24,11 +24,13 @@ def time_slice_html(
     mask: np.ndarray,
     time_values: np.ndarray,
     labels: np.ndarray | None = None,
+    label_map: dict[str, str] | None = None,
     color_map: dict[str, str] | None = None,
     embryo_ids: np.ndarray | None = None,
     output_path: str | Path | None = None,
     title: str = "Time slice",
     add_slice_panel: bool = True,
+    subplot_titles: tuple[str, str] | None = None,
     width: int = 1500,
     height: int = 700,
     trajectory_trace_alpha: float = 0.16,
@@ -54,6 +56,7 @@ def time_slice_html(
     mask : (N_e, T) bool
     time_values : (T,) float — hpf values
     labels : (N_e,) str, optional
+    label_map : raw label → display label mapping, optional
     color_map : label → hex color string, auto-generated if None
     embryo_ids : (N_e,) str, optional — shown in hover tooltip
     output_path : if given, writes self-contained HTML and returns the Figure
@@ -61,6 +64,8 @@ def time_slice_html(
     add_slice_panel : if True (default), show a 2D cross-section panel on the
         right that updates with the slider. If False, only the 3D overview is
         shown, filling the full figure width.
+    subplot_titles : optional custom subplot titles. Defaults to
+        ("3D overview", "Current time slice") when the slice panel is enabled.
     trajectory_trace_alpha : opacity of the background trajectory lines in the 3D overview
     current_time_marker_alpha : opacity of highlighted current-time points in the 3D overview
     slice_marker_alpha : opacity of points in the 2D slice panel
@@ -100,7 +105,8 @@ def time_slice_html(
     if marker_size_2d is not None:
         slice_marker_size = int(marker_size_2d)
 
-    color_map = _resolve_color_map(labels, color_map)
+    labels = _apply_label_map(labels, label_map)
+    color_map = _resolve_color_map(labels, color_map, label_map=label_map)
     unique_labels = list(color_map.keys()) if labels is not None else [None]
 
     def _hover_text(i: int, z: float | None = None) -> str:
@@ -125,11 +131,14 @@ def time_slice_html(
     # -----------------------------------------------------------------------
     # Subplot layout — 1 or 2 columns depending on add_slice_panel.
     # -----------------------------------------------------------------------
+    if subplot_titles is None:
+        subplot_titles = ("3D overview", "Current time slice")
+
     if add_slice_panel:
         fig = make_subplots(
             rows=1, cols=2,
             specs=[[{"type": "scene"}, {"type": "xy"}]],
-            subplot_titles=("3D overview", "Current time slice"),
+            subplot_titles=subplot_titles,
             horizontal_spacing=0.06,
             column_widths=[0.55, 0.45],
         )
@@ -137,7 +146,7 @@ def time_slice_html(
         fig = make_subplots(
             rows=1, cols=1,
             specs=[[{"type": "scene"}]],
-            subplot_titles=("3D overview",),
+            subplot_titles=(subplot_titles[0],),
         )
 
     for ann in fig.layout.annotations:
@@ -184,17 +193,26 @@ def time_slice_html(
 
         fig.add_trace(go.Scatter3d(
             x=xs, y=ys, z=zs,
-            mode="lines+markers",
+            mode="lines",
             name=str(lbl) if lbl is not None else "unknown",
             legendgroup=str(lbl),
             showlegend=False,
             line=dict(color=color, width=1.5),
+            opacity=trajectory_trace_alpha,
+            hoverinfo="skip",
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter3d(
+            x=xs, y=ys, z=zs,
+            mode="markers",
+            name=str(lbl) if lbl is not None else "unknown",
+            legendgroup=str(lbl),
+            showlegend=False,
             marker=dict(
                 color=color,
                 size=trajectory_marker_size,
-                opacity=min(trajectory_marker_alpha / max(trajectory_trace_alpha, 1e-6), 1.0),
+                opacity=trajectory_marker_alpha,
             ),
-            opacity=trajectory_trace_alpha,
+            opacity=1.0,
             text=hover_texts,
             hovertemplate="%{text}<extra></extra>",
         ), row=1, col=1)
@@ -368,10 +386,13 @@ def time_slice_html(
 def _resolve_color_map(
     labels: np.ndarray | None,
     color_map: dict[str, str] | None,
+    label_map: dict[str, str] | None = None,
 ) -> dict[str, str]:
     if labels is None:
         return {}
     if color_map is not None:
+        if label_map:
+            return {label_map.get(str(k), str(k)): v for k, v in color_map.items()}
         return {str(k): v for k, v in color_map.items()}
     try:
         import plotly.express as px
@@ -382,3 +403,11 @@ def _resolve_color_map(
     unique = sorted(np.unique(labels).tolist())
     return {lbl: palette[i % len(palette)] for i, lbl in enumerate(unique)}
 
+
+def _apply_label_map(
+    labels: np.ndarray | None,
+    label_map: dict[str, str] | None,
+) -> np.ndarray | None:
+    if labels is None or not label_map:
+        return labels
+    return np.asarray([label_map.get(str(label), str(label)) for label in labels], dtype=object)

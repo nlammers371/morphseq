@@ -110,8 +110,11 @@ def _plot_features_over_time_subplot(
     smooth_params: Optional[Dict] = None,
     highlight_ids: Optional[Set[str]] = None,
     id_style_lookup: Optional[Dict[str, IdTraceStyle]] = None,
+    label_map: Optional[Dict[Any, str]] = None,
+    style: Optional[StyleSpec] = None,
 ) -> SubplotData:
     """Plot Features Over Time Subplot (internal IR builder for one facet cell)."""
+    style = style or default_style()
     # Determine color groups
     if color_by and color_by in df.columns:
         mask = pd.Series(True, index=df.index)
@@ -140,6 +143,7 @@ def _plot_features_over_time_subplot(
             continue
 
         color = color_lookup.get(group_val, STANDARD_PALETTE[0])
+        label_value = label_map.get(str(group_val), str(group_val)) if label_map else str(group_val)
         
         # Individual traces
         if show_individual:
@@ -148,8 +152,8 @@ def _plot_features_over_time_subplot(
                     x=traj['times'], y=traj['metrics'],
                     style=TraceStyle(
                         color=color,
-                        alpha=0.2,
-                        width=0.8,
+                        alpha=style.individual_alpha,
+                        width=style.individual_width,
                         zorder=2,
                     ),
                     show_legend=False,
@@ -157,7 +161,7 @@ def _plot_features_over_time_subplot(
                 ))
         
         # Legend: show once per group across all subplots
-        label = str(group_val) if group_val is not None else trend_statistic
+        label = label_value if group_val is not None else trend_statistic
         legend_key = f"{y_col}_{group_val}" if group_val is not None else f"{y_col}_agg"
         show_legend = legend_key not in legend_tracker
         if show_legend:
@@ -178,7 +182,7 @@ def _plot_features_over_time_subplot(
                     x=band_t, y=band_c,
                     band_lower=band_c - band_e,
                     band_upper=band_c + band_e,
-                    style=TraceStyle(color=color, alpha=0.2, width=0, zorder=3),
+                    style=TraceStyle(color=color, alpha=style.band_alpha, width=0, zorder=3),
                     render_as='band',
                     show_legend=False,
                 ))
@@ -192,7 +196,7 @@ def _plot_features_over_time_subplot(
             mpl_ls, _ = resolve_linestyle(trend_linestyle)
             traces.append(TraceData(
                 x=np.array(trend_t), y=np.array(trend_v),
-                style=TraceStyle(color=color, alpha=1.0, width=3.5, linestyle=mpl_ls, zorder=5),
+                style=TraceStyle(color=color, alpha=style.trend_alpha, width=style.trend_width, linestyle=mpl_ls, zorder=5),
                 label=label,
                 legend_group=legend_key,
                 show_legend=show_legend,
@@ -252,6 +256,7 @@ def plot_feature_over_time(
     id_col: str = 'embryo_id',
     color_by: Optional[str] = None,
     color_lookup: Optional[Dict[Any, str]] = None,  # ← USER PROVIDES domain-specific colors
+    label_map: Optional[Dict[Any, str]] = None,
     # Faceting (consistent API)
     facet_row: Optional[str] = None,
     facet_col: Optional[str] = None,
@@ -453,6 +458,8 @@ def plot_feature_over_time(
             smooth_params=smooth_params,
             highlight_ids=normalized_highlight_ids,
             id_style_lookup=normalized_id_styles,
+            label_map=label_map,
+            style=style,
         )
         if xlim is not None:
             subplot.xlim = tuple(float(v) for v in xlim)
