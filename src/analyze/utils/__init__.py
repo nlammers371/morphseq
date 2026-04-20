@@ -63,15 +63,6 @@ from .pca import (
     subtract_wt_reference,
 )
 
-# Data containers
-from .data_containers import (
-    BinObject,
-    FeatureSpec,
-    InputRef,
-    ReducerSpec,
-    SupportReport,
-)
-
 # Note: Plotting utilities are now at src.analyze.viz.plotting
 # To avoid circular imports, they are not imported here.
 # Use: from src.analyze.viz.plotting import plot_feature_over_time
@@ -106,10 +97,4 @@ __all__ = [
     "fit_transform_pca",
     "compute_wt_reference_by_time",
     "subtract_wt_reference",
-    # Data containers
-    "BinObject",
-    "FeatureSpec",
-    "InputRef",
-    "ReducerSpec",
-    "SupportReport",
 ]

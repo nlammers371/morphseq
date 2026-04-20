@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..specs import InputRef, ReducerSpec
+from ...specs import InputRef, ReducerSpec
 from .registry import register_reducer
 
 

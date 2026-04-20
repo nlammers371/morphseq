@@ -1,21 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import ceil
 from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
 
-from ..binning import bins_in_time_window
-from .reducers import (
-    get_reducer,
-    make_centered_reducer,
-    make_group_centered_reducer,
-    make_group_difference_reducer,
-)
-from .reports import SupportReport
-from .specs import FeatureSpec, InputRef, LevelName, ReducerSpec
+from .specs import FeatureSpec, LevelName
 
 
 _RESERVED_COLUMNS = {
@@ -27,14 +18,6 @@ _RESERVED_COLUMNS = {
     "n_frames",
     "bin_width_seconds",
 }
-
-
-def _as_tuple(value: Iterable[Any] | Any) -> tuple[Any, ...]:
-    if isinstance(value, tuple):
-        return value
-    if isinstance(value, list):
-        return tuple(value)
-    return (value,)
 
 
 def _infer_feature_specs(df: pd.DataFrame, embryo_id_col: str, time_col: str) -> list[FeatureSpec]:
@@ -171,17 +154,23 @@ class BinObject:
         if embryo_meta_cols is None:
             ignore = {embryo_id_col, time_col, "bin_id", "bin_start", "bin_end", "bin_center_time", "bin_width_seconds"}
             embryo_meta_cols = [c for c in raw_df.columns if c not in ignore and c not in set().union(*(spec.source_columns for spec in feature_specs))]
+        if embryo_meta_cols:
+            nunique = raw.groupby(embryo_id_col)[embryo_meta_cols].nunique(dropna=False)
+            inconsistent = nunique[(nunique > 1).any(axis=1)]
+            if not inconsistent.empty:
+                offending = {}
+                for eid, row in inconsistent.iterrows():
+                    bad_cols = [c for c, n in row.items() if n > 1]
+                    offending[str(eid)] = bad_cols
+                raise ValueError(
+                    f"embryo_meta columns vary within embryo_id; each must be constant per embryo. "
+                    f"Offending embryo_id -> columns: {offending}"
+                )
         embryo_meta = raw[[embryo_id_col] + embryo_meta_cols].drop_duplicates(subset=[embryo_id_col]).copy()
 
-        levels = LevelCollection(binned=binned, raw=raw, bin_meta=bin_meta, embryo_meta=embryo_meta, cross_bin=pd.DataFrame())
+        cross_bin = embryo_meta[[embryo_id_col]].copy()
+        levels = LevelCollection(binned=binned, raw=raw, bin_meta=bin_meta, embryo_meta=embryo_meta, cross_bin=cross_bin)
         return cls(levels=levels, embryo_id_col=embryo_id_col, time_col=time_col, bin_width=bin_width, _feature_specs=feature_specs)
-
-    def _check_key_collision(self, key: str, overwrite: bool = False) -> None:
-        if overwrite:
-            return
-        for level in ["raw", "binned", "bin_meta", "embryo_meta", "cross_bin"]:
-            if key in self.levels._level_columns(level):
-                raise ValueError(f"Key {key!r} already exists in level {level!r}")
 
     def _find_key_level(self, key: str) -> str | None:
         for level in ["raw", "binned", "bin_meta", "embryo_meta", "cross_bin"]:
@@ -191,9 +180,11 @@ class BinObject:
 
     def _normalize_level(self, level: str | LevelName) -> str:
         level_name = str(level)
-        valid = {"raw", "binned", "bin_meta", "embryo_meta", "cross_bin"}
+        valid = {"binned", "bin_meta", "embryo_meta", "cross_bin"}
         if level_name not in valid:
-            raise ValueError(f"Unknown level {level!r}; expected one of {sorted(valid)}")
+            raise ValueError(
+                f"Cannot write to level {level!r}; expected one of {sorted(valid)} (raw is read-only)"
+            )
         return level_name
 
     def _level_grain_columns(self, level: str) -> list[str]:
@@ -202,6 +193,41 @@ class BinObject:
         if level in {"embryo_meta", "cross_bin"}:
             return [self.embryo_id_col]
         raise ValueError(f"Unknown level {level!r}")
+
+    def _coerce_feature_values(self, level: str, values: pd.Series | pd.DataFrame, key: str) -> pd.DataFrame:
+        grain_cols = self._level_grain_columns(level)
+
+        if isinstance(values, pd.Series):
+            series = values.rename(key)
+            if len(grain_cols) == 1:
+                if series.index.name != grain_cols[0]:
+                    raise KeyError(f"Series index must be named {grain_cols[0]!r} for level {level!r}")
+            else:
+                if not isinstance(series.index, pd.MultiIndex) or list(series.index.names) != grain_cols:
+                    raise KeyError(f"Series index must be a MultiIndex named {grain_cols} for level {level!r}")
+            return series.reset_index()[grain_cols + [key]].copy()
+
+        if isinstance(values, pd.DataFrame):
+            incoming = values.copy()
+            if all(c in incoming.columns for c in grain_cols):
+                pass
+            elif len(grain_cols) == 1 and incoming.index.name == grain_cols[0]:
+                incoming = incoming.reset_index()
+            elif isinstance(incoming.index, pd.MultiIndex) and list(incoming.index.names) == grain_cols:
+                incoming = incoming.reset_index()
+            else:
+                raise KeyError(f"DataFrame must include grain columns {grain_cols} as columns or index names")
+
+            if key not in incoming.columns:
+                value_cols = [c for c in incoming.columns if c not in grain_cols]
+                if len(value_cols) != 1:
+                    raise ValueError(
+                        f"DataFrame values must contain exactly one feature column when key {key!r} is absent"
+                    )
+                incoming = incoming.rename(columns={value_cols[0]: key})
+            return incoming[grain_cols + [key]].copy()
+
+        raise TypeError("values must be a pandas Series or DataFrame")
 
     def _validate_write_contract(self, *, level: str, key: str, overwrite: bool) -> None:
         owner = self._find_key_level(key)
@@ -235,12 +261,20 @@ class BinObject:
         if duplicates.any():
             raise ValueError(f"Incoming values contain duplicate rows at level grain {grain_cols}")
 
+        current = getattr(self.levels, level)
+        if not current.empty:
+            current_keys = set(map(tuple, current[grain_cols].itertuples(index=False, name=None)))
+            incoming_keys = set(map(tuple, values_df[grain_cols].itertuples(index=False, name=None)))
+            extra = incoming_keys - current_keys
+            if extra:
+                raise ValueError(
+                    f"Incoming values reference unknown grain rows for level {level!r}: {sorted(extra)}"
+                )
+
         for key in feature_cols:
             self._validate_write_contract(level=level, key=key, overwrite=overwrite)
 
         incoming = values_df[grain_cols + feature_cols].copy()
-        current = getattr(self.levels, level)
-
         if current.empty:
             setattr(self.levels, level, incoming)
             return
@@ -250,7 +284,7 @@ class BinObject:
         if to_drop:
             base = base.drop(columns=to_drop)
 
-        merged = base.merge(incoming, on=grain_cols, how="outer")
+        merged = base.merge(incoming, on=grain_cols, how="left", validate="one_to_one")
         setattr(self.levels, level, merged)
 
     def add_feature(
@@ -277,40 +311,7 @@ class BinObject:
             Whether replacing an existing key in the same level is allowed.
         """
         level_name = self._normalize_level(level)
-        grain_cols = self._level_grain_columns(level_name)
-
-        if isinstance(values, pd.Series):
-            if values.name is None:
-                series = values.rename(key)
-            else:
-                series = values.rename(key)
-            incoming = series.reset_index()
-            if key not in incoming.columns:
-                incoming[key] = series.to_numpy()
-        elif isinstance(values, pd.DataFrame):
-            incoming = values.copy()
-            if all(c in incoming.columns for c in grain_cols):
-                pass
-            elif isinstance(incoming.index, pd.MultiIndex) and list(incoming.index.names) == grain_cols:
-                incoming = incoming.reset_index()
-            elif incoming.index.name == grain_cols[0] and len(grain_cols) == 1:
-                incoming = incoming.reset_index()
-            else:
-                raise KeyError(
-                    f"DataFrame values must include grain columns {grain_cols} as columns or index names"
-                )
-
-            value_cols = [c for c in incoming.columns if c not in grain_cols]
-            if key in incoming.columns:
-                incoming = incoming[grain_cols + [key]].copy()
-            else:
-                if len(value_cols) != 1:
-                    raise ValueError(
-                        f"DataFrame values must contain exactly one feature column when key {key!r} is absent"
-                    )
-                incoming = incoming.rename(columns={value_cols[0]: key})
-        else:
-            raise TypeError("values must be a pandas Series or DataFrame")
+        incoming = self._coerce_feature_values(level_name, values, key)
 
         self._upsert_level_features(
             level=level_name,
@@ -318,368 +319,3 @@ class BinObject:
             feature_cols=[key],
             overwrite=overwrite,
         )
-
-    def _resolve_reducer(self, reducer: str | ReducerSpec) -> ReducerSpec:
-        return get_reducer(reducer)
-
-    def _select_bins(self, time_window: tuple[float, float]) -> pd.DataFrame:
-        meta = self.levels.bin_meta.drop_duplicates(subset=["bin_id"]).sort_values("bin_center_time").copy()
-        mask = bins_in_time_window(meta["bin_start"].to_numpy(), meta["bin_end"].to_numpy(), time_window)
-        return meta.loc[mask].copy()
-
-    def _required_bins(self, *, bins_in_scope: int, reducer: ReducerSpec, bin_fract: float, min_bins: int | None) -> int:
-        required_bins = max(reducer.math_min_bins, ceil(bin_fract * bins_in_scope), min_bins or 0)
-        if required_bins > bins_in_scope:
-            raise ValueError(
-                f"required_bins={required_bins} exceeds bins_in_scope={bins_in_scope} for reducer {reducer.name!r}"
-            )
-        return required_bins
-
-    def _resolve_consumed_inputs(self, group: pd.DataFrame, reducer: ReducerSpec, feature_key: str) -> dict[str, Any]:
-        resolved: dict[str, Any] = {}
-        for ref in reducer.consumes:
-            if ref.level == "binned":
-                key = feature_key if ref.key == "target" else ref.key
-                if key not in group.columns:
-                    raise KeyError(f"Missing binned key {key!r}")
-                resolved[ref.key] = group[key]
-            elif ref.level == "bin_meta":
-                if ref.key not in group.columns:
-                    raise KeyError(f"Missing bin_meta key {ref.key!r}")
-                resolved[ref.key] = group[ref.key]
-            elif ref.level == "embryo_meta":
-                meta_row = self.levels.embryo_meta.set_index(self.embryo_id_col).loc[group[self.embryo_id_col].iloc[0]]
-                if ref.key not in meta_row.index:
-                    raise KeyError(f"Missing embryo_meta key {ref.key!r}")
-                resolved[ref.key] = pd.Series([meta_row[ref.key]] * len(group), index=group.index)
-            else:
-                raise ValueError(f"cross_bin reducers do not consume raw inputs in this implementation: {ref}")
-        return resolved
-
-    def _apply_reducer(self, group: pd.DataFrame, reducer: ReducerSpec, feature_key: str) -> dict[str, Any]:
-        if reducer.func is None:
-            raise ValueError(f"Reducer {reducer.name!r} has no callable implementation")
-        resolved = self._resolve_consumed_inputs(group, reducer, feature_key)
-        return reducer.func(group, resolved)
-
-    def _cross_bin_output_name(self, feature_key: str, reducer_name: str, time_window: tuple[float, float], suffix: str | None = None) -> str:
-        feature_id = feature_key.removeprefix("bin__")
-        base = f"xbin__{feature_id}__{reducer_name}__{int(time_window[0])}_{int(time_window[1])}"
-        if suffix:
-            base += f"__{suffix}"
-        return base
-
-    def validate_reducer(self, reducer: str | ReducerSpec, feature_key: str, *, time_window: tuple[float, float]) -> None:
-        reducer = self._resolve_reducer(reducer)
-        if feature_key not in self.levels.binned.columns:
-            raise KeyError(f"Unknown binned feature {feature_key!r}")
-        bins = self._select_bins(time_window)
-        self._required_bins(bins_in_scope=len(bins), reducer=reducer, bin_fract=1.0, min_bins=None)
-        missing_inputs = []
-        for ref in reducer.consumes:
-            if ref.level == "binned" and ref.key != "target" and ref.key not in self.levels.binned.columns:
-                missing_inputs.append(f"binned:{ref.key}")
-            if ref.level == "bin_meta" and ref.key not in self.levels.bin_meta.columns:
-                missing_inputs.append(f"bin_meta:{ref.key}")
-            if ref.level == "embryo_meta" and ref.key not in self.levels.embryo_meta.columns:
-                missing_inputs.append(f"embryo_meta:{ref.key}")
-        if missing_inputs:
-            raise KeyError(f"Reducer {reducer.name!r} is missing required inputs: {missing_inputs}")
-
-    def summarize_cross_bin_by_group(
-        self,
-        *,
-        features: str,
-        reducer: str | ReducerSpec = "mean_equal_bin",
-        time_window: tuple[float, float],
-        group_key: str,
-        bin_fract: float = 1.0,
-        min_bins: int | None = None,
-    ) -> pd.DataFrame:
-        """Compute group-level summary from a cross-bin reduction result.
-
-        Returns one row per group with the mean of the embryo-level reduced value.
-        """
-        meta_df, _ = self.cross_bin_reduce(
-            features=features,
-            reducer=reducer,
-            time_window=time_window,
-            bin_fract=bin_fract,
-            min_bins=min_bins,
-            overwrite=True,
-        )
-        if meta_df.empty:
-            raise ValueError("No embryos retained; cannot compute group summary")
-        value_cols = [c for c in meta_df.columns if c.startswith("xbin__")]
-        if len(value_cols) != 1:
-            raise ValueError(f"Expected exactly one xbin output column, found {value_cols}")
-        value_col = value_cols[0]
-        if group_key not in self.levels.embryo_meta.columns:
-            raise KeyError(f"Unknown embryo_meta group key {group_key!r}")
-        group_df = self.levels.embryo_meta[[self.embryo_id_col, group_key]].copy()
-        merged = meta_df.merge(group_df, on=self.embryo_id_col, how="left")
-        return (
-            merged.groupby(group_key, dropna=False)[value_col]
-            .mean()
-            .reset_index()
-            .rename(columns={value_col: "group_mean"})
-        )
-
-    def build_centered_reducer_from_group(
-        self,
-        *,
-        features: str,
-        time_window: tuple[float, float],
-        group_key: str,
-        reference_group: str,
-        base_reducer: str | ReducerSpec = "mean_equal_bin",
-        reducer_name: str | None = None,
-        bin_fract: float = 1.0,
-        min_bins: int | None = None,
-    ) -> ReducerSpec:
-        """Auto-create a centered reducer using one reference group baseline.
-
-        Typical use: center all embryos by WT mean in the selected window.
-        """
-        summary = self.summarize_cross_bin_by_group(
-            features=features,
-            reducer=base_reducer,
-            time_window=time_window,
-            group_key=group_key,
-            bin_fract=bin_fract,
-            min_bins=min_bins,
-        )
-        idx = summary[group_key].astype(str) == str(reference_group)
-        if not idx.any():
-            raise KeyError(f"Reference group {reference_group!r} not found in retained cohort")
-        baseline_value = float(summary.loc[idx, "group_mean"].iloc[0])
-        name = reducer_name or f"centered__{get_reducer(base_reducer).name}__{group_key}_{reference_group}"
-        return make_centered_reducer(
-            name=name,
-            base_reducer=base_reducer,
-            baseline_value=baseline_value,
-            register=True,
-        )
-
-    def build_group_centered_reducer(
-        self,
-        *,
-        features: str,
-        time_window: tuple[float, float],
-        group_key: str,
-        base_reducer: str | ReducerSpec = "mean_equal_bin",
-        reducer_name: str | None = None,
-        bin_fract: float = 1.0,
-        min_bins: int | None = None,
-    ) -> ReducerSpec:
-        """Auto-create a group-centered reducer using per-group cohort means."""
-        summary = self.summarize_cross_bin_by_group(
-            features=features,
-            reducer=base_reducer,
-            time_window=time_window,
-            group_key=group_key,
-            bin_fract=bin_fract,
-            min_bins=min_bins,
-        )
-        baseline_by_group = {
-            str(row[group_key]): float(row["group_mean"])
-            for _, row in summary.iterrows()
-        }
-        name = reducer_name or f"group_centered__{get_reducer(base_reducer).name}__{group_key}"
-        return make_group_centered_reducer(
-            name=name,
-            group_key=group_key,
-            baseline_by_group=baseline_by_group,
-            base_reducer=base_reducer,
-            register=True,
-        )
-
-    def build_group_difference_reducer(
-        self,
-        *,
-        features: str,
-        time_window: tuple[float, float],
-        group_key: str,
-        reference_group: str,
-        base_reducer: str | ReducerSpec = "mean_equal_bin",
-        reducer_name: str | None = None,
-        bin_fract: float = 1.0,
-        min_bins: int | None = None,
-    ) -> ReducerSpec:
-        """Auto-create reducer returning value - mean(reference_group) for all groups."""
-        summary = self.summarize_cross_bin_by_group(
-            features=features,
-            reducer=base_reducer,
-            time_window=time_window,
-            group_key=group_key,
-            bin_fract=bin_fract,
-            min_bins=min_bins,
-        )
-        mean_by_group = {
-            str(row[group_key]): float(row["group_mean"])
-            for _, row in summary.iterrows()
-        }
-        name = reducer_name or f"group_diff__{get_reducer(base_reducer).name}__vs_{group_key}_{reference_group}"
-        return make_group_difference_reducer(
-            name=name,
-            group_key=group_key,
-            reference_group=str(reference_group),
-            mean_by_group=mean_by_group,
-            base_reducer=base_reducer,
-            register=True,
-        )
-
-    def cross_bin_reduce(
-        self,
-        *,
-        features: str,
-        reducer: str | ReducerSpec,
-        time_window: tuple[float, float],
-        bin_fract: float = 1.0,
-        min_bins: int | None = None,
-        verbose: bool = False,
-        label_col: str | None = None,
-        overwrite: bool = False,
-    ) -> tuple[pd.DataFrame, SupportReport]:
-        reducer = self._resolve_reducer(reducer)
-        if features not in self.levels.binned.columns:
-            raise KeyError(f"Unknown binned feature {features!r}")
-
-        bins = self._select_bins(time_window)
-        required_bins = self._required_bins(bins_in_scope=len(bins), reducer=reducer, bin_fract=bin_fract, min_bins=min_bins)
-        selected_bin_ids = tuple(bins["bin_id"].tolist())
-        selected_bin_centers = tuple(bins["bin_center_time"].astype(float).tolist())
-
-        working = self.levels.binned.merge(bins[["bin_id"]], on="bin_id", how="inner")
-        working = working.sort_values([self.embryo_id_col, "bin_center_time"])
-        present = working[working[features].notna()].groupby(self.embryo_id_col)["bin_id"].nunique()
-        kept = present[present >= required_bins].index
-        kept_df = working[working[self.embryo_id_col].isin(kept)].copy()
-
-        output_name = self._cross_bin_output_name(features, reducer.name, time_window)
-
-        rows: list[dict[str, Any]] = []
-        dropped = tuple(sorted(set(working[self.embryo_id_col].astype(str).unique()) - set(map(str, kept))))
-        drop_reasons = {eid: f"bins_present<{required_bins}" for eid in dropped}
-
-        for embryo_id, group in kept_df.groupby(self.embryo_id_col, sort=True):
-            result = self._apply_reducer(group, reducer, features)
-            row = {self.embryo_id_col: embryo_id, output_name: result["value"]}
-            rows.append(row)
-
-        meta_df = pd.DataFrame(rows)
-        if not meta_df.empty:
-            self._upsert_level_features(
-                level="cross_bin",
-                values_df=meta_df,
-                feature_cols=[output_name],
-                overwrite=overwrite,
-            )
-
-        class_drop_warning = None
-        if label_col and label_col in self.levels.embryo_meta.columns and not meta_df.empty:
-            embryo_labels = self.levels.embryo_meta.set_index(self.embryo_id_col)[label_col]
-            kept_labels = embryo_labels.loc[embryo_labels.index.intersection(pd.Index(meta_df[self.embryo_id_col]))]
-            drop_rates = {}
-            for label in embryo_labels.dropna().astype(str).unique():
-                total = int((embryo_labels.astype(str) == label).sum())
-                kept_n = int((kept_labels.astype(str) == label).sum())
-                drop_rates[label] = 1.0 - (kept_n / total if total else 0.0)
-            if drop_rates and (max(drop_rates.values()) - min(drop_rates.values()) > 0.15):
-                class_drop_warning = "Class-imbalanced exclusions detected"
-
-        report = SupportReport(
-            time_window=time_window,
-            selected_bin_ids=selected_bin_ids,
-            selected_bin_centers=selected_bin_centers,
-            bins_in_scope=len(bins),
-            required_bins=required_bins,
-            bin_fract=bin_fract,
-            min_bins=min_bins,
-            math_min_bins=reducer.math_min_bins,
-            kept_embryos=tuple(meta_df[self.embryo_id_col].astype(str).tolist()) if not meta_df.empty else tuple(),
-            dropped_embryos=dropped,
-            drop_reasons=drop_reasons,
-            confounding_warning=class_drop_warning,
-            reducer_name=reducer.name,
-            consumed_inputs=tuple(f"{ref.level}:{ref.key}" for ref in reducer.consumes),
-            provenance={
-                "feature": features,
-                "output_name": output_name,
-                "reducer_version": reducer.version,
-            },
-        )
-
-        if verbose:
-            print(report.as_dict())
-        return meta_df, report
-
-    def cross_bin_reduce_batch(
-        self,
-        *,
-        features: list[str],
-        reducer: str | ReducerSpec,
-        time_window: tuple[float, float],
-        bin_fract: float = 1.0,
-        min_bins: int | None = None,
-        verbose: bool = False,
-        label_col: str | None = None,
-        overwrite: bool = False,
-    ) -> tuple[pd.DataFrame, SupportReport]:
-        reducer = self._resolve_reducer(reducer)
-        bins = self._select_bins(time_window)
-        required_bins = self._required_bins(bins_in_scope=len(bins), reducer=reducer, bin_fract=bin_fract, min_bins=min_bins)
-        selected_bin_ids = tuple(bins["bin_id"].tolist())
-        selected_bin_centers = tuple(bins["bin_center_time"].astype(float).tolist())
-
-        working = self.levels.binned.merge(bins[["bin_id"]], on="bin_id", how="inner")
-        working = working.sort_values([self.embryo_id_col, "bin_center_time"])
-        valid_mask = working[features].notna().all(axis=1)
-        present = working[valid_mask].groupby(self.embryo_id_col)["bin_id"].nunique()
-        kept = present[present >= required_bins].index
-        kept_df = working[working[self.embryo_id_col].isin(kept)].copy()
-
-        rows: list[dict[str, Any]] = []
-        output_names = {f: self._cross_bin_output_name(f, reducer.name, time_window) for f in features}
-
-        dropped = tuple(sorted(set(working[self.embryo_id_col].astype(str).unique()) - set(map(str, kept))))
-        drop_reasons = {eid: f"bins_present<{required_bins}" for eid in dropped}
-        for embryo_id, group in kept_df.groupby(self.embryo_id_col, sort=True):
-            row = {self.embryo_id_col: embryo_id}
-            for feature in features:
-                result = self._apply_reducer(group, reducer, feature)
-                row[output_names[feature]] = result["value"]
-            rows.append(row)
-
-        meta_df = pd.DataFrame(rows)
-        if not meta_df.empty:
-            self._upsert_level_features(
-                level="cross_bin",
-                values_df=meta_df,
-                feature_cols=list(output_names.values()),
-                overwrite=overwrite,
-            )
-
-        report = SupportReport(
-            time_window=time_window,
-            selected_bin_ids=selected_bin_ids,
-            selected_bin_centers=selected_bin_centers,
-            bins_in_scope=len(bins),
-            required_bins=required_bins,
-            bin_fract=bin_fract,
-            min_bins=min_bins,
-            math_min_bins=reducer.math_min_bins,
-            kept_embryos=tuple(meta_df[self.embryo_id_col].astype(str).tolist()) if not meta_df.empty else tuple(),
-            dropped_embryos=dropped,
-            drop_reasons=drop_reasons,
-            reducer_name=reducer.name,
-            consumed_inputs=tuple(f"{ref.level}:{ref.key}" for ref in reducer.consumes),
-            provenance={
-                "features": tuple(features),
-                "output_names": output_names,
-                "reducer_version": reducer.version,
-            },
-        )
-        if verbose:
-            print(report.as_dict())
-        return meta_df, report

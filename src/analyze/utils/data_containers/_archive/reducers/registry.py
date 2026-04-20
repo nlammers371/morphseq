@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..specs import ReducerSpec
+from ...specs import ReducerSpec
 
 
 _REGISTRY: dict[str, ReducerSpec] = {}
