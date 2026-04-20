@@ -4,6 +4,7 @@ Visualization styling utilities and shared color palettes.
 
 from .lookup import ColorLookup, build_suffix_color_lookup
 from .color_utils import (
+    ColorPreset,
     STANDARD_PALETTE,
     normalize_color,
     to_rgba_string,
@@ -13,6 +14,7 @@ from .color_utils import (
     build_ordered_color_lookup,
     resolve_color_lookup,
     build_genotype_color_lookup,
+    build_color_preset,
 )
 from .genotype_colors import (
     SPECIAL_GENOTYPE_COLORS,
@@ -29,6 +31,7 @@ from .color_mapping_config import (
 __all__ = [
     'ColorLookup',
     'build_suffix_color_lookup',
+    'ColorPreset',
     'STANDARD_PALETTE',
     'normalize_color',
     'to_rgba_string',
@@ -38,6 +41,7 @@ __all__ = [
     'build_ordered_color_lookup',
     'resolve_color_lookup',
     'build_genotype_color_lookup',
+    'build_color_preset',
     'SPECIAL_GENOTYPE_COLORS',
     'extract_genotype_suffix',
     'get_known_genotype_color',

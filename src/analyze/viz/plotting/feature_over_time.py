@@ -17,7 +17,8 @@ from analyze.utils.data_processing import get_trajectories_for_group, get_global
 from analyze.utils.stats import compute_trend_line
 from analyze.viz.styling import (
     STANDARD_PALETTE,
-    build_ordered_color_lookup,
+    ColorPreset,
+    resolve_color_lookup,
 )
 
 # Engine imports
@@ -68,21 +69,25 @@ def _build_color_lookup(
     label_map: Optional[Dict[Any, str]] = None,
     color_lookup: Optional[Dict[Any, str]] = None,
     palette: Optional[List[str]] = None,
+    color_preset: Optional[ColorPreset] = None,
+    color_mode: str = "auto",
 ) -> Dict[Any, str]:
-    """Build or use provided color lookup (palette-first).
+    """Build or use provided color lookup (auto genotype-aware by default).
     
     Private helper. If color_lookup provided, use it.
-    Otherwise, auto-assign from palette.
+    Otherwise, resolve via preset or the requested color mode.
     """
     if color_by is None or color_by not in df.columns:
         return {}
     
     unique_vals = list(df[color_by].dropna().unique())
-    return build_ordered_color_lookup(
+    return resolve_color_lookup(
         unique_vals,
-        label_map=label_map,
         color_lookup=color_lookup,
         palette=palette or STANDARD_PALETTE,
+        color_preset=color_preset,
+        color_mode=color_mode,
+        label_map=label_map,
     )
 
 
@@ -119,7 +124,12 @@ def _plot_features_over_time_subplot(
         mask = pd.Series(True, index=df.index)
         for k, v in filter_dict.items():
             mask &= (df[k] == v)
-        groups = sorted(df.loc[mask, color_by].dropna().unique())
+        groups_raw = list(df.loc[mask, color_by].dropna().unique())
+        if color_preset is not None and color_preset.order:
+            groups = [v for v in color_preset.order if v in groups_raw]
+            groups.extend([v for v in groups_raw if v not in groups])
+        else:
+            groups = sorted(groups_raw)
     else:
         groups = [None]
     
@@ -257,6 +267,8 @@ def plot_feature_over_time(
     color_by: Optional[str] = None,
     color_lookup: Optional[Dict[Any, str]] = None,  # ← USER PROVIDES domain-specific colors
     label_map: Optional[Dict[Any, str]] = None,
+    color_preset: Optional[ColorPreset] = None,
+    color_mode: str = 'auto',
     # Faceting (consistent API)
     facet_row: Optional[str] = None,
     facet_col: Optional[str] = None,
@@ -297,8 +309,8 @@ def plot_feature_over_time(
 ) -> Any:
     """Plot feature(s) over time, optionally faceted.
     
-    100% DOMAIN-AGNOSTIC: Caller provides color_lookup for domain-specific coloring.
-    If color_lookup=None, auto-assigns colors from palette.
+    100% DOMAIN-AGNOSTIC: Defaults are genotype-aware via the shared resolver,
+    but callers can supply an explicit `color_lookup` or `color_preset`.
     
     Parameters
     ----------
@@ -317,6 +329,13 @@ def plot_feature_over_time(
     color_lookup : Dict[Any, str], optional
         Pre-built mapping from values in color_by column to hex colors.
         Use this to inject domain-specific coloring (e.g., genotype colors).
+    color_preset : ColorPreset, optional
+        Explicit reusable color preset object. This is the preferred path for
+        project palettes and talk figures.
+    color_mode : str, default='auto'
+        Fallback color strategy when no preset is supplied. Use 'auto' or
+        'genotype' for genotype-aware defaults, or 'palette' for generic
+        palette-first behavior.
     facet_row : str, optional
         Column to facet by rows
     facet_col : str, optional
@@ -407,8 +426,16 @@ def plot_feature_over_time(
         normalized_id_styles = {str(k): _coerce_embryo_trace_style(v) for k, v in id_style_lookup.items()}
         normalized_highlight_ids.update(normalized_id_styles.keys())
 
-    # Build color lookup (palette-first unless caller provides overrides)
-    color_lookup = _build_color_lookup(df, color_by, label_map, color_lookup, color_palette)
+    # Build color lookup (explicit lookup wins, then preset, then mode)
+    color_lookup = _build_color_lookup(
+        df,
+        color_by,
+        label_map,
+        color_lookup,
+        color_palette,
+        color_preset=color_preset,
+        color_mode=color_mode,
+    )
 
     # Determine facet values
     if isinstance(features, (list, tuple)):
