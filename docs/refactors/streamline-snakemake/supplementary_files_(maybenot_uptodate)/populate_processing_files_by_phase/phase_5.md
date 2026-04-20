@@ -16,6 +16,21 @@ schemas.
 - `experiment_metadata/{exp}/frame_contract.csv` (Phase 1) –
   calibration (`micrometers_per_pixel`, `frame_interval_s`).
 
+## Implementation Boundary
+
+Feature extraction should stay mostly plate-free. Plate metadata is merged once after the feature tables exist, at the feature/analysis boundary.
+
+- `plate_metadata.csv` is user input and first enters at the final feature merge, not in pre-segmentation contracts.
+- Core feature modules should stay operation-named and pure on in-memory tables.
+- Thin workflow wrappers should live in `feature_extraction/entrypoints/` once the split is applied.
+- Snakemake should call only the entrypoints, never the computational modules directly.
+- Logical invariants belong in the core operations; schema and file I/O belong at the wrapper boundary.
+
+Current state to preserve during the split:
+- `compute_stage_predictions.py` can remain plate-aware as a localized feature output, but it should not force a broad plate join across all feature modules.
+- `consolidate_features.py` is the right place to accept the final late metadata merge once all feature tables exist.
+- The package should avoid a vague `pipelines/` bucket once the layout is cleaned up.
+
 ---
 
 ## Outputs

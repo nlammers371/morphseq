@@ -709,6 +709,16 @@ Shared utilities for all segmentation methods:
 
 **Key principle:** Features operate on masks/tracking metadata (not raw snip pixels); the merge output is the single source consumed by all QC modules.
 
+**Implementation boundary for the feature split:**
+- Core operation modules stay at the package level with names that describe the computation, not the workflow.
+- Thin workflow wrappers should move into `feature_extraction/entrypoints/` once the split lands.
+- Snakemake should depend on wrappers only.
+- Feature modules should stay plate-free where possible and compute independently.
+- The first merge of plate metadata should happen after the feature tables are computed, at the feature/analysis boundary.
+- `stage_predictions` can remain plate-aware as an individual output, but it should not force an early broad merge into all feature modules.
+- Core operations should enforce mathematical/data invariants, while schema checks, file I/O, and `.validated` sentinels stay in the wrapper layer.
+- Avoid a generic `pipelines/` bucket once this is split; use well-named operation files and entrypoints instead.
+
 ---
 
 ### **quality_control/**
