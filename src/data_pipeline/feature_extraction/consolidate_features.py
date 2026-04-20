@@ -30,7 +30,7 @@ def consolidate_snip_features(
         kinematics_df: Pose and kinematics metrics
         fraction_alive_df: Viability metrics
         stage_df: Developmental stage predictions
-        metadata_df: Optional plate/scope metadata
+        metadata_df: Optional late-stage metadata enrichment table
 
     Returns:
         Consolidated features DataFrame with schema validation
@@ -166,7 +166,7 @@ def load_and_consolidate_features(
         kinematics_path: Path to pose_kinematics_metrics.csv
         fraction_alive_path: Path to fraction_alive.csv
         stage_path: Path to stage_predictions.csv
-        metadata_path: Optional path to scope_and_plate_metadata.csv
+        metadata_path: Optional path to late-stage metadata enrichment
         output_path: Optional path to save consolidated CSV
 
     Returns:

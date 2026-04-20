@@ -149,7 +149,7 @@ def _pick_cohorts(
     return selected, wt_sorted
 
 
-def _build_bin_frame_manifest(
+def _build_bin_frame_contract(
     df_window: pd.DataFrame,
     selected: pd.DataFrame,
     bins_hpf: Sequence[float],
@@ -418,7 +418,7 @@ def build_manifest(args: argparse.Namespace) -> None:
         n_holdout_wt=args.n_holdout_wt,
         n_mutants=args.n_mutants,
     )
-    bin_manifest = _build_bin_frame_manifest(
+    bin_manifest = _build_bin_frame_contract(
         df_window=df_window,
         selected=selected,
         bins_hpf=bins_hpf,
@@ -444,7 +444,7 @@ def build_manifest(args: argparse.Namespace) -> None:
     qc_path = output_root / "cohort_qc_table.csv"
     wt_ranked_path = output_root / "wt_ranked_candidates.csv"
     selected_path = output_root / "cohort_selected_embryos.csv"
-    bin_manifest_path = output_root / "cohort_bin_frame_manifest.csv"
+    bin_manifest_path = output_root / "cohort_bin_frame_contract.csv"
     transitions_path = output_root / "cohort_transition_manifest.csv"
 
     qc_df.to_csv(qc_path, index=False)

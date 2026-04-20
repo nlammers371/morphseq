@@ -15,7 +15,7 @@ What stays the same:
 What to update:
 1. Run ingest as scope-first (YX1 and Keyence remain separate through extraction/mapping).
 2. Keep materialization scope-specific and emit `stitched_image_index.csv` during building (reporter pattern).
-3. Validate and use `frame_manifest.csv` as the canonical pre-segmentation frame metadata table.
+3. Validate and use `frame_contract.csv` as the canonical pre-segmentation frame metadata table.
 4. Use canonical frame-level naming in checks:
    - `channel_id`
    - `channel_name_raw`
@@ -202,11 +202,11 @@ data_pipeline_output/                           # NEW PIPELINE OUTPUT ROOT
 ├── experiment_metadata/                        # PHASE 1 OUTPUTS (pipeline writes)
 │   └── {experiment_id}/
 │       ├── plate_metadata.csv [VALIDATED]
-│       ├── scope_metadata_raw.csv [VALIDATED]
+│       ├── scope_series_metadata_raw.csv [VALIDATED]
 │       ├── series_well_mapping.csv
-│       ├── scope_metadata_mapped.csv [VALIDATED]
+│       ├── scope_series_metadata_mapped.csv [VALIDATED]
 │       ├── stitched_image_index.csv [VALIDATED]
-│       └── frame_manifest.csv [VALIDATED]
+│       └── frame_contract.csv [VALIDATED]
 │
 ├── built_image_data/                           # PHASE 2 OUTPUTS (pipeline writes)
 │   └── {experiment_id}/
@@ -460,7 +460,7 @@ Note: the rule names below are illustrative; prefer the canonical rule names in 
   - `rule_build_yx1_stitched_images`
   - `rule_build_keyence_stitched_images`
   - `rule_validate_stitched_image_index`
-  - `rule_build_frame_manifest`
+  - `rule_build_frame_contract`
 
 - [ ] **Phase 3: Segmentation**
   - `rule_prepare_frames_for_sam2`
@@ -504,7 +504,7 @@ rule rule_extract_yx1_scope_metadata:
         expand(f"{RAW_DATA}/YX1/{{exp}}/{{well}}_Seq0001.nd2",
                exp=EXPERIMENTS, well=["A01"])
     output:
-        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_metadata_raw.csv"
+        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_series_metadata_raw.csv"
     shell:
         "\"$PYTHON\" -m data_pipeline.metadata_ingest.scope.yx1.extract_scope_metadata {input} {output}"
 
@@ -515,7 +515,7 @@ rule rule_apply_series_mapping_yx1:
         plate=rules.rule_extract_plate_metadata.output,
         mapping=rules.rule_map_series_to_wells_yx1.output
     output:
-        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_metadata_mapped.csv"
+        f"{DATA_ROOT}/experiment_metadata/{{exp}}/scope_series_metadata_mapped.csv"
     shell:
         "\"$PYTHON\" -m data_pipeline.metadata_ingest.scope.yx1.apply_series_mapping {input.scope} {input.plate} {input.mapping} {output}"
 ```
@@ -532,7 +532,7 @@ PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_gro
 # Run first 2 phases
 snakemake \
     --config data_root=data_pipeline_output \
-    --until build_frame_manifest \
+    --until build_frame_contract \
     -j 4
 
 # Validate Phase 1 outputs (metadata alignment)
@@ -542,7 +542,7 @@ snakemake \
 
 # Expected outputs
 ls data_pipeline_output/experiment_metadata/test_yx1_001/
-# Should show: plate_metadata.csv, scope_metadata_raw.csv, series_well_mapping.csv, scope_metadata_mapped.csv, stitched_image_index.csv, frame_manifest.csv
+# Should show: plate_metadata.csv, scope_series_metadata_raw.csv, series_well_mapping.csv, scope_series_metadata_mapped.csv, stitched_image_index.csv, frame_contract.csv
 ```
 
 ### Phase 3-8 Validation (Full Pipeline)

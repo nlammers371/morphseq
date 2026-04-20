@@ -38,7 +38,7 @@ def _resolve_rel_to_data_root(path_str: str, *, data_root: Path) -> Path:
 
 def run_segmentation_and_tracking(
     *,
-    frame_manifest_csv: Path,
+    frame_contract_csv: Path,
     experiment_id: str,
     well_id: str,
     output_root: Path,
@@ -72,7 +72,7 @@ def run_segmentation_and_tracking(
     else:
         candidate = requested_well_id
 
-    # Use the experiment-qualified well_id for storage to match frame_manifest keys.
+    # Use the experiment-qualified well_id for storage to match frame_contract keys.
     shard_dir = output_root / "segmentation_and_tracking" / str(experiment_id) / "per_well" / str(candidate)
     shard_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +83,7 @@ def run_segmentation_and_tracking(
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     # Load manifest and filter to BF frames for this well.
-    manifest = pd.read_csv(frame_manifest_csv)
+    manifest = pd.read_csv(frame_contract_csv)
     well_id_col = manifest["well_id"].astype(str)
     wanted = {str(requested_well_id), candidate}
     well_df = manifest[
@@ -101,12 +101,12 @@ def run_segmentation_and_tracking(
         well_df = well_df.head(int(max_frames)).reset_index(drop=True)
 
     manifest_well_id = str(well_df["well_id"].iloc[0])
-    # Canonical for contracts: match frame_manifest well_id.
+    # Canonical for contracts: match frame_contract well_id.
     canonical_well_id = manifest_well_id
     # Human-facing shorthand used in some IDs.
     well_slug = canonical_well_id.split("_")[-1]
     video_id = f"{experiment_id}_{well_slug}"
-    # frame_manifest well_index may be a string like "A01" (legacy). Normalize to 1-96 index.
+    # frame_contract well_index may be a string like "A01" (legacy). Normalize to 1-96 index.
     well_index_raw = str(well_df["well_index"].iloc[0])
     try:
         well_index = int(well_index_raw)

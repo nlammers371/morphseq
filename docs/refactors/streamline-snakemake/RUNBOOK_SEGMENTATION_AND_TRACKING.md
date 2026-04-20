@@ -1,7 +1,7 @@
 # Runbook: Phase 3 Segmentation + Tracking (segmentation_and_tracking)
 
 ## Scope
-This runbook executes Phase 3 segmentation + tracking from `frame_manifest.csv` and produces:
+This runbook executes Phase 3 segmentation + tracking from `frame_contract.csv` and produces:
 - per-well shards under `data_pipeline_output/segmentation_and_tracking/<exp>/per_well/...`
 - merged experiment contracts under `data_pipeline_output/segmentation_and_tracking/<exp>/contracts/...`
 - a symlink-only browse view under `data_pipeline_output/segmentation_and_tracking/<exp>/views/...`
@@ -17,8 +17,8 @@ PYTHON=/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_gro
 ```
 
 You must have Phase 2 frame contracts built:
-- `data_pipeline_output/experiment_metadata/<exp>/frame_manifest.csv`
-- `data_pipeline_output/experiment_metadata/<exp>/.frame_manifest.validated`
+- `data_pipeline_output/experiment_metadata/<exp>/frame_contract.csv`
+- `data_pipeline_output/experiment_metadata/<exp>/.frame_contract.validated`
 
 ## Dry run
 ```bash

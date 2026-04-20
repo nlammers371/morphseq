@@ -4,7 +4,7 @@
  Context
 
  The pipeline has metadata alignment (Phase 1-2) and frame
- contracts producing frame_manifest.csv. Phase 3 consumes that
+ contracts producing frame_contract.csv. Phase 3 consumes that
  manifest, runs detector + tracker models per well, and emits
  canonical contract outputs. Construction 2 (Ingestor +
  Normalizer) isolates model-output parsing from contract mapping —
@@ -345,7 +345,7 @@
 
  1. _validate_provenance(records) — raises if source_backend or
  run_id empty
- 2. frame_index comes from frame_manifest.csv (source of truth)
+ 2. frame_index comes from frame_contract.csv (source of truth)
  3. validate_dataframe_schema() + uniqueness check on UNIQUE_KEY_*
  4. Deterministic sort before returning: (well_id, frame_index,
  image_id, embryo_id)
@@ -424,7 +424,7 @@
  Runner flow
 
  def run_segmentation_and_tracking(
-     *, frame_manifest_csv, experiment_id, well_id, output_dir,
+     *, frame_contract_csv, experiment_id, well_id, output_dir,
      pipeline_config, model_paths..., device, run_id, verbose
  ) -> dict[str, Path]:
 
@@ -499,7 +499,7 @@
 
  rule segment_and_track_well:
      # Per {experiment}/{well}
-     input: validated frame_manifest
+     input: validated frame_contract
      output: per_well/{well}/contracts/.segment_and_track.validated
      resources: gpu=1
 
@@ -567,7 +567,7 @@
 
  tasks.py — add segment-and-track subcommand
 
- CLI: --frame-manifest-csv, --experiment, --well-id, --output-dir,
+ CLI: --frame-contract-csv, --experiment, --well-id, --output-dir,
   --config-yaml, --device, --run-id
 
  ---
@@ -675,7 +675,7 @@
   records without provenance. Runner stamps once per backend.
  Single attribution point.
  2. frame_index is the only temporal index in Phase 3 — taken
- from frame_manifest.csv and carried through contracts.
+ from frame_contract.csv and carried through contracts.
  3. Absolute pixel bbox canonical, xyxy float — normalized bbox
  kept only on RawDetection for traceability. All contracts use
  absolute pixel float coords.

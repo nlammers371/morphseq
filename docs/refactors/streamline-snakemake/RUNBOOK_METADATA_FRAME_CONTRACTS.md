@@ -42,18 +42,17 @@ Per experiment under `data_pipeline_output/experiment_metadata/{experiment}/`:
 
 - `plate_metadata.csv`
 - `.plate_metadata.validated`
-- `scope_metadata_raw.csv`
+- `scope_series_metadata_raw.csv`
 - `series_well_mapping.csv`
 - `.physical_well_mapping.validated`
 - `physical_well_mapping_diagnostics.json`
-- `scope_metadata_mapped.csv`
-- `scope_and_plate_metadata.csv`
+- `scope_series_metadata_mapped.csv`
 - `stitched_image_index.csv`
 - `.stitched_image_index.validated`
-- `frame_manifest.csv`
-- `.frame_manifest.validated`
+- `frame_contract.csv`
+- `.frame_contract.validated`
 
-Note: `frame_manifest.csv` is a plate-free physical frame inventory (scope + stitched paths). Plate annotations are joined later on demand.
+Note: `frame_contract.csv` is the segmentation contract built from microscope-derived metadata plus stitched-image provenance. Plate annotations are joined later at the feature stage.
 
 Stitched images are written to:
 

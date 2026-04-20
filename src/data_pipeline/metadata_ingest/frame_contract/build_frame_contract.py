@@ -1,4 +1,4 @@
-"""Build physical frame_manifest.csv from stitched index and scope metadata.
+"""Build physical frame_contract.csv from stitched index and scope metadata.
 
 This contract is plate-independent: it contains only physical frame inventory,
 calibration, geometry, and timing needed for segmentation/snips.
@@ -16,11 +16,11 @@ from data_pipeline.io.validators import validate_dataframe_schema
 from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
 from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
-from data_pipeline.schemas.frame_manifest import REQUIRED_COLUMNS_FRAME_MANIFEST, UNIQUE_KEY_FRAME_MANIFEST
+from data_pipeline.schemas.frame_contract import REQUIRED_COLUMNS_FRAME_CONTRACT, UNIQUE_KEY_FRAME_CONTRACT
 
 
 def _with_frame_columns(df: pd.DataFrame) -> pd.DataFrame:
-    return ensure_frame_time_alias(df, stage_name="frame_manifest_inputs")
+    return ensure_frame_time_alias(df, stage_name="frame_contract_inputs")
 
 
 def _canonicalize_scope_metadata(df: pd.DataFrame) -> pd.DataFrame:
@@ -50,38 +50,18 @@ def _canonicalize_scope_metadata(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _load_scope_metadata(
-    *,
-    scope_and_plate_csv: Path | None,
-    scope_metadata_csv: Path | None,
-) -> pd.DataFrame:
-    # Prefer the explicit scope metadata contract. `scope_and_plate_metadata.csv` is accepted
-    # for convenience/transition, but plate fields are not used for the physical frame manifest.
-    if scope_and_plate_csv is not None:
-        return _canonicalize_scope_metadata(pd.read_csv(scope_and_plate_csv))
-    if scope_metadata_csv is None:
-        raise ValueError("Either --scope-metadata-csv or --scope-and-plate-csv must be provided.")
-    return _canonicalize_scope_metadata(pd.read_csv(scope_metadata_csv))
-
-
-def build_frame_manifest(
+def build_frame_contract(
     stitched_index_csv: Path,
-    scope_and_plate_csv: Path | None,
+    scope_metadata_csv: Path,
     output_csv: Path,
-    *,
-    scope_metadata_csv: Path | None = None,
-    plate_metadata_csv: Path | None = None,  # accepted for CLI compatibility; ignored
 ) -> pd.DataFrame:
-    """Build and validate frame manifest table."""
+    """Build and validate the frame contract table."""
     stitched_df = add_elapsed_time_columns(
         _with_frame_columns(pd.read_csv(stitched_index_csv)),
         group_cols=["experiment_id", "well_id", "channel_id"],
     )
     stitched_df = add_frame_interval_unit_columns(stitched_df)
-    scope_df = _load_scope_metadata(
-        scope_and_plate_csv=scope_and_plate_csv,
-        scope_metadata_csv=scope_metadata_csv,
-    )
+    scope_df = _canonicalize_scope_metadata(pd.read_csv(scope_metadata_csv))
 
     join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
 
@@ -97,14 +77,14 @@ def build_frame_manifest(
         if mismatch.any():
             preview = merged.loc[mismatch, join_cols + ["time_int", "time_int_scope"]]
             raise ValueError(
-                "time_int mismatch between stitched index and scope+plate rows: "
+                "time_int mismatch between stitched index and scope rows: "
                 f"{preview.head(10).to_dict(orient='records')}"
             )
 
     missing_meta = merged["micrometers_per_pixel"].isna()
     if missing_meta.any():
         preview = merged.loc[missing_meta, join_cols].head(10).to_dict(orient="records")
-        raise ValueError(f"Missing scope/plate metadata for stitched rows: {preview}")
+        raise ValueError(f"Missing scope metadata for stitched rows: {preview}")
 
     def _col(name: str) -> pd.Series:
         if name in merged.columns:
@@ -114,7 +94,7 @@ def build_frame_manifest(
             return merged[scoped]
         return pd.Series(np.nan, index=merged.index)
 
-    manifest = pd.DataFrame(
+    contract = pd.DataFrame(
         {
             "experiment_id": merged["experiment_id"],
             "well_id": merged["well_id"],
@@ -140,52 +120,40 @@ def build_frame_manifest(
             "objective_magnification": merged["objective_magnification"],
         }
     )
-    manifest = add_elapsed_time_columns(
-        manifest,
+    contract = add_elapsed_time_columns(
+        contract,
         group_cols=["experiment_id", "well_id", "channel_id"],
     )
-    manifest = add_frame_interval_unit_columns(manifest)
+    contract = add_frame_interval_unit_columns(contract)
 
-    validate_dataframe_schema(manifest, REQUIRED_COLUMNS_FRAME_MANIFEST, "frame_manifest")
+    validate_dataframe_schema(contract, REQUIRED_COLUMNS_FRAME_CONTRACT, "frame_contract")
 
-    duplicate_mask = manifest.duplicated(subset=UNIQUE_KEY_FRAME_MANIFEST, keep=False)
+    duplicate_mask = contract.duplicated(subset=UNIQUE_KEY_FRAME_CONTRACT, keep=False)
     if duplicate_mask.any():
-        duplicates = manifest.loc[duplicate_mask, UNIQUE_KEY_FRAME_MANIFEST]
+        duplicates = contract.loc[duplicate_mask, UNIQUE_KEY_FRAME_CONTRACT]
         raise ValueError(
-            "Duplicate frame_manifest keys detected: "
+            "Duplicate frame_contract keys detected: "
             f"{duplicates.head(10).to_dict(orient='records')}"
         )
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    manifest.to_csv(output_csv, index=False)
-    return manifest
+    contract.to_csv(output_csv, index=False)
+    return contract
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stitched-index-csv", type=Path, required=True)
-    parser.add_argument("--scope-and-plate-csv", type=Path, required=False)
-    parser.add_argument("--scope-metadata-csv", type=Path, required=False)
-    # Accepted for backwards compatibility; ignored for the physical manifest.
-    parser.add_argument("--plate-metadata-csv", type=Path, required=False)
+    parser.add_argument("--scope-metadata-csv", type=Path, required=True)
     parser.add_argument("--output-csv", type=Path, required=True)
-    args = parser.parse_args()
-
-    if args.scope_and_plate_csv is not None and args.scope_metadata_csv is not None:
-        parser.error("Provide either --scope-and-plate-csv OR --scope-metadata-csv, not both.")
-    if args.scope_and_plate_csv is None and args.scope_metadata_csv is None:
-        parser.error("Either --scope-metadata-csv or --scope-and-plate-csv is required.")
-
-    return args
+    return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    build_frame_manifest(
+    build_frame_contract(
         stitched_index_csv=args.stitched_index_csv,
-        scope_and_plate_csv=args.scope_and_plate_csv,
         scope_metadata_csv=args.scope_metadata_csv,
-        plate_metadata_csv=args.plate_metadata_csv,
         output_csv=args.output_csv,
     )
 

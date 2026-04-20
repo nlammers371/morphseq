@@ -50,7 +50,7 @@ Each file must pass the schemas outlined in
 ### `metadata_ingest/scope/yx1_scope_metadata.py`
 
 - Responsibilities: extract microscope-specific acquisition metadata,
-  normalize to shared column names, and write `scope_metadata.csv`.
+  normalize to shared column names, and write `scope_series_metadata_raw.csv`.
 - Source guidance:
   - [`preprocessing.md`](../populate_process_files/preprocessing.md#preprocessingkeyencemetadatapy)
   - [`preprocessing.md`](../populate_process_files/preprocessing.md#preprocessingyx1metadatapy)
@@ -74,15 +74,14 @@ Each file must pass the schemas outlined in
   - Deterministic implicit mapping with validation when missing.
   - Schema for the mapping CSV (new `REQUIRED_COLUMNS_SERIES_MAPPING`).
 
-### `metadata_ingest/mapping/align_scope_plate.py`
+### `metadata_ingest/mapping/apply_series_mapping.py`
 
-- Responsibility: join validated plate + scope metadata using the
-  mapping output to write
-  `aligned_metadata/scope_and_plate.csv`.
+- Responsibility: apply validated series-to-well mapping to scope-side
+  metadata and write the mapped scope table.
 - Functions to script:
-  - `align_scope_and_plate(plate_df: pd.DataFrame, scope_df: pd.DataFrame, mapping_df: pd.DataFrame) -> pd.DataFrame`
-  - `validate_aligned_metadata(df: pd.DataFrame) -> None`
-  - `write_aligned_metadata(df: pd.DataFrame, output_csv: Path) -> None`
+  - `apply_series_mapping(scope_df: pd.DataFrame, mapping_df: pd.DataFrame) -> pd.DataFrame`
+  - `validate_mapped_scope_metadata(df: pd.DataFrame) -> None`
+  - `write_mapped_scope_metadata(df: pd.DataFrame, output_csv: Path) -> None`
 - Reference: join strategy outlined in
   `processing_files_pipeline_structure_and_plan.md` (Input Metadata
   Alignment section) and the schema doc.
@@ -103,7 +102,7 @@ Each file must pass the schemas outlined in
 
 - All CSV writers must call schema validators from `schemas/` before
   writing (`plate_metadata`, `scope_metadata`,
-  `scope_and_plate_metadata`, and new `series_mapping` schema).
+  `frame_contract`, and new `series_mapping` schema).
 - Add smoke tests (or TODO placeholders) for:
   - Missing required columns (fail fast with helpful messages).
   - Ambiguous series mappings (warn + fail where needed).

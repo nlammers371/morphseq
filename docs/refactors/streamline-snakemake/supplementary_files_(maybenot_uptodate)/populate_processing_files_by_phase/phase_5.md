@@ -13,7 +13,7 @@ schemas.
   with mask RLE, `snip_id`.
 - `segmentation/{exp}/unet_masks/via/` (Phase 3b) – viability masks for
   fraction alive computation.
-- `experiment_metadata/{exp}/scope_and_plate_metadata.csv` (Phase 1) –
+- `experiment_metadata/{exp}/frame_contract.csv` (Phase 1) –
   calibration (`micrometers_per_pixel`, `frame_interval_s`).
 
 ---

@@ -1,4 +1,4 @@
-"""Validate frame_manifest.csv contract and emit sentinel file."""
+"""Validate frame_contract.csv contract and emit sentinel file."""
 
 from __future__ import annotations
 
@@ -9,24 +9,25 @@ import pandas as pd
 
 from data_pipeline.io.validators import validate_dataframe_schema
 from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
-from data_pipeline.schemas.frame_manifest import (
-    REQUIRED_COLUMNS_FRAME_MANIFEST,
-    UNIQUE_KEY_FRAME_MANIFEST,
+from data_pipeline.schemas.frame_contract import (
+    REQUIRED_COLUMNS_FRAME_CONTRACT,
+    UNIQUE_KEY_FRAME_CONTRACT,
 )
 
-def validate_frame_manifest(input_csv: Path, output_flag: Path) -> pd.DataFrame:
-    """Validate frame manifest schema, uniqueness, and stitched path existence."""
+
+def validate_frame_contract(input_csv: Path, output_flag: Path) -> pd.DataFrame:
+    """Validate frame contract schema, uniqueness, and stitched path existence."""
     df = ensure_frame_time_alias(
         pd.read_csv(input_csv),
-        stage_name="frame_manifest",
+        stage_name="frame_contract",
     )
-    validate_dataframe_schema(df, REQUIRED_COLUMNS_FRAME_MANIFEST, "frame_manifest")
+    validate_dataframe_schema(df, REQUIRED_COLUMNS_FRAME_CONTRACT, "frame_contract")
 
-    duplicate_mask = df.duplicated(subset=UNIQUE_KEY_FRAME_MANIFEST, keep=False)
+    duplicate_mask = df.duplicated(subset=UNIQUE_KEY_FRAME_CONTRACT, keep=False)
     if duplicate_mask.any():
-        duplicates = df.loc[duplicate_mask, UNIQUE_KEY_FRAME_MANIFEST]
+        duplicates = df.loc[duplicate_mask, UNIQUE_KEY_FRAME_CONTRACT]
         raise ValueError(
-            "Duplicate frame-manifest keys detected: "
+            "Duplicate frame-contract keys detected: "
             f"{duplicates.head(10).to_dict(orient='records')}"
         )
 
@@ -45,7 +46,7 @@ def validate_frame_manifest(input_csv: Path, output_flag: Path) -> pd.DataFrame:
 
     if missing_files:
         raise FileNotFoundError(
-            "Missing stitched image files referenced by frame_manifest: "
+            "Missing stitched image files referenced by frame_contract: "
             f"{missing_files}"
         )
 
@@ -63,7 +64,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    validate_frame_manifest(args.input_csv, args.output_flag)
+    validate_frame_contract(args.input_csv, args.output_flag)
 
 
 if __name__ == "__main__":

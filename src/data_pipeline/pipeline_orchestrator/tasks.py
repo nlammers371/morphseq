@@ -12,7 +12,6 @@ from data_pipeline.metadata_ingest.scope.yx1.extract_scope_metadata import extra
 from data_pipeline.metadata_ingest.scope.keyence.map_series_to_wells import map_series_to_wells_keyence
 from data_pipeline.metadata_ingest.scope.yx1.map_series_to_wells import map_series_to_wells_yx1
 from data_pipeline.metadata_ingest.scope.shared.apply_series_mapping import apply_series_mapping
-from data_pipeline.metadata_ingest.plate.align_scope_plate import align_scope_and_plate_metadata
 from data_pipeline.metadata_ingest.stitched_index.materialize_stitched_images import materialize_stitched_images
 from data_pipeline.segmentation_and_tracking.pipelines.segmentation_and_tracking import run_segmentation_and_tracking
 
@@ -94,14 +93,6 @@ def cmd_apply_series(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_align(args: argparse.Namespace) -> None:
-    align_scope_and_plate_metadata(
-        plate_metadata_csv=args.plate_csv,
-        scope_metadata_csv=args.scope_csv,
-        output_csv=args.output_csv,
-    )
-
-
 def cmd_materialize_stitched(args: argparse.Namespace) -> None:
     materialize_stitched_images(
         experiment=args.experiment,
@@ -124,7 +115,7 @@ def cmd_materialize_stitched(args: argparse.Namespace) -> None:
 def cmd_segmentation_and_tracking(args: argparse.Namespace) -> None:
     cfg = yaml.safe_load(Path(args.config_yaml).read_text()) or {}
     run_segmentation_and_tracking(
-        frame_manifest_csv=args.frame_manifest_csv,
+        frame_contract_csv=args.frame_contract_csv,
         experiment_id=args.experiment,
         well_id=args.well_id,
         output_root=args.output_root,
@@ -144,14 +135,14 @@ def cmd_snip_processing(args: argparse.Namespace) -> None:
     exp = str(args.experiment)
     well = str(args.well_id)
 
-    frame_manifest_csv = Path(args.frame_manifest_csv)
+    frame_contract_csv = Path(args.frame_contract_csv)
     segmentation_tracking_csv = Path(args.segmentation_tracking_csv)
 
     run_snip_processing_well(
         output_root=output_root,
         experiment_id=exp,
         well_id=well,
-        frame_manifest_csv=frame_manifest_csv,
+        frame_contract_csv=frame_contract_csv,
         segmentation_tracking_csv=segmentation_tracking_csv,
         pipeline_config=cfg,
         verbose=_parse_bool(args.verbose),
@@ -201,12 +192,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_apply.add_argument("--selected-wells", default="")
     p_apply.set_defaults(func=cmd_apply_series)
 
-    p_align = sub.add_parser("align")
-    p_align.add_argument("--plate-csv", type=Path, required=True)
-    p_align.add_argument("--scope-csv", type=Path, required=True)
-    p_align.add_argument("--output-csv", type=Path, required=True)
-    p_align.set_defaults(func=cmd_align)
-
     p_mat = sub.add_parser("materialize-stitched")
     p_mat.add_argument("--experiment", required=True)
     p_mat.add_argument("--microscope", choices=["YX1", "Keyence"], required=True)
@@ -225,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_mat.set_defaults(func=cmd_materialize_stitched)
 
     p_sat = sub.add_parser("segmentation-and-tracking")
-    p_sat.add_argument("--frame-manifest-csv", type=Path, required=True)
+    p_sat.add_argument("--frame-contract-csv", type=Path, required=True)
     p_sat.add_argument("--experiment", required=True)
     p_sat.add_argument("--well-id", required=True)
     p_sat.add_argument("--output-root", type=Path, required=True)
@@ -239,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_snip.add_argument("--experiment", required=True)
     p_snip.add_argument("--well-id", required=True)
     p_snip.add_argument("--output-root", type=Path, required=True)
-    p_snip.add_argument("--frame-manifest-csv", type=Path, required=True)
+    p_snip.add_argument("--frame-contract-csv", type=Path, required=True)
     p_snip.add_argument("--segmentation-tracking-csv", type=Path, required=True)
     p_snip.add_argument("--config-yaml", type=Path, required=True)
     p_snip.add_argument("--verbose", default="false")

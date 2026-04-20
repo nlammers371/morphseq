@@ -9,11 +9,11 @@ quality-control masks. All Stage 3 modules must rely on the manifest and
 
 ## Inputs
 
-- `experiment_image_manifest.json` (Phase 2b) – authoritative list of
+- `frame_contract.csv` (Phase 2b) – authoritative list of
   wells, channels, frames.
 - `built_image_data/{exp}/stitched_ff_images/…` (Phase 2a) – normalized
   stitched imagery.
-- Aligned metadata (Phase 1) for calibration (`scope_and_plate_metadata`).
+- Aligned metadata (Phase 1) for calibration (`frame_contract`).
 
 ---
 

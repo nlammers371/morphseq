@@ -5,8 +5,8 @@ rule compute_stage_predictions_well:
     input:
         plate_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".plate_metadata.validated",
         plate_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
-        frame_manifest_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
-        frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv",
+        frame_contract_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        frame_contract_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
         seg_well_validated=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segment_and_track.validated",
         seg_tracking_csv=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
     output:
@@ -23,7 +23,7 @@ rule compute_stage_predictions_well:
             '--output-root "{params.output_root}" '
             '--experiment "{params.experiment}" --well-id "{params.well_id}" '
             '--segmentation-tracking-csv "{input.seg_tracking_csv}" '
-            '--frame-manifest-csv "{input.frame_manifest_csv}" '
+            '--frame-contract-csv "{input.frame_contract_csv}" '
             '--plate-metadata-csv "{input.plate_csv}"'
         )
 

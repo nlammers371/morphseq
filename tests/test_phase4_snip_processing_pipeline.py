@@ -55,8 +55,8 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
         ]
     ).to_csv(seg_csv, index=False)
 
-    frame_manifest_csv = output_root / "experiment_metadata" / exp / "frame_manifest.csv"
-    frame_manifest_csv.parent.mkdir(parents=True, exist_ok=True)
+    frame_contract_csv = output_root / "experiment_metadata" / exp / "frame_contract.csv"
+    frame_contract_csv.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         [
             {
@@ -68,7 +68,7 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
                 "micrometers_per_pixel": 2.0,
             }
         ]
-    ).to_csv(frame_manifest_csv, index=False)
+    ).to_csv(frame_contract_csv, index=False)
 
     # Act
     from data_pipeline.snip_processing.pipelines.snip_processing import run_snip_processing_well
@@ -92,7 +92,7 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
         output_root=output_root,
         experiment_id=exp,
         well_id=well,
-        frame_manifest_csv=frame_manifest_csv,
+        frame_contract_csv=frame_contract_csv,
         segmentation_tracking_csv=seg_csv,
         pipeline_config=cfg,
         verbose=False,

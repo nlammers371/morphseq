@@ -1,7 +1,7 @@
 """
 YX1 microscope metadata extraction.
 
-Extracts scope metadata from YX1 ND2 files and produces validated scope_metadata.csv.
+Extracts scope metadata from YX1 ND2 files and produces validated scope_series_metadata_raw.csv.
 """
 
 from pathlib import Path
@@ -145,7 +145,7 @@ def extract_yx1_scope_metadata(
 
     Args:
         raw_data_dir: Directory containing ND2 file
-        output_csv: Output path for scope_metadata.csv
+        output_csv: Output path for scope_series_metadata_raw.csv
         experiment_id: Experiment identifier
 
     Returns:

@@ -11,8 +11,8 @@ def _snip_write_views() -> bool:
 
 rule snip_processing_well:
     input:
-        frame_manifest_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
-        frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv",
+        frame_contract_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        frame_contract_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
         seg_well_validated=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segment_and_track.validated",
         seg_tracking_csv=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
     output:
@@ -31,7 +31,7 @@ rule snip_processing_well:
             '--experiment "{params.experiment}" '
             '--well-id "{params.well_id}" '
             '--output-root "{params.output_root}" '
-            '--frame-manifest-csv "{input.frame_manifest_csv}" '
+            '--frame-contract-csv "{input.frame_contract_csv}" '
             '--segmentation-tracking-csv "{input.seg_tracking_csv}" '
             '--config-yaml "{params.config_yaml}" '
             '--verbose "false"'

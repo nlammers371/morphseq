@@ -1,11 +1,11 @@
 # Streamlined Snakemake User Guide
 
 ## What This Pipeline Produces
-- `scope_metadata_raw.csv`: microscope metadata extracted from raw files
-- `scope_metadata_mapped.csv`: scope metadata mapped to plate well IDs
-- `scope_and_plate_metadata.csv`: merged scope + plate metadata
+- `plate_metadata.csv`: user-provided experiment annotation
+- `scope_series_metadata_raw.csv`: microscope series metadata extracted from raw files
+- `scope_series_metadata_mapped.csv`: series-to-well mapping output
 - `stitched_image_index.csv`: materialized frame paths and provenance
-- `frame_manifest.csv`: analysis-ready frame table
+- `frame_contract.csv`: segmentation contract built from scope-derived and stitched-image metadata
 - Phase 3 segmentation + tracking (per experiment):
   - `segmentation_and_tracking/<experiment>/contracts/segmentation_tracking.csv` (merged contract)
   - `segmentation_and_tracking/<experiment>/views/` (symlink-only browse view: videos/frames/masks)
@@ -21,7 +21,7 @@ Run full smoke pipeline:
 
 ```bash
 snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
-  /net/trapnell/vol1/home/mdcolon/proj/morphseq-docs/data_pipeline_output/experiment_metadata/20240509_24hpf/.frame_manifest.validated \
+  /net/trapnell/vol1/home/mdcolon/proj/morphseq-docs/data_pipeline_output/experiment_metadata/20240509_24hpf/.frame_contract.validated \
   --cores 4
 ```
 
@@ -80,7 +80,7 @@ snakemake -s src/data_pipeline/pipeline_orchestrator/Snakefile \
 - Canonical frame key is now `frame_index`.
 - `time_int` remains a compatibility alias during migration.
 - When both columns exist, validators enforce `frame_index == time_int`.
-- `scope_metadata_mapped.csv`, `stitched_image_index.csv`, and `frame_manifest.csv` all emit:
+- `scope_series_metadata_mapped.csv`, `stitched_image_index.csv`, and `frame_contract.csv` all emit:
   - `experiment_time_s`
   - `frame_interval_s`
   - `frame_interval_min`

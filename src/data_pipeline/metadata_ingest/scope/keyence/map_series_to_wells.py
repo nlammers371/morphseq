@@ -129,7 +129,7 @@ def map_series_to_wells_keyence(
 
     Args:
         raw_data_dir: Root directory containing raw Keyence data
-        scope_metadata_csv: Path to validated scope_metadata.csv
+        scope_metadata_csv: Path to validated scope_series_metadata_raw.csv
         output_mapping_csv: Path to write series_well_mapping.csv
         output_provenance_json: Path to write mapping_provenance.json
         experiment_id: Experiment identifier (used for composing well_id)

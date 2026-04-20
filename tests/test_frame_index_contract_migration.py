@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from data_pipeline.metadata_ingest.frame_manifest.build_frame_manifest import build_frame_manifest
+from data_pipeline.metadata_ingest.frame_contract.build_frame_contract import build_frame_contract
 from data_pipeline.metadata_ingest.stitched_index.validate_stitched_image_index import (
     validate_stitched_image_index,
 )
@@ -76,14 +76,14 @@ def test_validate_stitched_index_rejects_time_int_frame_index_mismatch(tmp_path:
         validate_stitched_image_index(stitched_csv, validation_flag)
 
 
-def test_build_frame_manifest_joins_on_frame_index_and_emits_time_alias(tmp_path: Path) -> None:
+def test_build_frame_contract_joins_on_frame_index_and_emits_time_alias(tmp_path: Path) -> None:
     data_root = tmp_path / "data_pipeline_output"
     exp_dir = data_root / "experiment_metadata" / "exp1"
     exp_dir.mkdir(parents=True)
 
     stitched_csv = exp_dir / "stitched_image_index.csv"
-    scope_csv = exp_dir / "scope_and_plate_metadata.csv"
-    output_csv = exp_dir / "frame_manifest.csv"
+    scope_csv = exp_dir / "scope_series_metadata_mapped.csv"
+    output_csv = exp_dir / "frame_contract.csv"
 
     _write_stitched_row(stitched_csv, frame_index=3, include_time_int=False)
 
@@ -110,70 +110,11 @@ def test_build_frame_manifest_joins_on_frame_index_and_emits_time_alias(tmp_path
     }
     pd.DataFrame([scope_row]).to_csv(scope_csv, index=False)
 
-    manifest = build_frame_manifest(
+    manifest = build_frame_contract(
         stitched_index_csv=stitched_csv,
-        scope_and_plate_csv=scope_csv,
+        scope_metadata_csv=scope_csv,
         output_csv=output_csv,
     )
     assert output_csv.exists()
     assert manifest.loc[0, "frame_index"] == 3
     assert manifest.loc[0, "time_int"] == 3
-
-
-def test_build_frame_manifest_accepts_split_scope_and_plate_inputs(tmp_path: Path) -> None:
-    data_root = tmp_path / "data_pipeline_output"
-    exp_dir = data_root / "experiment_metadata" / "exp1"
-    exp_dir.mkdir(parents=True)
-
-    stitched_csv = exp_dir / "stitched_image_index.csv"
-    scope_csv = exp_dir / "scope_metadata_mapped.csv"
-    plate_csv = exp_dir / "plate_metadata.csv"
-    output_csv = exp_dir / "frame_manifest.csv"
-
-    _write_stitched_row(stitched_csv, frame_index=4, include_time_int=False)
-
-    scope_row = {
-        "experiment_id": "exp1",
-        "well_id": "A01",
-        "well_index": "A01",
-        "channel_id": "BF",
-        "frame_index": 4,
-        "time_int": 4,
-        "image_id": "exp1_A01_BF_f0004",
-        "channel_name_raw": "BF",
-        "micrometers_per_pixel": 1.23,
-        "frame_interval_s": 600,
-        "absolute_start_time": "2026-01-01T00:00:00",
-        "experiment_time_s": 2400,
-        "image_width_px": 1440,
-        "image_height_px": 3420,
-        "objective_magnification": 4,
-        "microscope_id": "Keyence",
-    }
-    pd.DataFrame([scope_row]).to_csv(scope_csv, index=False)
-
-    plate_row = {
-        "experiment_id": "exp1",
-        "well_id": "A01",
-        "well_index": "A01",
-        "genotype": "wt",
-        "treatment": "control",
-        "temperature": 28.5,
-        "medium": "egg_water",
-        "start_age_hpf": 24,
-        "embryos_per_well": 1,
-    }
-    pd.DataFrame([plate_row]).to_csv(plate_csv, index=False)
-
-    manifest = build_frame_manifest(
-        stitched_index_csv=stitched_csv,
-        scope_and_plate_csv=None,
-        scope_metadata_csv=scope_csv,
-        plate_metadata_csv=plate_csv,
-        output_csv=output_csv,
-    )
-
-    assert output_csv.exists()
-    assert manifest.loc[0, "frame_index"] == 4
-    assert manifest.loc[0, "time_int"] == 4
-    assert manifest.loc[0, "genotype"] == "wt"

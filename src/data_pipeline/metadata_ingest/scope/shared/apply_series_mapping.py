@@ -63,7 +63,7 @@ def apply_series_mapping(
     """Map scope rows to plate wells and canonical IDs for downstream contracts."""
     scope_df = ensure_frame_time_alias(
         pd.read_csv(scope_metadata_csv),
-        stage_name="scope_metadata_mapped_input",
+        stage_name="scope_series_metadata_mapped_input",
     )
     mapping_df = pd.read_csv(mapping_csv)
 

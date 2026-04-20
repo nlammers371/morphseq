@@ -242,7 +242,7 @@ def extract_keyence_scope_metadata(
     Args:
         raw_data_dir: Root directory containing raw Keyence data
         experiment_id: Experiment identifier
-        output_csv: Path to write validated scope_metadata.csv
+        output_csv: Path to write validated scope_series_metadata_raw.csv
 
     Returns:
         Validated DataFrame with scope metadata

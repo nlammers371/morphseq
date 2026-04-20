@@ -25,8 +25,8 @@ def _scope_dir(experiment: str):
 rule segment_and_track_well:
     input:
         physical_mapping_validated=lambda wc: _scope_dir(wc.experiment) / ".physical_well_mapping.validated",
-        frame_manifest_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
-        frame_manifest_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.csv",
+        frame_contract_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        frame_contract_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
     output:
         validated_flag=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segment_and_track.validated",
     params:
@@ -44,7 +44,7 @@ rule segment_and_track_well:
         (
             'TRANSFORMERS_OFFLINE=1 HF_HUB_OFFLINE=1 PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.pipeline_orchestrator.tasks '
             'segmentation-and-tracking '
-            '--frame-manifest-csv "{input.frame_manifest_csv}" '
+            '--frame-contract-csv "{input.frame_contract_csv}" '
             '--experiment "{params.experiment}" '
             '--well-id "{params.well_id}" '
             '--output-root "{params.output_root}" '

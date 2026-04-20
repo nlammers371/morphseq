@@ -59,7 +59,7 @@ rule extract_scope_metadata_yx1:
     input:
         raw_images_dir=lambda wc: RAW_IMAGES_DIR / "YX1" / wc.experiment
     output:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_metadata_raw.csv"
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_series_metadata_raw.csv"
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
@@ -76,7 +76,7 @@ rule extract_scope_metadata_keyence:
     input:
         raw_images_dir=lambda wc: RAW_IMAGES_DIR / "Keyence" / wc.experiment
     output:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_metadata_raw.csv"
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_series_metadata_raw.csv"
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
@@ -91,7 +91,7 @@ rule extract_scope_metadata_keyence:
 
 rule map_series_to_wells_yx1:
     input:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_metadata_raw.csv",
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_series_metadata_raw.csv",
         raw_images_dir=lambda wc: RAW_IMAGES_DIR / "YX1" / wc.experiment
     output:
         mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "series_well_mapping.csv",
@@ -123,7 +123,7 @@ rule map_series_to_wells_yx1:
 
 rule map_series_to_wells_keyence:
     input:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_metadata_raw.csv",
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_series_metadata_raw.csv",
         raw_images_dir=lambda wc: RAW_IMAGES_DIR / "Keyence" / wc.experiment
     output:
         mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "series_well_mapping.csv",
@@ -144,10 +144,10 @@ rule map_series_to_wells_keyence:
 
 rule apply_series_mapping_yx1:
     input:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_metadata_raw.csv",
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_series_metadata_raw.csv",
         mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "series_well_mapping.csv",
     output:
-        mapped_scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_metadata_mapped.csv",
+        mapped_scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_series_metadata_mapped.csv",
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
@@ -164,10 +164,10 @@ rule apply_series_mapping_yx1:
 
 rule apply_series_mapping_keyence:
     input:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_metadata_raw.csv",
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_series_metadata_raw.csv",
         mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "series_well_mapping.csv",
     output:
-        mapped_scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_metadata_mapped.csv",
+        mapped_scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_series_metadata_mapped.csv",
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
@@ -185,7 +185,7 @@ rule apply_series_mapping_keyence:
 rule validate_physical_well_mapping_yx1:
     """Validate that physical series->well mapping is complete and canonical."""
     input:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_metadata_raw.csv",
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "scope_series_metadata_raw.csv",
         mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / "series_well_mapping.csv",
     output:
         validated_flag=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "yx1" / ".physical_well_mapping.validated",
@@ -206,7 +206,7 @@ rule validate_physical_well_mapping_yx1:
 rule validate_physical_well_mapping_keyence:
     """Validate that physical series->well mapping is complete and canonical."""
     input:
-        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_metadata_raw.csv",
+        scope_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "scope_series_metadata_raw.csv",
         mapping_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / "series_well_mapping.csv",
     output:
         validated_flag=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope" / "keyence" / ".physical_well_mapping.validated",
@@ -221,28 +221,5 @@ rule validate_physical_well_mapping_keyence:
             '--scope-metadata-csv "{input.scope_csv}" --mapping-csv "{input.mapping_csv}" '
             '--output-flag "{output.validated_flag}" --diagnostics-json "{output.diagnostics_json}" '
             '--allow-unmapped-wells "{params.allow_unmapped}"'
-        )
-
-
-rule align_scope_and_plate:
-    input:
-        plate_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
-        scope_csv=lambda wc: (
-            EXPERIMENT_METADATA_DIR
-            / wc.experiment
-            / "scope"
-            / _scope_dir(wc.experiment)
-            / "scope_metadata_mapped.csv"
-        )
-    output:
-        aligned_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_and_plate_metadata.csv"
-    params:
-        python=PYTHON_EXE,
-        pythonpath=SRC_ROOT
-    shell:
-        (
-            'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.pipeline_orchestrator.tasks '
-            'align --plate-csv "{input.plate_csv}" --scope-csv "{input.scope_csv}" '
-            '--output-csv "{output.aligned_csv}"'
         )
 

@@ -104,7 +104,7 @@ validation in each builder is sufficient.
 - Phase 2 completion unlocks Phase 3 (segmentation), which consumes the
   stitched images and image manifest (NOT diagnostics).
 
-**Note:** Manifest generation (`metadata_ingest/manifests/generate_image_manifest.py`)
+**Note:** Frame contract generation (`metadata_ingest/frame_contract/build_frame_contract.py`)
 is Phase 2b and runs after image building completes. The manifest inventories the
 stitched images and provides the authoritative frame list for segmentation.
 

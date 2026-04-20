@@ -1,6 +1,6 @@
-"""Schema definition for frame manifest contract."""
+"""Schema definition for the canonical frame contract."""
 
-REQUIRED_COLUMNS_FRAME_MANIFEST = [
+REQUIRED_COLUMNS_FRAME_CONTRACT = [
     "experiment_id",
     "well_id",
     "well_index",
@@ -25,7 +25,7 @@ REQUIRED_COLUMNS_FRAME_MANIFEST = [
     "objective_magnification",
 ]
 
-UNIQUE_KEY_FRAME_MANIFEST = [
+UNIQUE_KEY_FRAME_CONTRACT = [
     "experiment_id",
     "well_id",
     "channel_id",

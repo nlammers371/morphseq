@@ -65,19 +65,19 @@ print(f"Experiment microscopes: {EXPERIMENT_MICROSCOPES}")
 rule all:
     """Default target: complete smoke pipeline for metadata + frame contracts."""
     input:
-        expand(EXPERIMENT_METADATA_DIR / "{exp}" / ".frame_manifest.validated", exp=EXPERIMENTS)
+        expand(EXPERIMENT_METADATA_DIR / "{exp}" / ".frame_contract.validated", exp=EXPERIMENTS)
 
 
 rule scope_ingest_complete:
     """Run scope ingestion (microscope extraction + physical well mapping) for all configured experiments."""
     input:
-        expand(EXPERIMENT_METADATA_DIR / "{exp}" / "scope_and_plate_metadata.csv", exp=EXPERIMENTS)
+        [EXPERIMENT_METADATA_DIR / exp / "scope" / EXPERIMENT_MICROSCOPES[exp].lower() / "scope_series_metadata_mapped.csv" for exp in EXPERIMENTS]
 
 
 rule frame_contracts_complete:
     """Run stitched-index and frame-manifest contract generation for all experiments."""
     input:
-        expand(EXPERIMENT_METADATA_DIR / "{exp}" / ".frame_manifest.validated", exp=EXPERIMENTS)
+        expand(EXPERIMENT_METADATA_DIR / "{exp}" / ".frame_contract.validated", exp=EXPERIMENTS)
 
 
 include: "rules/scope_ingest.smk"

@@ -18,7 +18,7 @@ Clarifications:
 2. Keep stitched image materialization scope-specific.
 3. Keep pre-segmentation canonical contracts as:
    - `stitched_image_index.csv`
-   - `frame_manifest.csv` (canonical frame metadata table)
+   - `frame_contract.csv` (canonical frame metadata table)
 4. Canonical frame-level naming remains:
    - `channel_id`
    - `channel_name_raw`
@@ -28,10 +28,13 @@ Clarifications:
 ## TL;DR
 Pre-segmentation now has two key CSV contracts:
 
-1. `stitched_image_index.csv` tells you what stitched files were materialized.
-2. `frame_manifest.csv` is the canonical frame-level table for segmentation.
+1. `plate_metadata.csv` is the user-provided experiment annotation.
+2. `scope_series_metadata_raw.csv` is the microscope-side series output.
+3. `scope_series_metadata_mapped.csv` is the scope-to-well mapping result.
+4. `stitched_image_index.csv` is the materialization truth.
+5. `frame_contract.csv` is the canonical frame-level table for segmentation.
 
-The old `experiment_image_manifest.json` is deprecated and removed.
+Plate metadata re-enters later at the feature stage, not before segmentation.
 
 ---
 
@@ -53,12 +56,12 @@ The old `experiment_image_manifest.json` is deprecated and removed.
 ├── experiment_metadata/
 │   └── {experiment_id}/
 │       ├── plate_metadata.csv
-│       ├── scope_metadata_raw.csv
+│       ├── scope_series_metadata_raw.csv
 │       ├── series_well_mapping.csv
 │       ├── series_well_mapping_provenance.json
-│       ├── scope_metadata_mapped.csv
+│       ├── scope_series_metadata_mapped.csv
 │       ├── stitched_image_index.csv
-│       └── frame_manifest.csv
+│       └── frame_contract.csv
 │
 ├── built_image_data/
 │   └── {experiment_id}/
@@ -162,7 +165,7 @@ Core columns:
 - `source_artifact_path`
 - `source_artifact_kind`
 
-### `frame_manifest.csv`
+### `frame_contract.csv`
 Purpose:
 - Canonical frame-level input to segmentation and downstream joins.
 
@@ -221,11 +224,11 @@ Files marked as validated enforce schema and non-null rules:
 
 - Pre-segmentation:
   - `plate_metadata.csv`
-  - `scope_metadata_raw.csv`
-  - `scope_metadata_mapped.csv`
+  - `scope_series_metadata_raw.csv`
+  - `scope_series_metadata_mapped.csv`
   - `series_well_mapping.csv`
   - `stitched_image_index.csv`
-  - `frame_manifest.csv`
+  - `frame_contract.csv`
 - Post-segmentation:
   - `segmentation_and_tracking/{exp}/contracts/segmentation_tracking.csv`
   - `segmentation_and_tracking/{exp}/contracts/.segmentation_tracking.validated`
@@ -243,16 +246,16 @@ Files marked as validated enforce schema and non-null rules:
 When checking a new experiment:
 
 1. Confirm `plate_metadata.csv` looks correct.
-2. Confirm `scope_metadata_mapped.csv` has correct wells/channels/timing.
+2. Confirm `scope_series_metadata_mapped.csv` has correct wells/channels/timing.
 3. Confirm `stitched_image_index.csv` has expected materialization outcomes.
-4. Confirm `frame_manifest.csv` has complete calibration and metadata rows.
-5. Run segmentation from `frame_manifest.csv`.
+4. Confirm `frame_contract.csv` has complete calibration and metadata rows.
+5. Run segmentation from `frame_contract.csv`.
 
 ---
 
 ## Deprecated Output
 
 Removed/deprecated:
-- `experiment_image_manifest.json`
+- `frame_contract.csv`
 
 Do not build new tooling that depends on this file.

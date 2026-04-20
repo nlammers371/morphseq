@@ -28,7 +28,7 @@ def run_snip_processing_well(
     output_root: Path,
     experiment_id: str,
     well_id: str,
-    frame_manifest_csv: Path,
+    frame_contract_csv: Path,
     segmentation_tracking_csv: Path,
     pipeline_config: dict[str, Any],
     verbose: bool = False,
@@ -57,14 +57,14 @@ def run_snip_processing_well(
     if len(tracking_df) == 0:
         raise ValueError(f"No rows for mask_type={mask_type!r} in: {segmentation_tracking_csv}")
 
-    frame_df = pd.read_csv(frame_manifest_csv, usecols=["image_id", "micrometers_per_pixel", "well_index", "well_id", "frame_index"])
+    frame_df = pd.read_csv(frame_contract_csv, usecols=["image_id", "micrometers_per_pixel", "well_index", "well_id", "frame_index"])
     frame_df["image_id"] = frame_df["image_id"].astype(str)
     tracking_df["image_id"] = tracking_df["image_id"].astype(str)
 
     merged = tracking_df.merge(frame_df, on="image_id", how="left", suffixes=("", "_frame"))
     if merged["micrometers_per_pixel"].isna().any():
         bad = merged.loc[merged["micrometers_per_pixel"].isna(), ["image_id", "snip_id"]].head(10).to_dict(orient="records")
-        raise ValueError(f"Missing micrometers_per_pixel after join with frame_manifest for rows: {bad}")
+        raise ValueError(f"Missing micrometers_per_pixel after join with frame_contract for rows: {bad}")
 
     # Determine background stats.
     bg_cfg = (snip_cfg.get("background_stats") or {})
@@ -201,7 +201,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--output-root", type=Path, required=True)
     p.add_argument("--experiment", required=True)
     p.add_argument("--well-id", required=True)
-    p.add_argument("--frame-manifest-csv", type=Path, required=True)
+    p.add_argument("--frame-contract-csv", type=Path, required=True)
     p.add_argument("--segmentation-tracking-csv", type=Path, required=True)
     p.add_argument("--config-yaml", type=Path, required=True)
     p.add_argument("--verbose", default="false")
@@ -217,7 +217,7 @@ def main() -> None:
         output_root=args.output_root,
         experiment_id=str(args.experiment),
         well_id=str(args.well_id),
-        frame_manifest_csv=args.frame_manifest_csv,
+        frame_contract_csv=args.frame_contract_csv,
         segmentation_tracking_csv=args.segmentation_tracking_csv,
         pipeline_config=cfg,
         verbose=str(args.verbose).strip().lower() in {"1", "true", "yes", "y", "on"},

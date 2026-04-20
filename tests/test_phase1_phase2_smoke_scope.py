@@ -39,16 +39,16 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
 
     microscopes = get_experiment_microscopes({})
     scope_dir = metadata_dir / "scope" / microscopes[experiment].lower()
-    scope_mapped = scope_dir / "scope_metadata_mapped.csv"
+    scope_mapped = scope_dir / "scope_series_metadata_mapped.csv"
     stitched_index = metadata_dir / "stitched_image_index.csv"
-    frame_manifest = metadata_dir / "frame_manifest.csv"
+    frame_contract = metadata_dir / "frame_contract.csv"
 
-    if not scope_mapped.exists() or not stitched_index.exists() or not frame_manifest.exists():
+    if not scope_mapped.exists() or not stitched_index.exists() or not frame_contract.exists():
         pytest.skip("Smoke artifacts not built yet; run Snakemake workflow first.")
 
     scope_df = pd.read_csv(scope_mapped)
     stitched_df = pd.read_csv(stitched_index)
-    manifest_df = pd.read_csv(frame_manifest)
+    manifest_df = pd.read_csv(frame_contract)
 
     allowed_wells = SMOKE_WELLS[experiment]
 
@@ -113,7 +113,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         ]:
             assert col in stitched_df.columns
 
-    frame_manifest_front = [
+    frame_contract_front = [
         "experiment_id",
         "well_id",
         "well_index",
@@ -122,7 +122,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         "image_id",
         "time_int",
     ]
-    assert list(manifest_df.columns[: len(frame_manifest_front)]) == frame_manifest_front
+    assert list(manifest_df.columns[: len(frame_contract_front)]) == frame_contract_front
 
     for col in [
         "well_id",
