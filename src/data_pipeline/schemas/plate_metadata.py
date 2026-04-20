@@ -13,7 +13,6 @@ REQUIRED_COLUMNS_PLATE_METADATA = [
 
     # Biological metadata
     'genotype',
-    'treatment',              # or 'chem_perturbation'
     'start_age_hpf',
 
     # Experimental conditions

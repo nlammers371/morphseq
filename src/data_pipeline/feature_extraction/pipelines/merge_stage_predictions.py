@@ -20,7 +20,7 @@ def merge_stage_predictions(*, output_root: Path, experiment: str) -> dict[str, 
     contracts_dir.mkdir(parents=True, exist_ok=True)
 
     def _is_valid_well(well_root: Path) -> bool:
-        return (well_root / "contracts" / ".stage_predictions.validated").exists()
+        return (well_root / "contracts" / ".stage_predictions.computed").exists()
 
     wells = sorted([p.name for p in per_well_root.iterdir() if p.is_dir()]) if per_well_root.exists() else []
     valid = [w for w in wells if _is_valid_well(per_well_root / w)]
@@ -60,4 +60,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

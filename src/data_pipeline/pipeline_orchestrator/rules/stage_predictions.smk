@@ -10,7 +10,7 @@ rule compute_stage_predictions_well:
         seg_well_validated=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segment_and_track.validated",
         seg_tracking_csv=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
     output:
-        validated_flag=DATA_ROOT / "computed_features" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".stage_predictions.validated",
+        computed_flag=DATA_ROOT / "computed_features" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".stage_predictions.computed",
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
@@ -31,7 +31,7 @@ rule compute_stage_predictions_well:
 rule merge_stage_predictions:
     input:
         per_well_validated=lambda wc: expand(
-            DATA_ROOT / "computed_features" / wc.experiment / "per_well" / "{well_id}" / "contracts" / ".stage_predictions.validated",
+            DATA_ROOT / "computed_features" / wc.experiment / "per_well" / "{well_id}" / "contracts" / ".stage_predictions.computed",
             well_id=selected_well_ids_for_experiment(wc.experiment),
         )
     output:

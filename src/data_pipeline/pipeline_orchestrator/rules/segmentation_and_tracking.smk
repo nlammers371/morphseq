@@ -28,6 +28,7 @@ rule segment_and_track_well:
         frame_contract_validated=EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
         frame_contract_csv=EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
     output:
+        seg_tracking_csv=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
         validated_flag=DATA_ROOT / "segmentation_and_tracking" / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segment_and_track.validated",
     params:
         python=PYTHON_EXE,

@@ -16,6 +16,17 @@ from data_pipeline.schemas.plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
 from data_pipeline.schemas.stage_predictions import REQUIRED_COLUMNS_STAGE_PREDICTIONS
 
 
+def _coalesce_column(df: pd.DataFrame, candidates: list[str], *, required: bool = True) -> pd.Series:
+    for name in candidates:
+        if name in df.columns:
+            series = df[name]
+            if not series.isna().all():
+                return series
+    if required:
+        raise ValueError(f"None of the expected columns are present with values: {candidates}")
+    return pd.Series(index=df.index, dtype="object")
+
+
 def _pipeline_version() -> str:
     try:
         repo_root = Path(__file__).resolve().parents[4]
@@ -84,6 +95,7 @@ def compute_stage_predictions_well(
     if merged["elapsed_time_s"].isna().any():
         preview = merged.loc[merged["elapsed_time_s"].isna(), ["snip_id", "image_id"]].head(10).to_dict(orient="records")
         raise ValueError(f"Missing elapsed_time_s after join to frame_contract (preview): {preview}")
+    merged_well_index = _coalesce_column(merged, ["well_index", "well_index_x", "well_index_y"]).astype(str)
 
     # Compute predictions.
     merged["elapsed_time_s"] = merged["elapsed_time_s"].astype(float)
@@ -94,7 +106,7 @@ def compute_stage_predictions_well(
         {
             "experiment_id": exp,
             "well_id": well,
-            "well_index": merged["well_index"],
+            "well_index": merged_well_index,
             "image_id": merged["image_id"].astype(str),
             "embryo_id": merged["embryo_id"].astype(str),
             "frame_index": merged["frame_index"].astype(int),
@@ -120,9 +132,9 @@ def compute_stage_predictions_well(
     out.to_parquet(out_pq, index=False)
     out.to_csv(out_csv, index=False)
 
-    flag = out_dir / ".stage_predictions.validated"
-    flag.write_text("validated\n")
-    return {"parquet": out_pq, "csv": out_csv, "validated_flag": flag}
+    flag = out_dir / ".stage_predictions.computed"
+    flag.write_text("computed\n")
+    return {"parquet": out_pq, "csv": out_csv, "computed_flag": flag}
 
 
 def _parse_args() -> argparse.Namespace:

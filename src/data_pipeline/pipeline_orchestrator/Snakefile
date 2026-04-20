@@ -5,6 +5,10 @@ import sys
 
 configfile: "src/data_pipeline/pipeline_orchestrator/config.yaml"
 
+wildcard_constraints:
+    experiment="[^/]+",
+    well_id="[^/]+",
+
 WORKFLOW_DIR = Path(workflow.basedir)
 PROJECT_ROOT = WORKFLOW_DIR.parent.parent.parent
 SRC_ROOT = PROJECT_ROOT / "src"
