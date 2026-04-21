@@ -1,6 +1,9 @@
 # Future improvements — classification (AUROC over time)
 
-Last updated: 2026-03-05
+> **Status: historical snapshot (2026-03-05).** Kept for roadmap context.
+> Much of the P0 work has since landed in `run_classification` / `ClassificationAnalysis`.
+> The "Current state" section below describes the API *as of March 2026* and is now out of date
+> — see [`README.md`](README.md) for the current canonical reference.
 
 This document captures planned improvements to the `analyze.classification` API surface.
 It prioritizes changes that reduce user friction when making talk figures.
