@@ -12,7 +12,8 @@ Public API (used via relative import within the classification package)
 -----------------------------------------------------------------------
 _resolve_feature_columns  -- feature spec -> concrete column lists
 _build_binary_labels      -- pooling-aware binary labeling (_y column)
-_bin_and_aggregate        -- floor-bin + per-(id, bin, label) mean aggregation
+_bin_and_aggregate        -- bin via add_time_bins + per-(id, bin, label) mean aggregation
+_aggregate_binned         -- mean-aggregate a pre-binned DataFrame (no flooring)
 """
 
 from __future__ import annotations
