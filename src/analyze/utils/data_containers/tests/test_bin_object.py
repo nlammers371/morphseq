@@ -101,6 +101,23 @@ def test_add_feature_rejects_raw_level() -> None:
         bo.add_feature(level="raw", values=series, key="bad")
 
 
+def test_classification_wiring_example_builds_plain_dataframe() -> None:
+    bo = BinObject.from_raw(_toy_raw(), bin_width=2.0)
+
+    toy = bo.levels.binned[["embryo_id", "bin_id"]].copy()
+    toy["bin__toy__score"] = 1.0
+    bo.add_feature(level="binned", values=toy, key="bin__toy__score", overwrite=False)
+
+    clf_df = bo.levels.binned.merge(
+        bo.levels.embryo_meta[["embryo_id", "genotype"]],
+        on="embryo_id",
+        how="left",
+    )
+
+    assert {"embryo_id", "bin_center_time", "genotype", "bin__toy__score"}.issubset(clf_df.columns)
+    assert not clf_df.duplicated(subset=["embryo_id", "bin_id"]).any()
+
+
 def test_from_raw_rejects_varying_embryo_meta() -> None:
     raw = _toy_raw()
     mask = (raw["embryo_id"] == "e1") & (raw["predicted_stage_hpf"] == 31.0)

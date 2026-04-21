@@ -20,6 +20,7 @@ from sklearn.metrics import confusion_matrix, roc_auc_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
 import analyze.utils.resampling as resample
+from ..utils.binning import add_time_bins
 
 from .results import ComparisonSpec, MulticlassOVRResults
 
@@ -593,9 +594,12 @@ def run_multiclass_classification_test(
     df_filtered["_class_label"] = df_filtered[embryo_id_col].astype(str).map(embryo_to_class)
     feature_cols = _resolve_feature_columns(df_filtered, features)
 
-    df_filtered["_time_bin"] = (
-        np.floor(df_filtered[time_col] / bin_width) * bin_width
-    ).astype(int)
+    df_filtered = add_time_bins(
+        df_filtered,
+        time_col=time_col,
+        bin_width=bin_width,
+        bin_col="_time_bin",
+    )
 
     groupby_cols = [embryo_id_col, "_time_bin", "_class_label"]
     df_binned = df_filtered.groupby(groupby_cols, as_index=False)[feature_cols].mean()

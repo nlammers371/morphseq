@@ -14,6 +14,7 @@ from typing import Dict, List, Any, Optional, Union
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.metrics import roc_auc_score
+from ..utils.binning import add_time_bins
 
 try:
     from joblib import Parallel, delayed
@@ -306,9 +307,12 @@ def run_binary_classification_test(
         print(f"Using {len(feature_cols)} feature columns")
 
     # Create time bins
-    df_comparison['time_bin'] = (
-        np.floor(df_comparison[time_col] / bin_width) * bin_width
-    ).astype(int)
+    df_comparison = add_time_bins(
+        df_comparison,
+        time_col=time_col,
+        bin_width=bin_width,
+        bin_col='time_bin',
+    )
 
     # Bin embeddings: average per embryo x time_bin
     groupby_cols = [embryo_id_col, 'time_bin', group_col]

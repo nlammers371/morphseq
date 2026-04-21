@@ -48,6 +48,40 @@ bo.add_feature(
 - Hand back a `Series` or `DataFrame` with the right grain.
 - Let `BinObject` validate and attach it to the correct level.
 
+## Classification wiring (simple)
+
+`BinObject` is just the validation/container layer. Classification should still
+consume a plain pandas DataFrame.
+
+```python
+from analyze.utils.data_containers import BinObject
+from analyze.classification import run_classification
+
+bo = BinObject.from_raw(raw_df, bin_width=2.0)
+
+# Optional: add your own computed per-bin feature
+toy = bo.levels.binned[["embryo_id", "bin_id"]].copy()
+toy["bin__toy__score"] = 1.0
+bo.add_feature(level="binned", values=toy, key="bin__toy__score")
+
+# Build classification input as a normal DataFrame
+clf_df = bo.levels.binned.merge(
+  bo.levels.embryo_meta[["embryo_id", "genotype"]],
+  on="embryo_id",
+  how="left",
+)
+
+run_classification(
+  clf_df,
+  class_col="genotype",
+  id_col="embryo_id",
+  time_col="bin_center_time",
+  features={"vae": ["bin__vae__0__mean", "bin__vae__1__mean", "bin__toy__score"]},
+  comparisons="all_pairs",
+  bin_width=2.0,
+)
+```
+
 ## Notes
 
 - VAE features are the primary default path and are binned with `mean`.
