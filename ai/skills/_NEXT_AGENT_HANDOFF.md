@@ -1,7 +1,7 @@
 # Handoff — skill docs restructure
 
 **Last updated:** 2026-04-20
-**Status:** classification done. Two skills remain.
+**Status:** classification done. trajectory_condensation schema migration done. One skill task remains (#4).
 
 ## Completed (reference implementation)
 
@@ -32,14 +32,26 @@ See the classification structure as the template for the remaining two.
 5. **Delete `COMMAND.md` / `VIZ.md`** in the skill dir — content merged.
 6. **Cross-check signatures against source** before writing. For each function documented in old skill docs, verify every kwarg is present and named correctly in the current source. Common drift: missing kwargs, renamed/moved modules, legacy-leading examples.
 
+## Completed
+
+### Task #3 — `ai/skills/analyze-trajectory-condensation/` ✅ DONE
+
+- `schema.py`: added `from_classifier_directions(df, vd, *, time_col, ...)` — preferred
+  input path using `ValidatedDirections` from `morphology_geometry`. Each feature dim
+  is a raw dot product onto a classifier direction; no SVM clipping.
+- `from_pairwise_margin_csv`, `from_multiclass_csv`, `subset_pairwise` now emit
+  `DeprecationWarning` with explicit "values are clipped" message.
+- All three legacy names removed from `__init__.__all__` (still callable via
+  `schema.from_pairwise_margin_csv` for historical scripts in
+  `results/mcolon/20260329_pbx_crispant_analysis_cont/`).
+- `README.md` Quick Start updated to the `load_classifier_directions →
+  from_classifier_directions` pattern; legacy section explains the clipping problem.
+- `SKILL.md` solver pattern updated; legacy callout added.
+- Open question from earlier (contrast coords in `classification/engine/` vs separate
+  subpackage): trajectory_condensation is now migrated off contrast coords, so this
+  is ready to revisit if desired.
+
 ## Remaining tasks
-
-### Task #3 — `ai/skills/analyze-trajectory-condensation/` (depends on classification)
-
-- Source: `src/analyze/trajectory_condensation/`
-- Existing `DESIGN.md` is in git status modified — inspect first
-- This module consumes classification contrast coordinates (`raw_contrast_scores_long`, `contrast_support_long`, etc.) — make sure the new docs explicitly note this dependency and point back to `classification/README.md` § "Contrast coordinates"
-- Skill dir contents: `COMMAND.md`, `SKILL.md`, `VIZ.md`
 
 ### Task #4 — morphology_geometry (no skill currently exists)
 

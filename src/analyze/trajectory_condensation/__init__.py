@@ -20,7 +20,7 @@ from .viz import (
     load_run,
     time_slice_html,
 )
-from .schema import CondensationData, validate, from_multiclass_csv, from_pairwise_margin_csv, subset_pairwise
+from .schema import CondensationData, validate, from_classifier_directions
 from .force_diagnostics import ForceSnapshot, force_snapshot, force_target_table
 from .condensation import (
     CondensationConfig,
@@ -57,9 +57,7 @@ from .principal_tree import (
 __all__ = [
     "CondensationData",
     "validate",
-    "from_multiclass_csv",
-    "from_pairwise_margin_csv",
-    "subset_pairwise",
+    "from_classifier_directions",
     "force_diagnostics",
     "init_embedding",
     "iteration_ranking",
