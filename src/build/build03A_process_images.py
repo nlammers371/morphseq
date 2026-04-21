@@ -1519,9 +1519,9 @@ def extract_embryo_snips(root: str | Path,
 
     stats_df["time_int"] = stats_df["time_int"].astype(int)
 
-    # draw random sample to estimate background
-    # print("Estimating background...")
-    px_mean, px_std = 10, 5 #estimate_image_background(root, stats_df, bkg_seed=309, n_bkg_samples=100)
+    # draw random sample to estimate background (legacy behavior)
+    print("🔬 Estimating background from real embryo data...")
+    px_mean, px_std = estimate_image_background(root, stats_df, bkg_seed=309, n_bkg_samples=100)
 
     # Normalize boolean dtypes to avoid pandas bitwise errors
     if "out_of_frame_flag" in stats_df.columns and stats_df["out_of_frame_flag"].dtype != bool:

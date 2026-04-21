@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import skimage.io as skio
 from skimage.transform import resize
+from tqdm import tqdm
 
 from .io import resolve_from_root, rel_to_root
 from .process_snips import process_single_snip
@@ -63,53 +64,75 @@ def estimate_background_stats_full_frame(
     Locked v1 definition:
       background pixels = source stitched image pixels where embryo_mask == 0
       computed in full-frame space (before resize/rotate/crop)
+    
+    ADAPTED FROM: src/build/build03A_process_images.py::estimate_image_background()
+    (Legacy implementation that properly computes real background statistics instead of
+    returning hardcoded fallback values like the original broken implementation).
+    
+    This adaptation uses the new segmentation_tracking-based data structure
+    (source_image_path, exported_mask_path) instead of legacy file discovery.
     """
     definition = "full_frame_outside_embryo"
     if len(rows) == 0:
-        return BackgroundStats(mean=128.0, std=30.0, definition=definition)
+        raise ValueError("No rows provided to estimate background statistics")
 
-    # Deterministic sampling: sort then RNG.
-    rows = rows.sort_values(["image_id", "snip_id"]).reset_index(drop=True)
-    rng = np.random.default_rng(int(seed))
+    # Deterministic random state for reproducibility (matching legacy seed=309 default)
+    np.random.seed(int(seed))
+    
+    # Sample embryos from the provided rows
     n_avail = len(rows)
-    if n_samples <= 0:
+    if int(n_samples) <= 0:
         n_samples = 1
-    replace = n_samples > n_avail
-    sample_idx = rng.choice(np.arange(n_avail), size=int(min(n_samples, n_avail) if not replace else n_samples), replace=replace)
-
-    total = 0
-    sum_x = 0.0
-    sum_x2 = 0.0
-
-    for i in sample_idx.tolist():
-        r = rows.iloc[int(i)]
-        img_path = resolve_from_root(str(r["source_image_path"]), output_root=output_root)
-        mask_path = resolve_from_root(str(r["exported_mask_path"]), output_root=output_root)
+    replace = int(n_samples) > n_avail
+    sample_indices = np.random.choice(
+        range(n_avail),
+        size=int(n_samples) if replace else min(int(n_samples), n_avail),
+        replace=replace
+    )
+    
+    bkg_pixel_list = []
+    
+    for i in tqdm(sample_indices, desc="Estimating background from snip data..."):
+        row = rows.iloc[int(i)]
+        
+        # Resolve paths using the snip_processing path resolver
+        img_path = resolve_from_root(str(row["source_image_path"]), output_root=output_root)
+        mask_path = resolve_from_root(str(row["exported_mask_path"]), output_root=output_root)
+        
         if not img_path.exists() or not mask_path.exists():
             continue
-
-        img = _as_gray_u8(skio.imread(str(img_path)))
-        mask = _mask_to_binary(skio.imread(str(mask_path)), target_hw=(img.shape[0], img.shape[1]))
-        bg = img[mask == 0]
-        if bg.size == 0:
+        
+        # Load image and mask
+        try:
+            im_ff = _as_gray_u8(skio.imread(str(img_path)))
+            im_mask = _mask_to_binary(skio.imread(str(mask_path)), target_hw=(im_ff.shape[0], im_ff.shape[1]))
+        except Exception:
             continue
+        
+        # Extract background pixels (mask == 0) - same logic as build03A
+        im_bkg = (im_mask == 0).astype(np.uint8)
+        bkg_pixels = im_ff[im_bkg == 1]
+        
+        if bkg_pixels.size > 0:
+            # Limit samples per image to avoid memory issues
+            if max_pixels_per_image and bkg_pixels.size > max_pixels_per_image:
+                pick_indices = np.random.choice(bkg_pixels.size, size=max_pixels_per_image, replace=False)
+                bkg_pixels = bkg_pixels[pick_indices]
+            
+            bkg_pixel_list.extend(bkg_pixels.tolist())
+    
+    if not bkg_pixel_list:
+        raise ValueError(
+            f"Failed to collect background pixels after sampling {len(sample_indices)} embryos. "
+            f"Check that source_image_path and exported_mask_path exist and are readable."
+        )
+    
+    # Compute statistics from collected background pixels (same as build03A)
+    px_mean = np.mean(bkg_pixel_list)
+    px_std = np.std(bkg_pixel_list)
+    
+    return BackgroundStats(mean=float(px_mean), std=float(px_std), definition=definition)
 
-        if max_pixels_per_image is not None and bg.size > int(max_pixels_per_image):
-            pick = rng.choice(np.arange(bg.size), size=int(max_pixels_per_image), replace=False)
-            bg = bg[pick]
-
-        bg_f = bg.astype(np.float64)
-        total += int(bg_f.size)
-        sum_x += float(bg_f.sum())
-        sum_x2 += float((bg_f * bg_f).sum())
-
-    if total <= 1:
-        return BackgroundStats(mean=128.0, std=30.0, definition=definition)
-
-    mean = sum_x / total
-    var = max(0.0, (sum_x2 / total) - (mean * mean))
-    std = float(np.sqrt(var))
-    return BackgroundStats(mean=float(mean), std=float(std), definition=definition)
 
 
 def resolve_yolk_mask_path(
