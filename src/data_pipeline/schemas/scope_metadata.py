@@ -28,5 +28,5 @@ REQUIRED_COLUMNS_SCOPE_METADATA = [
     'microscope_id',
     'channel',
     'z_position',
-    'frame_index',
+    'time_int',
 ]

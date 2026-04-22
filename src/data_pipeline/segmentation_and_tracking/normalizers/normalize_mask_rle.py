@@ -23,7 +23,7 @@ def normalize_mask_rle(
     rows = []
     for m in masks:
         x0, y0, x1, y1 = [float(v) for v in (m.bbox_xyxy_abs or [0, 0, 0, 0])]
-        snip_id = f"{str(m.embryo_id)}_{str(channel_id)}_f{int(m.frame_index):04d}"
+        snip_id = f"{str(m.embryo_id)}_{str(channel_id)}_f{int(m.time_int):04d}"
         instance_id = str(m.embryo_local_id or "")
         if not instance_id:
             instance_id = str(m.embryo_id)
@@ -38,7 +38,7 @@ def normalize_mask_rle(
                 "channel_id": str(channel_id),
                 "instance_id": instance_id,
                 "snip_id": str(snip_id),
-                "frame_index": int(m.frame_index),
+                "time_int": int(m.time_int),
                 "mask_type": str(m.mask_type),
                 "mask_rle": dumps_json(m.mask_rle),
                 "area_px": float(m.area_px),
@@ -61,7 +61,7 @@ def normalize_mask_rle(
     df = pd.DataFrame(rows)
     if len(df) == 0:
         df = pd.DataFrame(columns=REQUIRED_COLUMNS_MASK_RLE)
-    df = df.sort_values(["well_id", "frame_index", "image_id", "embryo_id"]).reset_index(drop=True)
+    df = df.sort_values(["well_id", "time_int", "image_id", "embryo_id"]).reset_index(drop=True)
     validate_schema(df, REQUIRED_COLUMNS_MASK_RLE, stage_name="mask_rle")
     require_unique(df, UNIQUE_KEY_MASK_RLE, stage_name="mask_rle")
     return df

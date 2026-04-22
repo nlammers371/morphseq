@@ -97,7 +97,7 @@ class VideoGenerator:
                 else "coco"
             )
 
-        for frame_rec in sorted(video_record.frames, key=lambda f: (f.frame_index if f.frame_index is not None else 0, f.image_id)):
+        for frame_rec in sorted(video_record.frames, key=lambda f: (f.time_int if f.time_int is not None else 0, f.image_id)):
             frame = cv2.imread(str(frame_rec.image_path))
             if frame is None:
                 if verbose:

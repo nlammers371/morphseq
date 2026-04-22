@@ -4,7 +4,7 @@ REQUIRED_COLUMNS_STITCHED_IMAGE_INDEX = [
     "experiment_id",
     "well_id",
     "well_index",
-    "frame_index",
+    "time_int",
     "channel_id",
     "image_id",
     "time_int",
@@ -26,5 +26,5 @@ UNIQUE_KEY_STITCHED_IMAGE_INDEX = [
     "experiment_id",
     "well_id",
     "channel_id",
-    "frame_index",
+    "time_int",
 ]

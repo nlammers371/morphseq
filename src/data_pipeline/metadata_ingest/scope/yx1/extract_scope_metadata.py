@@ -224,7 +224,7 @@ def extract_yx1_scope_metadata(
                         'microscope_id': 'YX1',
                         'channel': channel,
                         'z_position': 0,  # Z-stacked, so single plane
-                        'frame_index': t_idx,
+                        'time_int': t_idx,
                     }
                     rows.append(row)
 

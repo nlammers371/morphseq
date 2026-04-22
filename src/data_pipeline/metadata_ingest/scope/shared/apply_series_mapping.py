@@ -9,7 +9,7 @@ import pandas as pd
 
 from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
-from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 
 
 def _build_series_lookup(mapping_df: pd.DataFrame) -> dict[int, str]:
@@ -61,7 +61,7 @@ def apply_series_mapping(
     selected_wells: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Map scope rows to plate wells and canonical IDs for downstream contracts."""
-    scope_df = ensure_frame_time_alias(
+    scope_df = ensure_time_int_column(
         pd.read_csv(scope_metadata_csv),
         stage_name="scope_series_metadata_mapped_input",
     )
@@ -91,7 +91,7 @@ def apply_series_mapping(
         + "_"
         + mapped_df["channel_id"].astype(str)
         + "_f"
-        + mapped_df["frame_index"].astype(int).map(lambda val: f"{val:04d}")
+        + mapped_df["time_int"].astype(int).map(lambda val: f"{val:04d}")
     )
 
     mapped_df = add_elapsed_time_columns(
@@ -108,10 +108,9 @@ def apply_series_mapping(
         "experiment_id",
         "well_id",
         "well_index",
-        "frame_index",
+        "time_int",
         "channel_id",
         "image_id",
-        "time_int",
         "experiment_time_s",
         "frame_interval_s",
         "frame_interval_min",

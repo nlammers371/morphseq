@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_pipeline.io.validators import validate_dataframe_schema
-from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 from data_pipeline.schemas.stitched_image_index import (
     REQUIRED_COLUMNS_STITCHED_IMAGE_INDEX,
     UNIQUE_KEY_STITCHED_IMAGE_INDEX,
@@ -16,7 +16,7 @@ from data_pipeline.schemas.stitched_image_index import (
 
 def validate_stitched_image_index(input_csv: Path, output_flag: Path) -> pd.DataFrame:
     """Validate stitched-image index schema, uniqueness, and file existence."""
-    df = ensure_frame_time_alias(
+    df = ensure_time_int_column(
         pd.read_csv(input_csv),
         stage_name="stitched_image_index",
     )

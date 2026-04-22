@@ -64,7 +64,7 @@ Components:
 'image_id'              # e.g., "20240915_A01_t0023"
 'embryo_id'             # e.g., "20240915_A01_e0001"
 'snip_id'               # e.g., "20240915_A01_e0001_s0023" ✅ CREATED HERE
-'frame_index'           # Integer frame number (same as _s suffix)
+'time_int'           # Integer frame number (same as _s suffix)
 'area_px'               # Mask area in pixels
 'bbox_x_min'            # Bounding box coordinates
 'bbox_y_min'
@@ -129,7 +129,7 @@ Components:
 ✅ image_id, embryo_id       # Parsed from SAM2 output
 ✅ bbox_x/y_min/max          # From SAM2 masks
 ✅ area_px                   # From SAM2 masks
-✅ frame_index               # Frame number
+✅ time_int               # Frame number
 ✅ time_int                  # Integer timepoint
 ✅ All metadata              # From raw data + well metadata
 ```
@@ -157,7 +157,7 @@ Components:
 ```
 Columns include:
     - snip_id (PRIMARY KEY) ✅
-    - image_id, embryo_id, frame_index
+    - image_id, embryo_id, time_int
     - bbox_x_min, bbox_y_min, bbox_x_max, bbox_y_max ✅
     - area_px ✅
     - All metadata
@@ -250,7 +250,7 @@ analysis_ready/{experiment_id}/
 ### consolidated_snip_features.csv contains:
 ```
 From tracking_table.csv:
-    - snip_id, image_id, embryo_id, frame_index
+    - snip_id, image_id, embryo_id, time_int
     - bbox_x_min, bbox_y_min, bbox_x_max, bbox_y_max
     - area_px
     - time_int

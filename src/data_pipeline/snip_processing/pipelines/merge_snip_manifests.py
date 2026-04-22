@@ -68,12 +68,12 @@ def merge_snip_manifests(*, experiment: str, output_root: Path, write_views: boo
     if parts_pq:
         dfs = [pd.read_parquet(p) for p in parts_pq]
         merged = pd.concat(dfs, axis=0, ignore_index=True)
-        merged = merged.sort_values([c for c in ["well_id", "frame_index", "image_id", "embryo_id", "snip_id"] if c in merged.columns])
+        merged = merged.sort_values([c for c in ["well_id", "time_int", "image_id", "embryo_id", "snip_id"] if c in merged.columns])
         merged.to_parquet(contracts_dir / "snip_manifest.parquet", index=False)
     if parts_csv:
         dfs = [pd.read_csv(p) for p in parts_csv]
         merged = pd.concat(dfs, axis=0, ignore_index=True)
-        merged = merged.sort_values([c for c in ["well_id", "frame_index", "image_id", "embryo_id", "snip_id"] if c in merged.columns])
+        merged = merged.sort_values([c for c in ["well_id", "time_int", "image_id", "embryo_id", "snip_id"] if c in merged.columns])
         merged.to_csv(contracts_dir / "snip_manifest.csv", index=False)
 
     if not write_views:

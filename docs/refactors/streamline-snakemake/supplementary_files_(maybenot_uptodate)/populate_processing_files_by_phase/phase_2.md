@@ -17,7 +17,7 @@ naming (via `identifiers/parsing.py`) that all downstream rules rely on.
 Both outputs must strictly follow the layout described in
 `processing_files_pipeline_structure_and_plan.md` (Built Image Data
 section). Diagnostics CSVs should include basic provenance columns
-(experiment_id, well_id, channel, frame_index) plus any
+(experiment_id, well_id, channel, time_int) plus any
 microscope-specific QA metrics. No formal schema validation required -
 diagnostics are for human review and retrospective analysis.
 
@@ -36,7 +36,7 @@ validation in each builder is sufficient.
   the same logic for `well_id`, `image_id`, and stitched FF paths.
 - Key helpers:
   - `make_well_id(experiment_id, well_index) -> str` (delegates to parsing)
-  - `make_image_path(experiment_id, well_index, channel, frame_index, root) -> Path`
+  - `make_image_path(experiment_id, well_index, channel, time_int, root) -> Path`
 - All per-microscope builders must route path/ID creation through this
   module to guarantee consistent directory structure and naming.
 
@@ -75,7 +75,7 @@ validation in each builder is sufficient.
   - Shared ID generation path via `identifiers.parsing` via
     `image_building.shared.layout`.
   - Include provenance columns in diagnostics (experiment_id, well_id,
-    channel, frame_index) plus YX1-specific metrics.
+    channel, time_int) plus YX1-specific metrics.
 
 ---
 
@@ -93,12 +93,12 @@ validation in each builder is sufficient.
 ## Validation & Handoff
 
 - Builders should validate provenance columns exist (experiment_id,
-  well_id, channel, frame_index) but can emit arbitrary
+  well_id, channel, time_int) but can emit arbitrary
   microscope-specific metrics without schema enforcement.
 - Smoke test each microscope path with representative data to ensure:
   - Output tree matches `built_image_data/{exp}/stitched_ff_images/...`.
   - Diagnosed frames align with metadata (matching `well_id`,
-    `channel`, `frame_index`).
+    `channel`, `time_int`).
   - Channel normalization matches Phase 1 outputs (no fallback to raw
     `ch00` labels).
 - Phase 2 completion unlocks Phase 3 (segmentation), which consumes the

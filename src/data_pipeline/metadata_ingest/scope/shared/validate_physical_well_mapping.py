@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 
 
 CANONICAL_WELL_RE = re.compile(r"^[A-H](0[1-9]|1[0-2])$")
@@ -78,7 +78,7 @@ def validate_physical_well_mapping(
     mapping_csv: Path,
     allow_unmapped_wells: bool,
 ) -> dict:
-    scope_df = ensure_frame_time_alias(pd.read_csv(scope_metadata_csv), stage_name="validate_physical_well_mapping.scope")
+    scope_df = ensure_time_int_column(pd.read_csv(scope_metadata_csv), stage_name="validate_physical_well_mapping.scope")
     mapping_df = pd.read_csv(mapping_csv)
     if mapping_df.empty:
         raise ValueError(f"Empty mapping_csv: {mapping_csv}")

@@ -13,15 +13,15 @@ from ..raw_types import RawMask, RawTrack
 def ingest_propagation(
     results: dict[int, dict[str, dict]],
     *,
-    image_id_by_frame_index: dict[int, str],
-    seed_frame_index: int,
+    image_id_by_time_int: dict[int, str],
+    seed_time_int: int,
     seed_image_id: str,
     well_id: str,
     channel_id: str,
 ) -> list[RawTrack]:
     tracks: list[RawTrack] = []
-    for frame_index, frame_data in results.items():
-        image_id = image_id_by_frame_index.get(int(frame_index))
+    for time_int, frame_data in results.items():
+        image_id = image_id_by_time_int.get(int(time_int))
         if image_id is None:
             continue
         for embryo_id, emb in frame_data.items():
@@ -33,7 +33,7 @@ def ingest_propagation(
             embryo_global_id = f"{str(well_id)}_{embryo_local_id}"
             tracks.append(
                 RawTrack(
-                    frame_index=int(frame_index),
+                    time_int=int(time_int),
                     image_id=str(image_id),
                     embryo_id=str(embryo_global_id),
                     embryo_local_id=str(embryo_local_id),
@@ -42,7 +42,7 @@ def ingest_propagation(
                     bbox_xyxy_abs=bbox,
                     area_px=area,
                     confidence=conf,
-                    is_seed_frame=(str(image_id) == str(seed_image_id) and int(frame_index) == int(seed_frame_index)),
+                    is_seed_frame=(str(image_id) == str(seed_image_id) and int(time_int) == int(seed_time_int)),
                 )
             )
     return tracks
@@ -82,7 +82,7 @@ def tracks_to_raw_masks(
         bbox = [float(x) for x in t.bbox_xyxy_abs]
         source_image_path = str(source_image_path_by_image_id.get(t.image_id, ""))
 
-        snip_id = f"{str(t.embryo_id)}_{str(t.channel_id)}_f{int(t.frame_index):04d}"
+        snip_id = f"{str(t.embryo_id)}_{str(t.channel_id)}_f{int(t.time_int):04d}"
         exported_rel = f"{exported_mask_rel_prefix}/{mask_head}/{snip_id}_mask.png"
         exported_abs = exported_mask_dir / f"{snip_id}_mask.png"
 
@@ -95,7 +95,7 @@ def tracks_to_raw_masks(
 
         masks.append(
             RawMask(
-                frame_index=int(t.frame_index),
+                time_int=int(t.time_int),
                 image_id=str(t.image_id),
                 embryo_id=str(t.embryo_id),
                 embryo_local_id=str(t.embryo_local_id),

@@ -58,11 +58,7 @@ def merge_tracking_with_frame_contract(
     tracking_df: pd.DataFrame,
     frame_contract_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    preferred_keys = ["experiment_id", "well_id", "channel_id"]
-    if "frame_index" in tracking_df.columns and "frame_index" in frame_contract_df.columns:
-        preferred_keys.append("frame_index")
-    elif "time_int" in tracking_df.columns and "time_int" in frame_contract_df.columns:
-        preferred_keys.append("time_int")
+    preferred_keys = ["experiment_id", "well_id", "channel_id", "time_int"]
     join_keys = [key for key in preferred_keys if key in tracking_df.columns and key in frame_contract_df.columns]
 
     if not join_keys:

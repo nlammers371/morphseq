@@ -45,7 +45,7 @@ def normalize_track_instances(
                 "embryo_local_id": str(t.embryo_local_id),
                 "channel_id": str(t.channel_id),
                 "instance_id": instance_id,
-                "frame_index": int(t.frame_index),
+                "time_int": int(t.time_int),
                 "bbox_x_min": float(x0),
                 "bbox_y_min": float(y0),
                 "bbox_x_max": float(x1),
@@ -64,7 +64,7 @@ def normalize_track_instances(
     df = pd.DataFrame(rows)
     if len(df) == 0:
         df = pd.DataFrame(columns=REQUIRED_COLUMNS_TRACK_INSTANCES)
-    df = df.sort_values(["well_id", "frame_index", "image_id", "embryo_id"]).reset_index(drop=True)
+    df = df.sort_values(["well_id", "time_int", "image_id", "embryo_id"]).reset_index(drop=True)
     validate_schema(df, REQUIRED_COLUMNS_TRACK_INSTANCES, stage_name="track_instances")
     require_unique(df, UNIQUE_KEY_TRACK_INSTANCES, stage_name="track_instances")
     return df

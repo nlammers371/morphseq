@@ -11,7 +11,7 @@ REQUIRED_COLUMNS_AUXILIARY_MASKS = [
     "experiment_id",
     "well_id",
     "well_index",
-    "frame_index",
+    "time_int",
     "image_id",
     "source_image_path",
     "source_micrometers_per_pixel",

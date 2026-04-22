@@ -33,7 +33,7 @@ class FrameRecord:
 
     image_id: str
     image_path: Path
-    frame_index: int | None = None
+    time_int: int | None = None
     annotations: list[AnnotationRecord] = field(default_factory=list)
     qc_flags: list[str] = field(default_factory=list)
 

@@ -28,7 +28,7 @@ def ingest_detections(
     model,
     image_path: Path,
     *,
-    frame_index: int,
+    time_int: int,
     image_id: str,
     image_height_px: int,
     image_width_px: int,
@@ -56,7 +56,7 @@ def ingest_detections(
         phrase = d.get("phrase")
         raw.append(
             RawDetection(
-                frame_index=int(frame_index),
+                time_int=int(time_int),
                 image_id=str(image_id),
                 box_xyxy_norm=box_norm,
                 confidence=conf,
@@ -96,12 +96,12 @@ def ingest_seed_selection(
     selected_indices = list(range(num))
 
     # Frame index is stored on detections.
-    seed_frame_index = int(chosen[0].frame_index) if chosen else 0
+    seed_time_int = int(chosen[0].time_int) if chosen else 0
     return SeedSelection(
         experiment_id=str(experiment_id),
         well_id=str(well_id),
         video_id=str(video_id),
-        seed_frame_index=seed_frame_index,
+        seed_time_int=seed_time_int,
         seed_image_id=str(seed_image_id),
         num_detections=num,
         avg_confidence=avg,

@@ -12,7 +12,7 @@ REQUIRED_COLUMNS_FEATURES = [
     'embryo_id',
     'experiment_id',        # For cross-experiment analysis
     'well_id',              # Well identifier
-    'frame_index',
+    'time_int',
 
     # Calibration (document what was used for conversions)
     'micrometers_per_pixel',

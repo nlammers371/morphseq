@@ -185,7 +185,7 @@ def run_auxiliary_mask_inference(
                 "experiment_id": str(row["experiment_id"]),
                 "well_id": str(row["well_id"]),
                 "well_index": str(row["well_index"]),
-                "frame_index": int(row["frame_index"]),
+                "time_int": int(row["time_int"]),
                 "image_id": image_id,
                 "source_image_path": str(source_image_path),
                 "source_micrometers_per_pixel": float(source_mpp_value),

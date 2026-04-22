@@ -16,7 +16,7 @@
 
  Locked invariants
 
- - frame_index is canonical — Phase 3 contracts use `frame_index`
+ - time_int is canonical — Phase 3 contracts use `time_int`
  only (no `time_int`)
  - Absolute pixel bbox is canonical — xyxy format, float values,
  clamped to image bounds
@@ -25,7 +25,7 @@
  - Per-well shards first, merge to experiment-level — no write
  collisions
  - Provenance stamped once by NormalizeContext — not by ingestors
- - Deterministic sort before writes — (well_id, frame_index,
+ - Deterministic sort before writes — (well_id, time_int,
  image_id, embryo_id)
  - Explicit mask contracts per head (future-proof):
    - embryo_mask_rle.parquet (mask_type column still included)
@@ -89,7 +89,7 @@
 
  @dataclass
  class RawDetection:
-     frame_index: int
+     time_int: int
      image_id: str
      box_xyxy_norm: list[float]           # normalized [0,1] —
  kept for traceability only
@@ -108,7 +108,7 @@
 
  @dataclass
  class RawTrack:
-     frame_index: int
+     time_int: int
      image_id: str
      embryo_id: str
      embryo_local_id: str = ""            # tracker-native ID (backend/debug)
@@ -128,7 +128,7 @@
 
  @dataclass
  class RawMask:
-     frame_index: int
+     time_int: int
      image_id: str
      embryo_id: str
      embryo_local_id: str = ""            # tracker-native ID (backend/debug)
@@ -156,7 +156,7 @@
      experiment_id: str
      well_id: str
      video_id: str
-     seed_frame_index: int
+     seed_time_int: int
      seed_image_id: str
      num_detections: int
      avg_confidence: float
@@ -218,7 +218,7 @@
 
  REQUIRED_COLUMNS_FRAME_DETECTIONS = [
      "experiment_id", "well_id", "video_id", "image_id",
-     "frame_index",
+     "time_int",
      "detection_index",
      "detection_instance_id",             # stable per-image id: "{image_id}_det{idx:03d}"
      "box_x_min_abs", "box_y_min_abs", "box_x_max_abs",
@@ -234,7 +234,7 @@
 
  REQUIRED_COLUMNS_SEED_SELECTION = [
      "experiment_id", "well_id", "video_id",
-     "seed_frame_index", "seed_image_id",
+     "seed_time_int", "seed_image_id",
      "num_detections", "avg_confidence", "selection_reason",
      "candidate_frames_evaluated",
      "selected_detection_indices",
@@ -246,7 +246,7 @@
 
  REQUIRED_COLUMNS_TRACK_INSTANCES = [
      "experiment_id", "video_id", "well_id", "well_index",
-     "image_id", "embryo_id", "frame_index",
+     "image_id", "embryo_id", "time_int",
      "embryo_local_id", "channel_id", "instance_id",
      "bbox_x_min", "bbox_y_min", "bbox_x_max", "bbox_y_max",
      "area_px", "mask_confidence",
@@ -261,7 +261,7 @@
 
  REQUIRED_COLUMNS_MASK_RLE = [
      "experiment_id", "video_id", "well_id",
-     "image_id", "embryo_id", "snip_id", "frame_index",
+     "image_id", "embryo_id", "snip_id", "time_int",
      "embryo_local_id", "channel_id", "instance_id",
      "mask_type",                        # "sam" | "yolk" |
  "focus" | etc.
@@ -306,7 +306,7 @@
 
  gdino_ingestor.py
 
- - ingest_detections(model, image_path, *, frame_index, image_id,
+ - ingest_detections(model, image_path, *, time_int, image_id,
  image_height_px, image_width_px, ...) -> list[RawDetection]
    - Calls existing detect_embryos() + filter_detections()
    - Computes box_xyxy_abs from normalized + image dims, clamps to
@@ -345,9 +345,9 @@
 
  1. _validate_provenance(records) — raises if source_backend or
  run_id empty
- 2. frame_index comes from frame_contract.csv (source of truth)
+ 2. time_int comes from frame_contract.csv (source of truth)
  3. validate_dataframe_schema() + uniqueness check on UNIQUE_KEY_*
- 4. Deterministic sort before returning: (well_id, frame_index,
+ 4. Deterministic sort before returning: (well_id, time_int,
  image_id, embryo_id)
 
  Files
@@ -431,7 +431,7 @@
      run_id = run_id or uuid.uuid4().hex[:8]
      backends = load_segmentation_backends_config(pipeline_config)
 
-     # Load manifest, filter to well, use frame_index as the
+     # Load manifest, filter to well, use time_int as the
      # canonical temporal index for Phase 3
      well_df = ...
 
@@ -591,7 +591,7 @@
 
  - Each normalizer produces DataFrame matching REQUIRED_COLUMNS_*
  - Missing provenance raises ValueError
- - frame_index carried through output
+ - time_int carried through output
  - Deterministic sort order
  - Unique key violations detected
  - model_release never empty (should be "unknown")
@@ -674,7 +674,7 @@
  1. NormalizeContext centralizes provenance — ingestors return raw
   records without provenance. Runner stamps once per backend.
  Single attribution point.
- 2. frame_index is the only temporal index in Phase 3 — taken
+ 2. time_int is the only temporal index in Phase 3 — taken
  from frame_contract.csv and carried through contracts.
  3. Absolute pixel bbox canonical, xyxy float — normalized bbox
  kept only on RawDetection for traceability. All contracts use
@@ -705,7 +705,7 @@
  import time.
  12. Unique keys include (source_backend, run_id) — prevents rerun
   row duplication.
- 13. Deterministic sort before all writes — (well_id, frame_index,
+ 13. Deterministic sort before all writes — (well_id, time_int,
   image_id, embryo_id). Makes diffs reproducible.
  14. Per-well validation sentinels — merge consumes only validated
   shards. Experiment-level contract validated again after merge.

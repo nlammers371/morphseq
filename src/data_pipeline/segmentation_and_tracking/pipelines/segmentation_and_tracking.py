@@ -94,8 +94,8 @@ def run_segmentation_and_tracking(
     if len(well_df) == 0:
         raise ValueError(f"No frames found for experiment={experiment_id} well={well_id} channel_id={channel_id}.")
 
-    well_df["frame_index"] = well_df["frame_index"].astype(int)
-    well_df = well_df.sort_values(["frame_index", "image_id"]).reset_index(drop=True)
+    well_df["time_int"] = well_df["time_int"].astype(int)
+    well_df = well_df.sort_values(["time_int", "image_id"]).reset_index(drop=True)
     max_frames = sat_cfg.get("max_frames")
     if max_frames is not None:
         well_df = well_df.head(int(max_frames)).reset_index(drop=True)
@@ -125,7 +125,7 @@ def run_segmentation_and_tracking(
     frames_for_qc: list[tuple[str, Path]] = []
     stitched_abs_by_image_id: dict[str, Path] = {}
     stitched_rel_by_image_id: dict[str, str] = {}
-    frame_index_by_image_id: dict[str, int] = {}
+    time_int_by_image_id: dict[str, int] = {}
     img_hw_by_image_id: dict[str, tuple[int, int]] = {}
     for _, row in well_df.iterrows():
         image_id = str(row["image_id"])
@@ -133,7 +133,7 @@ def run_segmentation_and_tracking(
         stitched_abs = _resolve_rel_to_data_root(stitched_rel, data_root=output_root)
         stitched_abs_by_image_id[image_id] = stitched_abs
         stitched_rel_by_image_id[image_id] = stitched_rel
-        frame_index_by_image_id[image_id] = int(row["frame_index"])
+        time_int_by_image_id[image_id] = int(row["time_int"])
         img_hw_by_image_id[image_id] = (int(row["image_height_px"]), int(row["image_width_px"]))
         frames_for_qc.append((image_id, stitched_abs))
 
@@ -194,13 +194,13 @@ def run_segmentation_and_tracking(
     raw_dets_all = []
     dets_by_image: dict[str, list] = {}
     for image_id, stitched_abs in frames_for_qc:
-        frame_index = int(frame_index_by_image_id[image_id])
+        time_int = int(time_int_by_image_id[image_id])
         img_h, img_w = img_hw_by_image_id[image_id]
 
         raw = det_ing.ingest_detections(
             det_model,
             stitched_abs,
-            frame_index=frame_index,
+            time_int=time_int,
             image_id=image_id,
             image_height_px=img_h,
             image_width_px=img_w,
@@ -231,15 +231,15 @@ def run_segmentation_and_tracking(
     seed_df = normalize_seed_selection([seed])
     seed_df.to_parquet(contracts_dir / "seed_selection.parquet", index=False)
 
-    # Build SAM2 frame sequence (chronological) and map seq_idx -> image_id/frame_index.
+    # Build SAM2 frame sequence (chronological) and map seq_idx -> image_id/time_int.
     frame_paths = []
-    seq_index_to_frame_index: dict[int, int] = {}
+    seq_index_to_time_int: dict[int, int] = {}
     image_id_by_seq_index: dict[int, str] = {}
     source_image_path_by_image_id: dict[str, str] = {}
     for seq_idx, (image_id, stitched_abs) in enumerate(frames_for_qc):
         frame_paths.append(stitched_abs)
-        frame_index = int(frame_index_by_image_id[image_id])
-        seq_index_to_frame_index[seq_idx] = frame_index
+        time_int = int(time_int_by_image_id[image_id])
+        seq_index_to_time_int[seq_idx] = time_int
         image_id_by_seq_index[seq_idx] = image_id
         source_image_path_by_image_id[image_id] = stitched_rel_by_image_id[image_id]
 
@@ -282,20 +282,20 @@ def run_segmentation_and_tracking(
             verbose=verbose,
         )
 
-    # Remap SAM2 seq indices to manifest frame_index.
+    # Remap SAM2 seq indices to manifest time_int.
     remapped: dict[int, dict[str, dict]] = {}
-    image_id_by_frame_index: dict[int, str] = {}
+    image_id_by_time_int: dict[int, str] = {}
     for seq_idx, frame_data in sam2_results.items():
-        frame_index = seq_index_to_frame_index.get(int(seq_idx))
-        if frame_index is None:
+        time_int = seq_index_to_time_int.get(int(seq_idx))
+        if time_int is None:
             continue
-        remapped[int(frame_index)] = frame_data
-        image_id_by_frame_index[int(frame_index)] = image_id_by_seq_index[int(seq_idx)]
+        remapped[int(time_int)] = frame_data
+        image_id_by_time_int[int(time_int)] = image_id_by_seq_index[int(seq_idx)]
 
     raw_tracks = trk_ing.ingest_propagation(
         remapped,
-        image_id_by_frame_index=image_id_by_frame_index,
-        seed_frame_index=int(seed.seed_frame_index),
+        image_id_by_time_int=image_id_by_time_int,
+        seed_time_int=int(seed.seed_time_int),
         seed_image_id=str(seed.seed_image_id),
         well_id=str(canonical_well_id),
         channel_id=str(channel_id),

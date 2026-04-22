@@ -67,7 +67,7 @@ REQUIRED_COLUMNS_SCOPE_METADATA = [
     'microscope_id',
     'channel',
     'z_position',
-    'frame_index',
+    'time_int',
 ]
 ```
 
@@ -80,7 +80,7 @@ REQUIRED_COLUMNS_SCOPE_AND_PLATE_METADATA = [
     'well_index',
     'image_id',
     'time_int',
-    'frame_index',
+    'time_int',
     'embryo_id',
 
     # From plate_metadata
@@ -109,7 +109,7 @@ REQUIRED_COLUMNS_SEGMENTATION_TRACKING = [
     'image_id',
     'embryo_id',
     'snip_id',
-    'frame_index',
+    'time_int',
     'time_int',
 
     # Mask data
@@ -141,7 +141,7 @@ REQUIRED_COLUMNS_SNIP_MANIFEST = [
     'snip_id',
     'embryo_id',
     'experiment_id',
-    'frame_index',
+    'time_int',
     'time_int',
 
     # File paths
@@ -165,7 +165,7 @@ REQUIRED_COLUMNS_FEATURES = [
     'embryo_id',
     'experiment_id',        # For cross-experiment analysis
     'well_id',              # Well identifier
-    'frame_index',
+    'time_int',
 
     # Calibration (document what was used for conversions)
     'micrometers_per_pixel',

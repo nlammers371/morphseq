@@ -90,7 +90,7 @@ analysis_tables/{experiment_id}/              # NEW: Final output folder
 **Columns:**
 ```
 From tracking_table.csv (43 columns):
-    - snip_id, image_id, embryo_id, frame_index
+    - snip_id, image_id, embryo_id, time_int
     - bbox_x_min, bbox_y_min, bbox_x_max, bbox_y_max
     - area_px
     - time_int

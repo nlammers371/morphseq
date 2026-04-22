@@ -15,12 +15,12 @@ import pandas as pd
 from data_pipeline.io.validators import validate_dataframe_schema
 from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
-from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 from data_pipeline.schemas.frame_contract import REQUIRED_COLUMNS_FRAME_CONTRACT, UNIQUE_KEY_FRAME_CONTRACT
 
 
 def _with_frame_columns(df: pd.DataFrame) -> pd.DataFrame:
-    return ensure_frame_time_alias(df, stage_name="frame_contract_inputs")
+    return ensure_time_int_column(df, stage_name="frame_contract_inputs")
 
 
 def _canonicalize_scope_metadata(df: pd.DataFrame) -> pd.DataFrame:
@@ -38,7 +38,7 @@ def _canonicalize_scope_metadata(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df["channel_name_raw"] = df["channel_id"].astype(str)
 
-    dedup_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
+    dedup_cols = ["experiment_id", "well_id", "well_index", "channel_id", "time_int"]
     existing_dedup_cols = [col for col in dedup_cols if col in df.columns]
     if len(existing_dedup_cols) == len(dedup_cols):
         df = (
@@ -63,7 +63,7 @@ def build_frame_contract(
     stitched_df = add_frame_interval_unit_columns(stitched_df)
     scope_df = _canonicalize_scope_metadata(pd.read_csv(scope_metadata_csv))
 
-    join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "frame_index"]
+    join_cols = ["experiment_id", "well_id", "well_index", "channel_id", "time_int"]
 
     merged = stitched_df.merge(
         scope_df,
@@ -99,7 +99,7 @@ def build_frame_contract(
             "experiment_id": merged["experiment_id"],
             "well_id": merged["well_id"],
             "well_index": merged["well_index"],
-            "frame_index": merged["frame_index"],
+            "time_int": merged["time_int"],
             "channel_id": merged["channel_id"],
             "image_id": merged["image_id"],
             "time_int": merged["time_int"],

@@ -28,7 +28,7 @@ def consolidate_snip_features(
     Consolidate all feature tables into single DataFrame.
 
     Args:
-        tracking_df: Segmentation tracking with snip_id, embryo_id, frame_index
+        tracking_df: Segmentation tracking with snip_id, embryo_id, time_int
         geometry_df: Mask geometry metrics (area, perimeter, etc.)
         kinematics_df: Pose and kinematics metrics
         fraction_alive_df: Viability metrics

@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from data_pipeline.io.validators import validate_dataframe_schema
-from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 from data_pipeline.schemas.frame_contract import (
     REQUIRED_COLUMNS_FRAME_CONTRACT,
     UNIQUE_KEY_FRAME_CONTRACT,
@@ -17,7 +17,7 @@ from data_pipeline.schemas.frame_contract import (
 
 def validate_frame_contract(input_csv: Path, output_flag: Path) -> pd.DataFrame:
     """Validate frame contract schema, uniqueness, and stitched path existence."""
-    df = ensure_frame_time_alias(
+    df = ensure_time_int_column(
         pd.read_csv(input_csv),
         stage_name="frame_contract",
     )

@@ -54,7 +54,7 @@ def _derive_video_id_from_image_stem(image_stem: str) -> str | None:
     return prefix
 
 
-def _extract_frame_index(image_id: str, fallback: int) -> int:
+def _extract_time_int(image_id: str, fallback: int) -> int:
     m = re.search(r"_[ft](\d+)$", image_id)
     if m:
         return int(m.group(1))
@@ -175,7 +175,7 @@ def _load_grounded_sam2_video_record(
         frame = FrameRecord(
             image_id=image_id,
             image_path=image_path,
-            frame_index=_extract_frame_index(image_id, i),
+            time_int=_extract_time_int(image_id, i),
             annotations=annotations,
             qc_flags=list(image_data.get("qc_flags", [])),
         )
@@ -241,14 +241,14 @@ def _load_coco_video_record(
             continue
         anns_by_image.setdefault(img_id, []).append(ann)
 
-    # Stable sort: frame_index if provided, else by file name
+    # Stable sort: time_int if provided, else by file name
     def _sort_key(img: dict[str, Any]) -> tuple[int, str]:
         fn = str(img.get("file_name", ""))
-        idx = img.get("frame_index")
+        idx = img.get("time_int")
         if isinstance(idx, int):
             return idx, fn
         stem = Path(fn).stem
-        fallback_idx = _extract_frame_index(stem, 0)
+        fallback_idx = _extract_time_int(stem, 0)
         return fallback_idx, fn
 
     selected_images.sort(key=_sort_key)
@@ -282,7 +282,7 @@ def _load_coco_video_record(
         frame = FrameRecord(
             image_id=stem,
             image_path=image_path,
-            frame_index=int(image.get("frame_index", _extract_frame_index(stem, i))),
+            time_int=int(image.get("time_int", _extract_time_int(stem, i))),
             annotations=ann_records,
             qc_flags=[],
         )

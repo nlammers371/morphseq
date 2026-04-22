@@ -7,7 +7,7 @@ REQUIRED_COLUMNS_STAGE_PREDICTIONS = [
     "well_index",
     "image_id",
     "embryo_id",
-    "frame_index",
+    "time_int",
     "snip_id",
 
     # Inputs used

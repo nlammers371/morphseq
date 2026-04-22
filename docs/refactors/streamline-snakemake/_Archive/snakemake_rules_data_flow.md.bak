@@ -423,7 +423,7 @@ REQUIRED_CHANNEL_FIELDS = [
 
 REQUIRED_FRAME_FIELDS = [
     'image_id',
-    'frame_index', 
+    'time_int',
     'absolute_start_time',
     'experiment_time_s',
     'image_path'

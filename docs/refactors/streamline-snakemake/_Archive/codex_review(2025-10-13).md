@@ -8,9 +8,9 @@
    - Recommendation: Restrict the scope/plate schema to well-level data (experiment, well identifiers, calibration). Move embryo-specific fields into later schemas that operate after segmentation.
 
 2. **Snip ID format oscillates between `_s####` and `_t####` across docs**  
-   - Evidence: `docs/refactors/streamline-snakemake/processing_files_pipeline_structure_and_plan.md:354-355` defines snip IDs as `{embryo_id}_s{frame:04d}`, while the same file later (line 733) and the output structure spec (`docs/refactors/streamline-snakemake/data_ouput_strcutre.md:110-118`) require `{embryo_id}_t{frame_index}`.  
+   - Evidence: `docs/refactors/streamline-snakemake/processing_files_pipeline_structure_and_plan.md:354-355` defines snip IDs as `{embryo_id}_s{frame:04d}`, while the same file later (line 733) and the output structure spec (`docs/refactors/streamline-snakemake/data_ouput_strcutre.md:110-118`) require `{embryo_id}_t{time_int}`.
    - Impact: Downstream joins (snip manifest, feature tables, embeddings) rely on stable snip IDs. Conflicting formats will break lookups, make validation impossible, and cause duplicated rows when the pipeline mixes both patterns.  
-   - Recommendation: Pick one canonical snip ID pattern (likely `_t{frame_index}` to stay aligned with image IDs), update every document/rule/spec to match, and capture the convention in the forthcoming shared entity-ID rules module so future docs/code stay consistent.
+   - Recommendation: Pick one canonical snip ID pattern (likely `_t{time_int}` to stay aligned with image IDs), update every document/rule/spec to match, and capture the convention in the forthcoming shared entity-ID rules module so future docs/code stay consistent.
 
 3. **Analysis-ready schema attempts to embed every upstream column**  
    - Evidence: `docs/refactors/streamline-snakemake/data_validation_plan.md:228-244` builds `REQUIRED_COLUMNS_ANALYSIS_READY` by concatenating the feature, QC, plate, and scope required lists. Those upstream lists include columns (e.g., `channel`, `microscope_id`, `absolute_start_time`) that never appear in `segmentation_tracking.csv` or downstream merges.  

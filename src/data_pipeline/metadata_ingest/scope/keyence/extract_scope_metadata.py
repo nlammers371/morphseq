@@ -285,7 +285,7 @@ def extract_keyence_scope_metadata(
                 'well_index': well_index,
                 'well_id': f"{experiment_id}_{well_index}",
                 'time_int': time_int,
-                'frame_index': time_int,  # For Keyence, time_int == frame_index
+                'time_int': time_int,  # For Keyence, time_int == time_int
                 'image_id': f"{experiment_id}_{well_index}_{normalized_channel}_f{time_int:04d}",
 
                 # Spatial calibration

@@ -158,7 +158,7 @@ Core columns:
 - `well_index`
 - `channel_id`
 - `time_int`
-- `frame_index`
+- `time_int`
 - `image_id`
 - `stitched_image_path`
 - `materialization_status`
@@ -177,7 +177,7 @@ Core columns:
 - `channel_id`
 - `channel_name_raw`
 - `time_int`
-- `frame_index`
+- `time_int`
 - `image_id`
 - `stitched_image_path`
 - `micrometers_per_pixel`
@@ -206,8 +206,8 @@ experiment_id
 └── well_index (A01, B12, ...)
     └── well_id = {experiment_id}_{well_index}
         └── channel_id (BF, GFP, ...)
-            └── frame_index (0-based contiguous order)
-                └── image_id = {well_id}_{channel_id}_t{frame_index}
+            └── time_int (0-based contiguous order)
+                └── image_id = {well_id}_{channel_id}_t{time_int}
                     └── embryo_id (starts at segmentation stage)
                         └── snip_id
 ```

@@ -14,7 +14,6 @@ REQUIRED_COLUMNS_FRAME_CONTRACT = [
     "channel_id",
     "channel_name_raw",
     "time_int",
-    "frame_index",
     "image_id",
     "stitched_image_path",
     "micrometers_per_pixel",

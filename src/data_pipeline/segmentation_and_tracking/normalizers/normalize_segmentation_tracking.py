@@ -24,6 +24,6 @@ def build_segmentation_tracking_contract(mask_rle_df: pd.DataFrame, *, well_inde
 
     # Ensure required columns exist; extra columns are allowed.
     validate_schema(df, REQUIRED_COLUMNS_SEGMENTATION_TRACKING, stage_name="segmentation_tracking")
-    df = df.sort_values(["well_id", "frame_index", "image_id", "embryo_id"]).reset_index(drop=True)
+    df = df.sort_values(["well_id", "time_int", "image_id", "embryo_id"]).reset_index(drop=True)
     return df
 

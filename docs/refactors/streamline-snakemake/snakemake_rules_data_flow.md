@@ -249,7 +249,7 @@ Required columns:
 - `well_index`
 - `channel_id`
 - `time_int`
-- `frame_index`
+- `time_int`
 - `image_id`
 - `stitched_image_path`
 - `materialization_status`
@@ -269,7 +269,7 @@ Required columns:
 - `channel_id`
 - `channel_name_raw`
 - `time_int`
-- `frame_index`
+- `time_int`
 - `image_id`
 - `stitched_image_path`
 - `micrometers_per_pixel`
@@ -295,11 +295,11 @@ Uniqueness key for both:
 
 - `channel_id`: normalized channel (`BF`, `GFP`, etc.)
 - `channel_name_raw`: microscope-native channel label
-- `image_id`: `{well_id}_{channel_id}_f{frame_index:04d}`
+- `image_id`: `{well_id}_{channel_id}_f{time_int:04d}`
 
 Frame semantics:
 - `time_int` = acquisition ordering key (to be deprecate) 
-- `frame_index` = contiguous 0-based index after sorting by `time_int` per `(experiment_id, well_id, channel_id)`
+- `time_int` = contiguous 0-based index after sorting by `time_int` per `(experiment_id, well_id, channel_id)`
 
 ---
 
@@ -479,7 +479,7 @@ Perform microscope-specific z-stack collapse and tile stitching to produce norma
 
 **Purpose:**
 - Join stitched image index + scope metadata into canonical plate-free frame-level table
-- Preserve and validate `frame_index` (canonical) and `time_int` (compatibility alias)
+- Preserve and validate `time_int` (canonical) and `time_int` (compatibility alias)
 - Single source of truth for frame inventory consumed by segmentation
 
 **Key point:** This is where channel normalization is validated. All downstream rules use normalized channel names from this manifest.
@@ -766,7 +766,7 @@ REQUIRED_CHANNEL_FIELDS = [
 
 REQUIRED_FRAME_FIELDS = [
     'image_id',
-    'frame_index', 
+    'time_int',
     'absolute_start_time',
     'experiment_time_s',
     'image_path'
@@ -825,7 +825,7 @@ rule build_frame_contract:
     # 1. Read scope_series_metadata_mapped.csv (includes normalized channel info from preprocessing)
     # 2. Join with stitched_image_index.csv (plate-free physical frame manifest)
     # 3. Sort frames by time_int per (experiment_id, well_id, channel_id)
-    # 4. Assign contiguous frame_index
+    # 4. Assign contiguous time_int
     # 5. Validate against schema (REQUIRED_COLUMNS_FRAME_MANIFEST)
     # 6. Write frame_contract.csv [VALIDATED]
 ```

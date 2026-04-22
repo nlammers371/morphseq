@@ -118,7 +118,7 @@ def render_overlays_from_segmentation_tracking(
     if len(df) == 0:
         return {"out_dir": out_dir}
 
-    required = {"image_id", "frame_index", "source_image_path", "exported_mask_path", "embryo_id"}
+    required = {"image_id", "time_int", "source_image_path", "exported_mask_path", "embryo_id"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"segmentation_tracking missing columns required for overlays: {sorted(missing)}")
@@ -141,7 +141,7 @@ def render_overlays_from_segmentation_tracking(
         suffix = f"_{mask_type}_mask_overlay" if mask_type is not None else ""
 
     # Ensure deterministic order.
-    sort_cols = ["frame_index", "image_id"]
+    sort_cols = ["time_int", "image_id"]
     if "embryo_local_id" in df.columns:
         sort_cols.append("embryo_local_id")
     else:

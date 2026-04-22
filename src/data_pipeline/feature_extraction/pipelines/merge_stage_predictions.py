@@ -37,7 +37,7 @@ def merge_stage_predictions(*, output_root: Path, experiment: str) -> dict[str, 
 
     dfs = [pd.read_parquet(p) for p in parts]
     merged = pd.concat(dfs, axis=0, ignore_index=True)
-    merged = merged.sort_values([c for c in ["well_id", "frame_index", "image_id", "embryo_id", "snip_id"] if c in merged.columns])
+    merged = merged.sort_values([c for c in ["well_id", "time_int", "image_id", "embryo_id", "snip_id"] if c in merged.columns])
 
     out_pq = contracts_dir / "stage_predictions.parquet"
     out_csv = contracts_dir / "stage_predictions.csv"

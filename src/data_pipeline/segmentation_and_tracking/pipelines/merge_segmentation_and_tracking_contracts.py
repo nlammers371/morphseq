@@ -80,7 +80,7 @@ def merge_contracts(*, experiment: str, output_root: Path) -> None:
             continue
         dfs = [pd.read_parquet(p) for p in parts]
         merged = pd.concat(dfs, axis=0, ignore_index=True)
-        merged = merged.sort_values([c for c in ["well_id", "frame_index", "image_id", "embryo_id"] if c in merged.columns])
+        merged = merged.sort_values([c for c in ["well_id", "time_int", "image_id", "embryo_id"] if c in merged.columns])
         merged.to_parquet(contracts_dir / parquet_name, index=False)
 
     # Final CSV contract
@@ -92,7 +92,7 @@ def merge_contracts(*, experiment: str, output_root: Path) -> None:
     if csv_parts:
         dfs = [pd.read_csv(p) for p in csv_parts]
         merged = pd.concat(dfs, axis=0, ignore_index=True)
-        merged = merged.sort_values([c for c in ["well_id", "frame_index", "image_id", "embryo_id"] if c in merged.columns])
+        merged = merged.sort_values([c for c in ["well_id", "time_int", "image_id", "embryo_id"] if c in merged.columns])
         merged.to_csv(contracts_dir / "segmentation_tracking.csv", index=False)
 
     def _mask_heads_for_well(well_root: Path) -> list[str]:

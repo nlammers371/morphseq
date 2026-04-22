@@ -25,7 +25,7 @@ from data_pipeline.image_building.shared.log_focus import LoG_focus_stacker
 from data_pipeline.image_building.shared.log_focus import im_rescale
 from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
-from data_pipeline.metadata_ingest.time_helpers import ensure_frame_time_alias
+from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 
 log = logging.getLogger(__name__)
 
@@ -408,7 +408,7 @@ def materialize_stitched_images(
     done_flag: Path | None = None,
 ) -> pd.DataFrame:
     """Materialize stitched images for selected wells and emit stitched-image index."""
-    scope_df = ensure_frame_time_alias(
+    scope_df = ensure_time_int_column(
         pd.read_csv(scope_csv),
         stage_name="materialize_stitched_images.scope_csv",
     )
@@ -429,8 +429,8 @@ def materialize_stitched_images(
     scope_df = add_frame_interval_unit_columns(scope_df)
 
     scope_df = (
-        scope_df.sort_values(["well_index", "channel_id", "frame_index"])
-        .drop_duplicates(subset=["experiment_id", "well_id", "well_index", "channel_id", "frame_index"], keep="first")
+        scope_df.sort_values(["well_index", "channel_id", "time_int"])
+        .drop_duplicates(subset=["experiment_id", "well_id", "well_index", "channel_id", "time_int"], keep="first")
         .copy()
     )
 
@@ -465,8 +465,8 @@ def materialize_stitched_images(
             well_index = str(row["well_index"])
             channel_id = str(row.get("channel_id", row.get("channel", "BF")))
             well_id = str(row["well_id"])
-            frame_index = int(row["frame_index"])
-            time_int = int(row.get("time_int", frame_index))
+            time_int = int(row["time_int"])
+            time_int = int(row.get("time_int", time_int))
             frame_interval_s = _safe_float(row.get("frame_interval_s", np.nan))
             frame_interval_min = _safe_float(row.get("frame_interval_min", np.nan))
             frame_interval_hr = _safe_float(row.get("frame_interval_hr", np.nan))
@@ -477,7 +477,7 @@ def materialize_stitched_images(
 
             image_id = row.get("image_id")
             if pd.isna(image_id) or not str(image_id):
-                image_id = f"{well_id}_{channel_id}_f{frame_index:04d}"
+                image_id = f"{well_id}_{channel_id}_f{time_int:04d}"
             image_id = str(image_id)
 
             output_path = stitched_root / well_index / channel_id / f"{image_id}.{image_extension}"
@@ -517,7 +517,7 @@ def materialize_stitched_images(
                         output_path,
                         width,
                         height,
-                        frame_index,
+                        time_int,
                         overwrite=overwrite,
                         image_extension=image_extension,
                     )
@@ -576,7 +576,7 @@ def materialize_stitched_images(
                         output_path,
                         width,
                         height,
-                        frame_index,
+                        time_int,
                         overwrite=overwrite,
                         image_extension=image_extension,
                     )
@@ -587,7 +587,7 @@ def materialize_stitched_images(
                     output_path,
                     width,
                     height,
-                    frame_index,
+                    time_int,
                     overwrite=overwrite,
                     image_extension=image_extension,
                 )
@@ -600,7 +600,7 @@ def materialize_stitched_images(
                     "experiment_id": experiment,
                     "well_id": well_id,
                     "well_index": well_index,
-                    "frame_index": frame_index,
+                    "time_int": time_int,
                     "channel_id": channel_id,
                     "image_id": image_id,
                     "time_int": time_int,
@@ -644,7 +644,7 @@ def materialize_stitched_images(
         "experiment_id",
         "well_id",
         "well_index",
-        "frame_index",
+        "time_int",
         "channel_id",
         "image_id",
         "time_int",

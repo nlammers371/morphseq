@@ -57,7 +57,7 @@ def run_snip_processing_well(
     if len(tracking_df) == 0:
         raise ValueError(f"No rows for mask_type={mask_type!r} in: {segmentation_tracking_csv}")
 
-    frame_df = pd.read_csv(frame_contract_csv, usecols=["image_id", "micrometers_per_pixel", "well_index", "well_id", "frame_index"])
+    frame_df = pd.read_csv(frame_contract_csv, usecols=["image_id", "micrometers_per_pixel", "well_index", "well_id", "time_int"])
     frame_df["image_id"] = frame_df["image_id"].astype(str)
     tracking_df["image_id"] = tracking_df["image_id"].astype(str)
 
@@ -125,7 +125,7 @@ def run_snip_processing_well(
                     "well_index": row.get("well_index"),
                     "image_id": str(row["image_id"]),
                     "embryo_id": str(row["embryo_id"]),
-                    "frame_index": int(row["frame_index"]),
+                    "time_int": int(row["time_int"]),
                     "source_image_path": str(row["source_image_path"]),
                     "exported_mask_path": str(row["exported_mask_path"]),
                     "yolk_mask_path": None,

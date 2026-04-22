@@ -28,7 +28,7 @@ Example Usage:
     )
 
     # Result: DataFrame with columns:
-    # image_id, embryo_id, snip_id, frame_index, area_px, bbox_*,
+    # image_id, embryo_id, snip_id, time_int, area_px, bbox_*,
     # mask_confidence, mask_rle, exported_mask_path, well_id,
     # is_seed_frame, source_image_path, ...
     ```
@@ -38,7 +38,7 @@ Output Schema:
     - image_id: Unique image identifier (e.g., "exp_A01_t0000")
     - embryo_id: Unique embryo identifier within video
     - snip_id: Unique snip identifier (embryo × frame)
-    - frame_index: Temporal index
+    - time_int: Temporal index
     - area_px: Mask area in pixels
     - bbox_x_min, bbox_y_min, bbox_x_max, bbox_y_max: Bounding box
     - mask_confidence: SAM2 confidence score
@@ -165,7 +165,7 @@ def flatten_sam2_json_to_csv(
         ...                     "seed_frame_info": {"seed_frame": "exp1_A01_t0005"},
         ...                     "image_ids": {
         ...                         "exp1_A01_t0005": {
-        ...                             "frame_index": 5,
+        ...                             "time_int": 5,
         ...                             "embryos": {
         ...                                 "exp1_A01_e01": {
         ...                                     "snip_id": "exp1_A01_e01_t0005",
@@ -188,7 +188,7 @@ def flatten_sam2_json_to_csv(
         >>> len(df)
         1
         >>> df.columns.tolist()[:5]
-        ['image_id', 'embryo_id', 'snip_id', 'frame_index', 'area_px']
+        ['image_id', 'embryo_id', 'snip_id', 'time_int', 'area_px']
     """
     rows = []
 
@@ -208,7 +208,7 @@ def flatten_sam2_json_to_csv(
             image_ids = video_data.get("image_ids", {})
 
             for image_id, image_data in image_ids.items():
-                frame_index = image_data.get("frame_index", 0)
+                time_int = image_data.get("time_int", 0)
                 is_seed_frame = (image_id == seed_frame_id)
 
                 # Get source image path if available
@@ -252,7 +252,7 @@ def flatten_sam2_json_to_csv(
                         "image_id": image_id,
                         "embryo_id": embryo_id,
                         "snip_id": snip_id,
-                        "frame_index": frame_index,
+                        "time_int": time_int,
                         "time_int": time_int,
                         # Mask data
                         "mask_rle": mask_rle,
@@ -389,7 +389,7 @@ def validate_csv_schema(df: pd.DataFrame) -> None:
         ...     "image_id": ["img1"],
         ...     "embryo_id": ["e1"],
         ...     "snip_id": ["s1"],
-        ...     "frame_index": [0],
+        ...     "time_int": [0],
         ...     "area_px": [100.0],
         ...     "bbox_x_min": [10],
         ...     "bbox_y_min": [20],

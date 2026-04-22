@@ -109,7 +109,7 @@ def compute_stage_predictions_well(
             "well_index": merged_well_index,
             "image_id": merged["image_id"].astype(str),
             "embryo_id": merged["embryo_id"].astype(str),
-            "frame_index": merged["frame_index"].astype(int),
+            "time_int": merged["time_int"].astype(int),
             "snip_id": merged["snip_id"].astype(str),
             "elapsed_time_s": merged["elapsed_time_s"].astype(float),
             "start_age_hpf": float(start_age_hpf),
@@ -125,7 +125,7 @@ def compute_stage_predictions_well(
     validate_dataframe_schema(out, REQUIRED_COLUMNS_STAGE_PREDICTIONS, "stage_predictions")
 
     # Deterministic order.
-    out = out.sort_values(["frame_index", "image_id", "embryo_id", "snip_id"]).reset_index(drop=True)
+    out = out.sort_values(["time_int", "image_id", "embryo_id", "snip_id"]).reset_index(drop=True)
 
     out_pq = out_dir / "stage_predictions.parquet"
     out_csv = out_dir / "stage_predictions.csv"

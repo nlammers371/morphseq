@@ -210,7 +210,7 @@ Required columns:
 - `well_index`
 - `channel_id`
 - `time_int`
-- `frame_index`
+- `time_int`
 - `image_id`
 - `stitched_image_path`
 - `materialization_status` (`written`, `symlinked`, `skipped`, `failed`)
@@ -232,7 +232,7 @@ Required columns:
 - `channel_id`
 - `channel_name_raw`
 - `time_int`
-- `frame_index`
+- `time_int`
 - `image_id`
 - `stitched_image_path`
 - `micrometers_per_pixel`
@@ -254,7 +254,7 @@ Uniqueness key for both contracts:
 
 Frame semantics:
 - `time_int` is the acquisition time key.
-- `frame_index` is contiguous 0-based order after sorting by `time_int` per `(experiment_id, well_id, channel_id)`.
+- `time_int` is contiguous 0-based order after sorting by `time_int` per `(experiment_id, well_id, channel_id)`.
 
 ---
 
@@ -655,7 +655,7 @@ def propagate_bidirectional(predictor, frame_paths: list[Path], seed_idx: int,
     return merge_results(forward, backward)  # prefers forward when both exist
 ```
 
-`propagate_forward` always receives a `start_index`, so offset `0` from SAM2 maps back to the real frame index (the seed frame in the forward pass, the seed frame in reversed space for backward). When we do the reverse slice, we remap offsets with `seed_idx - offset` before merging, keeping everything keyed by true chronology.
+`propagate_forward` always receives a `start_index`, so offset `0` from SAM2 maps back to the real `time_int` (the seed frame in the forward pass, the seed frame in reversed space for backward). When we do the reverse slice, we remap offsets with `seed_idx - offset` before merging, keeping everything keyed by true chronology.
 
 #### **unet/** - AUXILIARY MASKS FOR QC
 - **inference.py**: Run inference on all 5 UNet models
@@ -1048,7 +1048,7 @@ built_image_data/{exp}/
 └── stitched_ff_images/
     └── {well_id}/                                # well_id = {experiment_id}_{well_index}
         └── {channel_id}/                       # Normalized channel name (BF, GFP, etc.)
-            └── {well_id}_{channel_id}_t{frame_index}.tif  # image_id-based filename
+            └── {well_id}_{channel_id}_t{time_int}.tif  # image_id-based filename
 
 build_diagnostics/{exp}/
 └── stitching_{microscope}.csv                    # Z-stack / stitching QA logs per microscope
@@ -1056,7 +1056,7 @@ build_diagnostics/{exp}/
 
 **Key points:**
 - Channel names normalized during `extract_scope_metadata` (Phase 1)
-- `image_id` format: `{experiment_id}_{well_index}_{channel_id}_t{frame_index}` (self-documenting)
+- `image_id` format: `{experiment_id}_{well_index}_{channel_id}_t{time_int}` (self-documenting)
 - Provenance tracked via `channel_name_raw` in `stitched_image_index.csv` / `frame_contract.csv`
 
 ### **Segmentation Outputs** (Phase 3 outputs)
@@ -1077,7 +1077,7 @@ segmentation/{exp}/
 
 **ID generation:**
 - `embryo_id` = `{image_id}_{embryo_index}` (e.g., `exp_A01_BF_t0000_e01`)
-- `snip_id` = `{embryo_id}_t{frame_index}` (e.g., `exp_A01_BF_t0000_e01_t0000`)
+- `snip_id` = `{embryo_id}_t{time_int}` (e.g., `exp_A01_BF_t0000_e01_t0000`)
 
 ### **Snip Processing** (Phase 4 outputs)
 ```

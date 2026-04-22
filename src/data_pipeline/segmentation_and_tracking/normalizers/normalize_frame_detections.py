@@ -36,7 +36,7 @@ def normalize_frame_detections(
                     "well_id": str(well_id),
                     "video_id": str(video_id),
                     "image_id": str(image_id),
-                    "frame_index": int(d.frame_index),
+                    "time_int": int(d.time_int),
                     "detection_index": int(idx),
                     "detection_instance_id": f"{str(image_id)}_det{int(idx):03d}",
                     "box_x_min_abs": float(x0),
@@ -56,7 +56,7 @@ def normalize_frame_detections(
     df = pd.DataFrame(rows)
     if len(df) == 0:
         df = pd.DataFrame(columns=REQUIRED_COLUMNS_FRAME_DETECTIONS)
-    df = df.sort_values(["well_id", "frame_index", "image_id", "detection_index"]).reset_index(drop=True)
+    df = df.sort_values(["well_id", "time_int", "image_id", "detection_index"]).reset_index(drop=True)
     validate_schema(df, REQUIRED_COLUMNS_FRAME_DETECTIONS, stage_name="frame_detections")
     require_unique(df, UNIQUE_KEY_FRAME_DETECTIONS, stage_name="frame_detections")
     return df

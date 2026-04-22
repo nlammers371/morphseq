@@ -8,7 +8,7 @@ from typing import Any
 class RawDetection:
     """One detected object in one frame, from any detector backend."""
 
-    frame_index: int
+    time_int: int
     image_id: str
     box_xyxy_norm: list[float]
     confidence: float
@@ -33,7 +33,7 @@ class RawDetection:
 class RawTrack:
     """One tracked object in one frame, from any tracker backend."""
 
-    frame_index: int
+    time_int: int
     image_id: str
     embryo_id: str
     mask: Any  # np.ndarray (H,W) binary
@@ -58,7 +58,7 @@ class RawTrack:
 class RawMask:
     """One RLE-encoded mask for one embryo in one frame."""
 
-    frame_index: int
+    time_int: int
     image_id: str
     embryo_id: str
     mask_type: str
@@ -90,7 +90,7 @@ class SeedSelection:
     experiment_id: str
     well_id: str
     video_id: str
-    seed_frame_index: int
+    seed_time_int: int
     seed_image_id: str
     num_detections: int
     avg_confidence: float

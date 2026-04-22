@@ -22,7 +22,7 @@ canonical `well_id`, `image_id`, and `channel` naming.
   `experiment_id`, `well_id`, `image_id`, and to normalize channels
   (`BF`, `GFP`, …). No `ch00`/`ch01` legacy names.
 - **Diagnostics columns (recommended, not enforced):**
-  - Required for provenance: `experiment_id`, `well_id`, `channel`, `frame_index`
+  - Required for provenance: `experiment_id`, `well_id`, `channel`, `time_int`
   - Optional QA metrics: focus scores, tile counts, warnings, processing timestamps
   - Per-microscope columns encouraged (e.g., Keyence z-plane selection, YX1 bit depth)
   - No formal schema validation - diagnostics are for human review, not pipeline automation
@@ -35,8 +35,8 @@ canonical `well_id`, `image_id`, and `channel` naming.
   and IDs the same way.
 - Suggested helpers:
   - `make_well_id(experiment_id: str, well_index: str) -> str`
-  - `make_image_id(experiment_id: str, well_index: str, channel: str, frame_index: int) -> str`
-  - `make_image_path(exp_id: str, well_index: str, channel: str, frame_index: int, root: Path) -> Path`
+  - `make_image_id(experiment_id: str, well_index: str, channel: str, time_int: int) -> str`
+  - `make_image_path(exp_id: str, well_index: str, channel: str, time_int: int, root: Path) -> Path`
 - All builders must rely on these helpers (rather than manual string
   formatting) to guarantee `built_image_data/{exp}/stitched_ff_images/`
   remains consistent across microscopes.
@@ -92,7 +92,7 @@ canonical `well_id`, `image_id`, and `channel` naming.
 **Responsibilities**
 - Handle YX1-specific preprocessing (channel ordering, bit depth, flat-field).
 - Produce the same stitched FF layout as the Keyence builder, with provenance columns
-  in diagnostics (experiment_id, well_id, channel, frame_index) plus YX1-specific metrics.
+  in diagnostics (experiment_id, well_id, channel, time_int) plus YX1-specific metrics.
 
 **Key functions**
 - `build_yx1_stitched_ff(experiment_ctx: ExperimentContext, output_root: Path, diagnostics_csv: Path) -> None`
@@ -119,7 +119,7 @@ If common functionality emerges (diagnostic record writer, ID helper wrappers, f
 
 - Smoke test builders with synthetic or small real experiments to ensure:
   - Output directory structure matches expectations.
-  - Diagnostics CSVs include provenance columns (experiment_id, well_id, channel, frame_index).
+  - Diagnostics CSVs include provenance columns (experiment_id, well_id, channel, time_int).
   - IDs parse correctly via `identifiers/parsing`.
   - Channel normalization is preserved (`BF`, `GFP`, …).
 - Capture representative before/after examples for documentation once migration completes.

@@ -49,7 +49,7 @@ Example Usage (Future):
 
 Output Structure:
     ```
-    unet_masks/
+    auxiliary_masks/
     ├── via/{image_id}_via.png
     ├── yolk/{image_id}_yolk.png
     ├── focus/{image_id}_focus.png
