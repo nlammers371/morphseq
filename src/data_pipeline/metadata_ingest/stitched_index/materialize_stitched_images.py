@@ -26,6 +26,7 @@ from data_pipeline.image_building.shared.log_focus import im_rescale
 from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
 from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
+from data_pipeline.shared.identifiers import build_image_id
 
 log = logging.getLogger(__name__)
 
@@ -477,7 +478,7 @@ def materialize_stitched_images(
 
             image_id = row.get("image_id")
             if pd.isna(image_id) or not str(image_id):
-                image_id = f"{well_id}_{channel_id}_f{time_int:04d}"
+                image_id = build_image_id(experiment, well_index, channel_id, time_int)
             image_id = str(image_id)
 
             output_path = stitched_root / well_index / channel_id / f"{image_id}.{image_extension}"

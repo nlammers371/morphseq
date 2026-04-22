@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 
 from data_pipeline.segmentation.grounded_sam2.propagation import encode_mask_to_rle
+from data_pipeline.shared.identifiers import build_embryo_id
+from data_pipeline.shared.identifiers import build_snip_id
 
 from ..raw_types import RawMask, RawTrack
 
@@ -13,6 +15,7 @@ from ..raw_types import RawMask, RawTrack
 def ingest_propagation(
     results: dict[int, dict[str, dict]],
     *,
+    experiment_id: str,
     image_id_by_time_int: dict[int, str],
     seed_time_int: int,
     seed_image_id: str,
@@ -30,7 +33,7 @@ def ingest_propagation(
             area = float(emb.get("area", 0.0))
             conf = float(emb.get("confidence", 0.0))
             embryo_local_id = str(embryo_id)
-            embryo_global_id = f"{str(well_id)}_{embryo_local_id}"
+            embryo_global_id = build_embryo_id(str(experiment_id), str(well_id), int(embryo_local_id))
             tracks.append(
                 RawTrack(
                     time_int=int(time_int),
@@ -82,7 +85,7 @@ def tracks_to_raw_masks(
         bbox = [float(x) for x in t.bbox_xyxy_abs]
         source_image_path = str(source_image_path_by_image_id.get(t.image_id, ""))
 
-        snip_id = f"{str(t.embryo_id)}_{str(t.channel_id)}_f{int(t.time_int):04d}"
+        snip_id = build_snip_id(str(t.embryo_id), int(t.time_int))
         exported_rel = f"{exported_mask_rel_prefix}/{mask_head}/{snip_id}_mask.png"
         exported_abs = exported_mask_dir / f"{snip_id}_mask.png"
 

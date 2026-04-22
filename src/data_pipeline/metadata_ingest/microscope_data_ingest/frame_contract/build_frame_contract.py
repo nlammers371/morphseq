@@ -7,6 +7,7 @@ import pandas as pd
 
 from data_pipeline.io.validators import validate_dataframe_schema
 from data_pipeline.schemas.frame_contract import REQUIRED_COLUMNS_FRAME_CONTRACT, UNIQUE_KEY_FRAME_CONTRACT
+from data_pipeline.shared.identifiers import build_image_id
 from data_pipeline.schemas.scope_metadata import REQUIRED_COLUMNS_SCOPE_METADATA
 
 
@@ -55,13 +56,10 @@ def build_frame_contract(
     fi = pd.to_numeric(df["time_int"], errors="raise").astype(int)
     df["time_int"] = fi
 
-    df["image_id"] = (
-        df["well_id"].astype(str)
-        + "_"
-        + df["channel_id"].astype(str)
-        + "_f"
-        + df["time_int"].map(lambda x: f"{int(x):04d}")
-    )
+    df["image_id"] = [
+        build_image_id(exp_id, str(w), str(ch), int(t))
+        for w, ch, t in zip(df["well_id"], df["channel_id"], df["time_int"])
+    ]
 
     df["stitched_image_path"] = [
         str(

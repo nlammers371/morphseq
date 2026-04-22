@@ -13,6 +13,8 @@ import nd2
 from data_pipeline.schemas.scope_metadata import REQUIRED_COLUMNS_SCOPE_METADATA
 from data_pipeline.schemas.channel_normalization import CHANNEL_NORMALIZATION_MAP
 from data_pipeline.io.validators import validate_dataframe_schema
+from data_pipeline.shared.identifiers import build_image_id
+from data_pipeline.shared.identifiers import build_well_id
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -151,6 +153,7 @@ def extract_yx1_scope_metadata(
     Returns:
         DataFrame with validated scope metadata
     """
+    experiment_id = str(experiment_id).strip()
     log.info(f"Extracting YX1 scope metadata for {experiment_id}")
 
     # Find and open ND2 file
@@ -205,8 +208,8 @@ def extract_yx1_scope_metadata(
                     channel = _normalize_channel_name(raw_channel)
 
                     # Build IDs (temporary - will be refined by series mapper)
-                    well_id = f"{experiment_id}_{well_index}"
-                    image_id = f"{well_id}_{channel}_f{t_idx:04d}"
+                    well_id = build_well_id(well_index)
+                    image_id = build_image_id(experiment_id, well_id, channel, t_idx)
 
                     row = {
                         'experiment_id': experiment_id,

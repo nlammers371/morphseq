@@ -10,6 +10,8 @@ import pandas as pd
 from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
 from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
+from data_pipeline.shared.identifiers import build_image_id
+from data_pipeline.shared.identifiers import build_well_id
 
 
 def _build_series_lookup(mapping_df: pd.DataFrame) -> dict[int, str]:
@@ -78,7 +80,7 @@ def apply_series_mapping(
         lambda raw: _resolve_mapped_well(str(raw), series_lookup, known_wells, prefer_zero_based=prefer_zero_based)
     )
 
-    mapped_df["well_id"] = f"{experiment_id}_" + mapped_df["well_index"].astype(str)
+    mapped_df["well_id"] = mapped_df["well_index"].map(build_well_id)
     mapped_df["channel_id"] = mapped_df.get("channel", "BF").astype(str)
 
     if "raw_channel_name" in mapped_df.columns:
@@ -86,13 +88,10 @@ def apply_series_mapping(
     else:
         mapped_df["channel_name_raw"] = mapped_df["channel_id"].astype(str)
 
-    mapped_df["image_id"] = (
-        mapped_df["well_id"].astype(str)
-        + "_"
-        + mapped_df["channel_id"].astype(str)
-        + "_f"
-        + mapped_df["time_int"].astype(int).map(lambda val: f"{val:04d}")
-    )
+    mapped_df["image_id"] = [
+        build_image_id(experiment_id, well, channel, int(t))
+        for well, channel, t in zip(mapped_df["well_id"].astype(str), mapped_df["channel_id"].astype(str), mapped_df["time_int"].astype(int))
+    ]
 
     mapped_df = add_elapsed_time_columns(
         mapped_df,
@@ -102,7 +101,7 @@ def apply_series_mapping(
 
     selected_wells_set = {str(well) for well in (selected_wells or []) if str(well)}
     if selected_wells_set:
-        mapped_df = mapped_df[mapped_df["well_index"].astype(str).isin(selected_wells_set)].copy()
+        mapped_df = mapped_df[mapped_df["well_id"].astype(str).isin(selected_wells_set)].copy()
 
     front_cols = [
         "experiment_id",

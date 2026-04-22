@@ -6,6 +6,7 @@ from data_pipeline.schemas.segmentation import (
     REQUIRED_COLUMNS_MASK_RLE,
     UNIQUE_KEY_MASK_RLE,
 )
+from data_pipeline.shared.identifiers import build_snip_id
 
 from ..raw_types import RawMask
 from ._shared import dumps_json, require_unique, validate_provenance, validate_schema
@@ -23,7 +24,7 @@ def normalize_mask_rle(
     rows = []
     for m in masks:
         x0, y0, x1, y1 = [float(v) for v in (m.bbox_xyxy_abs or [0, 0, 0, 0])]
-        snip_id = f"{str(m.embryo_id)}_{str(channel_id)}_f{int(m.time_int):04d}"
+        snip_id = build_snip_id(str(m.embryo_id), int(m.time_int))
         instance_id = str(m.embryo_local_id or "")
         if not instance_id:
             instance_id = str(m.embryo_id)

@@ -6,6 +6,7 @@ import argparse
 import yaml
 from pathlib import Path
 
+from data_pipeline.metadata_ingest.experiment_identity import resolve_experiment_id
 from data_pipeline.metadata_ingest.plate.plate_processing import process_plate_layout
 from data_pipeline.metadata_ingest.scope.keyence.extract_scope_metadata import extract_keyence_scope_metadata
 from data_pipeline.metadata_ingest.scope.yx1.extract_scope_metadata import extract_yx1_scope_metadata
@@ -38,15 +39,17 @@ def cmd_normalize_plate(args: argparse.Namespace) -> None:
 
 def cmd_extract_scope(args: argparse.Namespace) -> None:
     if args.microscope == "YX1":
+        experiment_id = resolve_experiment_id(args.raw_images_dir, args.microscope, explicit_experiment_id=args.experiment)
         extract_yx1_scope_metadata(
             raw_data_dir=args.raw_images_dir,
             output_csv=args.output_csv,
-            experiment_id=args.experiment,
+            experiment_id=experiment_id,
         )
     elif args.microscope == "Keyence":
+        experiment_id = resolve_experiment_id(args.raw_images_parent, args.microscope, explicit_experiment_id=args.experiment)
         extract_keyence_scope_metadata(
             raw_data_dir=args.raw_images_parent,
-            experiment_id=args.experiment,
+            experiment_id=experiment_id,
             output_csv=args.output_csv,
         )
     else:
@@ -55,6 +58,7 @@ def cmd_extract_scope(args: argparse.Namespace) -> None:
 
 def cmd_map_series(args: argparse.Namespace) -> None:
     if args.microscope == "YX1":
+        experiment_id = resolve_experiment_id(args.raw_images_dir, args.microscope, explicit_experiment_id=args.experiment)
         nd2_files = sorted(args.raw_images_dir.glob("*.nd2"))
         nd2_path = nd2_files[0] if nd2_files else None
         map_series_to_wells_yx1(
@@ -72,12 +76,13 @@ def cmd_map_series(args: argparse.Namespace) -> None:
             dy_cv_tol=float(args.dy_cv_tol),
         )
     elif args.microscope == "Keyence":
+        experiment_id = resolve_experiment_id(args.raw_images_parent, args.microscope, explicit_experiment_id=args.experiment)
         map_series_to_wells_keyence(
             raw_data_dir=args.raw_images_parent,
             scope_metadata_csv=args.scope_csv,
             output_mapping_csv=args.output_mapping_csv,
             output_provenance_json=args.output_provenance_json,
-            experiment_id=str(args.experiment),
+            experiment_id=experiment_id,
         )
     else:
         raise ValueError(f"Unsupported microscope: {args.microscope}")

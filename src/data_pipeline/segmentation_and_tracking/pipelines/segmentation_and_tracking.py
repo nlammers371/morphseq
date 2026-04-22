@@ -294,6 +294,7 @@ def run_segmentation_and_tracking(
 
     raw_tracks = trk_ing.ingest_propagation(
         remapped,
+        experiment_id=experiment_id,
         image_id_by_time_int=image_id_by_time_int,
         seed_time_int=int(seed.seed_time_int),
         seed_image_id=str(seed.seed_image_id),

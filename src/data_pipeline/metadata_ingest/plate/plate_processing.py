@@ -11,6 +11,7 @@ import numpy as np
 
 from data_pipeline.schemas.plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
 from data_pipeline.io.validators import validate_dataframe_schema
+from data_pipeline.shared.identifiers import build_well_id
 
 
 def process_plate_layout(
@@ -61,7 +62,7 @@ def process_plate_layout(
 
     # Generate well_id (format: experiment_id_well_index)
     if 'well_id' not in df.columns:
-        df['well_id'] = df['experiment_id'] + '_' + df['well_index']
+        df['well_id'] = df['well_index'].map(build_well_id)
 
     # Some historical well metadata files do not include temperature.
     # Use zebrafish default culture temperature to preserve schema contract.

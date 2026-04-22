@@ -14,6 +14,8 @@ import re
 from data_pipeline.schemas.scope_metadata import REQUIRED_COLUMNS_SCOPE_METADATA
 from data_pipeline.schemas.channel_normalization import CHANNEL_NORMALIZATION_MAP
 from data_pipeline.io.validators import validate_dataframe_schema
+from data_pipeline.shared.identifiers import build_image_id
+from data_pipeline.shared.identifiers import build_well_id
 
 log = logging.getLogger(__name__)
 
@@ -251,6 +253,7 @@ def extract_keyence_scope_metadata(
         FileNotFoundError: If data directory or files not found
         ValueError: If validation fails
     """
+    experiment_id = str(experiment_id).strip()
     log.info(f"Extracting Keyence scope metadata for {experiment_id}")
 
     # Discover TIFF files
@@ -280,13 +283,13 @@ def extract_keyence_scope_metadata(
             time_int = _extract_time_int_from_path(tiff_path)
 
             # Build row
+            well_id = build_well_id(well_index)
             row = {
                 'experiment_id': experiment_id,
                 'well_index': well_index,
-                'well_id': f"{experiment_id}_{well_index}",
+                'well_id': well_id,
                 'time_int': time_int,
-                'time_int': time_int,  # For Keyence, time_int == time_int
-                'image_id': f"{experiment_id}_{well_index}_{normalized_channel}_f{time_int:04d}",
+                'image_id': build_image_id(experiment_id, well_id, normalized_channel, time_int),
 
                 # Spatial calibration
                 'micrometers_per_pixel': micrometers_per_pixel,
