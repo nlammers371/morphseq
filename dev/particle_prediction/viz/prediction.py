@@ -179,20 +179,52 @@ def plot_rollout_against_truth(
     true_future: np.ndarray,
     context_points: np.ndarray | None = None,
     dims: tuple[int, int] = (0, 1),
+    max_particle_trajectories: int | None = 64,
+    show_particle_arrows: bool = True,
 ) -> plt.Figure:
-    """Overlay query context, predictive mean, samples, and observed future."""
+    """Overlay query context, predictive mean, particle trajectories, and observed future."""
 
     query_state = np.asarray(query_state, dtype=np.float64)
     true_future = np.asarray(true_future, dtype=np.float64)
     fig, axis = plt.subplots(figsize=(7.2, 5.8))
-    axis.scatter(
-        rollout.forward_samples[:, :, dims[0]].reshape(-1),
-        rollout.forward_samples[:, :, dims[1]].reshape(-1),
-        s=10,
-        alpha=0.12,
-        color="#3a6ea5",
-        label="particle cloud",
-    )
+    n_steps, n_particles, _ = rollout.forward_samples.shape
+    particle_limit = n_particles if max_particle_trajectories is None else min(int(max_particle_trajectories), n_particles)
+    segment_colors = plt.cm.plasma(np.linspace(0.15, 0.9, n_steps))
+
+    for particle_index in range(particle_limit):
+        path = np.vstack([query_state[None, :], rollout.forward_samples[:, particle_index, :]])
+        for step_index in range(n_steps):
+            start = path[step_index]
+            stop = path[step_index + 1]
+            axis.plot(
+                [start[dims[0]], stop[dims[0]]],
+                [start[dims[1]], stop[dims[1]]],
+                color=segment_colors[step_index],
+                linewidth=1.1,
+                alpha=0.16,
+                zorder=1,
+            )
+            if show_particle_arrows:
+                delta = stop[list(dims)] - start[list(dims)]
+                if np.linalg.norm(delta) > 1.0e-12:
+                    axis.annotate(
+                        "",
+                        xy=(stop[dims[0]], stop[dims[1]]),
+                        xytext=(start[dims[0]], start[dims[1]]),
+                        arrowprops={
+                            "arrowstyle": "-|>",
+                            "mutation_scale": 7,
+                            "lw": 0.0,
+                            "color": segment_colors[step_index],
+                            "alpha": 0.28,
+                            "shrinkA": 0.0,
+                            "shrinkB": 0.0,
+                        },
+                        zorder=2,
+                    )
+
+    if particle_limit > 0:
+        axis.plot([], [], color=segment_colors[0], linewidth=1.2, alpha=0.45, label="particle trajectories")
     if context_points is not None:
         context_points = np.asarray(context_points, dtype=np.float64)
         axis.plot(context_points[:, dims[0]], context_points[:, dims[1]], color="#888888", linewidth=2.0, label="context")

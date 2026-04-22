@@ -24,6 +24,7 @@ from dev.particle_prediction.viz.matching import (
     plot_history_offset_heatmap,
     plot_history_reranking,
     plot_query_and_candidate_neighbors,
+    plot_reference_distance_landscape,
 )
 from dev.particle_prediction.viz.prediction import (
     plot_jitter_ellipse_or_covariance,
@@ -139,11 +140,11 @@ def _make_bank_fixture():
     matches = compare_matching_modes(bank, query.state, query.history_segments)
     tasks = build_prediction_tasks([resampled, resampled_b], history_length=3, horizons=[1, 2, 3], mode='history')
     eval_results = run_evaluation_suite(tasks=tasks, bank=bank, n_particles=16, random_seed=5)
-    return source, smoothed, resampled, bank, windows, prediction, rollout, matches, eval_results
+    return source, smoothed, resampled, resampled_b, bank, windows, prediction, rollout, matches, eval_results
 
 
 def test_visualization_smoke() -> None:
-    source, smoothed, resampled, bank, windows, prediction, rollout, matches, eval_results = _make_bank_fixture()
+    source, smoothed, resampled, resampled_b, bank, windows, prediction, rollout, matches, eval_results = _make_bank_fixture()
     fig_factories = [
         lambda: plot_raw_vs_smoothed_timeseries(smoothed),
         lambda: plot_latent_trajectory_before_after_smoothing(smoothed),
@@ -154,7 +155,28 @@ def test_visualization_smoke() -> None:
         lambda: plot_transition_windows_for_embryo(resampled, windows),
         lambda: plot_history_segments_example(windows[0]),
         lambda: plot_bank_state_density(bank),
-        lambda: plot_query_and_candidate_neighbors(windows[0].state, matches['default']),
+        lambda: plot_query_and_candidate_neighbors(
+            windows[0].state,
+            matches['default'],
+            query_trajectory=resampled.resampled,
+            query_history_points=resampled.resampled[windows[0].resampled_index - 3: windows[0].resampled_index + 1],
+            reference_trajectories={
+                resampled.source.embryo_id: resampled.resampled,
+                resampled_b.source.embryo_id: resampled_b.resampled,
+            },
+        ),
+        lambda: plot_reference_distance_landscape(
+            windows[0].state,
+            bank,
+            query_trajectory=resampled.resampled,
+            query_history_points=resampled.resampled[windows[0].resampled_index - 3: windows[0].resampled_index + 1],
+            query_history_segments=windows[0].history_segments,
+            reference_trajectories={
+                resampled.source.embryo_id: resampled.resampled,
+                resampled_b.source.embryo_id: resampled_b.resampled,
+            },
+            metric='full_context',
+        ),
         lambda: plot_history_reranking(matches['default'], matches['fast_summary']),
         lambda: plot_history_offset_heatmap(windows[0].history_segments, windows[0], offset_radius=0),
         lambda: compare_default_vs_fast_matching(matches['default'], matches['fast_summary']),

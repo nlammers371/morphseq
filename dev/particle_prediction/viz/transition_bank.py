@@ -116,7 +116,7 @@ def plot_history_segments_example(
         head_width=0.05,
         color="tab:red",
     )
-    axis.scatter(next_point[dims[0]], next_point[dims[1]], color="tab:red", s=30, label="next state")
+    axis.scatter(next_point[dims[0]], next_point[dims[1]], color="tab:red", s=10, label="next state")
     axis.set_xlabel(f"latent dim {dims[0]}")
     axis.set_ylabel(f"latent dim {dims[1]}")
     axis.set_title(f"History segments example: {window.embryo_id}")
