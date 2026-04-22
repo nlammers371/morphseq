@@ -23,6 +23,11 @@ REQUIRED_COLUMNS_FEATURES = [
     'perimeter_um',
     'centroid_x_um',
     'centroid_y_um',
+    'mean_curvature_per_um',
+    'median_curvature_per_um',
+    'max_curvature_per_um',
+    'centerline_length_um',
+    'centerline_point_count',
 
     # Developmental stage
     'predicted_stage_hpf',  # Critical for QC and downstream analysis

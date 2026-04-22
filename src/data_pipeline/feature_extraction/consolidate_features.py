@@ -11,11 +11,14 @@ from typing import Optional
 import warnings
 
 from ..schemas.features import REQUIRED_COLUMNS_FEATURES
+from ..schemas.plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
+from ..io.validators import validate_dataframe_schema
 
 
 def consolidate_snip_features(
     tracking_df: pd.DataFrame,
     geometry_df: pd.DataFrame,
+    curvature_df: pd.DataFrame,
     kinematics_df: pd.DataFrame,
     fraction_alive_df: pd.DataFrame,
     stage_df: pd.DataFrame,
@@ -30,7 +33,7 @@ def consolidate_snip_features(
         kinematics_df: Pose and kinematics metrics
         fraction_alive_df: Viability metrics
         stage_df: Developmental stage predictions
-        metadata_df: Optional late-stage metadata enrichment table
+        metadata_df: Optional plate/scope metadata
 
     Returns:
         Consolidated features DataFrame with schema validation
@@ -44,6 +47,14 @@ def consolidate_snip_features(
         on='snip_id',
         how='left',
         suffixes=('', '_geometry')
+    )
+
+    # Merge curvature metrics
+    consolidated = consolidated.merge(
+        curvature_df,
+        on='snip_id',
+        how='left',
+        suffixes=('', '_curvature')
     )
 
     # Merge kinematics
@@ -151,6 +162,7 @@ def save_consolidated_features(
 def load_and_consolidate_features(
     tracking_path: Path,
     geometry_path: Path,
+    curvature_path: Path,
     kinematics_path: Path,
     fraction_alive_path: Path,
     stage_path: Path,
@@ -163,10 +175,11 @@ def load_and_consolidate_features(
     Args:
         tracking_path: Path to segmentation_tracking.csv
         geometry_path: Path to mask_geometry_metrics.csv
+        curvature_path: Path to curvature_metrics.csv
         kinematics_path: Path to pose_kinematics_metrics.csv
         fraction_alive_path: Path to fraction_alive.csv
         stage_path: Path to stage_predictions.csv
-        metadata_path: Optional path to late-stage metadata enrichment
+        metadata_path: Optional path to scope_and_plate_metadata.csv
         output_path: Optional path to save consolidated CSV
 
     Returns:
@@ -175,6 +188,7 @@ def load_and_consolidate_features(
     # Load all feature tables
     tracking_df = pd.read_csv(tracking_path)
     geometry_df = pd.read_csv(geometry_path)
+    curvature_df = pd.read_csv(curvature_path)
     kinematics_df = pd.read_csv(kinematics_path)
     fraction_alive_df = pd.read_csv(fraction_alive_path)
     stage_df = pd.read_csv(stage_path)
@@ -182,11 +196,13 @@ def load_and_consolidate_features(
     metadata_df = None
     if metadata_path and metadata_path.exists():
         metadata_df = pd.read_csv(metadata_path)
+        validate_dataframe_schema(metadata_df, REQUIRED_COLUMNS_PLATE_METADATA, "plate_metadata.csv")
 
     # Consolidate
     consolidated = consolidate_snip_features(
         tracking_df,
         geometry_df,
+        curvature_df,
         kinematics_df,
         fraction_alive_df,
         stage_df,

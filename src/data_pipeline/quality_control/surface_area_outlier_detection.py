@@ -38,7 +38,7 @@ def compute_sa_outlier_flag(
     k_upper: float = 1.2,
     k_lower: float = 0.9,
     stage_col: str = "predicted_stage_hpf",
-    sa_col: str = "surface_area_um",
+    sa_col: str = "area_um2",
 ) -> pd.DataFrame:
     """
     Two-sided surface area outlier detection using global reference curves.
@@ -63,8 +63,9 @@ def compute_sa_outlier_flag(
         Lower threshold multiplier (SA < k_lower × p5 flagged)
     stage_col : str, default "predicted_stage_hpf"
         Column name for developmental stage in hours post-fertilization
-    sa_col : str, default "surface_area_um"
-        Column name for surface area in square micrometers
+    sa_col : str, default "area_um2"
+        Canonical column name for surface area in square micrometers.
+        Legacy inputs using ``surface_area_um`` are still accepted.
 
     Returns
     -------
@@ -115,7 +116,10 @@ def compute_sa_outlier_flag(
     if stage_col not in df.columns:
         raise ValueError(f"Missing required column: {stage_col}")
     if sa_col not in df.columns:
-        raise ValueError(f"Missing required column: {sa_col}")
+        if "surface_area_um" in df.columns:
+            sa_col = "surface_area_um"
+        else:
+            raise ValueError(f"Missing required column: {sa_col}")
 
     # Load reference curves
     try:

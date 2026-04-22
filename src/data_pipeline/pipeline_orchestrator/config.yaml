@@ -1,182 +1,82 @@
-# MorphSeq Snakemake pipeline configuration
+# MorphSeq Pipeline Configuration
 
-# Output root (relative to repo root unless absolute)
+# Data paths
 data_root: "data_pipeline_output"
 
-# Absolute interpreter for all rule modules
-python_executable: "/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python"
-
-# Smoke dataset defaults
+# Experiments to process
 experiments:
-  - "20240418"
-  - "20240509_24hpf"
+  - 20250912
 
-# Explicit microscope assignment per experiment
-experiment_microscopes:
-  "20240418": "YX1"
-  "20240509_24hpf": "Keyence"
+# Microscope selection.
+# If you need per-experiment microscope selection, add:
+# microscope_by_experiment:
+#   20250912: "YX1"
+microscope: "YX1"
 
-# Fixed well scope for fast stitched-image tests
-experiment_wells:
-  "20240418": ["A01", "C01"]
-  "20240509_24hpf": ["A04", "B04"]
+# Plate metadata is optional for build/segment/snips, but kept for later biology/QC/analysis.
+plate_metadata:
+  enabled: true
+  # Expected input path:
+  #   {data_root}/inputs/plate_metadata/{experiment}_well_metadata.xlsx
 
-# Input locations (can be symlinked inside data_root/inputs)
-inputs:
-  plate_metadata_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/metadata/well_metadata"
-  raw_image_data_dir: "/net/trapnell/vol1/home/nlammers/projects/data/morphseq/raw_image_data"
-
-# Scope ingestion settings (microscope extraction + plate-free physical well mapping)
-scope_ingest:
-  # Default: require a validated physical well mapping (YX1 XY reference / Keyence directory structure).
-  # If true, allow fallback to non-canonical S00-style well IDs when physical mapping is unavailable.
-  allow_unmapped_wells: false
-  yx1_mapping:
-    method: "xy_reference"
-    ref_xy_csv: "/net/trapnell/vol1/home/mdcolon/proj/morphseq/morphseq_playground/metadata/YX1_nd2_ref_plate_xy_coordinates.csv"
-    max_distance_um: 4500.0
-    # XY reference grid validator tolerances (um, unitless CV).
-    row_y_tol_um: 1200.0
-    col_x_tol_um: 1200.0
-    dx_cv_tol: 0.15
-    dy_cv_tol: 0.15
-
-# Frame-contract settings
-frame_contracts:
-  overwrite: false
-  output_image_extension: "jpg"
+# Scope metadata (physical) extraction.
+scope_metadata:
   yx1:
-    device_preference: "cuda"
-    z_buffer: false
+    raw_images_pattern: "YX1/{experiment}"
   keyence:
-    projection_method: "log"
-    ff_filter_res_um: 3.0
-    device_preference: "cuda"
+    raw_images_pattern: "Keyence/{experiment}"
 
-# Snakemake resources
+# Image building (stitched FF images).
+image_building:
+  device: "cuda"
+  overwrite: false
+  yx1:
+    z_buffer: false
+  # Keyence support depends on having FF tiles/inputs wired; leave disabled for now.
+  keyence:
+    enabled: false
+
+# Segmentation + tracking (GroundingDINO + SAM2).
+segmentation_and_tracking:
+  device: "cuda"
+  channel_id: "BF"
+  tracking_mode: "bidirectional"
+  groundingdino:
+    text_prompt: "individual embryo"
+    box_threshold: 0.35
+    text_threshold: 0.25
+    confidence_threshold: 0.45
+    iou_threshold: 0.5
+    config_path: ""
+    weights_path: ""
+  sam2:
+    config_path: ""
+    checkpoint_path: ""
+
+# Auxiliary masks (UNet-derived QC masks).
+auxiliary_masks:
+  model_root: "models/segmentation"
+  batch_size: 64
+  num_workers: 1
+  overwrite: false
+
+# Snip processing (crop + rotate + augment).
+snip_processing:
+  # Legacy downstream models expect (H, W) = (576, 256).
+  output_shape: [576, 256]
+  target_pixel_size_um: 7.8
+  save_raw_crops: true
+  write_manifest_csv: true
+  background_n_samples: 100
+  background_seed: 309
+
+# Phase 5: QC (placeholder)
+qc:
+  edge_margin_pixels: 2
+  death_fraction_threshold: 0.9
+
+# Snakemake settings
 threads: 4
 resources:
-  mem_mb: 12000
-  gpu: 1
-
-# Overwrite control:
-# - overwrite_all=true: rewrite all internal artifacts for steps that support overwrite.
-# - overwrite_steps.<step>=true: step-specific overwrite toggle (overrides defaults).
-overwrite_all: false
-overwrite_materialize_stitched_images: null
-overwrite_steps:
-  materialize_stitched_images: false
-
-# Segmentation backend settings (detector + tracker backends).
-segmentation:
-  detector_backend: "groundingdino"      # future: "detectron2"
-  tracker_backend: "sam2"                # future: "sam3"
-
-# segmentation_and_tracking settings (paths resolved relative to data_root unless absolute).
-segmentation_and_tracking:
-  channel_id: "BF"
-  device: "cpu"
-
-  # Single root directory for model repos/assets (relative to data_root unless absolute).
-  models_root: "models"
-
-  # GroundingDINO
-  groundingdino_repo: "GroundingDINO"
-  groundingdino_model_name: "SwinT_OGC"
-  # If you are using a fine-tuned GroundingDINO checkpoint, set this to something
-  # stable and human-readable (e.g. a run name / date) so it shows up in provenance.
-  groundingdino_release: "finetune_run_nick_masks_20250308"
-  groundingdino_config: "groundingdino/config/GroundingDINO_SwinT_OGC.py"
-  # Fine-tuned checkpoint used by legacy `run_morphseq_pipeline` SAM2 wrapper.
-  # Can be absolute (recommended) or relative to `models_root`.
-  groundingdino_weights: "/net/trapnell/vol1/home/mdcolon/proj/image_segmentation/Open-GroundingDino/finetune_output/finetune_output_run_nick_masks_20250308/checkpoint_best_regular.pth"
-
-  # SAM2
-  sam2_models_root: "sam2"
-  sam2_model_name: "hiera_large"
-  sam2_release: "unknown"
-  sam2_config: "configs/sam2.1/sam2.1_hiera_l.yaml"
-  sam2_checkpoint: "checkpoints/sam2.1_hiera_large.pt"
-
-  # Detection thresholds
-  text_prompt: "individual embryo"
-  box_threshold: 0.35
-  text_threshold: 0.25
-  confidence_threshold: 0.45
-  iou_threshold: 0.5
-  min_detections: 1
-  mask_type: "embryo"
-  max_frames: 5
-
-  # Persist inputs for debugging / future reuse.
-  raw_frames:
-    enabled: true
-    # "symlink" avoids duplicating large stitched images; "copy" makes a self-contained snapshot.
-    mode: "symlink"
-    # Also write a sequentially named directory (00000.jpg, 00001.jpg, ...) for SAM2 predictors.
-    write_sam2_seq_dir: true
-
-  # Optional raw (no masks) QC video.
-  raw_video:
-    enabled: false
-    fps: 10
-    codec: "mp4v"
-    write_video: true
-    write_frames: false
-
-  qc_overlay:
-    enabled: true
-    alpha: 0.45
-    fps: 10
-    write_frames: true
-    write_video: true
-    render:
-      # Scale the final overlay output (video + frames) for easier viewing.
-      # 1.0 = native resolution, 3.0 = 3x larger.
-      scale: 1.0
-      # Per-embryo label text (e.g. "embryo_0") style.
-      label_font_scale: 0.8
-      label_thickness: 2
-      # Top banner (image_id) style.
-      banner_font_scale: 1.0
-      banner_thickness: 2
-    # Render overlays for a specific mask_type (default: the run's mask_type).
-    # Typical: "embryo"
-    render_mask_type: null
-
-# snip_processing settings (embryo crops from segmentation_and_tracking masks).
-snip_processing:
-  enabled: true
-  # Which Phase 3 mask_type to use for snips.
-  mask_type: "embryo"
-
-  # Output snip geometry (legacy-aligned defaults; override as needed).
-  target_pixel_size_um: 7.8
-  output_shape_hw: [576, 256]
-  blend_radius_um: 75.0
-
-  # Save raw, un-augmented crops for debugging/provenance.
-  save_raw_crops: true
-
-  # Optional yolk masks for yolk-at-top orientation.
-  yolk_mask:
-    enabled: true
-
-  # Background noise stats for augmentation.
-  background_stats:
-    mode: "estimate"   # "estimate" or "fixed"
-    estimate:
-      n_samples: 100
-      seed: 309
-    fixed:
-      mean: 128.0
-      std: 30.0
-    # Locked v1 definition: computed on the source stitched frame where embryo_mask == 0.
-    definition: "full_frame_outside_embryo"
-
-  # Incremental behavior.
-  overwrite: false
-  skip_existing: true
-
-  # Build `processed_snips/{exp}/views/` symlink browse tree at merge time.
-  write_views: true
+  mem_mb: 8000
+  gpu: 0

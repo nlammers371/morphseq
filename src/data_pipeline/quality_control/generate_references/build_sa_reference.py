@@ -101,13 +101,16 @@ df_ref = df_all[ref_mask].copy()
 # Check required columns
 if 'predicted_stage_hpf' not in df_ref.columns:
     raise ValueError("Missing 'predicted_stage_hpf' column!")
-if 'surface_area_um' not in df_ref.columns:
-    raise ValueError("Missing 'surface_area_um' column!")
+sa_col = 'area_um2' if 'area_um2' in df_ref.columns else 'surface_area_um'
+if sa_col not in df_ref.columns:
+    raise ValueError("Missing 'area_um2' column (or legacy 'surface_area_um')")
+if sa_col == 'surface_area_um':
+    print("⚠️  Using legacy 'surface_area_um' column; prefer 'area_um2' going forward")
 
 # Drop NaN values
 print(f"\nDropping NaN values...")
 initial_len = len(df_ref)
-df_ref = df_ref.dropna(subset=['predicted_stage_hpf', 'surface_area_um'])
+df_ref = df_ref.dropna(subset=['predicted_stage_hpf', sa_col])
 print(f"  {initial_len} → {len(df_ref)} rows ({initial_len - len(df_ref)} removed)")
 
 # Calculate stage-binned statistics
@@ -138,7 +141,7 @@ for i, hpf_center in enumerate(hpf_centers):
     n_array[i] = n
 
     if n >= 5:  # Minimum sample size for stable percentiles
-        sa_vals = df_ref.loc[bin_mask, 'surface_area_um']
+        sa_vals = df_ref.loc[bin_mask, sa_col]
         p5_array[i] = sa_vals.quantile(0.05)
         p50_array[i] = sa_vals.quantile(0.50)
         p95_array[i] = sa_vals.quantile(0.95)
@@ -251,7 +254,7 @@ print(f"\nReference dataset:")
 print(f"  Total embryos: {df_ref['embryo_id'].nunique() if 'embryo_id' in df_ref.columns else 'N/A'}")
 print(f"  Total frames: {len(df_ref)}")
 print(f"  Stage range: {df_ref['predicted_stage_hpf'].min():.1f} - {df_ref['predicted_stage_hpf'].max():.1f} hpf")
-print(f"  SA range: {df_ref['surface_area_um'].min():.0f} - {df_ref['surface_area_um'].max():.0f} µm")
+print(f"  SA range: {df_ref[sa_col].min():.0f} - {df_ref[sa_col].max():.0f} µm")
 
 print(f"\nReference curves:")
 print(f"  Valid bins: {n_valid_bins} / {len(hpf_centers)}")

@@ -1,2 +1,2 @@
-"""Phase 3: segmentation_and_tracking pipeline."""
+"""Segmentation and tracking helpers."""
 
