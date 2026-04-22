@@ -25,76 +25,78 @@ same frame dilute any whole-image signal.
 - `edge_density`, `grad_anisotropy`
 
 ### Adjacent Z-pair (inside mask)
-- `ncc` — normalized cross-correlation between consecutive slices  ✅ STRONGEST SIGNAL
-- `ssim_score`
-- `phase_shift_mag` — lateral shift estimated by phase correlation (pixels)  ✅ USEFUL
+- `ncc` — normalized cross-correlation between consecutive slices  ✅ KEEP
+- `phase_shift_mag` — lateral shift estimated by phase correlation (pixels)  DROP (redundant with NCC — NCC already captures that motion occurred)
+- `local_ncc_min`, `local_ncc_std` — NCC computed per 128px tile; min=worst tile,
+  std=spatial spread of motion. **Not shown in exploratory figure — will be derived
+  from saved NCC grids during pipeline QC post-hoc.**
+- `ssim_score` — DROP (redundant with NCC)
+- `nmi` — DROP (too noisy, ranges overlap across labels)
 - `post_align_residual`, `mask_iou`, `centroid_shift`, `area_ratio`
 
 ### Whole-stack summaries
-- `bad_pair_frac_ncc` — fraction of pairs with NCC < 0.90  ✅ STRONGEST SIGNAL
+- `bad_pair_frac_ncc` — fraction of pairs with NCC < 0.90  ✅ KEEP
 - `ncc_min`, `longest_bad_ncc_run`
 - `winner_z_entropy_inside`, `winner_z_disc_ratio` — from LoG winner-Z map
 
 ## Key Findings
 
-### What works
-1. **`ncc_min` and `bad_pair_frac_ncc`** are the strongest discriminators.
+### Chosen metrics (two orthogonal signals)
+1. **NCC family** (`ncc_min`, `bad_pair_frac_ncc`) — between-slice motion detector.
    All Great stacks: ncc_min > 0.93, bad_pair_frac = 0.
    Three of four Bad stacks: ncc_min < 0.50, bad_pair_frac > 0.14.
-   Threshold suggestion: `ncc_min < 0.85` OR `bad_pair_frac_ncc > 0.10`
+   Threshold: `ncc_min < 0.85` OR `bad_pair_frac_ncc > 0.10`
 
-2. **`log_mean`** (absolute, not relative) — Bad stacks cluster lower.
-   Best used as mean over all Z slices per embryo-stack.
+2. **`rel_entropy`** (embryo entropy − background entropy per Z slice) — catches
+   within-slice blur and signal quality. Bad stacks strongly negative (−0.5 to −2.2
+   mean); Great stacks near zero (−0.1 to −0.4). Orthogonal to NCC — catches the
+   tricky case (B10 t=97: passes NCC, flagged by rel_entropy −0.51).
 
-3. **`rel_entropy`** (embryo minus background entropy) — Bad stacks are more
-   negative (embryo much less textured than background). Useful for catching
-   the tricky case (B10 t=97) that NCC misses.
-
-4. **Winner-Z spatial chaos** — visually compelling. Bad embryos show chaotic
-   Z-index maps inside the mask; Great embryos show smooth gradients.
-   Captured by `winner_z_disc_ratio` but needs more examples to threshold.
-
-### What doesn't work
-- `lap_var_max` — complete overlap between Bad and Great
+### What was tried and dropped
+- `log_mean`, `lap_var_max` — complete overlap between Bad and Great
 - `log_sharp_frac` — useless by construction (always ~25%)
-- Relative normalization by background (bg_log_mean is nearly flat across Z,
-   dividing by a constant doesn't change curve shape or separation)
+- `ssim_score` — redundant with NCC
+- `nmi` — too noisy, ranges overlap
+- Background normalization — bg entropy nearly flat across Z, no separation benefit
+
+### Local NCC (not dropped — deferred to pipeline)
+- `local_ncc_min` and `local_ncc_std` computed per 128px tile inside embryo bbox.
+- local_ncc_std captures spatially non-uniform motion (one end moves, other stays).
+- **Plan**: save `(14 pairs, N_tiles_y, N_tiles_x)` NCC grids during `_focus_stack()`.
+  Post-hoc, intersect with embryo mask to derive local_ncc_min/std per embryo.
+  Also save `(15 slices, N_tiles_y, N_tiles_x)` entropy grids for rel_entropy.
+  Grid size: ~17×17 tiles at 128px → ~33KB per frame, negligible storage.
 
 ### Tricky case: B10 t=97
 - Labeled Bad, but NCC looks clean (ncc_min=0.915, bad_pair_frac=0)
-- Caught by: low `log_mean` overall, strongly negative `rel_entropy` (−0.51)
+- Caught by: strongly negative `rel_entropy` (−0.51 mean)
 - Hypothesis: motion happened *within* a single Z slice (blurring one slice)
   rather than *between* slices. NCC-pair approach cannot see within-slice blur.
 
-## Composite Score (proposed)
-Simple first-pass threshold combining the two complementary signals:
-  BAD if: `ncc_min < 0.85` OR `bad_pair_frac_ncc > 0.10`
-  SOFT BAD if: `log_mean_mean < 1.5 * median(log_mean_mean across all embryos in frame)`
-
-The NCC catches between-slice motion; log_mean catches globally soft stacks
-(within-slice blur, bad focus, dim embryo).
-
-## Next Steps
-1. Test on multi-embryo frames — the real use case is per-embryo comparison
-   within the same frame at the same Z. Embryo vs embryo normalization (not
-   vs background) is the right relative metric.
-2. Wire NCC + log_mean into `_focus_stack()` in `stitched_ff_builder.py` to
-   emit a per-embryo quality flag alongside the stacked image.
-3. Save winner-Z maps as a diagnostic artifact in built_image_data/.
-4. Label more examples, especially edge cases (partially moving embryos,
-   dim wells, early timepoints with small embryos).
+## Next Steps (pipeline)
+1. Add grid-saving to `_focus_stack()` in `stitched_ff_builder.py`:
+   - NCC grid: `(14, N_ty, N_tx)` float32 — adjacent Z-pair NCC per tile
+   - Entropy grid: `(15, N_ty, N_tx)` float32 — Shannon entropy per tile per slice
+   - Save as .npy alongside focus-stacked TIFFs in built_image_data/
+2. Post-hoc QC (after segmentation produces embryo masks):
+   - Load grid + mask, intersect tiles with embryo bbox
+   - Derive: ncc_min, bad_pair_frac, local_ncc_std, rel_entropy_mean per embryo
+   - Flag: `ncc_min < 0.85` OR `bad_pair_frac > 0.10` OR `rel_entropy_mean < threshold`
 
 ## Scripts
 - `01_zstack_metric_exploration.py` — computes all metrics, saves CSVs + figures
 - `02_relative_metrics.py` — background normalization experiment (not useful, kept for reference)
+- `03_ranked_metric_viz.py` — 6-column comparison figure (focus image + Z slices + metric bars)
+- `04_pair_metrics_plot.py` — NCC and phase-shift per adjacent pair
+- `05_add_mi_and_local_ncc.py` — computes NMI + local NCC; generates all-tested-metrics figure
 
 ## Outputs
 - `slice_metrics.csv` — per (example, embryo, z): all focus metrics
 - `pair_metrics.csv` — per (example, embryo, z-pair): NCC, SSIM, phase shift
+- `pair_metrics_extended.csv` — pair_metrics + nmi, local_ncc_min/std/n
 - `stack_metrics.csv` — per (example, embryo): summaries + winner-Z diagnostics
-- `figures/focus_curves.png` — absolute per-slice metrics across Z
-- `figures/focus_curves_relative.png` — relative metrics (not useful)
-- `figures/pair_metrics.png` — NCC and phase-shift per adjacent pair  ← most diagnostic
+- `slice_metrics_relative.csv` — rel_entropy per (example, embryo, z)
+- `figures/ranked_metric_comparison.png` — main diagnostic figure ← most useful
+- `figures/pair_metrics_all_tested.png` — all tested metrics with KEEP/DROP badges
+- `figures/pair_metrics_final.png` — NCC and phase-shift only
 - `figures/winner_z_maps.png` — spatial winner-Z maps (chaotic=bad, smooth=good)
-- `figures/stack_metrics_dotplot.png` — per-stack metric separation
-- `figures/zstrip_*.png` — Z-slice strips with NCC annotations

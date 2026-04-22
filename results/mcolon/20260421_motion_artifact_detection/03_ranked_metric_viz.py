@@ -47,10 +47,13 @@ EXAMPLES = [
 
 # Ranked metrics: (key, stack_df column, short label, good=high?)
 METRICS = [
-    ("ncc_min",             "ncc_min",             "NCC MIN",          True),
-    ("bad_pair_frac",       "bad_pair_frac_ncc",   "BAD PAIR FRAC",    False),
-    ("longest_bad_run",     "longest_bad_ncc_run", "LONGEST BAD RUN",  False),
-    ("max_phase_shift_px",  "max_phase_shift_px",  "PHASE SHIFT (px)", False),
+    ("ncc_min",             "ncc_min",             "NCC MIN",           True),
+    ("bad_pair_frac",       "bad_pair_frac_ncc",   "BAD PAIR FRAC",     False),
+    ("longest_bad_run",     "longest_bad_ncc_run", "LONGEST BAD RUN",   False),
+    ("local_ncc_min",       "local_ncc_min_min",   "LOCAL NCC MIN",     True),
+    ("local_ncc_std",       "local_ncc_std_mean",  "LOCAL NCC STD",     False),
+    ("rel_entropy",         "rel_entropy_mean",    "REL ENTROPY (mean)", True),
+    ("max_phase_shift_px",  "max_phase_shift_px",  "PHASE SHIFT (px)",  False),
 ]
 
 NCC_THRESH = 0.90
@@ -93,6 +96,30 @@ def add_contour(ax, mask_crop, color, lw=1.5):
 # ---------------------------------------------------------------------------
 stack_df = pd.read_csv(OUT_DIR / "stack_metrics.csv")
 pair_df  = pd.read_csv(OUT_DIR / "pair_metrics.csv")
+
+# Merge local NCC summaries from extended pair metrics
+pair_ext_path = OUT_DIR / "pair_metrics_extended.csv"
+if pair_ext_path.exists():
+    pair_ext = pd.read_csv(pair_ext_path)
+    local_summary = (
+        pair_ext.groupby(["well", "time_int", "embryo"])
+        .agg(local_ncc_min_min=("local_ncc_min", "min"),
+             local_ncc_std_mean=("local_ncc_std", "mean"))
+        .reset_index()
+    )
+    stack_df = stack_df.merge(local_summary, on=["well", "time_int", "embryo"], how="left")
+
+# Merge rel_entropy mean from relative slice metrics
+rel_path = OUT_DIR / "slice_metrics_relative.csv"
+if rel_path.exists():
+    rel_df = pd.read_csv(rel_path)
+    rel_df["date"] = rel_df["date"].astype(str)
+    rel_summary = (
+        rel_df.groupby(["well", "time_int", "embryo"])["rel_entropy"]
+        .mean().reset_index()
+        .rename(columns={"rel_entropy": "rel_entropy_mean"})
+    )
+    stack_df = stack_df.merge(rel_summary, on=["well", "time_int", "embryo"], how="left")
 
 # metric ranges for consistent bar scaling
 metric_ranges = {}
@@ -154,7 +181,7 @@ for col_idx, (label, well, t, series, ex_color) in enumerate(EXAMPLES):
         5, 1,
         subplot_spec=col_gs[col_idx],
         hspace=0.08,
-        height_ratios=[2.5, 1, 1, 1, 1.8]
+        height_ratios=[2.5, 1, 1, 1, 3.2]
     )
 
     # ------------------------------------------------------------------
