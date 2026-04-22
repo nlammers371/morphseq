@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+from data_pipeline.utils.cuda_diagnostics import resolve_device
+
 
 def _resolve_sam2_pkg_dir(sam2_models_root: Path) -> Path:
     sam2_models_root = Path(sam2_models_root)
@@ -42,6 +44,7 @@ def load_sam2_video_predictor(
     checkpoint_path: Path,
     device: str = "cuda",
 ):
+    device = resolve_device(device)
     sam2_models_root = Path(sam2_models_root)
     sam2_pkg_dir = _resolve_sam2_pkg_dir(sam2_models_root)
     sam2_models_root = sam2_models_root.resolve()

@@ -17,7 +17,7 @@ from data_pipeline.metadata_ingest.stitched_index.materialize_stitched_images im
     _keyence_orientation,
     _materialize_keyence_ff_tiles_with_log,
     _materialize_keyence_tile_projection,
-    _resolve_device,
+    resolve_device as _resolve_device,
     _stitch_keyence_tile_projections,
 )
 

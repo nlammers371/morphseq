@@ -9,6 +9,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from data_pipeline.utils.cuda_diagnostics import resolve_device
+
 
 def load_groundingdino_model(
     *,
@@ -17,6 +19,7 @@ def load_groundingdino_model(
     weights_path: Path,
     device: str = "cuda",
 ):
+    device = resolve_device(device)
     repo_dir = Path(repo_dir)
     config_path = Path(config_path)
     weights_path = Path(weights_path)

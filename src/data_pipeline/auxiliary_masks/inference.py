@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+
+from data_pipeline.utils.cuda_diagnostics import resolve_device
 from torch.utils.data import DataLoader
 from skimage import io
 
@@ -150,7 +152,7 @@ def run_auxiliary_mask_inference(
     if frame_df.empty:
         raise ValueError("frame_contract.csv is empty; cannot materialize auxiliary masks")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(resolve_device("cuda"))
     manifest_rows = []
 
     family_paths: dict[str, dict[str, str]] = {}

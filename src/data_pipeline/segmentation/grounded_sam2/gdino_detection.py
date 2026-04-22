@@ -56,6 +56,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from data_pipeline.utils.cuda_diagnostics import resolve_device
+
 warnings.filterwarnings("ignore")
 
 from data_pipeline.models.groundingdino import load_groundingdino_model as _load_groundingdino_model
@@ -87,6 +89,7 @@ def load_groundingdino_model(
         ...     "weights/groundingdino_swint_ogc.pth"
         ... )
     """
+    device = resolve_device(device)
     config_path = Path(config_path)
     weights_path = Path(weights_path)
 
@@ -144,6 +147,7 @@ def detect_embryos(
         >>> detections[0]["confidence"]
         0.87
     """
+    device = resolve_device(device)
     if not image_path.exists():
         raise FileNotFoundError(f"Image not found: {image_path}")
 

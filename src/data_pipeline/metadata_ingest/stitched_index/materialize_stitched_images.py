@@ -27,6 +27,7 @@ from data_pipeline.metadata_ingest.time_helpers import add_elapsed_time_columns
 from data_pipeline.metadata_ingest.time_helpers import add_frame_interval_unit_columns
 from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 from data_pipeline.shared.identifiers import build_image_id
+from data_pipeline.utils.cuda_diagnostics import resolve_device
 
 log = logging.getLogger(__name__)
 
@@ -253,13 +254,6 @@ def _materialize_keyence_tile_projection(stack_paths: list[Path]) -> np.ndarray:
     return projected
 
 
-def _resolve_device(device_preference: str | None) -> str:
-    pref = str(device_preference or "cuda").strip().lower()
-    if pref.startswith("cuda") and torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-
 def _compute_joint_percentile_bounds(stacks: list[np.ndarray]) -> tuple[float, float]:
     if not stacks:
         return 0.0, 1.0
@@ -443,8 +437,8 @@ def materialize_stitched_images(
     keyence_lookup = _infer_keyence_stack_lookup(raw_images_dir) if microscope == "Keyence" else {}
     keyence_orientation = _keyence_orientation(experiment)
     keyence_master_params = _keyence_master_params_path(raw_images_dir, experiment) if microscope == "Keyence" else None
-    keyence_device = _resolve_device(device_preference)
-    yx1_device = _resolve_device(device_preference)
+    keyence_device = resolve_device(device_preference)
+    yx1_device = resolve_device(device_preference)
     yx1_series_map = _build_yx1_well_to_series_map(mapping_csv) if microscope == "YX1" else {}
     image_extension = _normalize_extension(output_image_extension)
     keyence_method = str(keyence_projection_method or "log").strip().lower()

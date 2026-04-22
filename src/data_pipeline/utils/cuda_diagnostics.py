@@ -12,6 +12,8 @@ from dataclasses import dataclass
 import ctypes
 import os
 
+import torch
+
 
 @dataclass(frozen=True)
 class CudaDiagnostics:
@@ -91,6 +93,20 @@ def diagnose_cuda_driver() -> CudaDiagnostics:
         can_open_cap1=can_open_cap1,
         can_open_cap2=can_open_cap2,
     )
+
+
+def resolve_device(device_preference: str | None = "cuda", *, require_cuda: bool = False) -> str:
+    """Resolve a requested device preference to a concrete runtime device string."""
+    pref = str(device_preference or "cuda").strip().lower()
+    if pref.startswith("cpu"):
+        return "cpu"
+    if pref.startswith("cuda"):
+        if torch.cuda.is_available():
+            return "cuda"
+        if require_cuda:
+            require_cuda_or_raise()
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def require_cuda_or_raise() -> None:

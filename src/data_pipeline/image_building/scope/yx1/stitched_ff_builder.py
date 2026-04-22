@@ -26,6 +26,7 @@ import skimage.io as skio
 
 # Import shared LoG utilities used across pipeline image builders.
 from data_pipeline.image_building.shared.log_focus import LoG_focus_stacker, im_rescale
+from data_pipeline.utils.cuda_diagnostics import resolve_device
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +68,7 @@ def _focus_stack(
     # Normalize and convert to tensor
     norm, _, _ = im_rescale(stack_zyx)
     norm = norm.astype(np.float32)
+    device = resolve_device(device)
     tensor = torch.from_numpy(norm).to(device)
 
     # Apply focus stacking
@@ -112,7 +114,7 @@ def compile_yx1_data(
     exp_name: str,
     well_series_mapping: dict[str, int],  # well_name -> series_number (1-based)
     overwrite: bool = False,
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",  # GPU BUG FIX: NOT commented out
+    device: str = "cuda",
     n_workers: int = 1,
     z_buffer: bool = False,
 ):
@@ -137,6 +139,7 @@ def compile_yx1_data(
     output_dir = output_root / exp_name / "stitched_ff_images"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    device = resolve_device(device)
     log.info("Processing YX1 data: %s (device=%s)", exp_name, device)
 
     if device == "cpu":
