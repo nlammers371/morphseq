@@ -1,0 +1,49 @@
+[Wed Apr 22 18:53:14 PDT 2026] Starting decile figure  host=t003.grid.gs.washington.edu
+Loaded 2177 embryo summaries
+Sampled 20 embryos across 10 deciles
+  D1-1    well=B09  t= 16  p=64  ncc_p05=0.1115
+  D1-2    well=E09  t= 16  p=67  ncc_p05=0.2318
+  D2-1    well=E06  t= 15  p=42  ncc_p05=0.3285
+  D2-2    well=B08  t= 56  p=61  ncc_p05=0.4463
+  D3-1    well=G08  t= 18  p=56  ncc_p05=0.5848
+  D3-2    well=B05  t= 96  p=33  ncc_p05=0.6825
+  D4-1    well=E06  t= 16  p=42  ncc_p05=0.7743
+  D4-2    well=A06  t=104  p=46  ncc_p05=0.8447
+  D5-1    well=A03  t=  7  p=16  ncc_p05=0.8842
+  D5-2    well=A03  t= 56  p=16  ncc_p05=0.9130
+  D6-1    well=E08  t=  7  p=58  ncc_p05=0.9318
+  D6-2    well=G04  t=  7  p=25  ncc_p05=0.9464
+  D7-1    well=D05  t= 97  p=35  ncc_p05=0.9560
+  D7-2    well=F01  t=104  p= 5  ncc_p05=0.9637
+  D8-1    well=C10  t=  7  p=76  ncc_p05=0.9698
+  D8-2    well=E06  t=  6  p=42  ncc_p05=0.9746
+  D9-1    well=B04  t= 11  p=30  ncc_p05=0.9781
+  D9-2    well=C01  t=  7  p= 2  ncc_p05=0.9817
+  D10-1   well=C08  t=  0  p=60  ncc_p05=0.9847
+  D10-2   well=B02  t=  2  p=14  ncc_p05=0.9895
+Pre-loading masks and focused images for 20 embryos...
+Rendering 20 columns (loading ND2 stacks one at a time)...
+  [1/20] D1-1      well=B09  t=16  p=64
+  [2/20] D1-2      well=E09  t=16  p=67
+  [3/20] D2-1      well=E06  t=15  p=42
+  [4/20] D2-2      well=B08  t=56  p=61
+  [5/20] D3-1      well=G08  t=18  p=56
+  [6/20] D3-2      well=B05  t=96  p=33
+  [7/20] D4-1      well=E06  t=16  p=42
+  [8/20] D4-2      well=A06  t=104  p=46
+  [9/20] D5-1      well=A03  t=7  p=16
+  [10/20] D5-2      well=A03  t=56  p=16
+  [11/20] D6-1      well=E08  t=7  p=58
+  [12/20] D6-2      well=G04  t=7  p=25
+  [13/20] D7-1      well=D05  t=97  p=35
+  [14/20] D7-2      well=F01  t=104  p=5
+  [15/20] D8-1      well=C10  t=7  p=76
+  [16/20] D8-2      well=E06  t=6  p=42
+  [17/20] D9-1      well=B04  t=11  p=30
+  [18/20] D9-2      well=C01  t=7  p=2
+  [19/20] D10-1     well=C08  t=0  p=60
+  [20/20] D10-2     well=B02  t=2  p=14
+Saved → /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/figures/decile_ranked_ncc_p05.png
+
+Figure saved → /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/figures/decile_ranked_ncc_p05.png
+[Wed Apr 22 18:56:29 PDT 2026] Done.

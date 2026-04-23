@@ -19,7 +19,26 @@ See that module's README for design rationale and usage.
 
 **Goal:** Run the production utility (`zstack_motion_qc`) over an entire raw ND2
 file, compute NCC and rel_entropy grids for every (T, P) stack, save per-stack
-scalar summaries, and characterize the distribution to find natural QC thresholds.
+What I would save
+
+For each stack (T, P):
+	•	ncc_grid: shape (Z-1, Ny, Nx)
+	•	optionally entropy_grid: shape (Z, Ny, Nx)
+
+Then compute all derived summaries post hoc as needed:
+	•	ncc_min
+	•	ncc_p05
+	•	ncc_mean
+	•	ncc_median
+	•	ncc_bad_tile_fraction
+	•	ncc_bad_pair_fraction
+	•	spatial clustering metrics
+	•	longest bad run across z
+	•	per-region summaries once masks exist
+
+That gives you freedom later.
+
+This also fits your future embryo-mask plan
 
 ### What the script should do
 
@@ -56,6 +75,21 @@ scalar summaries, and characterize the distribution to find natural QC threshold
 - Memory: loading all (T, P) stacks at once is ~113 × 95 × 15 × 2189² × 4 bytes ≈
   way too large. Stream one stack at a time via dask, compute grids immediately,
   discard the raw stack.
+
+---
+
+## Pipeline integration note (2026-04-22)
+
+Timing benchmark on `06_full_nd2_scan.py` (2×4 stacks, 4 workers):
+- ND2 load:     ~6.7s/stack  (78% of wall time) → **I/O-bound**
+- Grid compute: ~1.9s/stack  (22%)
+- npz save:     ~0.01s/stack (negligible)
+
+**Implication:** wiring `compute_local_ncc_grid` + `compute_local_entropy_grid` +
+`save_grids` into `_focus_stack()` in `stitched_ff_builder.py` adds essentially zero
+cost — the stack is already in memory at that point, so we pay nothing extra for
+the I/O that dominates the standalone scan. Do this integration before the next
+experiment lands so QC grids are produced as a free byproduct of image building.
 
 ---
 

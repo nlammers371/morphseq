@@ -1,0 +1,50 @@
+[Wed Apr 22 20:28:20 PDT 2026] Starting decile figure  host=t002.grid.gs.washington.edu
+Loaded 9257 embryo summaries
+Sampled 20 embryos across 10 deciles
+  D1-1    well=C04  t= 32  p=29  ncc_p05=0.1549
+  D1-2    well=D12  t= 76  p=92  ncc_p05=0.7820
+  D2-1    well=G03  t= 81  p=22  ncc_p05=0.8785
+  D2-2    well=G03  t= 50  p=22  ncc_p05=0.9035
+  D3-1    well=F09  t= 44  p=69  ncc_p05=0.9179
+  D3-2    well=H06  t= 65  p=40  ncc_p05=0.9293
+  D4-1    well=B09  t=  9  p=65  ncc_p05=0.9378
+  D4-2    well=A02  t=  9  p=15  ncc_p05=0.9441
+  D5-1    well=D11  t=  8  p=83  ncc_p05=0.9490
+  D5-2    well=B01  t=111  p= 1  ncc_p05=0.9530
+  D6-1    well=B01  t= 53  p= 1  ncc_p05=0.9573
+  D6-2    well=F01  t= 62  p= 5  ncc_p05=0.9611
+  D7-1    well=D07  t= 95  p=51  ncc_p05=0.9649
+  D7-2    well=B04  t=  9  p=30  ncc_p05=0.9684
+  D8-1    well=H06  t= 21  p=40  ncc_p05=0.9719
+  D8-2    well=D01  t= 79  p= 3  ncc_p05=0.9755
+  D9-1    well=G11  t= 43  p=86  ncc_p05=0.9777
+  D9-2    well=E07  t= 18  p=52  ncc_p05=0.9807
+  D10-1   well=C08  t= 24  p=61  ncc_p05=0.9839
+  D10-2   well=E11  t=  4  p=84  ncc_p05=0.9888
+Pre-loading masks and focused images for 20 embryos...
+Loaded well->p lookup: 95 wells from /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/06_scan_output/series_well_map.csv
+Rendering 20 columns (loading ND2 stacks one at a time)...
+  [1/20] D1-1      well=C04  t=32  p_nd2=29
+  [2/20] D1-2      well=D12  t=76  p_nd2=92
+  [3/20] D2-1      well=G03  t=81  p_nd2=22
+  [4/20] D2-2      well=G03  t=50  p_nd2=22
+  [5/20] D3-1      well=F09  t=44  p_nd2=69
+  [6/20] D3-2      well=H06  t=65  p_nd2=40
+  [7/20] D4-1      well=B09  t=9  p_nd2=65
+  [8/20] D4-2      well=A02  t=9  p_nd2=15
+  [9/20] D5-1      well=D11  t=8  p_nd2=83
+  [10/20] D5-2      well=B01  t=111  p_nd2=1
+  [11/20] D6-1      well=B01  t=53  p_nd2=1
+  [12/20] D6-2      well=F01  t=62  p_nd2=5
+  [13/20] D7-1      well=D07  t=95  p_nd2=51
+  [14/20] D7-2      well=B04  t=9  p_nd2=30
+  [15/20] D8-1      well=H06  t=21  p_nd2=40
+  [16/20] D8-2      well=D01  t=79  p_nd2=3
+  [17/20] D9-1      well=G11  t=43  p_nd2=86
+  [18/20] D9-2      well=E07  t=18  p_nd2=52
+  [19/20] D10-1     well=C08  t=24  p_nd2=61
+  [20/20] D10-2     well=E11  t=4  p_nd2=84
+Saved → /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/figures/decile_ranked_ncc_p05.png
+
+Figure saved → /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/figures/decile_ranked_ncc_p05.png
+[Wed Apr 22 20:32:09 PDT 2026] Done.
