@@ -11,7 +11,6 @@ Contract-driven pipeline:
 
 from pathlib import Path
 import os
-import csv
 
 # Configuration
 # Path is relative to Snakefile location
@@ -48,18 +47,38 @@ print(f"Data root: {DATA_ROOT}")
 print(f"Experiments: {EXPERIMENTS}")
 print(f"Microscope: {MICROSCOPE}")
 
+# Wildcard and identifier contract source:
+# docs/refactors/streamline-snakemake/identifier_and_wildcard_contract.md
+# Snakemake wildcards only capture path pieces; semantic validation stays in
+# Python helpers and input functions.
+# Smoke subsets (for example 20240418 -> A01,C01) come from config, not code.
+ruleorder: generate_auxiliary_masks_well > aggregate_auxiliary_masks
+ruleorder: segment_and_track_per_well > merge_segmentation_tracking
+ruleorder: run_snip_processing_per_well > merge_snip_manifests
+
 def experiment_well_ids(experiment: str) -> list[str]:
-    frame_contract = EXPERIMENT_METADATA_DIR / str(experiment) / "frame_contract.csv"
-    if not frame_contract.exists():
-        return []
-    with frame_contract.open(newline="") as handle:
-        reader = csv.DictReader(handle)
-        wells = sorted({str(row["well_id"]) for row in reader if row.get("well_id")})
-    return wells
+    configured = config.get("experiment_wells") or {}
+    wells = configured.get(str(experiment))
+    if wells is None:
+        wells = configured.get(experiment)
+    if wells is None:
+        for key, value in configured.items():
+            if str(key) == str(experiment):
+                wells = value
+                break
+    if wells:
+        return [str(w) for w in wells]
+
+    # When experiment_wells is absent from config, return [] so that discover_wells
+    # derives wells from a freshly-rebuilt frame_contract.csv via the checkpoint path.
+    # Do not read frame_contract.csv here — that file may be stale and would bypass
+    # the checkpoint/source-of-truth flow.
+    return []
 
 # ============================================================================
 # Plate metadata (optional for build/segment/snips)
 # ============================================================================
+
 
 rule normalize_plate_metadata:
     """
@@ -71,37 +90,19 @@ rule normalize_plate_metadata:
     input:
         plate_file = PLATE_METADATA_DIR / "{experiment}_well_metadata.xlsx"
     output:
-        normalized_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv"
+        normalized_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".plate_metadata.validated"
     params:
         experiment_id = "{experiment}"
     shell:
         """
-        "{PYTHON}" << 'EOF'
-import sys
-from pathlib import Path
-sys.path.insert(0, "{PROJECT_ROOT}/src")
-
-from data_pipeline.metadata_ingest.plate.plate_processing import process_plate_layout
-
-input_file = Path("{input.plate_file}")
-output_file = Path("{output.normalized_csv}")
-experiment_id = "{params.experiment_id}"
-
-# Create output directory
-output_file.parent.mkdir(parents=True, exist_ok=True)
-
-# Process plate layout
-df = process_plate_layout(
-    input_file=input_file,
-    experiment_id=experiment_id,
-    output_csv=output_file
-)
-
-print(f"✅ Normalized plate metadata: {{output_file}}")
-print(f"Columns: {{list(df.columns)}}")
-print(f"Shape: {{df.shape}}")
-EOF
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.pipeline_orchestrator.tasks normalize-plate \
+          --input-file "{input.plate_file}" \
+          --experiment "{params.experiment_id}" \
+          --output-csv "{output.normalized_csv}"
+        printf 'ok\n' > "{output.validated}"
         """
+
 
 
 rule extract_scope_metadata_yx1:
@@ -174,6 +175,7 @@ rule map_series_to_wells_yx1:
         PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.scope.yx1.map_series_to_wells \
           --raw-yx1-experiment-dir "{input.raw_images_dir}" \
           --experiment-id "{params.experiment_id}" \
+          --use-xy-reference \
           --output-mapping-csv "{output.mapping_csv}" \
           --output-provenance-json "{output.provenance_json}"
         """
@@ -194,7 +196,8 @@ rule apply_series_mapping_yx1:
         PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.scope.shared.apply_series_mapping \
           --scope-metadata-csv "{input.scope_csv}" \
           --series-well-mapping-csv "{input.mapping_csv}" \
-          --output-scope-metadata-mapped-csv "{output.mapped_csv}"
+          --output-scope-metadata-mapped-csv "{output.mapped_csv}" \
+          --experiment-id "{wildcards.experiment}"
         echo "ok" > "{output.validated}"
         """
 
@@ -202,58 +205,43 @@ rule apply_series_mapping_yx1:
 # Image building + physical frame manifest
 # ============================================================================
 
-rule build_stitched_images_yx1:
+
+rule materialize_stitched_images_yx1:
     input:
         raw_images_dir = RAW_IMAGES_DIR / "YX1" / "{experiment}",
         mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
+        scope_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
     output:
-        done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done"
+        stitched_index = EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv",
+        done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".materialize_stitched_images.done"
     params:
         experiment_id = "{experiment}",
+        selected_wells = lambda wc: ",".join(experiment_well_ids(wc.experiment)),
         device = lambda wc: str(config.get("image_building", {}).get("device", "cuda")),
         overwrite = lambda wc: int(bool(config.get("image_building", {}).get("overwrite", False))),
         z_buffer = lambda wc: int(bool(config.get("image_building", {}).get("yx1", {}).get("z_buffer", False))),
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
-from pathlib import Path
-import pandas as pd
-
-from data_pipeline.image_building.yx1.stitched_ff_builder import compile_yx1_data
-
-raw_dir = Path("{input.raw_images_dir}")
-mapping_csv = Path("{input.mapping_csv}")
-out_root = Path("{BUILT_IMAGE_DATA_DIR}")
-exp_id = "{params.experiment_id}"
-device = "{params.device}"
-overwrite = bool(int("{params.overwrite}"))
-z_buffer = bool(int("{params.z_buffer}"))
-
-df = pd.read_csv(mapping_csv)
-well_series_mapping = {{}}
-for _, r in df.iterrows():
-    well_series_mapping[str(r["well_index"])] = int(r["series_number"])
-
-compile_yx1_data(
-    raw_data_root=raw_dir.parent,
-    output_root=out_root,
-    exp_name=exp_id,
-    well_series_mapping=well_series_mapping,
-    overwrite=overwrite,
-    device=device,
-    z_buffer=z_buffer,
-)
-
-Path("{output.done}").parent.mkdir(parents=True, exist_ok=True)
-Path("{output.done}").write_text("ok\\n")
-EOF
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.pipeline_orchestrator.tasks materialize-stitched \
+          --experiment "{params.experiment_id}" \
+          --microscope "YX1" \
+          --raw-images-dir "{input.raw_images_dir}" \
+          --scope-csv "{input.scope_csv}" \
+          --mapping-csv "{input.mapping_csv}" \
+          --output-root "{BUILT_IMAGE_DATA_DIR}" \
+          --output-stitched-index-csv "{output.stitched_index}" \
+          --selected-wells "{params.selected_wells}" \
+          --output-image-extension "jpg" \
+          --device-preference "{params.device}" \
+          --overwrite "{params.overwrite}" \
+          --done-flag "{output.done}"
         """
 
 
 rule build_frame_contract:
     input:
+        stitched_index = EXPERIMENT_METADATA_DIR / "{experiment}" / "stitched_image_index.csv",
         mapped_scope = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
-        stitched_done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done",
     output:
         contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
         validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
@@ -261,11 +249,11 @@ rule build_frame_contract:
         channel_id = lambda wildcards: str(config.get("segmentation_and_tracking", {}).get("channel_id", "BF")),
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.microscope_data_ingest.frame_contract.build_frame_contract \
-          --scope-metadata-mapped-csv "{input.mapped_scope}" \
-          --built-image-data-root "{BUILT_IMAGE_DATA_DIR}" \
-          --output-csv "{output.contract}" \
-          --channel-id "{params.channel_id}"
+                PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.frame_contract.build_frame_contract \
+                    --stitched-index-csv "{input.stitched_index}" \
+                    --scope-metadata-csv "{input.mapped_scope}" \
+                    --output-csv "{output.contract}"
+                echo "ok" > "{output.validated}"
         """
 
 
@@ -275,6 +263,8 @@ checkpoint discover_wells:
         validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
     output:
         wells_txt = EXPERIMENT_METADATA_DIR / "{experiment}" / "wells.txt"
+    params:
+        selected_wells = lambda wc: ",".join(experiment_well_ids(wc.experiment)),
     shell:
         """
         PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
@@ -282,8 +272,13 @@ from pathlib import Path
 import pandas as pd
 
 contract = Path("{input.contract}")
-df = pd.read_csv(contract)
-wells = sorted(set(df["well_id"].astype(str).tolist()))
+selected_csv = "{params.selected_wells}".strip()
+if selected_csv:
+    wells = sorted({{part.strip() for part in selected_csv.split(",") if part.strip()}})
+else:
+    df = pd.read_csv(contract)
+    wells = sorted(set(df["well_id"].astype(str).tolist()))
+
 out = Path("{output.wells_txt}")
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\\n".join(wells) + "\\n")
@@ -323,7 +318,7 @@ rule segment_and_track_per_well:
           --experiment-id "{wildcards.experiment}" \
           --well-id "{wildcards.well_id}" \
           --channel-id "{params.channel_id}" \
-          --output-root "{SEGMENTATION_DIR}" \
+          --output-root "{DATA_ROOT}" \
           --device "{params.device}" \
           --gdino-config "{params.gdino_config}" \
           --gdino-weights "{params.gdino_weights}" \
@@ -340,14 +335,21 @@ rule merge_segmentation_tracking:
         ]
     output:
         merged = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.segmentation_and_tracking.pipelines.merge_segmentation_and_tracking_contracts           --experiment "{wildcards.experiment}"           --output-root "{DATA_ROOT}"
+        """
+
+
+rule validate_segmentation_tracking:
+    input:
+        merged = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+    output:
         done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.segmentation.grounded_sam2.merge_segmentation_tracking \
-          --inputs {input} \
-          --output-csv "{output.merged}"
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" {PROJECT_ROOT}/src/data_pipeline/segmentation_and_tracking/pipelines/validate_segmentation_and_tracking.py           --input-csv "{input.merged}"           --output-flag "{output.done}"
         """
-
 
 # ============================================================================
 # Snip processing (per well, consumes segmentation_tracking only)
@@ -372,7 +374,7 @@ rule run_snip_processing_per_well:
         """
         PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.snip_processing.run_from_segmentation_tracking \
           --segmentation-tracking "{input.seg}" \
-          --output-root "{PROCESSED_SNIPS_DIR}" \
+          --output-root "{DATA_ROOT}" \
           --output-shape {params.out_h} {params.out_w} \
           --target-pixel-size-um {params.target_um} \
           --save-raw-crops {params.save_raw} \
@@ -390,15 +392,21 @@ rule merge_snip_manifests:
         ]
     output:
         merged = PROCESSED_SNIPS_DIR / "{experiment}" / "contracts" / "snip_manifest.parquet",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.snip_processing.pipelines.merge_snip_manifests           --experiment "{wildcards.experiment}"           --output-root "{DATA_ROOT}"           --write-views 1
+        """
+
+
+rule validate_snip_manifest:
+    input:
+        merged = PROCESSED_SNIPS_DIR / "{experiment}" / "contracts" / "snip_manifest.parquet",
+    output:
         done = PROCESSED_SNIPS_DIR / "{experiment}" / "contracts" / ".snip_manifest_merged.validated",
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.snip_processing.merge_snip_manifests \
-          --inputs {input} \
-          --output-parquet "{output.merged}" \
-          --write-csv 1
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" {PROJECT_ROOT}/src/data_pipeline/snip_processing/pipelines/validate_snip_manifest.py           --input "{input.merged}"           --output-flag "{output.done}"
         """
-
 
 # ============================================================================
 # Auxiliary masks (per well, aggregated per experiment)
@@ -531,16 +539,16 @@ rule compute_stage_predictions:
         segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
         frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
         frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        plate_metadata = EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
+        plate_metadata_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".plate_metadata.validated",
     output:
         csv = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv",
         done = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv.validated",
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_stage_predictions \
-          --segmentation-tracking "{input.segmentation_tracking}" \
-          --frame-contract "{input.frame_contract}" \
-          --output-csv "{output.csv}"
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_stage_predictions           --segmentation-tracking "{input.segmentation_tracking}"           --frame-contract "{input.frame_contract}"           --plate-metadata "{input.plate_metadata}"           --output-csv "{output.csv}"
         """
+
 
 rule consolidate_features:
     input:
