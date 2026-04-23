@@ -46,6 +46,7 @@ OUT_DIR     = Path(__file__).parent / "07_embryo_ncc_output"
 BAD_THRESH  = 0.90
 NCC_MIN_FAIL_THRESH      = 0.85
 BAD_PAIR_FRAC_FAIL_THRESH = 0.10
+MIN_TILE_COVERAGE = 0.25  # raised from 0.10 — excludes edge tiles that straddle embryo boundary
 
 LABEL_COLORS = {
     "Bad Images":   "#d62728",
@@ -109,6 +110,7 @@ def run_analysis() -> pd.DataFrame:
             tile_size=data["tile_size"],
             stride=data["stride"],
             bad_thresh=BAD_THRESH,
+            min_tile_coverage=MIN_TILE_COVERAGE,
         )
         flag = "FAIL" if (
             (not np.isnan(summary["ncc_min"]) and summary["ncc_min"] < NCC_MIN_FAIL_THRESH) or
