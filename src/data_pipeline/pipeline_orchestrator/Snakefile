@@ -1,11 +1,11 @@
 """
 MorphSeq Pipeline - Snakemake Workflow
 
-Manifest-driven pipeline:
+Contract-driven pipeline:
   - Extract physical scope metadata (scope-specific)
   - Build stitched FF images (scope-specific)
-  - Build a single physical frame manifest (source of truth)
-  - Segment+track per well from the manifest (GDINO + SAM2)
+  - Build a single physical frame contract (source of truth)
+  - Segment+track per well from the frame contract (GDINO + SAM2)
   - Process snips per well from segmentation_tracking only
 """
 
@@ -34,6 +34,11 @@ EXPERIMENT_METADATA_DIR = DATA_ROOT / "experiment_metadata"
 BUILT_IMAGE_DATA_DIR = DATA_ROOT / "built_image_data"
 SEGMENTATION_DIR = DATA_ROOT / "segmentation_and_tracking"
 PROCESSED_SNIPS_DIR = DATA_ROOT / "processed_snips"
+AUXILIARY_MASKS_DIR = DATA_ROOT / "auxiliary_masks"
+MODELS_DIR = DATA_ROOT / "models"
+FEATURES_DIR = DATA_ROOT / "computed_features"
+QUALITY_CONTROL_DIR = DATA_ROOT / "quality_control"
+SA_REFERENCE_CURVES = PROJECT_ROOT / "metadata" / "sa_reference_curves.csv"
 
 # Experiment identifiers
 EXPERIMENTS = config.get("experiments", ["20250912"])
@@ -217,7 +222,7 @@ overwrite = bool(int("{params.overwrite}"))
 z_buffer = bool(int("{params.z_buffer}"))
 
 df = pd.read_csv(mapping_csv)
-well_series_mapping = {}
+well_series_mapping = {{}}
 for _, r in df.iterrows():
     well_series_mapping[str(r["well_index"])] = int(r["series_number"])
 
@@ -237,29 +242,29 @@ EOF
         """
 
 
-rule build_frame_manifest:
+rule build_frame_contract:
     input:
         mapped_scope = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
         stitched_done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done",
     output:
-        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.parquet",
-        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+        contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
     params:
         channel_id = lambda wildcards: str(config.get("segmentation_and_tracking", {}).get("channel_id", "BF")),
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.microscope_data_ingest.frame_manifest.build_frame_manifest \
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.microscope_data_ingest.frame_contract.build_frame_contract \
           --scope-metadata-mapped-csv "{input.mapped_scope}" \
           --built-image-data-root "{BUILT_IMAGE_DATA_DIR}" \
-          --output-parquet "{output.manifest}" \
+          --output-csv "{output.contract}" \
           --channel-id "{params.channel_id}"
         """
 
 
 checkpoint discover_wells:
     input:
-        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.parquet",
-        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+        contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
     output:
         wells_txt = EXPERIMENT_METADATA_DIR / "{experiment}" / "wells.txt"
     shell:
@@ -268,8 +273,8 @@ checkpoint discover_wells:
 from pathlib import Path
 import pandas as pd
 
-manifest = Path("{input.manifest}")
-df = pd.read_parquet(manifest)
+contract = Path("{input.contract}")
+df = pd.read_csv(contract)
 wells = sorted(set(df["well_id"].astype(str).tolist()))
 out = Path("{output.wells_txt}")
 out.parent.mkdir(parents=True, exist_ok=True)
@@ -291,8 +296,8 @@ def wells_for_experiment(wildcards):
 
 rule segment_and_track_per_well:
     input:
-        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_manifest.parquet",
-        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_manifest.validated",
+        manifest = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
     output:
         out_csv = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
         done = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segmentation_tracking.validated",
@@ -386,16 +391,399 @@ rule merge_snip_manifests:
           --write-csv 1
         """
 
+
+# ============================================================================
+# Auxiliary masks (per experiment, consumes frame contract)
+# ============================================================================
+
+rule generate_auxiliary_masks:
+    input:
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+    output:
+        manifest = AUXILIARY_MASKS_DIR / "{experiment}" / "contracts" / "auxiliary_masks.csv",
+        done = AUXILIARY_MASKS_DIR / "{experiment}" / "contracts" / ".auxiliary_masks.validated",
+    params:
+        model_root = lambda wc: str(MODELS_DIR / "segmentation"),
+        batch_size = lambda wc: int(config.get("auxiliary_masks", {}).get("batch_size", 64)),
+        num_workers = lambda wc: int(config.get("auxiliary_masks", {}).get("num_workers", 1)),
+        overwrite_flag = lambda wc: "--overwrite" if bool(config.get("auxiliary_masks", {}).get("overwrite", False)) else "",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.auxiliary_masks.materialize_auxiliary_masks \
+          --frame-contract "{input.frame_contract}" \
+          --output-root "{AUXILIARY_MASKS_DIR}/{wildcards.experiment}" \
+          --output-manifest-csv "{output.manifest}" \
+          --model-root "{params.model_root}" \
+          --batch-size {params.batch_size} \
+          --num-workers {params.num_workers} \
+          {params.overwrite_flag}
+        """
+
+
+# ============================================================================
+# Feature extraction (per experiment)
+# ============================================================================
+
+rule compute_mask_geometry:
+    input:
+        segmentation_tracking = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+    output:
+        csv = FEATURES_DIR / "{experiment}" / "mask_geometry" / "mask_geometry_metrics.csv",
+        done = FEATURES_DIR / "{experiment}" / "mask_geometry" / "mask_geometry_metrics.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_mask_geometry \
+          --segmentation-tracking "{input.segmentation_tracking}" \
+          --frame-contract "{input.frame_contract}" \
+          --output-csv "{output.csv}"
+        """
+
+rule compute_pose_kinematics:
+    input:
+        segmentation_tracking = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+    output:
+        csv = FEATURES_DIR / "{experiment}" / "pose_kinematics" / "pose_kinematics_metrics.csv",
+        done = FEATURES_DIR / "{experiment}" / "pose_kinematics" / "pose_kinematics_metrics.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_pose_kinematics \
+          --segmentation-tracking "{input.segmentation_tracking}" \
+          --frame-contract "{input.frame_contract}" \
+          --output-csv "{output.csv}"
+        """
+
+rule compute_fraction_alive:
+    input:
+        segmentation_tracking = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        auxiliary_masks_done = AUXILIARY_MASKS_DIR / "{experiment}" / "contracts" / ".auxiliary_masks.validated",
+    output:
+        csv = FEATURES_DIR / "{experiment}" / "fraction_alive" / "fraction_alive.csv",
+        done = FEATURES_DIR / "{experiment}" / "fraction_alive" / "fraction_alive.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_fraction_alive \
+          --segmentation-tracking "{input.segmentation_tracking}" \
+          --frame-contract "{input.frame_contract}" \
+          --auxiliary-masks-dir "{AUXILIARY_MASKS_DIR}/{wildcards.experiment}" \
+          --output-csv "{output.csv}"
+        """
+
+rule compute_stage_predictions:
+    input:
+        segmentation_tracking = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+    output:
+        csv = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv",
+        done = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_stage_predictions \
+          --segmentation-tracking "{input.segmentation_tracking}" \
+          --frame-contract "{input.frame_contract}" \
+          --output-csv "{output.csv}"
+        """
+
+rule consolidate_features:
+    input:
+        segmentation_tracking = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        mask_geometry = FEATURES_DIR / "{experiment}" / "mask_geometry" / "mask_geometry_metrics.csv",
+        mask_geometry_done = FEATURES_DIR / "{experiment}" / "mask_geometry" / "mask_geometry_metrics.csv.validated",
+        pose_kinematics = FEATURES_DIR / "{experiment}" / "pose_kinematics" / "pose_kinematics_metrics.csv",
+        pose_kinematics_done = FEATURES_DIR / "{experiment}" / "pose_kinematics" / "pose_kinematics_metrics.csv.validated",
+        fraction_alive = FEATURES_DIR / "{experiment}" / "fraction_alive" / "fraction_alive.csv",
+        fraction_alive_done = FEATURES_DIR / "{experiment}" / "fraction_alive" / "fraction_alive.csv.validated",
+        stage_predictions = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv",
+        stage_predictions_done = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv.validated",
+        plate_metadata = EXPERIMENT_METADATA_DIR / "{experiment}" / "plate_metadata.csv",
+    output:
+        csv = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv",
+        done = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv.validated",
+        schema = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.schema.json",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.consolidate_features \
+          --segmentation-tracking "{input.segmentation_tracking}" \
+          --frame-contract "{input.frame_contract}" \
+          --mask-geometry "{input.mask_geometry}" \
+          --pose-kinematics "{input.pose_kinematics}" \
+          --fraction-alive "{input.fraction_alive}" \
+          --stage-predictions "{input.stage_predictions}" \
+          --plate-metadata "{input.plate_metadata}" \
+          --output-csv "{output.csv}"
+        """
+
+
+rule feature_extraction_complete:
+    input:
+        expand(
+            FEATURES_DIR / "{exp}" / "consolidated" / "consolidated_snip_features.csv.validated",
+            exp=EXPERIMENTS
+        )
+
+rule compute_segmentation_qc:
+    input:
+        segmentation_tracking = SEGMENTATION_DIR / "{experiment}" / "contracts" / "segmentation_tracking.csv",
+        segmentation_tracking_done = SEGMENTATION_DIR / "{experiment}" / "contracts" / ".segmentation_tracking_merged.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "segmentation_qc" / "segmentation_qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "segmentation_qc" / "segmentation_qc_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+from data_pipeline.quality_control.segmentation_qc.segmentation_quality_qc import compute_segmentation_quality_qc
+
+tracking = pd.read_csv(Path("{input.segmentation_tracking}"))
+qc_df = compute_segmentation_quality_qc(tracking)
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df.to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule compute_viability_qc:
+    input:
+        consolidated_features = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv",
+        consolidated_features_done = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "viability_qc" / "viability_qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "viability_qc" / "viability_qc_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+
+features = pd.read_csv(Path("{input.consolidated_features}"), usecols=["snip_id"])
+qc_df = features.copy()
+qc_df["viability_flag"] = False
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df.to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule compute_death_detection:
+    input:
+        fraction_alive = FEATURES_DIR / "{experiment}" / "fraction_alive" / "fraction_alive.csv",
+        fraction_alive_done = FEATURES_DIR / "{experiment}" / "fraction_alive" / "fraction_alive.csv.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "death_detection" / "death_detection_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "death_detection" / "death_detection_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+from data_pipeline.quality_control.death_detection import compute_dead_flag_persistence
+
+fraction_alive = pd.read_csv(Path("{input.fraction_alive}"))
+qc_df = compute_dead_flag_persistence(fraction_alive)
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df[["snip_id", "dead_flag", "death_inflection_time_int"]].to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule compute_surface_area_qc:
+    input:
+        consolidated_features = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv",
+        consolidated_features_done = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "surface_area_qc" / "surface_area_qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "surface_area_qc" / "surface_area_qc_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+from data_pipeline.quality_control.morphology_qc.size_validation_qc import compute_size_validation_qc
+
+features = pd.read_csv(Path("{input.consolidated_features}"))
+qc_df = compute_size_validation_qc(features, Path("{SA_REFERENCE_CURVES}"))
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df[["snip_id", "sa_outlier_flag"]].to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule compute_auxiliary_mask_qc:
+    input:
+        auxiliary_masks = AUXILIARY_MASKS_DIR / "{experiment}" / "contracts" / "auxiliary_masks.csv",
+        auxiliary_masks_done = AUXILIARY_MASKS_DIR / "{experiment}" / "contracts" / ".auxiliary_masks.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "auxiliary_mask_qc" / "auxiliary_mask_qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "auxiliary_mask_qc" / "auxiliary_mask_qc_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+from data_pipeline.quality_control.auxiliary_mask_qc.imaging_quality_qc import compute_imaging_quality_qc
+
+manifest = pd.read_csv(Path("{input.auxiliary_masks}"))
+qc_df = compute_imaging_quality_qc(manifest)
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df[["snip_id", "yolk_flag", "bubble_flag"]].to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule compute_focus_qc:
+    input:
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "focus_qc" / "focus_qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "focus_qc" / "focus_qc_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+
+frame_contract = pd.read_csv(Path("{input.frame_contract}"), usecols=["snip_id"])
+qc_df = frame_contract.copy()
+qc_df["focus_flag"] = False
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df.to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule compute_motion_qc:
+    input:
+        frame_contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
+        frame_contract_done = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "motion_qc" / "motion_qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "motion_qc" / "motion_qc_flags.csv.validated",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+
+frame_contract = pd.read_csv(Path("{input.frame_contract}"), usecols=["snip_id"])
+qc_df = frame_contract.copy()
+qc_df["motion_flag"] = False
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df.to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+EOF
+        """
+
+rule consolidate_qc:
+    input:
+        segmentation = QUALITY_CONTROL_DIR / "{experiment}" / "segmentation_qc" / "segmentation_qc_flags.csv",
+        segmentation_done = QUALITY_CONTROL_DIR / "{experiment}" / "segmentation_qc" / "segmentation_qc_flags.csv.validated",
+        viability = QUALITY_CONTROL_DIR / "{experiment}" / "viability_qc" / "viability_qc_flags.csv",
+        viability_done = QUALITY_CONTROL_DIR / "{experiment}" / "viability_qc" / "viability_qc_flags.csv.validated",
+        imaging = QUALITY_CONTROL_DIR / "{experiment}" / "auxiliary_mask_qc" / "auxiliary_mask_qc_flags.csv",
+        imaging_done = QUALITY_CONTROL_DIR / "{experiment}" / "auxiliary_mask_qc" / "auxiliary_mask_qc_flags.csv.validated",
+        focus = QUALITY_CONTROL_DIR / "{experiment}" / "focus_qc" / "focus_qc_flags.csv",
+        focus_done = QUALITY_CONTROL_DIR / "{experiment}" / "focus_qc" / "focus_qc_flags.csv.validated",
+        motion = QUALITY_CONTROL_DIR / "{experiment}" / "motion_qc" / "motion_qc_flags.csv",
+        motion_done = QUALITY_CONTROL_DIR / "{experiment}" / "motion_qc" / "motion_qc_flags.csv.validated",
+        death = QUALITY_CONTROL_DIR / "{experiment}" / "death_detection" / "death_detection_flags.csv",
+        death_done = QUALITY_CONTROL_DIR / "{experiment}" / "death_detection" / "death_detection_flags.csv.validated",
+        surface_area = QUALITY_CONTROL_DIR / "{experiment}" / "surface_area_qc" / "surface_area_qc_flags.csv",
+        surface_area_done = QUALITY_CONTROL_DIR / "{experiment}" / "surface_area_qc" / "surface_area_qc_flags.csv.validated",
+    output:
+        csv = QUALITY_CONTROL_DIR / "{experiment}" / "consolidated" / "qc_flags.csv",
+        done = QUALITY_CONTROL_DIR / "{experiment}" / "consolidated" / "qc_flags.csv.validated",
+        schema = QUALITY_CONTROL_DIR / "{experiment}" / "consolidated" / "qc_flags.schema.json",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+import json
+from data_pipeline.quality_control.consolidation.consolidate_qc import consolidate_qc_flags
+from data_pipeline.schemas.quality_control import REQUIRED_COLUMNS_QC
+
+segmentation = pd.read_csv(Path("{input.segmentation}"))
+viability = pd.read_csv(Path("{input.viability}"))
+imaging = pd.read_csv(Path("{input.imaging}"))
+focus = pd.read_csv(Path("{input.focus}"))
+motion = pd.read_csv(Path("{input.motion}"))
+death = pd.read_csv(Path("{input.death}"))
+surface_area = pd.read_csv(Path("{input.surface_area}"))
+
+qc_df = consolidate_qc_flags(segmentation, viability, imaging, focus, motion, death, surface_area)
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+qc_df.to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+Path("{output.schema}").write_text(json.dumps(dict(columns=REQUIRED_COLUMNS_QC), indent=2) + '\n')
+EOF
+        """
+
+rule assemble_analysis_ready:
+    input:
+        consolidated_features = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv",
+        consolidated_features_done = FEATURES_DIR / "{experiment}" / "consolidated" / "consolidated_snip_features.csv.validated",
+        qc_flags = QUALITY_CONTROL_DIR / "{experiment}" / "consolidated" / "qc_flags.csv",
+        qc_flags_done = QUALITY_CONTROL_DIR / "{experiment}" / "consolidated" / "qc_flags.csv.validated",
+    output:
+        csv = DATA_ROOT / "analysis_ready" / "{experiment}" / "analysis_ready.csv",
+        done = DATA_ROOT / "analysis_ready" / "{experiment}" / ".analysis_ready.validated",
+        schema = DATA_ROOT / "analysis_ready" / "{experiment}" / "analysis_ready.schema.json",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+import pandas as pd
+import json
+from data_pipeline.analysis_ready.assemble import assemble_analysis_ready, validate_analysis_ready_schema
+from data_pipeline.schemas.analysis_ready import REQUIRED_COLUMNS_ANALYSIS_READY
+
+features = pd.read_csv(Path("{input.consolidated_features}"))
+qc = pd.read_csv(Path("{input.qc_flags}"))
+analysis = assemble_analysis_ready(features, qc)
+validate_analysis_ready_schema(analysis)
+out = Path("{output.csv}")
+out.parent.mkdir(parents=True, exist_ok=True)
+analysis.to_csv(out, index=False)
+Path("{output.done}").write_text("ok\n")
+Path("{output.schema}").write_text(json.dumps(dict(columns=REQUIRED_COLUMNS_ANALYSIS_READY), indent=2) + '\n')
+EOF
+        """
+
 # ============================================================================
 # Workflow Targets
 # ============================================================================
 
 rule all:
+    default_target: True
     """
-    Default target: build stitched images, manifest, segmentation, and snip processing.
+    Default target: build the final analysis-ready outputs.
     """
     input:
         expand(
-            PROCESSED_SNIPS_DIR / "{exp}" / "contracts" / ".snip_manifest_merged.validated",
+            DATA_ROOT / "analysis_ready" / "{exp}" / ".analysis_ready.validated",
             exp=EXPERIMENTS
         )

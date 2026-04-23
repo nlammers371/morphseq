@@ -1,262 +1,186 @@
 #!/usr/bin/env python3
+"""QC consolidation module.
+
+This module aligns the validated per-stage QC tables on ``snip_id``, derives
+the final ``use_snip`` gate, and writes the consolidated QC contract.
 """
-QC Consolidation Module
 
-Merges all QC flags from different modules and computes the final use_embryo gate.
+from __future__ import annotations
 
-Inputs:
-- segmentation_quality_qc.csv (edge, discontinuous, overlapping_mask flags)
-- auxiliary_mask_qc.csv (yolk, focus, bubble flags)
-- embryo_death_qc.csv (dead_flag, death_inflection_time_int, death_predicted_stage_hpf)
-- surface_area_outliers_qc.csv (sa_outlier_flag)
-
-Output:
-- consolidated_qc_flags.csv with all flags + use_embryo column
-
-Logic:
-- use_embryo = NOT (any QC_FAIL_FLAG is True)
-- QC_FAIL_FLAGS: dead_flag, sa_outlier_flag, yolk_flag, edge_flag,
-                discontinuous_mask_flag, overlapping_mask_flag, focus_flag, bubble_flag
-
-Authors: Wave 6 Implementation
-Date: 2025-11-06
-"""
+from pathlib import Path
 
 import pandas as pd
-import numpy as np
-from pathlib import Path
-from typing import List, Optional
 
-# Import schema for validation
-from src.data_pipeline.schemas.quality_control import REQUIRED_COLUMNS_QC, QC_FAIL_FLAGS
+from src.data_pipeline.schemas.quality_control import (
+    REQUIRED_COLUMNS_QC,
+    SNIP_EXCLUSION_FLAGS,
+    SNIP_INFORMATIONAL_FLAGS,
+)
+
+
+def assert_unique_snip_id(df: pd.DataFrame, stage_name: str, *, key: str = "snip_id") -> None:
+    if key not in df.columns:
+        raise ValueError(f"{stage_name}: missing required key column '{key}'")
+    if df[key].isna().any():
+        raise ValueError(f"{stage_name}: column '{key}' contains null values")
+    if df[key].duplicated().any():
+        raise ValueError(f"{stage_name}: duplicate '{key}' values detected")
+
+
+def _exact_columns(df: pd.DataFrame, expected: list[str], stage_name: str) -> pd.DataFrame:
+    missing = [column for column in expected if column not in df.columns]
+    extra = [column for column in df.columns if column not in expected]
+    if missing or extra:
+        raise ValueError(f"{stage_name}: column mismatch (missing={missing}, extra={extra})")
+    return df[expected].copy()
+
+
+def _normalize_death_detection(death_qc_df: pd.DataFrame) -> pd.DataFrame:
+    if "dead_flag" not in death_qc_df.columns:
+        raise ValueError("death_detection: expected dead_flag column")
+    expected = ["snip_id", "dead_flag", "death_inflection_time_int"]
+    return _exact_columns(death_qc_df, expected, "death_detection")
+
+
+def _assert_matching_snip_ids(reference: pd.DataFrame, other: pd.DataFrame, stage_name: str) -> None:
+    reference_ids = set(reference["snip_id"].astype(str))
+    other_ids = set(other["snip_id"].astype(str))
+    missing_left = sorted(other_ids - reference_ids)
+    missing_right = sorted(reference_ids - other_ids)
+    if missing_left or missing_right:
+        raise ValueError(
+            f"{stage_name}: snip_id mismatch (missing_in_reference={missing_left[:10]}, missing_in_{stage_name}={missing_right[:10]})"
+        )
 
 
 def consolidate_qc_flags(
     segmentation_qc_df: pd.DataFrame,
+    viability_qc_df: pd.DataFrame,
     imaging_qc_df: pd.DataFrame,
+    focus_qc_df: pd.DataFrame,
+    motion_qc_df: pd.DataFrame,
     death_qc_df: pd.DataFrame,
     size_qc_df: pd.DataFrame,
-    fraction_alive_df: Optional[pd.DataFrame] = None,
-    merge_on: str = 'snip_id'
+    merge_on: str = "snip_id",
 ) -> pd.DataFrame:
-    """
-    Merge all QC flags and compute final use_embryo gate.
+    """Combine validated QC tables into the final dense QC contract."""
+    if merge_on != "snip_id":
+        raise ValueError("consolidate_qc_flags only supports merge_on='snip_id'")
 
-    Parameters
-    ----------
-    segmentation_qc_df : pd.DataFrame
-        Segmentation QC flags:
-        [snip_id, edge_flag, discontinuous_mask_flag, overlapping_mask_flag, mask_quality_flag]
-    imaging_qc_df : pd.DataFrame
-        Imaging QC flags:
-        [snip_id, yolk_flag, focus_flag, bubble_flag]
-    death_qc_df : pd.DataFrame
-        Death detection flags:
-        [snip_id, dead_flag2, dead_inflection_time_int]
-    size_qc_df : pd.DataFrame
-        Size validation flags:
-        [snip_id, sa_outlier_flag]
-    fraction_alive_df : pd.DataFrame, optional
-        Fraction alive data for dead_flag computation:
-        [snip_id, fraction_alive]
-        If None, dead_flag will be computed from dead_flag2
-    merge_on : str, default 'snip_id'
-        Column to merge on
-
-    Returns
-    -------
-    pd.DataFrame
-        Consolidated QC flags with use_embryo column
-
-    Notes
-    -----
-    - use_embryo = NOT (any flag in QC_FAIL_FLAGS is True)
-    - QC_FAIL_FLAGS defined in schemas/quality_control.py
-    - All flags default to False if column missing
-    - Schema validation ensures REQUIRED_COLUMNS_QC are present
-    """
-    print(f"🔍 Consolidating QC flags...")
-
-    # Start with segmentation QC (has core IDs)
-    consolidated = segmentation_qc_df.copy()
-
-    # Merge imaging QC
-    consolidated = consolidated.merge(
+    segmentation = _exact_columns(
+        segmentation_qc_df,
+        ["snip_id", "edge_flag", "discontinuous_mask_flag", "overlapping_mask_flag"],
+        "segmentation_qc",
+    )
+    viability = _exact_columns(
+        viability_qc_df,
+        ["snip_id", "viability_flag"],
+        "viability_qc",
+    )
+    imaging = _exact_columns(
         imaging_qc_df,
-        on=merge_on,
-        how='left',
-        suffixes=('', '_imaging')
+        ["snip_id", "yolk_flag", "bubble_flag"],
+        "imaging_qc",
     )
+    focus = _exact_columns(focus_qc_df, ["snip_id", "focus_flag"], "focus_qc")
+    motion = _exact_columns(motion_qc_df, ["snip_id", "motion_flag"], "motion_qc")
+    death_detection = _normalize_death_detection(death_qc_df)
+    size = _exact_columns(size_qc_df, ["snip_id", "sa_outlier_flag"], "size_qc")
 
-    # Merge death QC
-    consolidated = consolidated.merge(
-        death_qc_df,
-        on=merge_on,
-        how='left',
-        suffixes=('', '_death')
-    )
+    for stage_name, frame in [
+        ("segmentation_qc", segmentation),
+        ("viability_qc", viability),
+        ("imaging_qc", imaging),
+        ("focus_qc", focus),
+        ("motion_qc", motion),
+        ("death_detection", death_detection),
+        ("size_qc", size),
+    ]:
+        assert_unique_snip_id(frame, stage_name)
 
-    # Merge size QC
-    consolidated = consolidated.merge(
-        size_qc_df[[merge_on, 'sa_outlier_flag']],
-        on=merge_on,
-        how='left',
-        suffixes=('', '_size')
-    )
+    _assert_matching_snip_ids(segmentation, viability, "viability_qc")
+    _assert_matching_snip_ids(segmentation, imaging, "imaging_qc")
+    _assert_matching_snip_ids(segmentation, focus, "focus_qc")
+    _assert_matching_snip_ids(segmentation, motion, "motion_qc")
+    _assert_matching_snip_ids(segmentation, death_detection, "death_detection")
+    _assert_matching_snip_ids(segmentation, size, "size_qc")
 
-    # Compute dead_flag from fraction_alive if provided
-    if fraction_alive_df is not None:
-        consolidated = consolidated.merge(
-            fraction_alive_df[[merge_on, 'fraction_alive']],
-            on=merge_on,
-            how='left'
-        )
-        # dead_flag = fraction_alive < 0.9 (UNet viability threshold)
-        consolidated['dead_flag'] = consolidated['fraction_alive'] < 0.9
-    else:
-        # Fallback: use dead_flag2 as dead_flag if fraction_alive not available
-        if 'dead_flag2' in consolidated.columns:
-            consolidated['dead_flag'] = consolidated['dead_flag2'].fillna(False)
-        else:
-            consolidated['dead_flag'] = False
+    consolidated = pd.concat(
+        [
+            segmentation.set_index("snip_id"),
+            viability.set_index("snip_id"),
+            imaging.set_index("snip_id"),
+            focus.set_index("snip_id"),
+            motion.set_index("snip_id"),
+            death_detection.set_index("snip_id"),
+            size.set_index("snip_id"),
+        ],
+        axis=1,
+        join="inner",
+    ).reset_index()
 
-    # Ensure all QC_FAIL_FLAGS exist and fill NaN with False
-    for flag_col in QC_FAIL_FLAGS:
-        if flag_col not in consolidated.columns:
-            consolidated[flag_col] = False
-        consolidated[flag_col] = consolidated[flag_col].fillna(False).astype(bool)
+    consolidated["use_snip"] = ~consolidated[SNIP_EXCLUSION_FLAGS].any(axis=1)
 
-    # Compute use_embryo flag: NOT (any fail flag is True)
-    # Use .any(axis=1) to check if ANY flag is True for each row
-    qc_fail_any = consolidated[QC_FAIL_FLAGS].any(axis=1)
-    consolidated['use_embryo'] = ~qc_fail_any
+    ordered = consolidated[
+        ["snip_id", "use_snip", *SNIP_EXCLUSION_FLAGS, *SNIP_INFORMATIONAL_FLAGS, "death_inflection_time_int"]
+    ].copy()
 
-    # Add death metadata columns if available
-    if 'dead_inflection_time_int' in death_qc_df.columns:
-        # Already merged, ensure it's in output
-        pass
+    for column in ["use_snip", *SNIP_EXCLUSION_FLAGS, *SNIP_INFORMATIONAL_FLAGS]:
+        ordered[column] = ordered[column].astype(bool)
+    ordered["death_inflection_time_int"] = ordered["death_inflection_time_int"].astype("Int64")
 
-    # Compute death_predicted_stage_hpf (stage at death inflection)
-    if 'predicted_stage_hpf' in consolidated.columns and 'dead_inflection_time_int' in consolidated.columns:
-        # For each embryo, find the stage_hpf at death_inflection_time_int
-        # This is already done in death_detection.py, so we just need to ensure it's present
-        # If not present, we can compute it here
-        if 'death_predicted_stage_hpf' not in consolidated.columns:
-            consolidated['death_predicted_stage_hpf'] = np.nan
-            # For rows where dead_inflection_time_int is set, copy predicted_stage_hpf
-            # This is a simplification - proper implementation would look up the exact time_int
-            has_inflection = ~consolidated['dead_inflection_time_int'].isna()
-            if has_inflection.any():
-                # Simplified: use current predicted_stage_hpf for now
-                # TODO: Lookup exact stage_hpf at inflection time_int from features table
-                consolidated.loc[has_inflection, 'death_predicted_stage_hpf'] = \
-                    consolidated.loc[has_inflection, 'predicted_stage_hpf']
-
-    # Validate against schema
-    validate_qc_schema(consolidated)
-
-    # Summary statistics
-    print_qc_summary(consolidated)
-
-    return consolidated
+    return ordered
 
 
-def validate_qc_schema(df: pd.DataFrame):
-    """
-    Validate consolidated QC dataframe against REQUIRED_COLUMNS_QC schema.
+def validate_qc_schema(df: pd.DataFrame) -> None:
+    missing = [column for column in REQUIRED_COLUMNS_QC if column not in df.columns]
+    extra = [column for column in df.columns if column not in REQUIRED_COLUMNS_QC]
+    if missing or extra:
+        raise ValueError(f"qc_flags.csv column mismatch (missing={missing}, extra={extra})")
 
-    Raises
-    ------
-    ValueError
-        If required columns are missing or contain all-null values
-    """
-    missing_cols = [col for col in REQUIRED_COLUMNS_QC if col not in df.columns]
+    if df["snip_id"].isna().any():
+        raise ValueError("qc_flags.csv: snip_id contains null values")
+    if df["snip_id"].duplicated().any():
+        raise ValueError("qc_flags.csv: duplicate snip_id values detected")
 
-    if missing_cols:
-        raise ValueError(
-            f"Consolidated QC missing required columns: {missing_cols}\n"
-            f"Expected schema: {REQUIRED_COLUMNS_QC}"
-        )
+    for column in ["use_snip", *SNIP_EXCLUSION_FLAGS, *SNIP_INFORMATIONAL_FLAGS]:
+        if df[column].isna().any():
+            raise ValueError(f"qc_flags.csv: column '{column}' contains null values")
+        if not pd.api.types.is_bool_dtype(df[column]):
+            raise ValueError(f"qc_flags.csv: column '{column}' must be boolean dtype")
 
-    # Check for all-null columns in critical fields
-    critical_cols = ['snip_id', 'embryo_id', 'use_embryo']
-    for col in critical_cols:
-        if col in df.columns and df[col].isna().all():
-            raise ValueError(f"Critical column '{col}' is all-null")
+    if str(df["death_inflection_time_int"].dtype) != "Int64":
+        raise ValueError("qc_flags.csv: death_inflection_time_int must be nullable integer dtype")
 
-    print(f"✅ Schema validation passed ({len(REQUIRED_COLUMNS_QC)} required columns)")
+    if not df["use_snip"].equals(~df[SNIP_EXCLUSION_FLAGS].any(axis=1)):
+        raise ValueError("qc_flags.csv: use_snip does not match SNIP_EXCLUSION_FLAGS")
 
 
-def print_qc_summary(df: pd.DataFrame):
-    """Print summary of QC flagging statistics."""
+def print_qc_summary(df: pd.DataFrame) -> None:
     total = len(df)
-    usable = df['use_embryo'].sum()
-    flagged = total - usable
-
-    print(f"\n📊 QC Consolidation Summary:")
+    usable = int(df["use_snip"].sum()) if len(df) else 0
+    print()
+    print("📊 QC Consolidation Summary:")
     print(f"   Total snips: {total}")
-    print(f"   Usable (use_embryo=True): {usable} ({100*usable/total:.1f}%)")
-    print(f"   Flagged (use_embryo=False): {flagged} ({100*flagged/total:.1f}%)")
-    print(f"\n   Flag breakdown:")
-
-    for flag_col in QC_FAIL_FLAGS:
-        if flag_col in df.columns:
-            flag_count = df[flag_col].sum()
-            if flag_count > 0:
-                print(f"      {flag_col}: {flag_count} ({100*flag_count/total:.1f}%)")
+    print(f"   Usable (use_snip=True): {usable} ({(100 * usable / total) if total else 0:.1f}%)")
+    print(f"   Flagged (use_snip=False): {total - usable} ({(100 * (total - usable) / total) if total else 0:.1f}%)")
+    print()
+    print("   Flag breakdown:")
+    for column in SNIP_EXCLUSION_FLAGS:
+        count = int(df[column].sum())
+        if count > 0:
+            print(f"      {column}: {count} ({100 * count / total:.1f}%)")
 
 
 def save_consolidated_qc(
     consolidated_df: pd.DataFrame,
     output_path: Path,
-    validate_schema: bool = True
-):
-    """
-    Save consolidated QC flags with optional schema validation.
-
-    Parameters
-    ----------
-    consolidated_df : pd.DataFrame
-        Consolidated QC dataframe
-    output_path : Path
-        Output CSV path
-    validate_schema : bool, default True
-        Whether to validate against REQUIRED_COLUMNS_QC
-    """
+    validate_schema: bool = True,
+) -> None:
     if validate_schema:
         validate_qc_schema(consolidated_df)
-
-    # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Save to CSV
     consolidated_df.to_csv(output_path, index=False)
     print(f"💾 Saved consolidated QC: {output_path}")
     print(f"   Rows: {len(consolidated_df)}")
     print(f"   Columns: {len(consolidated_df.columns)}")
-
-
-def main():
-    """Example usage and documentation."""
-    print("QC Consolidation Module")
-    print("=" * 50)
-    print("Merges all QC flags and computes use_embryo gate")
-    print("\nInputs:")
-    print("  - segmentation_quality_qc.csv")
-    print("  - auxiliary_mask_qc.csv")
-    print("  - embryo_death_qc.csv")
-    print("  - surface_area_outliers_qc.csv")
-    print("\nOutput:")
-    print("  - consolidated_qc_flags.csv")
-    print("\nLogic:")
-    print("  use_embryo = NOT (any QC_FAIL_FLAG is True)")
-    print(f"  QC_FAIL_FLAGS: {QC_FAIL_FLAGS}")
-    print("\nUsage:")
-    print("  from quality_control.consolidation import consolidate_qc_flags")
-    print("  consolidated_df = consolidate_qc_flags(")
-    print("      segmentation_qc_df, imaging_qc_df, death_qc_df, size_qc_df")
-    print("  )")
-
-
-if __name__ == "__main__":
-    main()

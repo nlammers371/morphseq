@@ -35,6 +35,3 @@ REQUIRED_COLUMNS_FEATURES = [
     'bbox_width_um',
     'bbox_height_um',
 ]
-
-# Alias for backwards compatibility
-REQUIRED_COLUMNS_CONSOLIDATED_FEATURES = REQUIRED_COLUMNS_FEATURES
