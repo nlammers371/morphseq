@@ -14,6 +14,17 @@ Analysis-ready wiring is tracked separately in:
 
 Do not fold analysis-ready changes back into this handoff.
 
+## Next Steps
+
+**Date:** 2026-04-23
+
+The smoke path is past segmentation/tracking and the downstream feature jobs are running. The current blocker is `generate_auxiliary_masks_well`, which still resolves image inputs through a doubled `data_pipeline_output/data_pipeline_output/...` path.
+
+Next actions:
+- Fix auxiliary-mask source path resolution so frame paths are absolute once, not re-rooted under the auxiliary output tree.
+- Rerun the smoke boundary through `consolidate_features` on `20240418` for wells `A01` and `C01`.
+- If that completes cleanly, record the verification outputs and leave the segmentation/tracking contract split in place for follow-up work.
+
 ---
 
 ## Execution boundary 1 — YX1 smoke through `consolidate_features`
