@@ -39,6 +39,26 @@ def _mask_tile_weights(
     return weights
 
 
+def _longest_bad_run(pair_means: np.ndarray, bad_thresh: float) -> int:
+    """
+    Longest consecutive run of Z-pairs where the pair-level mean masked-tile
+    NCC is below bad_thresh. NaN pair-means are treated as bad.
+
+    Returns 0 when no pair is bad, or when pair_means is empty.
+    """
+    if pair_means.size == 0:
+        return 0
+    is_bad = np.isnan(pair_means) | (pair_means < bad_thresh)
+    longest = current = 0
+    for bad in is_bad:
+        if bad:
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 0
+    return int(longest)
+
+
 def embryo_ncc_summary(
     ncc_grid: np.ndarray,
     mask: np.ndarray,
@@ -51,30 +71,78 @@ def embryo_ncc_summary(
     NCC summary for a single embryo, using only tiles that overlap the mask.
 
     Args:
-        ncc_grid  : (Z-1, Ny, Nx) from load_grids
-        mask      : (H, W) bool array at original image resolution
+        ncc_grid          : (Z-1, Ny, Nx) from load_grids
+        mask              : (H, W) bool array at original image resolution
         tile_size, stride : must match the values used when the grid was built
-        bad_thresh : NCC below this = bad pair
+        bad_thresh        : NCC value below which a tile/pair is considered bad
 
-    Returns dict with: ncc_mean, ncc_min, bad_pair_frac, local_ncc_std_mean, n_tiles
+    Semantics of returned fields:
+        ncc_mean           — mean NCC over all masked valid tiles across all Z-pairs
+        ncc_min            — minimum NCC over all masked valid tiles across all Z-pairs
+        ncc_p05            — 5th-percentile NCC over masked valid tiles across all Z-pairs
+        ncc_median         — median NCC over masked valid tiles across all Z-pairs
+        bad_pair_frac      — fraction of Z-pairs where the pair-level mean masked-tile
+                             NCC is below bad_thresh
+        ncc_bad_tile_frac  — fraction of individual masked valid NCC tiles (across all
+                             Z-pairs) whose value is below bad_thresh
+        local_ncc_std_mean — mean per-Z-pair spatial std of masked tile NCCs;
+                             high value flags spatially non-uniform (partial) motion
+        longest_bad_run    — longest consecutive Z-pair run where pair-level mean
+                             masked-tile NCC is below bad_thresh; NaN pair-means
+                             count as bad
+        n_tiles            — number of spatially valid (mask-overlapping) tile positions
+
+    All scalar metrics are NaN when no valid tiles overlap the mask (n_tiles == 0).
     """
     y_origins, x_origins = tile_origin_coords(mask.shape, tile_size, stride)
     weights = _mask_tile_weights(mask, y_origins, x_origins, tile_size, min_tile_coverage)
     valid = weights > 0
 
+    _nan = float("nan")
     if not valid.any():
-        return {"ncc_mean": np.nan, "ncc_min": np.nan,
-                "bad_pair_frac": np.nan, "local_ncc_std_mean": np.nan, "n_tiles": 0}
+        return {
+            "ncc_mean":           _nan,
+            "ncc_min":            _nan,
+            "ncc_p05":            _nan,
+            "ncc_median":         _nan,
+            "bad_pair_frac":      _nan,
+            "ncc_bad_tile_frac":  _nan,
+            "local_ncc_std_mean": _nan,
+            "longest_bad_run":    0,
+            "n_tiles":            0,
+        }
 
-    masked_grid = ncc_grid[:, valid]  # (Z-1, n_valid_tiles)
-    pair_means  = np.nanmean(masked_grid, axis=1)
-    pair_stds   = np.nanstd(masked_grid, axis=1)
+    masked_grid = ncc_grid[:, valid]          # (Z-1, n_valid_tiles)
+    pair_means  = np.nanmean(masked_grid, axis=1)   # (Z-1,)
+    pair_stds   = np.nanstd(masked_grid,  axis=1)   # (Z-1,)
+
+    # flat view of all masked NCC values across every Z-pair and tile
+    flat = masked_grid.ravel()
+    flat_valid = flat[~np.isnan(flat)]
+
+    if flat_valid.size == 0:
+        # grid exists but every value is NaN (e.g. zero-variance tiles)
+        return {
+            "ncc_mean":           _nan,
+            "ncc_min":            _nan,
+            "ncc_p05":            _nan,
+            "ncc_median":         _nan,
+            "bad_pair_frac":      float(np.mean(np.isnan(pair_means) | (pair_means < bad_thresh))),
+            "ncc_bad_tile_frac":  _nan,
+            "local_ncc_std_mean": _nan,
+            "longest_bad_run":    _longest_bad_run(pair_means, bad_thresh),
+            "n_tiles":            int(valid.sum()),
+        }
 
     return {
         "ncc_mean":           float(np.nanmean(masked_grid)),
         "ncc_min":            float(np.nanmin(masked_grid)),
+        "ncc_p05":            float(np.percentile(flat_valid, 5)),
+        "ncc_median":         float(np.median(flat_valid)),
         "bad_pair_frac":      float(np.mean(pair_means < bad_thresh)),
+        "ncc_bad_tile_frac":  float(np.mean(flat_valid < bad_thresh)),
         "local_ncc_std_mean": float(np.nanmean(pair_stds)),
+        "longest_bad_run":    _longest_bad_run(pair_means, bad_thresh),
         "n_tiles":            int(valid.sum()),
     }
 

@@ -45,11 +45,6 @@ def process_plate_layout(
         # Try multi-sheet format first
         df, series_map = _parse_plate_metadata_excel(input_file, experiment_id)
 
-        # If series_number_map exists, save it alongside plate metadata
-        if series_map is not None:
-            series_map_path = output_csv.parent / "series_number_map.csv"
-            series_map.to_csv(series_map_path, index=False)
-            print(f"✅ Saved series_number_map: {series_map_path}")
 
     elif input_file.suffix.lower() == '.csv':
         df = pd.read_csv(input_file)

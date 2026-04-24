@@ -63,8 +63,8 @@ def infer_stage_from_area(
 def compute_stage_predictions_batch(
     tracking_df: pd.DataFrame,
     start_age_col: str = 'start_age_hpf',
-    time_col: str = 'time_s',
-    temp_col: str = 'temperature_c',
+    time_col: str = 'experiment_time_s',
+    temp_col: str = 'temperature',
 ) -> pd.DataFrame:
     """
     Compute stage predictions for batch of snips.
@@ -86,11 +86,18 @@ def compute_stage_predictions_batch(
         # Extract metadata
         start_age = row.get(start_age_col, np.nan)
         elapsed_time = row.get(time_col, np.nan)
-        temperature = row.get(temp_col, np.nan)
+        if pd.isna(elapsed_time):
+            for alt_time_col in ('time_s', 'time_int'):
+                if alt_time_col in row and pd.notna(row[alt_time_col]):
+                    elapsed_time = row[alt_time_col]
+                    break
 
-        # Handle alternative column names
-        if pd.isna(temperature) and 'temperature' in row:
-            temperature = row['temperature']
+        temperature = row.get(temp_col, np.nan)
+        if pd.isna(temperature):
+            for alt_temp_col in ('temperature_c', 'temperature'):
+                if alt_temp_col in row and pd.notna(row[alt_temp_col]):
+                    temperature = row[alt_temp_col]
+                    break
 
         # Predict stage
         if pd.notna(start_age) and pd.notna(elapsed_time) and pd.notna(temperature):

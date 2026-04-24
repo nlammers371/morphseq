@@ -163,11 +163,12 @@ def extract_yx1_scope_metadata(
         n_t, n_w, n_z = shape[:3]
         log.info(f"ND2 shape: T={n_t}, W={n_w}, Z={n_z}")
 
-        # Get spatial calibration
+        # Get spatial calibration.
+        # ND2 shape layouts vary by acquisition, so use the trailing axes for Y/X.
         voxel_size = nd.voxel_size()
         micrometers_per_pixel = voxel_size[0]  # X dimension
-        image_height_px = shape[4]  # Y
-        image_width_px = shape[5]   # X
+        image_height_px = shape[-2]  # Y
+        image_width_px = shape[-1]   # X
 
         # Get channel names
         channel_names = [c.channel.name for c in nd.frame_metadata(0).channels]

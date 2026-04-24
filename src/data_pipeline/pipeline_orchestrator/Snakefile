@@ -12,24 +12,41 @@ Contract-driven pipeline:
 from pathlib import Path
 import os
 
-# Configuration
-# Path is relative to Snakefile location
-configfile: "config.yaml"
-
 # Get project root
 WORKFLOW_DIR = Path(workflow.basedir)
 PROJECT_ROOT = WORKFLOW_DIR.parent.parent.parent
 
+# Configuration
+configfile: str(WORKFLOW_DIR / "config.yaml")
+
 # Pinned interpreter (per repo rules).
 PYTHON = "/net/trapnell/vol1/home/mdcolon/software/miniconda3/envs/segmentation_grounded_sam/bin/python"
 
-# Data root from config
-DATA_ROOT = PROJECT_ROOT / config.get("data_root", "data_pipeline_output")
+
+def _normalize_target_wells(raw):
+    if raw is None or raw == "" or str(raw).lower() == "all":
+        return []
+    if isinstance(raw, str):
+        return [w.strip() for w in raw.split(",") if w.strip()]
+    return [str(w).strip() for w in raw if str(w).strip()]
+
+
+# Data root: default PROJECT_ROOT/data_pipeline_output, overridable via config or --config data_root=...
+_data_root_raw = config.get("data_root", None)
+DATA_ROOT = Path(_data_root_raw) if _data_root_raw and Path(_data_root_raw).is_absolute() else PROJECT_ROOT / (_data_root_raw or "data_pipeline_output")
+
+# Data pipeline code root: default PROJECT_ROOT/src/data_pipeline, overridable via config
+_code_root_raw = config.get("data_pipeline_code", None)
+DATA_PIPELINE_CODE = Path(_code_root_raw) if _code_root_raw and Path(_code_root_raw).is_absolute() else PROJECT_ROOT / (_code_root_raw or "src/data_pipeline")
+
+TARGET_WELLS = _normalize_target_wells(config.get("target_wells", []))
+TARGET_WELLS_CSV = ",".join(TARGET_WELLS)
+
 INPUTS_DIR = DATA_ROOT / "inputs"
 PLATE_METADATA_DIR = INPUTS_DIR / "plate_metadata"
 RAW_IMAGES_DIR = INPUTS_DIR / "raw_image_data"
 
-# Output directories (within data_root)
+# Output directories (always under DATA_ROOT; well filtering is applied at the data level).
 EXPERIMENT_METADATA_DIR = DATA_ROOT / "experiment_metadata"
 BUILT_IMAGE_DATA_DIR = DATA_ROOT / "built_image_data"
 SEGMENTATION_DIR = DATA_ROOT / "segmentation_and_tracking"
@@ -46,8 +63,10 @@ MICROSCOPE = str(config.get("microscope", "YX1"))
 
 print(f"Project root: {PROJECT_ROOT}")
 print(f"Data root: {DATA_ROOT}")
+print(f"Data pipeline code: {DATA_PIPELINE_CODE}")
 print(f"Experiments: {EXPERIMENTS}")
 print(f"Microscope: {MICROSCOPE}")
+print(f"Target wells: {TARGET_WELLS or 'all'}")
 
 # ============================================================================
 # Plate metadata (optional for build/segment/snips)
@@ -194,17 +213,86 @@ rule apply_series_mapping_yx1:
 # Image building + physical frame manifest
 # ============================================================================
 
+rule materialize_selected_wells:
+    """
+    Write the selected well set to disk so downstream rules have a real file
+    dependency on it. Snakemake reruns build_frame_contract whenever this
+    file changes (i.e. when target_wells config changes between runs).
+    """
+    input:
+        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
+    output:
+        selected_wells = EXPERIMENT_METADATA_DIR / "{experiment}" / "selected_wells.txt",
+    params:
+        target_wells_csv = TARGET_WELLS_CSV,
+        experiment_id = "{experiment}",
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+import csv
+from pathlib import Path
+
+mapping_csv = Path("{input.mapping_csv}")
+target_wells_csv = "{params.target_wells_csv}"
+exp_id = "{params.experiment_id}"
+
+with open(mapping_csv, newline="") as f:
+    all_wells = set(row["well_index"] for row in csv.DictReader(f))
+
+if target_wells_csv:
+    requested = set(target_wells_csv.split(","))
+    # Normalize full well IDs (e.g. 20250912_B01 -> B01) against mapping
+    normalized = set()
+    for w in requested:
+        if w in all_wells:
+            normalized.add(w)
+        elif "_" in w and w.split("_", 1)[1] in all_wells:
+            normalized.add(w.split("_", 1)[1])
+        else:
+            normalized.add(w)
+    unknown = normalized - all_wells
+    if unknown:
+        raise ValueError(
+            f"Requested wells not found in series_well_mapping: {{sorted(unknown)}}. "
+            f"Available wells: {{sorted(all_wells)}}"
+        )
+    selected = sorted(normalized)
+else:
+    selected = sorted(all_wells)
+
+out = Path("{output.selected_wells}")
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text("\\n".join(selected) + "\\n")
+EOF
+        """
+
+
+def _wells_from_mapping(wildcards):
+    """Read series_well_mapping to get well list, filtered by TARGET_WELLS."""
+    import csv
+    mapping_csv = EXPERIMENT_METADATA_DIR / wildcards.experiment / "series_well_mapping.csv"
+    with open(mapping_csv, newline="") as f:
+        wells = [row["well_index"] for row in csv.DictReader(f)]
+    if TARGET_WELLS:
+        allowed = set(TARGET_WELLS)
+        exp_id = wildcards.experiment
+        wells = [w for w in wells if w in allowed or f"{exp_id}_{w}" in allowed]
+    return [BUILT_IMAGE_DATA_DIR / wildcards.experiment / f".well_{w}.done" for w in wells]
+
+
 rule build_stitched_images_yx1:
     input:
         raw_images_dir = RAW_IMAGES_DIR / "YX1" / "{experiment}",
         mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
     output:
-        done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done"
+        done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".well_{well_index}.done"
     params:
         experiment_id = "{experiment}",
+        well_index = "{well_index}",
         device = lambda wc: str(config.get("image_building", {}).get("device", "cuda")),
         overwrite = lambda wc: int(bool(config.get("image_building", {}).get("overwrite", False))),
         z_buffer = lambda wc: int(bool(config.get("image_building", {}).get("yx1", {}).get("z_buffer", False))),
+        image_format = lambda wc: str(config.get("image_building", {}).get("image_format", "jpg")),
     shell:
         """
         PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
@@ -217,14 +305,18 @@ raw_dir = Path("{input.raw_images_dir}")
 mapping_csv = Path("{input.mapping_csv}")
 out_root = Path("{BUILT_IMAGE_DATA_DIR}")
 exp_id = "{params.experiment_id}"
+well_index = "{params.well_index}"
 device = "{params.device}"
 overwrite = bool(int("{params.overwrite}"))
 z_buffer = bool(int("{params.z_buffer}"))
+image_format = "{params.image_format}"
 
 df = pd.read_csv(mapping_csv)
-well_series_mapping = {{}}
-for _, r in df.iterrows():
-    well_series_mapping[str(r["well_index"])] = int(r["series_number"])
+df = df[df["well_index"].astype(str) == well_index]
+if df.empty:
+    raise ValueError(f"well_index={{well_index}} not found in series_well_mapping")
+
+well_series_mapping = {{str(r["well_index"]): int(r["series_number"]) for _, r in df.iterrows()}}
 
 compile_yx1_data(
     raw_data_root=raw_dir.parent,
@@ -234,6 +326,7 @@ compile_yx1_data(
     overwrite=overwrite,
     device=device,
     z_buffer=z_buffer,
+    image_format=image_format,
 )
 
 Path("{output.done}").parent.mkdir(parents=True, exist_ok=True)
@@ -242,10 +335,80 @@ EOF
         """
 
 
+rule build_stitched_images_yx1_all:
+    """Aggregate: write stitched inventory CSV + completion sentinel."""
+    input:
+        per_well_done = _wells_from_mapping,
+        mapping_csv = EXPERIMENT_METADATA_DIR / "{experiment}" / "series_well_mapping.csv",
+    output:
+        inventory = BUILT_IMAGE_DATA_DIR / "{experiment}" / "stitched_inventory.csv",
+        done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done",
+    params:
+        experiment_id = "{experiment}",
+        image_format = lambda wc: str(config.get("image_building", {}).get("image_format", "jpg")),
+    shell:
+        """
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" << 'EOF'
+from pathlib import Path
+from datetime import datetime, timezone
+import pandas as pd
+
+exp_id = "{params.experiment_id}"
+image_format = "{params.image_format}"
+mapping_csv = Path("{input.mapping_csv}")
+out_root = Path("{BUILT_IMAGE_DATA_DIR}") / exp_id
+inventory_path = Path("{output.inventory}")
+
+mapping_df = pd.read_csv(mapping_csv)
+mapping_wells = set(mapping_df["well_index"].astype(str))
+
+# Derive actual completed wells from sentinels — these are the per-well rule outputs.
+completed_wells = {{
+    w for w in mapping_wells
+    if (out_root / f".well_{{w}}.done").exists()
+}}
+
+# Strict: every completed well must be in the mapping.
+stray = completed_wells - mapping_wells
+if stray:
+    raise ValueError(f"Completed wells not in mapping: {{sorted(stray)}}")
+
+# Strict: no duplicate well_index.
+if len(completed_wells) != len(set(completed_wells)):
+    raise ValueError("Duplicate well_index in completed wells")
+
+rows = []
+for well_index in sorted(completed_wells):
+    rows.append({{
+        "experiment_id": exp_id,
+        "well_index": well_index,
+        "well_id": f"{{exp_id}}_{{well_index}}",
+        "image_format": image_format,
+        "stitched_image_dir": str(out_root / "stitched_ff_images" / well_index),
+        "built_at": datetime.now(timezone.utc).isoformat(),
+    }})
+
+inventory_df = pd.DataFrame(rows)
+
+# Strict: inventory must have no duplicate well_id.
+if inventory_df["well_id"].duplicated().any():
+    raise ValueError("Duplicate well_id in stitched inventory")
+
+inventory_path.parent.mkdir(parents=True, exist_ok=True)
+inventory_df.to_csv(inventory_path, index=False)
+Path("{output.done}").write_text("ok\\n")
+EOF
+        """
+
+
 rule build_frame_contract:
+    """
+    Experiment-level frame contract: all currently built frames for the experiment.
+    Additive as wells are built. Does not filter by selected wells.
+    """
     input:
         mapped_scope = EXPERIMENT_METADATA_DIR / "{experiment}" / "scope_metadata_mapped.csv",
-        stitched_done = BUILT_IMAGE_DATA_DIR / "{experiment}" / ".stitched_ff_images.done",
+        inventory = BUILT_IMAGE_DATA_DIR / "{experiment}" / "stitched_inventory.csv",
     output:
         contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
         validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
@@ -255,16 +418,22 @@ rule build_frame_contract:
         """
         PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.metadata_ingest.microscope_data_ingest.frame_contract.build_frame_contract \
           --scope-metadata-mapped-csv "{input.mapped_scope}" \
-          --built-image-data-root "{BUILT_IMAGE_DATA_DIR}" \
+          --stitched-inventory "{input.inventory}" \
           --output-csv "{output.contract}" \
           --channel-id "{params.channel_id}"
         """
 
 
 checkpoint discover_wells:
+    """
+    Run-scoped well selection: filters frame_contract wells by selected_wells.txt.
+    If selected_wells.txt lists a subset, validates it against the full contract
+    and writes only those wells to wells.txt. If no subset, writes all wells.
+    """
     input:
         contract = EXPERIMENT_METADATA_DIR / "{experiment}" / "frame_contract.csv",
         validated = EXPERIMENT_METADATA_DIR / "{experiment}" / ".frame_contract.validated",
+        selected_wells = EXPERIMENT_METADATA_DIR / "{experiment}" / "selected_wells.txt",
     output:
         wells_txt = EXPERIMENT_METADATA_DIR / "{experiment}" / "wells.txt"
     shell:
@@ -275,7 +444,28 @@ import pandas as pd
 
 contract = Path("{input.contract}")
 df = pd.read_csv(contract)
-wells = sorted(set(df["well_id"].astype(str).tolist()))
+all_well_ids = set(df["well_id"].astype(str))
+all_well_indexes = set(df["well_index"].astype(str))
+
+selected_raw = Path("{input.selected_wells}").read_text().splitlines()
+selected = [ln.strip() for ln in selected_raw if ln.strip()]
+
+if selected:
+    # Normalize: accept well_index (B01) or well_id (20250912_B01)
+    selected_ids = set()
+    for w in selected:
+        if w in all_well_ids:
+            selected_ids.add(w)
+        elif w in all_well_indexes:
+            # convert well_index to well_id
+            matching = df[df["well_index"].astype(str) == w]["well_id"].astype(str).tolist()
+            selected_ids.update(matching)
+        else:
+            raise ValueError(f"Selected well {{w!r}} not found in frame_contract. Available: {{sorted(all_well_ids)}}")
+    wells = sorted(selected_ids)
+else:
+    wells = sorted(all_well_ids)
+
 out = Path("{output.wells_txt}")
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text("\\n".join(wells) + "\\n")
@@ -554,7 +744,7 @@ qc_df = compute_segmentation_quality_qc(tracking)
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df.to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -577,7 +767,7 @@ qc_df["viability_flag"] = False
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df.to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -600,7 +790,7 @@ qc_df = compute_dead_flag_persistence(fraction_alive)
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df[["snip_id", "dead_flag", "death_inflection_time_int"]].to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -623,7 +813,7 @@ qc_df = compute_size_validation_qc(features, Path("{SA_REFERENCE_CURVES}"))
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df[["snip_id", "sa_outlier_flag"]].to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -646,7 +836,7 @@ qc_df = compute_imaging_quality_qc(manifest)
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df[["snip_id", "yolk_flag", "bubble_flag"]].to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -663,13 +853,13 @@ rule compute_focus_qc:
 from pathlib import Path
 import pandas as pd
 
-frame_contract = pd.read_csv(Path("{input.frame_contract}"), usecols=["snip_id"])
-qc_df = frame_contract.copy()
+frame_contract = pd.read_csv(Path("{input.frame_contract}"), usecols=["image_id"])
+qc_df = frame_contract.rename(columns={{"image_id": "snip_id"}}).copy()
 qc_df["focus_flag"] = False
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df.to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -686,13 +876,13 @@ rule compute_motion_qc:
 from pathlib import Path
 import pandas as pd
 
-frame_contract = pd.read_csv(Path("{input.frame_contract}"), usecols=["snip_id"])
-qc_df = frame_contract.copy()
+frame_contract = pd.read_csv(Path("{input.frame_contract}"), usecols=["image_id"])
+qc_df = frame_contract.rename(columns={{"image_id": "snip_id"}}).copy()
 qc_df["motion_flag"] = False
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df.to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 EOF
         """
 
@@ -737,7 +927,7 @@ qc_df = consolidate_qc_flags(segmentation, viability, imaging, focus, motion, de
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 qc_df.to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 Path("{output.schema}").write_text(json.dumps(dict(columns=REQUIRED_COLUMNS_QC), indent=2) + '\n')
 EOF
         """
@@ -768,7 +958,7 @@ validate_analysis_ready_schema(analysis)
 out = Path("{output.csv}")
 out.parent.mkdir(parents=True, exist_ok=True)
 analysis.to_csv(out, index=False)
-Path("{output.done}").write_text("ok\n")
+Path("{output.done}").write_text("ok\\n")
 Path("{output.schema}").write_text(json.dumps(dict(columns=REQUIRED_COLUMNS_ANALYSIS_READY), indent=2) + '\n')
 EOF
         """

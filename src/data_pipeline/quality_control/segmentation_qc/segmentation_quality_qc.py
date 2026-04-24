@@ -236,29 +236,24 @@ def compute_segmentation_quality_qc(
     pd.DataFrame
         QC flags with columns:
         [snip_id, embryo_id, image_id, edge_flag, discontinuous_mask_flag,
-         overlapping_mask_flag, mask_quality_flag]
+         overlapping_mask_flag]
 
     Notes
     -----
-    - mask_quality_flag = edge_flag OR discontinuous_mask_flag OR overlapping_mask_flag
     - Requires mask_rle column with RLE-encoded masks
     - Discontinuous check requires skimage (gracefully disabled if missing)
     """
     print(f"🔍 Computing segmentation quality QC for {len(segmentation_df)} snips...")
 
-    # Initialize output dataframe
     qc_df = segmentation_df[['snip_id', 'embryo_id', 'image_id']].copy()
     qc_df['edge_flag'] = False
     qc_df['discontinuous_mask_flag'] = False
     qc_df['overlapping_mask_flag'] = False
 
-    # Check required columns
     if 'mask_rle' not in segmentation_df.columns:
         print("⚠️  Warning: mask_rle column not found, skipping segmentation QC")
-        qc_df['mask_quality_flag'] = False
         return qc_df
 
-    # Process each snip
     edge_count = 0
     discontinuous_count = 0
 
@@ -270,16 +265,13 @@ def compute_segmentation_quality_qc(
             continue
 
         try:
-            # Decode mask
             mask = decode_mask_rle(mask_rle)
 
-            # Check edge contact
             edge_result = check_mask_on_edge(mask, margin_pixels)
             if any(edge_result.values()):
                 qc_df.loc[qc_df['snip_id'] == snip_id, 'edge_flag'] = True
                 edge_count += 1
 
-            # Check discontinuous mask
             if _HAS_IMAGE_LIBS:
                 disc_result = check_discontinuous_mask(mask, min_component_fraction)
                 if disc_result['is_discontinuous']:
@@ -290,7 +282,6 @@ def compute_segmentation_quality_qc(
             print(f"⚠️  Warning: Failed to process snip {snip_id}: {e}")
             continue
 
-    # Check overlapping masks (per-image)
     overlap_count = 0
     for image_id in segmentation_df['image_id'].unique():
         image_snips = segmentation_df[segmentation_df['image_id'] == image_id]
@@ -298,7 +289,6 @@ def compute_segmentation_quality_qc(
         if len(image_snips) < 2:
             continue
 
-        # Decode all masks for this image
         image_masks = {}
         for idx, row in image_snips.iterrows():
             snip_id = row['snip_id']
@@ -312,35 +302,25 @@ def compute_segmentation_quality_qc(
             except Exception:
                 continue
 
-        # Check for overlaps
         overlaps = check_overlapping_masks_per_image(image_masks, iou_threshold)
 
         for overlap in overlaps:
             snip_id1 = overlap['snip_id1']
             snip_id2 = overlap['snip_id2']
             qc_df.loc[qc_df['snip_id'].isin([snip_id1, snip_id2]), 'overlapping_mask_flag'] = True
-            overlap_count += 2  # Both snips flagged
+            overlap_count += 2
 
-    # Compute composite mask_quality_flag
-    qc_df['mask_quality_flag'] = (
-        qc_df['edge_flag'] |
-        qc_df['discontinuous_mask_flag'] |
-        qc_df['overlapping_mask_flag']
-    )
-
-    # Summary
-    total_flagged = qc_df['mask_quality_flag'].sum()
+    total_flagged = (qc_df['edge_flag'] | qc_df['discontinuous_mask_flag'] | qc_df['overlapping_mask_flag']).sum()
     print(f"✅ Segmentation QC complete:")
     print(f"   Edge contact: {edge_count} snips")
     print(f"   Discontinuous: {discontinuous_count} snips")
     print(f"   Overlapping: {overlap_count//2} pairs ({overlap_count} snips)")
-    print(f"   Total flagged: {total_flagged} snips ({100*total_flagged/len(qc_df):.1f}%)")
+    print(f"   Total flagged: {int(total_flagged)} snips ({100*int(total_flagged)/len(qc_df):.1f}%)")
 
     if not _HAS_IMAGE_LIBS:
         print(f"   ⚠️  Discontinuous check disabled (skimage not available)")
 
     return qc_df
-
 
 def main():
     """Example usage and testing."""
