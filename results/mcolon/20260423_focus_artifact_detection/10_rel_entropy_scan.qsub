@@ -1,0 +1,33 @@
+#!/bin/bash
+#$ -N rel_entropy_scan
+#$ -t 1-12
+#$ -tc 12
+#$ -pe serial 1
+#$ -l mfree=16G
+#$ -l h_rt=8:00:00
+#$ -cwd
+#$ -o results/mcolon/20260423_focus_artifact_detection/10_scan_output/logs/
+#$ -e results/mcolon/20260423_focus_artifact_detection/10_scan_output/logs/
+
+# Array job: 12 chunks covering T=0..112 (113 timepoints total, ~10 T per chunk)
+# SGE_TASK_ID: 1..12
+
+set -euo pipefail
+
+MORPHSEQ_ROOT="/net/trapnell/vol1/home/mdcolon/proj/morphseq"
+SCRIPT="$MORPHSEQ_ROOT/results/mcolon/20260423_focus_artifact_detection/10_rel_entropy_full_scan.py"
+
+# Map task ID → t_start, t_end  (chunks of 10, last chunk gets remainder)
+CHUNK_SIZE=10
+T_START=$(( (SGE_TASK_ID - 1) * CHUNK_SIZE ))
+T_END=$(( SGE_TASK_ID * CHUNK_SIZE ))
+# clamp to 113
+if [ "$T_END" -gt 113 ]; then T_END=113; fi
+
+echo "[$HOSTNAME] Task $SGE_TASK_ID: T=$T_START..$((T_END-1))"
+mkdir -p "$MORPHSEQ_ROOT/results/mcolon/20260423_focus_artifact_detection/10_scan_output/logs"
+
+conda run -n segmentation_grounded_sam --no-capture-output \
+  python "$SCRIPT" --t-start "$T_START" --t-end "$T_END"
+
+echo "[$HOSTNAME] Task $SGE_TASK_ID done."
