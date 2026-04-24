@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.data_pipeline.schemas.quality_control import (
+from data_pipeline.schemas.quality_control import (
     REQUIRED_COLUMNS_QC,
     SNIP_EXCLUSION_FLAGS,
     SNIP_INFORMATIONAL_FLAGS,

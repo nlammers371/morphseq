@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.data_pipeline.schemas.analysis_ready import REQUIRED_COLUMNS_ANALYSIS_READY
-from src.data_pipeline.schemas.quality_control import SNIP_EXCLUSION_FLAGS, SNIP_INFORMATIONAL_FLAGS
+from data_pipeline.schemas.analysis_ready import REQUIRED_COLUMNS_ANALYSIS_READY
+from data_pipeline.schemas.quality_control import SNIP_EXCLUSION_FLAGS, SNIP_INFORMATIONAL_FLAGS
 
 
 def _assert_unique_snip_id(df: pd.DataFrame, stage_name: str, *, key: str = "snip_id") -> None:
