@@ -7,9 +7,10 @@ You are a morphseq classification expert. When the user asks about AUROC compari
 
 ## Canonical references (read first)
 
-- **`src/analyze/classification/README.md`** — user-facing API, input contract, layer matrix, comparison-mode decision table, troubleshooting, full `run_classification` signature.
+- **`src/analyze/classification/README.md`** — user-facing walkthrough, input contract, comparison-mode examples, troubleshooting, full `run_classification` signature.
+- **`src/analyze/classification/docs/OUTPUT_SPEC.md`** — full output contract (`ClassificationAnalysis`, `scores` schema, all layers, persistence, `uns`). Open when you need to know exactly what a run produces or what's on disk.
+- **`src/analyze/classification/docs/DESIGN.md`** — approved design rationale. Open when deciding whether to change the signature, or when confused about `positive` / `negative` / `comparisons` semantics.
 - **`src/analyze/classification/viz/README.md`** — plotting cookbook organized by "I want to see X → use Y".
-- **`src/analyze/classification/DESIGN.md`** — approved design spec. Open when deciding whether to change the signature, or when confused about `positive` / `negative` / `comparisons` semantics.
 - **`src/analyze/classification/emergence/ALGORITHM.md`** + **`DESIGN.md`** — emergence algorithm.
 
 ## When to use this module

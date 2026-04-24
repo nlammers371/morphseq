@@ -1,10 +1,347 @@
 # classification
 
-Time-resolved binary and multiclass classification with permutation testing. Runs cross-validated AUROC at each developmental time bin and returns a single `ClassificationAnalysis` containing scores, metadata, and optional per-embryo artifacts. One entry point — `run_classification()` — handles default multiclass, all-pairs, explicit pairs, pooled groups, and user-supplied design tables, across one or multiple feature sets in a single call.
+Time-resolved classification with permutation testing. One entry point — **`run_classification()`** — runs cross-validated AUROC at each time bin across one or more feature sets and handles all-pairs, explicit pairs, pooled groups, and user-supplied design tables in a single call. It returns a `ClassificationAnalysis` object bundling scores, run metadata, and optional per-embryo artifacts (predictions, null distributions, classifier directions).
 
-**When to use this module:** you have a dataframe of embryos × features × time and want to know when (and on which features) classes become distinguishable.
+**When to use this module:** you have a dataframe of embryos × features × time and want to:
+1. **Difference detection** — ask whether/when classes are distinguishable (per-bin AUROC + permutation p-values).
+2. **Phenotype emergence** — order classes by when they first become separable from a reference.
+3. **Extract directions / geometry** — pull interpretable axes (coefficient vectors) out of the trained pairwise classifiers for downstream use in `morphology_geometry/` and `trajectory_condensation/`.
 
 **When NOT to use this module:** if you want the *ordering* of phenotype emergence rather than per-class AUROC, start in `emergence/`. If you want per-embryo deep dives on why a specific genotype gets misclassified, start in `misclassification/`.
+
+---
+
+## Import
+
+```python
+from analyze.classification import run_classification
+from analyze.classification import ClassificationAnalysis   # for loading saved runs
+```
+
+---
+
+## Two ways to use this module
+
+1. **Phenotype emergence** — "when do classes become separable, and on which features?"
+   → `run_classification(...)` → AUROC curves + plots.
+2. **Extract classifier geometry** — "what combination of features separates A from B?"
+   → `run_classification(..., save_classifier_directions=True)` → consumed by
+   `morphology_geometry/` and `trajectory_condensation/`.
+
+---
+
+## Quick workflow
+
+End-to-end: load a dataframe → run classification → inspect → plot → reload later.
+
+```python
+from analyze.classification import run_classification, ClassificationAnalysis
+
+# 1. Load your features. Whatever loader you use, `df` must have:
+#      - an id column (one row per embryo at one timepoint)
+#      - a class column (e.g. genotype)
+#      - a time column (continuous, e.g. predicted_stage_hpf)
+#      - feature columns (numeric — VAE latents, shape metrics, etc.)
+df = load_df(...)
+
+# 2. Run classification: every pair of classes, VAE embedding.
+result = run_classification(
+    df,
+    class_col="genotype", id_col="embryo_id", time_col="predicted_stage_hpf",
+    comparisons="all_pairs",
+    features={"emb": "z_mu_b"},    # prefix → all z_mu_b_* columns
+    save_dir="results/my_run/",    # auto-saves scores, confusion, metadata
+)
+
+# 3. Inspect.
+result.scores.head()            # one row per (feature_set, comparison, time_bin)
+result.comparison_ids           # e.g. ["homo__vs__wildtype", "het__vs__wildtype", ...]
+
+# 4. Plot.
+result.plot_aurocs(output_path="aurocs.png")           # AUROC curves over time
+from analyze.classification.viz import plot_auroc_heatmaps
+plot_auroc_heatmaps(result.scores, output_path="heatmap.png")   # faceted heatmap
+
+# 5. Later: reload without rerunning.
+result = ClassificationAnalysis.load("results/my_run/")
+```
+
+Use case 1 below breaks this down into the four common variations (pooling features,
+scoping classes, pooled sides, mixed specs).
+
+---
+
+## Which path does my call trigger?
+
+`run_classification()` has two internal paths. Most downstream-artifact flags
+(`save_classifier_directions`, etc.) require the **binary path**. The rule is simple:
+**if you produce explicit (positive vs negative) pairs, you're on the binary path.**
+
+| What you pass | Path |
+|---|---|
+| `comparisons="all_pairs"` | Binary (all C(n,2) pairs) |
+| `comparisons="all_pairs", positive=["A","B","C"]` | Binary (pairs scoped to those classes) |
+| `positive="A", negative="B"` | Binary (single pair) |
+| `positive=("A","B"), negative="C"` | Binary (pooled side) |
+| `comparisons=[{"positive":..., "negative":...}, ...]` | Binary (explicit design) |
+| Everything omitted (`positive=None, negative=None, comparisons=None`) | Multiclass *(default)* |
+
+Binary path unlocks `save_predictions`, `save_classifier_directions`, and `save_null_arrays`.
+The default multiclass mode is mainly useful when you want a single multiclass model per bin
+(see `save_multiclass_predictions`, used by the misclassification pipeline). Most users
+should pass `comparisons="all_pairs"`.
+
+Full semantics of how `positive`/`negative`/`comparisons` combine →
+[`docs/DESIGN.md` § "How positive, negative, and comparisons interact"](docs/DESIGN.md).
+
+---
+
+## Use case 1 — Phenotype emergence
+
+Most users land here. Run classification, get AUROC vs time, plot it. The snippets
+below build from simplest to most specific.
+
+### 1a. Simplest: all pairs, one feature set (VAE embedding)
+
+```python
+result = run_classification(
+    df,
+    class_col="genotype", id_col="embryo_id", time_col="predicted_stage_hpf",
+    comparisons="all_pairs",
+    features={"emb": "z_mu_b"},
+)
+# "z_mu_b" is a prefix — picks up all columns matching z_mu_b_* (e.g. z_mu_b_0, z_mu_b_1, ...).
+# Pass a list instead (e.g. ["total_length_um"]) to use explicit columns.
+```
+
+### 1b. Pooling multiple feature sets (VAE + curvature + shape)
+
+Each key in `features` becomes one `feature_set` row in `result.scores`:
+
+```python
+features={
+    "emb":       "z_mu_b",
+    "curvature": ["baseline_deviation_normalized"],
+    "shape":     ["total_length_um", "baseline_deviation_normalized"],
+}
+```
+
+### 1c. Subsetting classes — `positive` / `negative`
+
+```python
+# All pairs, but scoped to a subset of classes:
+positive=["wildtype", "homo", "het"], comparisons="all_pairs"
+
+# One specific pair:
+positive="homo", negative="wildtype"
+```
+
+### 1d. Pooled sides, mixed specs
+
+```python
+# homo vs pooled {wildtype + het}:
+positive="homo", negative=("wildtype", "het")
+
+# Enumerate: two comparisons, both against the same pooled negative
+positive=["homo", "het"], negative=("wildtype", "ctrl")
+#   → homo vs {wildtype+ctrl}
+#   → het  vs {wildtype+ctrl}
+
+# Same positive compared against two different negatives (one pooled):
+positive="homo", negative=["wildtype", ("wildtype", "het")]
+#   → homo vs wildtype
+#   → homo vs {wildtype+het}
+```
+
+More complex mixes, asymmetric designs, or hand-built design tables →
+see [`docs/DESIGN.md` § "How positive, negative, and comparisons interact"](docs/DESIGN.md).
+
+---
+
+## Classification outputs — the `ClassificationAnalysis` object
+
+`run_classification()` returns a single `ClassificationAnalysis`. It's a lightweight
+container; the primary output is the **`scores` DataFrame** on `result.scores`.
+
+```python
+result.scores         # pd.DataFrame — THE main output (see below)
+result.uns            # dict: run metadata (class_col, bin_width, git_commit, ...)
+result.layers         # lazy artifact registry (predictions, confusion, nulls, ...)
+result.feature_sets   # list[str] — keys of the `features={}` dict you passed
+result.comparison_ids # list[str] — e.g. ["homo__vs__wildtype", "het__vs__wildtype"]
+```
+
+### `result.scores` — the main output
+
+A tidy long-form DataFrame, one row per **(feature_set, comparison_id, time_bin_center)**.
+
+| Column | Type | Description |
+|---|---|---|
+| `feature_set` | str | Feature set name (key of `features={}` dict) |
+| `comparison_id` | str | Filesystem-safe identifier, e.g. `"homo__vs__wildtype"` |
+| `positive_label` | str | Human-readable positive class |
+| `negative_label` | str | Human-readable negative class |
+| `time_bin_center` | float | Center of time bin (hpf) |
+| `auroc_obs` | float | Observed cross-validated AUROC |
+
+**Optional columns:** `pval`, `n_permutations`, `n_positive`, `n_negative`.
+
+Example:
+
+```
+  feature_set       comparison_id  positive_label  negative_label  time_bin_center  auroc_obs   pval
+0         emb  homo__vs__wildtype            homo        wildtype             26.0      0.612  0.18
+1         emb  homo__vs__wildtype            homo        wildtype             30.0      0.781  0.02
+2         emb    het__vs__wildtype             het        wildtype             26.0      0.549  0.31
+...
+```
+
+Because it's a DataFrame, plain pandas works — filter, groupby, pivot, merge:
+
+```python
+# One comparison, one feature set, over time:
+df = result.scores.query("comparison_id == 'homo__vs__wildtype' and feature_set == 'emb'")
+
+# Peak AUROC per comparison:
+result.scores.groupby("comparison_id")["auroc_obs"].max()
+```
+
+### Subsetting via the result object
+
+`result.subset(...)` returns a new `ClassificationAnalysis` with filtered scores +
+the same metadata. Use it when you want to carry a slice into downstream plotting
+or save it as its own run:
+
+```python
+sub = result.subset(
+    feature_set="emb",
+    comparison_id="homo__vs__wildtype",
+    time_range=(24.0, 72.0),
+)
+sub.plot_aurocs(output_path="homo_vs_wt_emb.png")
+```
+
+Stacking two runs (e.g. different feature sets run separately):
+
+```python
+combined = res_emb.stack(res_shape)   # merges scores; layers are NOT merged
+```
+
+### Common next steps
+
+- **Plot** → `result.plot_aurocs()`, `plot_auroc_heatmaps(result.scores)` (see below).
+- **Save / reload** → `result.save("path/")` / `ClassificationAnalysis.load("path/")`.
+- **Slice** → `result.subset(feature_set=..., comparison_id=..., time_range=...)`.
+- **Extract geometry** → re-run with `save_classifier_directions=True`
+  (see [Workflow: extract classifier directions](#workflow-extract-classifier-directions)).
+
+### Full spec
+
+For the complete `ClassificationAnalysis` API (all methods, `_LazyLayers` internals,
+`uns` structure, on-disk layout, save/load contract) see
+[`docs/OUTPUT_SPEC.md`](docs/OUTPUT_SPEC.md).
+
+---
+
+## Plotting
+
+### AUROC curves over time
+
+```python
+result.plot_aurocs(output_path="aurocs.png")
+# Equivalent direct call:
+from analyze.classification.viz import plot_aurocs_over_time
+plot_aurocs_over_time(result.scores, output_path="aurocs.png")
+```
+
+### Faceted AUROC heatmap (all comparisons × feature sets at a glance)
+
+```python
+from analyze.classification.viz import plot_auroc_heatmaps
+plot_auroc_heatmaps(result.scores, output_path="heatmap.png")
+```
+
+### Confusion matrices per bin
+
+```python
+result.plot_confusion(output_path="confusion.png")
+```
+
+Full plot catalogue → [`viz/README.md`](viz/README.md).
+
+---
+
+## Saving extra artifacts
+
+Enable any of these flags to materialize additional layers. If `save_dir` is set,
+they persist automatically; otherwise they live in-memory on `result.layers`.
+
+```python
+save_predictions=True            # per-embryo probabilities + truth_signed_margin (binary path)
+save_multiclass_predictions=True # per-embryo probabilities (default multiclass mode; used by misclassification pipeline)
+save_null_arrays=True            # full permutation null distributions (diagnostic)
+save_dir="results/my_run/"       # auto-save at end; auto-enables save_predictions
+```
+
+Access pattern:
+
+```python
+preds = result.layers["predictions"]        # KeyError if unavailable
+preds = result.layers.get("predictions")    # None if unavailable
+"predictions" in result.layers              # bool, no disk load
+
+# Reload later:
+result = ClassificationAnalysis.load("results/my_run/")
+```
+
+Full layer reference (all flags, on-disk filenames, compatibility rules, margin conventions) →
+[`docs/OUTPUT_SPEC.md`](docs/OUTPUT_SPEC.md).
+
+---
+
+## Workflow: extract classifier directions
+
+When the question is not *"when are classes separable?"* but *"what axis in feature
+space separates them?"*. End-to-end example — this is the stable entry point that
+`morphology_geometry/` and `trajectory_condensation/` depend on.
+
+```python
+from analyze.classification import run_classification, ClassificationAnalysis
+
+# 1. Load features (same df shape as Quick workflow):
+#    id_col, class_col, time_col, feature columns.
+df = load_df(...)
+
+# 2. Run all-pairs classification with directions saved.
+result = run_classification(
+    df,
+    class_col="genotype", id_col="embryo_id", time_col="predicted_stage_hpf",
+    comparisons="all_pairs",                  # required — binary path
+    features={"emb": "z_mu_b"},
+    save_classifier_directions=True,          # REQUIRED for downstream geometry
+    save_dir="results/my_geom_run/",
+)
+
+# 3. Access the directions artifact.
+directions = result.layers["classifier_directions"]
+# One coefficient vector per (feature_set, comparison, time_bin).
+
+# 4. Reload without rerunning.
+result = ClassificationAnalysis.load("results/my_geom_run/")
+directions = result.layers["classifier_directions"]
+```
+
+**Downstream consumers** — these READMEs link back to this section. Don't rename the
+section header or break the anchor `#workflow-extract-classifier-directions` without
+coordinating:
+
+- `src/analyze/morphology_geometry/` — uses directions as interpretable axes.
+- `src/analyze/trajectory_condensation/` — uses directions for pathway fitting.
+
+> **Note on contrast coordinates.** An earlier sibling API (`save_contrast_coordinates=True`)
+> projected embryos onto these same axes, but its shrinkage math is being revised and the
+> layer is effectively frozen — see [`docs/future_improvement.md`](docs/future_improvement.md).
+> Classifier directions are the stable, recommended surface; use them for new work.
 
 ---
 
@@ -19,18 +356,10 @@ The module has several conceptual doors. Each subpackage answers a distinct ques
 | `viz/` | "Give me a figure of the result." | See [`viz/README.md`](viz/README.md) | Plots are organized by user goal, not function name. |
 | `emergence/` | "In what order do classes become distinguishable from a reference, and which co-emerge?" | `compute_emergence_data()`, `render_emergence_html()` | Consumes `result.scores`. See [`emergence/ALGORITHM.md`](emergence/ALGORITHM.md) + [`emergence/DESIGN.md`](emergence/DESIGN.md). |
 | `misclassification/` | "Which individual embryos get it wrong, when, and how?" | `run_misclassification_pipeline()` | Consumes the `predictions` layer. |
-| `directions/` | "What axis in feature space separates A from B?" (*preferred* interpretable geometry API) | `save_classifier_directions=True` → `result.layers["classifier_directions"]` | Per-comparison coefficient vectors as interpretable axes. Binary-path only. |
-| Contrast coordinates (in `engine/contrast_coordinates.py`) | "Where does each embryo sit along each pairwise separator?" (*legacy-but-supported* predecessor to `directions/`) | `save_contrast_coordinates=True` → 7 layer keys | Per-embryo projections. Feeds `plot_pairwise_coordinate_heatmap` and `trajectory_condensation`. Prefer `directions/` for new work. Binary-path only. |
+| `directions/` | "What axis in feature space separates A from B?" — interpretable geometry API | `save_classifier_directions=True` → `result.layers["classifier_directions"]` | Per-comparison coefficient vectors as interpretable axes. Binary path only. See [Workflow: extract classifier directions](#workflow-extract-classifier-directions). |
 | Legacy shims (`classification_test.py`, `results.py`, `classification_results.py`) | *(deprecated)* pre-`run_classification` API | — | `FutureWarning` on call. `analyze.difference_detection` is a re-export shim to these. |
 
-### Directions and contrast coordinates — the relationship
-
-Both derive from the **same trained pairwise binary classifiers**:
-
-- **`directions/`** gives you the *axes*: one coefficient vector per (feature_set, comparison, time_bin). Answers *"what combination of features separates A from B?"*
-- **Contrast coordinates** give you *embryos projected onto those axes*: per-embryo × comparison × time-bin values. Answers *"where does this specific embryo sit along each separator?"*
-
-Contrast coordinates were the earlier API for interpretable classifier geometry. `directions/` is the cleaner replacement. Both remain supported and both can be enabled on the same run; they will be coherent because they're built from the same fitted models.
+> Contrast coordinates (`save_contrast_coordinates=True`) are frozen pending a shrinkage rewrite — see [`docs/future_improvement.md`](docs/future_improvement.md). Use classifier directions.
 
 ---
 
@@ -38,9 +367,10 @@ Contrast coordinates were the earlier API for interpretable classifier geometry.
 
 | File | Purpose |
 |---|---|
-| [`README.md`](README.md) | **This file.** User-facing canonical reference. |
-| [`DESIGN.md`](DESIGN.md) | Design rationale / approved spec for the `run_classification` API and comparison resolution contract. Open when deciding *whether* to change the signature. |
-| [`future_improvement.md`](future_improvement.md) | Historical roadmap snapshot (2026-03-05). Many P0 items have landed. |
+| [`README.md`](README.md) | **This file.** User-facing landing page + walkthrough. |
+| [`docs/OUTPUT_SPEC.md`](docs/OUTPUT_SPEC.md) | Full output contract — `ClassificationAnalysis`, `scores` schema, all layers, persistence, `uns`. |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Design rationale for the `run_classification` API and comparison resolution. Open when deciding *whether* to change the signature. |
+| [`docs/future_improvement.md`](docs/future_improvement.md) | Historical roadmap snapshot (2026-03-05). Many P0 items have landed. |
 | [`viz/README.md`](viz/README.md) | Plotting cookbook, organized by what you want to see. |
 | [`emergence/ALGORITHM.md`](emergence/ALGORITHM.md) | Emergence algorithm spec. |
 | [`emergence/DESIGN.md`](emergence/DESIGN.md) | Emergence package design notes. |
@@ -62,228 +392,9 @@ Contrast coordinates were the earlier API for interpretable classifier geometry.
 
 ---
 
-## Quick start
+## Plot index (all layers)
 
-### Default multiclass (one-vs-rest reporting)
-
-```python
-from analyze.classification import run_classification
-
-result = run_classification(
-    df,
-    class_col="genotype",
-    id_col="embryo_id",
-    time_col="predicted_stage_hpf",
-    features={"emb": "z_mu_b"},
-)
-print(result.scores[["feature_set", "comparison_id", "time_bin_center", "auroc_obs", "pval"]].head())
-# One row per (feature_set, comparison_id, time_bin_center).
-# comparison_id is "<label>_vs_rest" in this mode.
-
-result.plot_aurocs(output_path="aurocs.png")
-```
-
-### Explicit binary pair, multiple feature sets, saved to disk
-
-```python
-result = run_classification(
-    df,
-    class_col="genotype", id_col="embryo_id", time_col="predicted_stage_hpf",
-    positive="homo", negative="wildtype",
-    features={"emb": "z_mu_b", "shape": ["total_length_um", "yolk_area_um2"]},
-    n_permutations=500,
-    save_predictions=True,
-    save_dir="results/homo_vs_wt/",    # auto-saves at end
-)
-```
-
-### Pooled comparison (tuple = pooled group)
-
-```python
-result = run_classification(
-    df,
-    class_col="genotype", id_col="embryo_id", time_col="predicted_stage_hpf",
-    positive=("het", "homo"),   # tuple → one pooled positive group
-    negative="wildtype",
-    features={"emb": "z_mu_b"},
-)
-```
-
----
-
-## Choosing a comparison mode
-
-The three parameters `positive`, `negative`, and `comparisons` control what gets compared. Rules:
-
-- **Tuple = pooled.** `("het", "homo")` is *one* group pooling both labels.
-- **List = enumerated.** `["het", "homo"]` runs *two* separate comparisons.
-- **Any explicit `negative=`** keeps the run binary, even with pooled groups.
-- **"one-vs-rest" is a reporting choice, not a fitting mode.** In default multiclass, the model is multiclass; results are reported per class as OvR.
-
-| What you want | How to request it |
-|---|---|
-| All classes vs rest (default) | `positive=None, negative=None, comparisons=None` |
-| All C(n,2) pairs | `comparisons="all_pairs"` |
-| All pairs *within a scoped class list* | `comparisons="all_pairs", positive=["A", "B", "C"]` |
-| Single pair A vs B | `positive="A", negative="B"` |
-| Pooled positive vs single negative | `positive=("A", "B"), negative="C"` |
-| Each non-WT vs one control | `positive=None, negative="wildtype"` (with `class_col` filtered upstream) |
-| Explicit design table | `comparisons=[{"positive": "A", "negative": "B"}, ...]` |
-
-**Forbidden combinations** (raise `ValueError`):
-- `comparisons=DataFrame/list` with `positive` or `negative`
-- `comparisons="all_pairs"` with `negative` or a scalar `positive`
-- Pooled tuples combined with `"all_pairs"`
-
-> **Confused by why a combination resolved the way it did?** The full semantics — role of each parameter (`positive` as scope filter vs. group definer, `negative` forcing explicit mode, etc.) and the complete mode-resolution table with "what happens" column — lives in [`DESIGN.md` § "How `positive`, `negative`, and `comparisons` interact"](DESIGN.md). Read that when the action table above doesn't answer your question.
-
----
-
-## The result object: `ClassificationAnalysis`
-
-```python
-result.scores           # pd.DataFrame — one row per (feature_set, comparison_id, time_bin_center)
-result.uns              # dict — run metadata (class_col, id_col, time_col, bin_width,
-                        #        n_permutations, class_weight, feature_sets, comparisons, git_commit, ...)
-result.layers           # lazy-loading artifact registry (see below)
-result.feature_sets     # list[str]
-result.comparison_ids   # list[str]
-```
-
-### `scores` schema
-
-**Required columns** (always present):
-
-| Column | Type | Description |
-|---|---|---|
-| `feature_set` | str | Feature set name (key of `features={}` dict) |
-| `comparison_id` | str | Filesystem-safe identifier, e.g. `"homo__vs__wildtype"` |
-| `positive_label` | str | Human-readable positive class |
-| `negative_label` | str | Human-readable negative class |
-| `time_bin_center` | float | Center of time bin (hpf) |
-| `auroc_obs` | float | Observed cross-validated AUROC |
-
-**Optional columns** (present when relevant):
-
-| Column | Description |
-|---|---|
-| `pval` | Permutation p-value |
-| `n_permutations` | Number of permutations used |
-| `n_pos`, `n_neg` | Sample counts per class in bin |
-
-`(feature_set, comparison_id, time_bin_center)` is the unique key.
-
-### Subsetting and stacking
-
-```python
-sub = result.subset(
-    feature_set="emb",
-    comparison_id="homo__vs__wildtype",
-    positive_label="homo",
-    time_range=(24.0, 72.0),
-)
-
-res_emb   = run_classification(df, features={"emb": "z_mu_b"}, ...)
-res_shape = run_classification(df, features={"shape": ["total_length_um"]}, ...)
-combined  = res_emb.stack(res_shape)   # merges scores; layers are NOT merged
-```
-
-### Layers: flag → artifact matrix
-
-Artifacts are produced on-demand and persisted to `save_dir` or written later via `result.save(path)`.
-
-| Layer key | Enabled by | Content |
-|---|---|---|
-| `predictions` | `save_predictions=True` *(also auto-True when `save_dir` is set)* | Per-embryo probability + `truth_signed_margin` for binary comparisons (tidy long-form). |
-| `multiclass_predictions` | `save_multiclass_predictions=True` | Wide-format OvR probabilities for the default multiclass path. |
-| `confusion` | *always computed* | Per-bin confusion matrices. |
-| `null_full` | `save_null_arrays=True` | Full null AUROC distributions (`NullDistributions` object). |
-| `classifier_directions` | `save_classifier_directions=True` | Per-comparison coefficient vectors (`ClassifierDirections` artifact). Binary-path only. |
-| `raw_contrast_scores_long` | `save_contrast_coordinates=True` | Per-embryo `class_signed_margin` on each pairwise classifier, long-form. |
-| `contrast_support_long` | `save_contrast_coordinates=True` | Per-(embryo, classifier, bin) support indicator. |
-| `contrast_specificity_by_timebin` | `save_contrast_coordinates=True` | Specificity metric per (embryo, bin). |
-| `raw_coordinates` | `save_contrast_coordinates=True` | Embryo × classifier matrix of raw margins. |
-| `shrunk_coordinates` | `save_contrast_coordinates=True` | `raw_coordinates` multiplied by per-(feature_set, comparison, bin) probe weight `clip((auroc_obs - null_mean) / 0.5, 0, 1)`. |
-| `residual_coordinates` | `save_contrast_coordinates=True` | `raw_coordinates - shrunk_coordinates`. |
-| `probe_index` | `save_contrast_coordinates=True` | Index over the probe dimension with feature-set + comparison + time-bin labels. |
-
-Access patterns:
-
-```python
-preds = result.layers["predictions"]        # KeyError if unavailable
-preds = result.layers.get("predictions")    # None if unavailable
-"predictions" in result.layers              # bool, no disk load
-result.layers.available()                    # list of saved/cached keys
-```
-
-`save_contrast_coordinates=True` requires `n_permutations > 0` and is **not** allowed with the multiclass fast path. Same for `save_classifier_directions=True`. Use explicit comparisons (binary path).
-
-### `predictions` parquet columns
-
-Used by `plot_margin_trends` and misclassification pipelines.
-
-| Column | Notes |
-|---|---|
-| `comparison_id`, `positive_label`, `negative_label`, `feature_set` | Identifiers |
-| `embryo_id` | From `id_col` |
-| `time_bin`, `time_bin_center`, `bin_width` | Binning |
-| `n_positive`, `n_negative`, `auroc_obs` | Per-bin stats |
-| `y_true`, `p_pos`, `y_pred`, `is_correct` | Per-embryo prediction |
-| `truth_signed_margin` | `[-1, 1]`; `+1` = most correct, `-1` = most wrong |
-
-### Margin conventions
-
-`src/analyze/classification/engine/margins.py`:
-
-| Function | Range | Sign meaning |
-|---|---|---|
-| `class_signed_margin(p_pos)` | `[-1, 1]` | `+1` = strongest positive-class support; sign relative to decision boundary. Formula: `2 * p_pos - 1`. |
-| `truth_signed_margin(p_pos, y_true)` | `[-1, 1]` | `+1` = most correct; sign relative to true label. |
-| `coerce_margin_range(arr)` | `[-1, 1]` | Rescales legacy `[-0.5, 0.5]` arrays. Pass loaded-from-disk margins through this. |
-
-`predictions.parquet` stores `truth_signed_margin`. `raw_contrast_scores_long` stores `class_signed_margin`.
-
-### Persistence
-
-```python
-result = run_classification(df, ..., save_dir="results/my_run/")   # auto-save at run end
-# -- or --
-result = run_classification(df, ...)
-result.save("results/my_run/", overwrite=False)                    # manual
-
-loaded = ClassificationAnalysis.load("results/my_run/")
-preds  = loaded.layers["predictions"]                              # lazy-loaded from parquet
-```
-
-On-disk layout:
-```
-results/my_run/
-├── scores.parquet
-├── metadata.json                              # result.uns
-├── predictions.parquet                        # if save_predictions
-├── multiclass_predictions.parquet             # if save_multiclass_predictions
-├── confusion.parquet
-├── null_distributions.npz                     # if save_null_arrays
-├── classifier_directions.parquet              # if save_classifier_directions
-├── classifier_directions_vectors.npz          # if save_classifier_directions
-├── raw_contrast_scores_long.parquet           # if save_contrast_coordinates
-├── contrast_support_long.parquet              # if save_contrast_coordinates
-├── contrast_specificity_by_timebin.parquet    # if save_contrast_coordinates
-├── raw_coordinates.parquet                    # if save_contrast_coordinates
-├── shrunk_coordinates.parquet                 # if save_contrast_coordinates
-├── residual_coordinates.parquet               # if save_contrast_coordinates
-└── probe_index.parquet                        # if save_contrast_coordinates
-```
-
-`ClassificationAnalysis.from_legacy(...)` currently raises `NotImplementedError` — use the legacy loader (`MulticlassOVRResults.from_dir`) for pre-`run_classification` saves.
-
----
-
-## Visualization
-
-See [`viz/README.md`](viz/README.md) for full plot reference organized by "I want to see X".
-
-One-line index of the most-used plots:
+Full catalogue → [`viz/README.md`](viz/README.md).
 
 | Goal | Function | Layer required |
 |---|---|---|
@@ -291,7 +402,6 @@ One-line index of the most-used plots:
 | Faceted AUROC heatmap | `plot_auroc_heatmaps` | `scores` |
 | Confusion matrices | `plot_confusion` / `result.plot_confusion()` | `confusion` |
 | Per-embryo margin trajectory | `plot_margin_trends` | `predictions` |
-| Per-embryo phenotype fingerprint | `plot_pairwise_coordinate_heatmap` | `raw_contrast_scores_long` |
 | Phenotype emergence timeline (static + interactive HTML) | `compute_emergence_data` + `render_emergence_html` | `scores` |
 | Misclassification deep-dive (embryo gallery) | `run_misclassification_pipeline` | `predictions` |
 
@@ -303,10 +413,9 @@ One-line index of the most-used plots:
 |---|---|---|
 | `ValueError: No valid comparisons produced results.` | Every comparison fell below the sample-size floor. | Check `min_samples_per_group` / `min_samples_per_member`; verify `id_col` and `class_col` values are non-null and correctly spelled. |
 | `KeyError: Layer 'predictions' was not computed during this run.` | `save_predictions=False` on the run, and no `save_dir` was set. | Re-run with `save_predictions=True` (or set `save_dir=...`, which auto-enables it). |
-| `ValueError: save_contrast_coordinates=True is only supported for binary comparison runs.` | You're in the multiclass fast path. | Set an explicit `comparisons="all_pairs"` or `positive=/negative=`. Same applies to `save_classifier_directions`. |
-| `ValueError: save_contrast_coordinates=True requires n_permutations > 0` | Shrinkage needs the null distribution. | Set `n_permutations >= 1` (typical: 100–500). |
+| `ValueError: save_classifier_directions=True is only supported for binary comparison runs.` | You're on the default multiclass mode. | Pass `comparisons="all_pairs"` or explicit `positive=/negative=` (see the path table above). |
 | `FileExistsError` on save | `save_dir` already populated. | Pass `overwrite=True`, or point `save_dir` elsewhere. |
-| AUROC pinned at 0.5 across all bins | Usually class imbalance collapsing CV folds, or features not actually predictive in that bin. | Inspect `n_pos`, `n_neg`; visualize raw features by class; consider widening `bin_width`. |
+| AUROC pinned at 0.5 across all bins | Usually class imbalance collapsing CV folds, or features not actually predictive in that bin. | Inspect `n_positive`, `n_negative`; visualize raw features by class; consider widening `bin_width`. |
 
 ---
 
@@ -346,7 +455,7 @@ def run_classification(
     save_predictions: bool = False,
     save_multiclass_predictions: bool = False,
     save_null_arrays: bool = False,
-    save_contrast_coordinates: bool = False,         # binary-path only; requires n_permutations > 0
+    save_contrast_coordinates: bool = False,         # FROZEN — shrinkage rewrite pending; prefer save_classifier_directions
     save_classifier_directions: bool = False,        # binary-path only
     save_dir: str | Path | None = None,              # auto-saves at end; auto-enables save_predictions
     overwrite: bool = False,                         # pass-through to .save()
@@ -362,8 +471,10 @@ Validation runs before any computation — invalid comparison specs, missing df 
 ```
 classification/
 ├── README.md                       # this file — canonical user-facing reference
-├── DESIGN.md                       # approved design spec for run_classification
-├── future_improvement.md           # historical roadmap snapshot (2026-03-05)
+├── docs/
+│   ├── OUTPUT_SPEC.md              # full ClassificationAnalysis + layers + persistence contract
+│   ├── DESIGN.md                   # design rationale for run_classification
+│   └── future_improvement.md       # historical roadmap snapshot (2026-03-05)
 ├── run_classification.py           # single entry-point orchestrator
 ├── engine/
 │   ├── analysis.py                 # ClassificationAnalysis, _LazyLayers
@@ -404,7 +515,7 @@ PYTHONPATH=src:$PYTHONPATH conda run -n segmentation_grounded_sam --no-capture-o
 
 The pre-`run_classification` functions (`run_classification_test`, `MulticlassOVRResults`, `ClassificationResults`) still work but emit `FutureWarning`. `analyze.difference_detection` is a re-export shim to these. Prefer the canonical path.
 
-### All-vs-rest
+### Legacy all-vs-rest
 
 ```python
 # Before
