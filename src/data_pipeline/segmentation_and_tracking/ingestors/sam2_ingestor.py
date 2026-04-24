@@ -8,6 +8,7 @@ import numpy as np
 from data_pipeline.segmentation.grounded_sam2.propagation import encode_mask_to_rle
 from data_pipeline.shared.identifiers import build_embryo_id
 from data_pipeline.shared.identifiers import build_snip_id
+from data_pipeline.shared.identifiers import normalize_embryo_local_track_id
 
 from ..raw_types import RawMask, RawTrack
 
@@ -33,7 +34,8 @@ def ingest_propagation(
             area = float(emb.get("area", 0.0))
             conf = float(emb.get("confidence", 0.0))
             embryo_local_id = str(embryo_id)
-            embryo_global_id = build_embryo_id(str(experiment_id), str(well_id), int(embryo_local_id))
+            embryo_local_track_id = normalize_embryo_local_track_id(embryo_local_id)
+            embryo_global_id = build_embryo_id(str(experiment_id), str(well_id), embryo_local_track_id)
             tracks.append(
                 RawTrack(
                     time_int=int(time_int),

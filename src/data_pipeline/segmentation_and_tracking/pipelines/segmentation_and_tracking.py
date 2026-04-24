@@ -71,9 +71,9 @@ def run_segmentation_and_tracking(
         candidate = f"{experiment_id}_{requested_well_id}"
     else:
         candidate = requested_well_id
+    storage_well_id = candidate.split("_", 1)[-1]
 
-    # Use the experiment-qualified well_id for storage to match frame_contract keys.
-    shard_dir = output_root / "segmentation_and_tracking" / str(experiment_id) / "per_well" / str(candidate)
+    shard_dir = output_root / "segmentation_and_tracking" / str(experiment_id) / "per_well" / str(storage_well_id)
     shard_dir.mkdir(parents=True, exist_ok=True)
 
     # Canonical per-well output roots (real files).
@@ -370,7 +370,7 @@ def run_segmentation_and_tracking(
             if verbose:
                 print(f"[qc_overlay] failed: {type(exc).__name__}: {exc}")
 
-    validated = contracts_dir / ".segment_and_track.validated"
+    validated = contracts_dir / ".segmentation_tracking.validated"
     validated.write_text("validated\n")
     return {
         "shard_dir": shard_dir,

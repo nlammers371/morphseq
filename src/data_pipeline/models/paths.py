@@ -34,7 +34,10 @@ class SegmentationAndTrackingModelPaths:
 
 def _as_str(d: Mapping[str, Any], key: str, default: str = "") -> str:
     val = d.get(key, default)
-    return default if val is None else str(val)
+    if val is None:
+        return default
+    text = str(val).strip()
+    return default if text == "" else text
 
 
 def resolve_models_root(*, config: Mapping[str, Any], data_root: Path) -> Path:
@@ -65,15 +68,19 @@ def resolve_segmentation_and_tracking_model_paths(
     gd_cfg = gd_cfg if gd_cfg.is_absolute() else (gd_repo / gd_cfg)
 
     gd_wts = Path(_as_str(raw, "groundingdino_weights", "weights/groundingdino_swint_ogc.pth"))
-    gd_wts = gd_wts if gd_wts.is_absolute() else (root / gd_wts)
+    gd_wts = gd_wts if gd_wts.is_absolute() else (gd_repo / gd_wts)
+    if not gd_wts.exists():
+        alt = gd_repo / "weights" / gd_wts.name
+        if alt.exists():
+            gd_wts = alt
 
     sam2_root = Path(_as_str(raw, "sam2_models_root", "sam2"))
     sam2_root = sam2_root if sam2_root.is_absolute() else (root / sam2_root)
 
-    sam2_cfg = Path(_as_str(raw, "sam2_config", "configs/sam2_hiera_l.yaml"))
+    sam2_cfg = Path(_as_str(raw, "sam2_config", "configs/sam2.1/sam2.1_hiera_l.yaml"))
     # Relative resolution is handled by sam2 loader; keep as possibly-relative Path here.
 
-    sam2_ckpt = Path(_as_str(raw, "sam2_checkpoint", "checkpoints/sam2_hiera_large.pt"))
+    sam2_ckpt = Path(_as_str(raw, "sam2_checkpoint", "checkpoints/sam2.1_hiera_large.pt"))
 
     return SegmentationAndTrackingModelPaths(
         models_root=root,

@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 from skimage import io
 
 from data_pipeline.feature_extraction.io.loaders import load_frame_contract
+from data_pipeline.shared.path_contracts import resolve_data_root_relative_path
 from data_pipeline.io.validators import validate_dataframe_schema
 from data_pipeline.schemas.auxiliary_masks import REQUIRED_COLUMNS_AUXILIARY_MASKS
 from src.functions.core_utils_segmentation import Dataset, FishModel
@@ -78,10 +79,13 @@ def _predict_family_masks(
     )
 
     def _resolve_source_path(value: object) -> str:
-        path = Path(str(value))
-        if path.is_absolute():
-            return str(path)
-        return str(data_root / path)
+        resolved = resolve_data_root_relative_path(value)
+        if resolved is None:
+            return str(value)
+        resolved_path = Path(resolved)
+        if resolved_path.is_absolute():
+            return str(resolved_path)
+        return str(data_root / resolved_path)
 
     source_paths = [_resolve_source_path(p) for p in frame_df[image_path_column].tolist()]
     image_lookup = {_resolve_source_path(row[image_path_column]): str(row["image_id"]) for _, row in frame_df.iterrows()}
@@ -174,9 +178,9 @@ def run_auxiliary_mask_inference(
     for _, row in frame_df.iterrows():
         image_id = str(row["image_id"])
         source_image_value = row[_resolve_frame_column(frame_df, "source_image_path", "stitched_image_path")]
-        source_image_path = Path(str(source_image_value))
-        if not source_image_path.is_absolute():
-            source_image_path = data_root / source_image_path
+        source_image_path = resolve_data_root_relative_path(source_image_value)
+        if source_image_path is None:
+            source_image_path = Path(str(source_image_value))
 
         source_mpp_value = row[
             _resolve_frame_column(frame_df, "source_micrometers_per_pixel", "micrometers_per_pixel")

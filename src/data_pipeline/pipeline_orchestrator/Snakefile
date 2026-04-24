@@ -11,6 +11,7 @@ Contract-driven pipeline:
 
 from pathlib import Path
 import os
+import json
 
 # Configuration
 # Path is relative to Snakefile location
@@ -37,6 +38,8 @@ PROCESSED_SNIPS_DIR = DATA_ROOT / "processed_snips"
 AUXILIARY_MASKS_DIR = DATA_ROOT / "auxiliary_masks"
 MODELS_DIR = DATA_ROOT / "models"
 FEATURES_DIR = DATA_ROOT / "computed_features"
+QUALITY_CONTROL_DIR = DATA_ROOT / "quality_control"
+ANALYSIS_READY_DIR = DATA_ROOT / "analysis_ready"
 
 # Experiment identifiers
 EXPERIMENTS = config.get("experiments", ["20250912"])
@@ -55,6 +58,8 @@ print(f"Microscope: {MICROSCOPE}")
 ruleorder: generate_auxiliary_masks_well > aggregate_auxiliary_masks
 ruleorder: segment_and_track_per_well > merge_segmentation_tracking
 ruleorder: run_snip_processing_per_well > merge_snip_manifests
+
+include: str(WORKFLOW_DIR / "rules" / "quality_control.smk")
 
 def experiment_well_ids(experiment: str) -> list[str]:
     configured = config.get("experiment_wells") or {}
@@ -305,25 +310,17 @@ rule segment_and_track_per_well:
         out_csv = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / "segmentation_tracking.csv",
         done = SEGMENTATION_DIR / "{experiment}" / "per_well" / "{well_id}" / "contracts" / ".segmentation_tracking.validated",
     params:
-        channel_id = lambda wc: str(config.get("segmentation_and_tracking", {}).get("channel_id", "BF")),
         device = lambda wc: str(config.get("segmentation_and_tracking", {}).get("device", "cuda")),
-        gdino_config = lambda wc: str(config.get("segmentation_and_tracking", {}).get("groundingdino", {}).get("config_path", "")),
-        gdino_weights = lambda wc: str(config.get("segmentation_and_tracking", {}).get("groundingdino", {}).get("weights_path", "")),
-        sam2_config = lambda wc: str(config.get("segmentation_and_tracking", {}).get("sam2", {}).get("config_path", "")),
-        sam2_ckpt = lambda wc: str(config.get("segmentation_and_tracking", {}).get("sam2", {}).get("checkpoint_path", "")),
+        pipeline_cfg = lambda wc: json.dumps(config),
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.segmentation.grounded_sam2.run_per_well \
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.segmentation_and_tracking.entrypoints.run_segmentation_and_tracking \
           --frame-manifest "{input.manifest}" \
           --experiment-id "{wildcards.experiment}" \
           --well-id "{wildcards.well_id}" \
-          --channel-id "{params.channel_id}" \
           --output-root "{DATA_ROOT}" \
           --device "{params.device}" \
-          --gdino-config "{params.gdino_config}" \
-          --gdino-weights "{params.gdino_weights}" \
-          --sam2-config "{params.sam2_config}" \
-          --sam2-checkpoint "{params.sam2_ckpt}"
+          --pipeline-cfg-json '{params.pipeline_cfg}'
         """
 
 
@@ -544,9 +541,11 @@ rule compute_stage_predictions:
     output:
         csv = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv",
         done = FEATURES_DIR / "{experiment}" / "stage_predictions" / "stage_predictions.csv.validated",
+    params:
+        stage_cfg = lambda wc: json.dumps(config.get("feature_extraction", {}).get("stage_predictions", {})),
     shell:
         """
-        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_stage_predictions           --segmentation-tracking "{input.segmentation_tracking}"           --frame-contract "{input.frame_contract}"           --plate-metadata "{input.plate_metadata}"           --output-csv "{output.csv}"
+        PYTHONPATH="{PROJECT_ROOT}:{PROJECT_ROOT}/src" "{PYTHON}" -m data_pipeline.feature_extraction.entrypoints.compute_stage_predictions           --segmentation-tracking "{input.segmentation_tracking}"           --frame-contract "{input.frame_contract}"           --plate-metadata "{input.plate_metadata}"           --stage-cfg '{params.stage_cfg}'           --output-csv "{output.csv}"
         """
 
 
@@ -593,6 +592,10 @@ rule feature_extraction_complete:
             exp=EXPERIMENTS
         )
         + expand(
+            FEATURES_DIR / "{exp}" / "stage_predictions" / "stage_predictions.csv.validated",
+            exp=EXPERIMENTS
+        )
+        + expand(
             AUXILIARY_MASKS_DIR / "{exp}" / "contracts" / ".auxiliary_masks.validated",
             exp=EXPERIMENTS
         )
@@ -604,11 +607,15 @@ rule feature_extraction_complete:
 rule all:
     default_target: True
     """
-    Default target: build the feature phase outputs.
+    Default target: build the feature smoke outputs through consolidated features.
     """
     input:
         expand(
             FEATURES_DIR / "{exp}" / "consolidated" / "consolidated_snip_features.csv.validated",
+            exp=EXPERIMENTS
+        )
+        + expand(
+            FEATURES_DIR / "{exp}" / "stage_predictions" / "stage_predictions.csv.validated",
             exp=EXPERIMENTS
         )
         + expand(

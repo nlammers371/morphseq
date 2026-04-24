@@ -7,6 +7,12 @@ data_root: "data_pipeline_output"
 experiments:
   - 20250912
 
+# Optional per-experiment well subsets for smoke runs or targeted reruns.
+experiment_wells:
+  20240418:
+    - A01
+    - C01
+
 # Microscope selection.
 # If you need per-experiment microscope selection, add:
 # microscope_by_experiment:
@@ -41,6 +47,17 @@ segmentation_and_tracking:
   device: "cuda"
   channel_id: "BF"
   tracking_mode: "bidirectional"
+  models_root: "models"
+  groundingdino_repo: "GroundingDINO"
+  groundingdino_config: "groundingdino/config/GroundingDINO_SwinT_OGC.py"
+  groundingdino_weights: "weights/groundingdino_swint_ogc.pth"
+  groundingdino_release: "legacy"
+  groundingdino_model_name: "SwinT_OGC"
+  sam2_models_root: "sam2"
+  sam2_config: "configs/sam2.1/sam2.1_hiera_l.yaml"
+  sam2_checkpoint: "checkpoints/sam2.1_hiera_large.pt"
+  sam2_release: "legacy"
+  sam2_model_name: "hiera_large"
   groundingdino:
     text_prompt: "individual embryo"
     box_threshold: 0.35
@@ -69,6 +86,10 @@ snip_processing:
   write_manifest_csv: true
   background_n_samples: 100
   background_seed: 309
+
+# Feature extraction stage defaults.
+feature_extraction:
+  stage_predictions: {}
 
 # Phase 5: QC (placeholder)
 qc:
