@@ -7,6 +7,7 @@ from pathlib import Path
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import dendrogram, linkage
@@ -18,7 +19,19 @@ REPO_ROOT = Path("/Users/nick/Projects/repositories/morphseq")
 DROPBOX_ROOT = Path("/Users/nick/Cole Trapnell's Lab Dropbox/Nick Lammers/Nick")
 MORPHSEQ_DROPBOX = DROPBOX_ROOT / "morphseq"
 CACHE_DIR = Path("/Users/nick/Projects/data/morphseq/results/20260528")
-FIG_DIR = CACHE_DIR / "figures"
+FIG_DIR = CACHE_DIR / "figures_no19C_timepoint"
+
+EXCLUDED_TEMPERATURES = (19.0,)
+TEMP_CMAP = "RdBu_r"
+TEMP_VMIN = 24
+TEMP_VMAX = 35
+TIMEPOINT_MARKERS = {
+    24.0: "o",
+    30.0: "s",
+    36.0: "^",
+}
+BOOTSTRAP_N = 5000
+BOOTSTRAP_SEED = 20260528
 
 
 def ensure_dirs() -> None:
@@ -54,10 +67,225 @@ def savefig(fig: plt.Figure, name: str) -> None:
 
 
 def temperature_scatter(ax, x, y, temp, **kwargs):
-    sc = ax.scatter(x, y, c=temp, cmap="RdBu_r", vmin=17, vmax=38, edgecolor="black", linewidth=0.25, **kwargs)
+    sc = ax.scatter(
+        x,
+        y,
+        c=temp,
+        cmap=TEMP_CMAP,
+        vmin=TEMP_VMIN,
+        vmax=TEMP_VMAX,
+        edgecolor="black",
+        linewidth=0.25,
+        **kwargs,
+    )
     cb = plt.colorbar(sc, ax=ax)
     cb.set_label("temperature (C)")
     return sc
+
+
+def drop_excluded_temperatures(df: pd.DataFrame, temperature_col: str = "temperature") -> pd.DataFrame:
+    if temperature_col not in df.columns:
+        return df.copy()
+    temp = pd.to_numeric(df[temperature_col], errors="coerce")
+    return df.loc[~temp.isin(EXCLUDED_TEMPERATURES)].copy()
+
+
+def is_included_temperature(temp: float) -> bool:
+    return float(temp) not in EXCLUDED_TEMPERATURES
+
+
+def _marker_for_timepoint(timepoint) -> str:
+    try:
+        key = float(timepoint)
+    except (TypeError, ValueError):
+        return "o"
+    return TIMEPOINT_MARKERS.get(key, "o")
+
+
+def _timepoint_label(timepoint) -> str:
+    try:
+        return f"{float(timepoint):g} hpf"
+    except (TypeError, ValueError):
+        return str(timepoint)
+
+
+def add_timepoint_legend(ax, timepoints, title: str = "collection") -> None:
+    unique = sorted(pd.Series(timepoints).dropna().unique(), key=lambda v: float(v))
+    handles = [
+        Line2D(
+            [0],
+            [0],
+            marker=_marker_for_timepoint(timepoint),
+            linestyle="none",
+            markerfacecolor="white",
+            markeredgecolor="#333333",
+            markeredgewidth=0.8,
+            markersize=6,
+            label=_timepoint_label(timepoint),
+        )
+        for timepoint in unique
+    ]
+    if handles:
+        ax.legend(handles=handles, title=title, frameon=False, loc="best", fontsize=8, title_fontsize=8)
+
+
+def value_timepoint_scatter(
+    ax,
+    x,
+    y,
+    value,
+    timepoint,
+    *,
+    z=None,
+    cmap=TEMP_CMAP,
+    vmin=None,
+    vmax=None,
+    colorbar_label="",
+    add_colorbar=True,
+    add_legend=True,
+    **kwargs,
+):
+    plot_df = pd.DataFrame(
+        {
+            "x": x,
+            "y": y,
+            "value": pd.to_numeric(value, errors="coerce"),
+            "timepoint": timepoint,
+        }
+    )
+    if z is not None:
+        plot_df["z"] = z
+    plot_df = plot_df.dropna(subset=["x", "y", "value", "timepoint"])
+
+    if vmin is None:
+        vmin = float(plot_df["value"].min())
+    if vmax is None:
+        vmax = float(plot_df["value"].max())
+
+    cmap_obj = plt.get_cmap(cmap)
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    scatter_kwargs = {
+        "s": 38,
+        "alpha": 0.9,
+        "edgecolor": "black",
+        "linewidth": 0.25,
+        **kwargs,
+    }
+    for timepoint_value, group in plot_df.groupby("timepoint", sort=True):
+        marker = _marker_for_timepoint(timepoint_value)
+        if z is None:
+            ax.scatter(
+                group["x"],
+                group["y"],
+                c=group["value"],
+                cmap=cmap_obj,
+                norm=norm,
+                marker=marker,
+                **scatter_kwargs,
+            )
+        else:
+            ax.scatter(
+                group["x"],
+                group["y"],
+                group["z"],
+                c=group["value"],
+                cmap=cmap_obj,
+                norm=norm,
+                marker=marker,
+                **scatter_kwargs,
+            )
+
+    mappable = mpl.cm.ScalarMappable(norm=norm, cmap=cmap_obj)
+    mappable.set_array([])
+    if add_colorbar:
+        cb = plt.colorbar(mappable, ax=ax)
+        if colorbar_label:
+            cb.set_label(colorbar_label)
+    if add_legend:
+        add_timepoint_legend(ax, plot_df["timepoint"])
+    return mappable
+
+
+def temperature_timepoint_scatter(ax, x, y, temp, timepoint, *, z=None, **kwargs):
+    return value_timepoint_scatter(
+        ax,
+        x,
+        y,
+        temp,
+        timepoint,
+        z=z,
+        cmap=TEMP_CMAP,
+        vmin=TEMP_VMIN,
+        vmax=TEMP_VMAX,
+        colorbar_label="temperature (C)",
+        **kwargs,
+    )
+
+
+def bootstrap_std_se(values: pd.Series, rng: np.random.Generator, n_bootstrap: int = BOOTSTRAP_N) -> float:
+    arr = pd.to_numeric(values, errors="coerce").dropna().to_numpy(dtype=float)
+    if arr.size < 2:
+        return np.nan
+    samples = rng.choice(arr, size=(n_bootstrap, arr.size), replace=True)
+    return float(np.std(np.std(samples, axis=1, ddof=1), ddof=1))
+
+
+def timepoint_average_variability_bootstrap(
+    df: pd.DataFrame,
+    value_col: str,
+    *,
+    temperature_col: str = "temperature",
+    timepoint_col: str = "timepoint",
+    n_bootstrap: int = BOOTSTRAP_N,
+    seed: int = BOOTSTRAP_SEED,
+) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    rows = []
+    data = drop_excluded_temperatures(df, temperature_col)
+    for temperature, temp_df in data.groupby(temperature_col, sort=True):
+        groups = [
+            pd.to_numeric(group[value_col], errors="coerce").dropna().to_numpy(dtype=float)
+            for _, group in temp_df.groupby(timepoint_col, sort=True)
+        ]
+        groups = [arr for arr in groups if arr.size >= 2]
+        if not groups:
+            continue
+        observed = np.array([np.std(arr, ddof=1) for arr in groups], dtype=float)
+        boot = np.empty(n_bootstrap, dtype=float)
+        for i in range(n_bootstrap):
+            boot[i] = np.mean([np.std(rng.choice(arr, size=arr.size, replace=True), ddof=1) for arr in groups])
+        rows.append(
+            {
+                "temperature": temperature,
+                "variability_mean": float(np.mean(observed)),
+                "variability_boot_se": float(np.std(boot, ddof=1)),
+                "n_timepoints": len(groups),
+                "n": int(sum(arr.size for arr in groups)),
+                "n_bootstrap": n_bootstrap,
+                "bootstrap_seed": seed,
+            }
+        )
+    return pd.DataFrame(rows).sort_values("temperature").reset_index(drop=True)
+
+
+def plot_temperature_variability_bootstrap(summary: pd.DataFrame, ylabel: str, title: str | None = None):
+    fig, ax = plt.subplots(figsize=(5.2, 4.2))
+    ax.errorbar(
+        summary["temperature"],
+        summary["variability_mean"],
+        yerr=summary["variability_boot_se"],
+        fmt="o-",
+        color="#333333",
+        ecolor="#555555",
+        elinewidth=0.9,
+        capsize=2.5,
+        markersize=5,
+    )
+    ax.set_xlabel("temperature (C)")
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    return fig, ax
 
 
 def add_identity(ax, x=None, y=None, **kwargs):
