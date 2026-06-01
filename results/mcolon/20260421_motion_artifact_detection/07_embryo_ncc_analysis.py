@@ -10,9 +10,9 @@ whole-frame metrics from 06 are not used for QC decisions.
 
 Outputs:
   07_embryo_ncc_output/embryo_ncc_summaries.csv
-  07_embryo_ncc_output/ncc_min_distribution.png
+    07_embryo_ncc_output/ncc_p05_distribution.png
   07_embryo_ncc_output/bad_pair_frac_distribution.png
-  07_embryo_ncc_output/scatter_ncc_min_vs_bad_frac.png
+    07_embryo_ncc_output/scatter_ncc_p05_vs_bad_frac.png
 
 Usage:
   python 07_embryo_ncc_analysis.py
@@ -44,7 +44,7 @@ LOOKUP_CSV  = MORPHSEQ_ROOT / "docs/refactors/motion_blur_filtering_zstack/frame
 OUT_DIR     = Path(__file__).parent / "07_embryo_ncc_output"
 
 BAD_THRESH  = 0.90
-NCC_MIN_FAIL_THRESH      = 0.85
+NCC_P05_FAIL_THRESH       = 0.85
 BAD_PAIR_FRAC_FAIL_THRESH = 0.10
 MIN_TILE_COVERAGE = 0.25  # raised from 0.10 — excludes edge tiles that straddle embryo boundary
 
@@ -112,12 +112,24 @@ def run_analysis() -> pd.DataFrame:
             bad_thresh=BAD_THRESH,
             min_tile_coverage=MIN_TILE_COVERAGE,
         )
-        flag = "FAIL" if (
-            (not np.isnan(summary["ncc_min"]) and summary["ncc_min"] < NCC_MIN_FAIL_THRESH) or
-            (not np.isnan(summary["bad_pair_frac"]) and summary["bad_pair_frac"] > BAD_PAIR_FRAC_FAIL_THRESH)
-        ) else "PASS"
+        has_ncc_p05 = not np.isnan(summary["ncc_p05"])
+        has_bad_pair_frac = not np.isnan(summary["bad_pair_frac"])
 
-        rows.append({"t": t, "p": p, "well": well, "qc_flag": flag, **summary})
+        primary_fail = has_ncc_p05 and (summary["ncc_p05"] < NCC_P05_FAIL_THRESH)
+        refined_fail = primary_fail and has_bad_pair_frac and (summary["bad_pair_frac"] > BAD_PAIR_FRAC_FAIL_THRESH)
+        flag = "FAIL" if primary_fail else "PASS"
+
+        rows.append(
+            {
+                "t": t,
+                "p": p,
+                "well": well,
+                "qc_flag": flag,
+                "qc_flag_primary_ncc_p05": "FAIL" if primary_fail else "PASS",
+                "qc_flag_refined_ncc_p05_and_bad_pair": "FAIL" if refined_fail else "PASS",
+                **summary,
+            }
+        )
 
     df = pd.DataFrame(rows).sort_values(["t", "p"]).reset_index(drop=True)
     csv_out = OUT_DIR / "embryo_ncc_summaries.csv"
@@ -146,7 +158,7 @@ def plot_distributions(df: pd.DataFrame, labeled: pd.DataFrame) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
     for ax, col, thresh, title in [
-        (axes[0], "ncc_min",       NCC_MIN_FAIL_THRESH,       "Embryo ncc_min (mask-aware)"),
+        (axes[0], "ncc_p05",       NCC_P05_FAIL_THRESH,       "Embryo ncc_p05 (mask-aware)"),
         (axes[1], "bad_pair_frac", BAD_PAIR_FRAC_FAIL_THRESH, "Embryo bad_pair_frac (mask-aware)"),
     ]:
         vals = df[col].dropna()
@@ -181,27 +193,27 @@ def plot_scatter(df: pd.DataFrame, labeled: pd.DataFrame) -> None:
     fig, ax = plt.subplots(figsize=(7, 6))
 
     # split by flag for color
-    ax.scatter(df.loc[df.qc_flag == "PASS", "ncc_min"],
+    ax.scatter(df.loc[df.qc_flag == "PASS", "ncc_p05"],
                df.loc[df.qc_flag == "PASS", "bad_pair_frac"],
                color="#4c72b0", alpha=0.3, s=15, label="PASS")
-    ax.scatter(df.loc[df.qc_flag == "FAIL", "ncc_min"],
+    ax.scatter(df.loc[df.qc_flag == "FAIL", "ncc_p05"],
                df.loc[df.qc_flag == "FAIL", "bad_pair_frac"],
                color="#d62728", alpha=0.6, s=20, label="FAIL")
 
     # overlay labeled examples
     for cat, grp in labeled.groupby("category"):
         color = LABEL_COLORS.get(cat, "black")
-        ax.scatter(grp["ncc_min"], grp["bad_pair_frac"],
+        ax.scatter(grp["ncc_p05"], grp["bad_pair_frac"],
                    color=color, edgecolors="k", lw=0.8, s=80, zorder=6, label=cat)
 
-    ax.axvline(NCC_MIN_FAIL_THRESH,       color="red",    lw=1, ls="--")
+    ax.axvline(NCC_P05_FAIL_THRESH,       color="red",    lw=1, ls="--")
     ax.axhline(BAD_PAIR_FRAC_FAIL_THRESH, color="orange", lw=1, ls="--")
-    ax.set_xlabel("ncc_min (embryo tiles only)")
+    ax.set_xlabel("ncc_p05 (embryo tiles only)")
     ax.set_ylabel("bad_pair_frac (embryo tiles only)")
     ax.set_title("Embryo-level motion QC scatter")
     ax.legend(fontsize=8)
     fig.tight_layout()
-    out = OUT_DIR / "scatter_ncc_min_vs_bad_frac.png"
+    out = OUT_DIR / "scatter_ncc_p05_vs_bad_frac.png"
     fig.savefig(out, dpi=150)
     plt.close(fig)
     print(f"Saved {out}")
@@ -209,7 +221,16 @@ def plot_scatter(df: pd.DataFrame, labeled: pd.DataFrame) -> None:
 
 def print_labeled_breakdown(df: pd.DataFrame, labeled: pd.DataFrame) -> None:
     print("\n=== Labeled example breakdown ===")
-    cols = ["t", "p", "well", "ncc_min", "bad_pair_frac", "n_tiles", "qc_flag"]
+    cols = [
+        "t",
+        "p",
+        "well",
+        "ncc_p05",
+        "bad_pair_frac",
+        "n_tiles",
+        "qc_flag",
+        "qc_flag_refined_ncc_p05_and_bad_pair",
+    ]
     for cat, grp in labeled.groupby("category"):
         print(f"\n--- {cat} ---")
         print(grp[cols].to_string(index=False))
