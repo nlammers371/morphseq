@@ -12,6 +12,8 @@ The final prediction is made at the embryo level.
 If a query embryo has multiple images, the method pools evidence across those images. If a query embryo has only one image, the method still returns an embryo-level label, but the output should indicate that the prediction is based on limited image evidence.
 ## Inputs
 ### Reference dataframe
+
+results/mcolon/20251229_cep290_phenotype_extraction/final_data/README.md This is where the data is. 
 The reference dataframe contains previously labeled embryo/image data.
 Each row corresponds to one image from a labeled embryo.
 Required columns:

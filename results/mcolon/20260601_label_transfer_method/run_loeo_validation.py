@@ -17,10 +17,11 @@ import pandas as pd
 
 # Allow running from the results directory directly
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]  # morphseq root
+ROOT = HERE.parents[2]  # morphseq root
+sys.path.insert(0, str(HERE))  # so label_transfer_core is importable directly
 sys.path.insert(0, str(ROOT))
 
-from results.mcolon._20260601_label_transfer_method.label_transfer_core import run_label_transfer
+from label_transfer_core import run_label_transfer
 
 
 # ---------------------------------------------------------------------------

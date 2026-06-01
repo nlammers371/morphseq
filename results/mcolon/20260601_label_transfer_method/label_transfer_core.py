@@ -379,7 +379,7 @@ def _add_confidence_scores(
     image_agreement = (
         neighbor_df
         .groupby("query_snip_id")
-        .apply(_image_neighbor_agreement)
+        .apply(_image_neighbor_agreement, include_groups=False)
         .reset_index()
         .rename(columns={0: "image_neighbor_agreement"})
     )
@@ -437,7 +437,7 @@ def _add_confidence_scores(
     image_pred_labels = (
         neighbor_df
         .groupby("query_snip_id")
-        .apply(_image_pred_label_from_group)
+        .apply(_image_pred_label_from_group, include_groups=False)
         .reset_index()
         .rename(columns={0: "image_pred_label"})
     )
