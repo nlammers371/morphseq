@@ -292,8 +292,8 @@ SAM2 produces `GroundedSam2Annotations.json` with complete embryo metadata:
 
 #### **Native SAM2 Format:**
 - **snip_id:** Uses `_s` prefix (e.g., `20240411_A01_e01_s0042`) 
-- **Frame Indexing:** `frame_index` matches snip numbering for parsing consistency
-- **No Conversion Needed:** Analysis confirmed frame_index == time_int, so `_s` format works directly
+- **Frame Indexing:** `time_int` matches snip numbering for parsing consistency
+- **No Conversion Needed:** Analysis confirmed time_int == time_int, so `_s` format works directly
 
 #### **Parsing Integration:**
 - **Existing Utilities:** `parsing_utils.py` handles both `_s` and `_t` formats
@@ -318,7 +318,7 @@ The integration of SAM2 into the legacy pipeline follows a **metadata bridge arc
 
 **CSV Schema:**
 ```
-image_id, embryo_id, snip_id, frame_index, area_px, 
+image_id, embryo_id, snip_id, time_int, area_px, 
 bbox_x_min, bbox_y_min, bbox_x_max, bbox_y_max, 
 mask_confidence, exported_mask_path, experiment_id, 
 video_id, is_seed_frame

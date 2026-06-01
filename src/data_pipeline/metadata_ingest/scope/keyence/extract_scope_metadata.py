@@ -4,6 +4,7 @@ Keyence microscope metadata extraction.
 Extracts scope metadata from Keyence BZ-X TIFF files and validates against schema.
 """
 
+import argparse
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -359,3 +360,25 @@ def extract_keyence_scope_metadata(
     log.info(f"Wrote Keyence scope metadata to {output_csv}")
 
     return df
+
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--raw-keyence-experiment-dir", type=Path, required=True)
+    p.add_argument("--experiment-id", required=True)
+    p.add_argument("--output-csv", type=Path, required=True)
+    return p.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    extract_keyence_scope_metadata(
+        raw_data_dir=args.raw_keyence_experiment_dir,
+        experiment_id=args.experiment_id,
+        output_csv=args.output_csv,
+    )
+
+
+if __name__ == "__main__":
+    main()

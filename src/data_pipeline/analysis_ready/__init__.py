@@ -1,17 +1,11 @@
 """Analysis-ready table assembly module."""
 
-from .assemble_features_qc_embeddings import (
-    assemble_features_qc_embeddings,
-    validate_analysis_ready_schema,
-    save_analysis_ready,
-    filter_for_analysis,
-    print_analysis_ready_summary,
-)
+from .core.assemble import assemble_analysis_ready
+
+# Backwards-compatible aliases for older call sites.
+assemble_features_qc_embeddings = assemble_analysis_ready
 
 __all__ = [
-    'assemble_features_qc_embeddings',
-    'validate_analysis_ready_schema',
-    'save_analysis_ready',
-    'filter_for_analysis',
-    'print_analysis_ready_summary',
+    "assemble_analysis_ready",
+    "assemble_features_qc_embeddings",
 ]

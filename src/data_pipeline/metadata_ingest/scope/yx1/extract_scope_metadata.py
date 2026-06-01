@@ -5,6 +5,7 @@ Extracts scope metadata from YX1 ND2 files and produces validated scope_series_m
 """
 
 from pathlib import Path
+import argparse
 import logging
 import numpy as np
 import pandas as pd
@@ -246,3 +247,25 @@ def extract_yx1_scope_metadata(
     log.info(f"Wrote scope metadata to {output_csv}")
 
     return df
+
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--raw-yx1-experiment-dir", type=Path, required=True)
+    p.add_argument("--output-csv", type=Path, required=True)
+    p.add_argument("--experiment-id", required=True)
+    return p.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    extract_yx1_scope_metadata(
+        raw_data_dir=args.raw_yx1_experiment_dir,
+        output_csv=args.output_csv,
+        experiment_id=args.experiment_id,
+    )
+
+
+if __name__ == "__main__":
+    main()

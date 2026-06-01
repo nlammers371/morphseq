@@ -13,11 +13,11 @@ def test_ensure_frame_time_alias_backfills_and_int_casts() -> None:
             "experiment_id": ["exp1", "exp1"],
             "well_id": ["exp1_A01", "exp1_A01"],
             "channel_id": ["BF", "BF"],
-            "frame_index": [0.0, 1.0],
+            "time_int": [0.0, 1.0],
         }
     )
     out = ensure_frame_time_alias(df, stage_name="unit_test")
-    assert list(out["frame_index"]) == [0, 1]
+    assert list(out["time_int"]) == [0, 1]
     assert list(out["time_int"]) == [0, 1]
 
 
@@ -27,7 +27,7 @@ def test_add_elapsed_time_columns_prefers_experiment_time() -> None:
             "experiment_id": ["exp1", "exp1", "exp1"],
             "well_id": ["exp1_A01", "exp1_A01", "exp1_A01"],
             "channel_id": ["BF", "BF", "BF"],
-            "frame_index": [0, 1, 2],
+            "time_int": [0, 1, 2],
             "time_int": [0, 1, 2],
             "experiment_time_s": [10.0, 40.0, 70.0],
             "frame_interval_s": [999.0, 999.0, 999.0],
@@ -44,7 +44,7 @@ def test_add_elapsed_time_columns_falls_back_to_frame_interval() -> None:
             "experiment_id": ["exp1", "exp1"],
             "well_id": ["exp1_A01", "exp1_A01"],
             "channel_id": ["BF", "BF"],
-            "frame_index": [3, 4],
+            "time_int": [3, 4],
             "time_int": [3, 4],
             "frame_interval_s": [600.0, 600.0],
         }

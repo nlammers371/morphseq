@@ -108,7 +108,7 @@ Integrate raw image metadata from legacy CSV files (`metadata/built_metadata_fil
           // BREAKING CHANGE: image_ids as dictionary
           "image_ids": {
             "20240418_A01_ch00_t0000": { //note parsing_id_convention.md
-              "frame_index": 0,
+              "time_int": 0,
               "raw_image_data_info": {
                 "Height (um)": 7080.86,
                 "Height (px)": 2189,
@@ -215,7 +215,7 @@ def enhance_video_metadata_with_csv(video_data, csv_df, well_id):
                               (csv_df['time_int'] == time_int)]
         
         image_info = {
-            'frame_index': i,
+            'time_int': i,
             'raw_image_data_info': {}
         }
         
@@ -307,9 +307,9 @@ for image_id in video_data["image_ids"]:
 ```python
 # NEW: image_ids as dictionary
 for image_id, image_info in video_data["image_ids"].items():
-    frame_index = image_info["frame_index"]
+    time_int = image_info["time_int"]
     raw_data = image_info["raw_image_data_info"] 
-    process_image(image_id, frame_index, raw_data)
+    process_image(image_id, time_int, raw_data)
 ```
 
 #### 2.3. Special Focus: export_sam2_metadata_to_csv.py
@@ -417,7 +417,7 @@ row['px_dim_raw'] = row['height_um'] / row['height_px']
 2. For each file found:
    a. Read and analyze current usage
    b. Update iteration patterns from list to dictionary
-   c. Ensure access to frame_index and raw_image_data_info
+   c. Ensure access to time_int and raw_image_data_info
    d. Test changes don't break functionality
 3. Special handling for export_sam2_metadata_to_csv.py:
    a. Add raw metadata merge logic
@@ -566,7 +566,7 @@ px_dim_raw = row["Height (um)"] / row["Height (px)"]
 4. ❌ **Production Integration**: Move from `_refactor_test.py` to production files
 
 ### **Critical Breaking Changes**:
-- **Dictionary Format**: `image_ids` is now `{image_id: {frame_index, raw_image_data_info}}`
+- **Dictionary Format**: `image_ids` is now `{image_id: {time_int, raw_image_data_info}}`
 - **Pipeline Incompatibility**: Existing scripts will break with new format
 - **Two-Phase Rollout Needed**: Must update all consuming scripts before production use
 

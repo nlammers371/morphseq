@@ -234,7 +234,7 @@ class Phase1TestRunner:
                 'channel_bf': ['BF'] * len(plate_df),
                 'image_id': [f"{plate_df.iloc[i]['well_id']}_t0000" for i in range(len(plate_df))],
                 'time_int': [0] * len(plate_df),
-                'frame_index': [0] * len(plate_df),
+                'time_int': [0] * len(plate_df),
             })
 
         # Save scope metadata to CSV

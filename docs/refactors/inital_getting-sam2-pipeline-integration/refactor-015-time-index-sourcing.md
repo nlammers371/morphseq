@@ -18,8 +18,8 @@ Both issues originate from diverging definitions of `time_int` after the SAM2 br
 - Conclusion: legacy Build01 introduces two conventions—Keyence files start at 1, YX1 files start at 0. The metadata CSV carries both `time_string` and `time_int` so downstream code can track which convention applies for each row.
 
 ### SAM2 Bridge (`segment_wells_sam2_csv`)
-- The SAM2 CSV already preserves the authoritative `image_id` (`20230525_A03_ch00_t0060`) and columns `time_string`, `time_int` (1-based), and zero-based `frame_index`.
-- Current refactor overwrites (`clobbers`) the 1-based `time_int` with `frame_index` (`exp_df['time_int'] = exp_df['frame_index']`). That change silently drops the legacy numbering while keeping `image_id` untouched.
+- The SAM2 CSV already preserves the authoritative `image_id` (`20230525_A03_ch00_t0060`) and columns `time_string`, `time_int` (1-based), and zero-based `time_int`.
+- Current refactor overwrites (`clobbers`) the 1-based `time_int` with `time_int` (`exp_df['time_int'] = exp_df['time_int']`). That change silently drops the legacy numbering while keeping `image_id` untouched.
 - Downstream `snip_id = embryo_id + '_t' + time_int.zfill(4)` now emits `_t0059` for the example above, breaking lookups for yolk masks and stitched FF images that still live at `_t0060`.
 
 ### Mask/Yolk Glob Logic (`export_embryo_snips`)
@@ -28,7 +28,7 @@ Both issues originate from diverging definitions of `time_int` after the SAM2 br
 
 ## Requirements Emerging
 
-1. Preserve the authoritative index from acquisition. SAM2 should propagate `time_string`/`time_int` untouched; if a zero-based value is needed, store it in a separate column (e.g., `frame_index_0`).
+1. Preserve the authoritative index from acquisition. SAM2 should propagate `time_string`/`time_int` untouched; if a zero-based value is needed, store it in a separate column (e.g., `time_int_0`).
 2. Disk lookups must prefer `time_string` when available; fallback to `time_int` only if the string is missing. This keeps compatibility with both Keyence (1-based) and YX1 (0-based) exports.
 3. `snip_id` must be recomputed using the preserved 1-based value so all downstream artifacts share the same stub as the original `image_id`.
 4. Add guards: raise if both `time_string` and `time_int` are absent; log a warning if `time_int == 0` while `time_string` encodes a non-zero frame (signals CSV drift).

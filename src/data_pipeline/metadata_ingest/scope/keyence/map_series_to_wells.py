@@ -4,6 +4,7 @@ Keyence-specific series to well mapping.
 Maps Keyence microscope series numbers to well positions based on file structure.
 """
 
+import argparse
 import pandas as pd
 import json
 from pathlib import Path
@@ -262,3 +263,29 @@ def load_series_well_mapping(mapping_csv: Path) -> pd.DataFrame:
     )
 
     return df
+
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--raw-keyence-experiment-dir", type=Path, required=True)
+    p.add_argument("--scope-metadata-csv", type=Path, required=True)
+    p.add_argument("--output-mapping-csv", type=Path, required=True)
+    p.add_argument("--output-provenance-json", type=Path, required=True)
+    p.add_argument("--experiment-id", required=True)
+    return p.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    map_series_to_wells_keyence(
+        raw_data_dir=args.raw_keyence_experiment_dir,
+        scope_metadata_csv=args.scope_metadata_csv,
+        output_mapping_csv=args.output_mapping_csv,
+        output_provenance_json=args.output_provenance_json,
+        experiment_id=args.experiment_id,
+    )
+
+
+if __name__ == "__main__":
+    main()

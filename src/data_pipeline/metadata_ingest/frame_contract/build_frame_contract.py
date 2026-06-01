@@ -19,6 +19,8 @@ from data_pipeline.metadata_ingest.time_helpers import ensure_time_int_column
 from data_pipeline.schemas.frame_contract import REQUIRED_COLUMNS_FRAME_CONTRACT, UNIQUE_KEY_FRAME_CONTRACT
 
 
+
+
 def _with_frame_columns(df: pd.DataFrame) -> pd.DataFrame:
     return ensure_time_int_column(df, stage_name="frame_contract_inputs")
 
@@ -117,7 +119,7 @@ def build_frame_contract(
             "elapsed_time_hr": _col("elapsed_time_hr"),
             "image_width_px": merged["image_width_px"],
             "image_height_px": merged["image_height_px"],
-            "objective_magnification": merged["objective_magnification"],
+            "objective_magnification": merged["objective_magnification"].astype(str),
         }
     )
     contract = add_elapsed_time_columns(

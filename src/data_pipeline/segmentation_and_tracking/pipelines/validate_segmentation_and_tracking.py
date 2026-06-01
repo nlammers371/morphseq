@@ -16,6 +16,8 @@ UNIQUE_KEY_SEGMENTATION_TRACKING = ["experiment_id", "well_id", "snip_id"]
 
 def validate_segmentation_tracking(input_csv: Path, output_flag: Path) -> pd.DataFrame:
     df = pd.read_csv(input_csv)
+    if "time_int" not in df.columns and "frame_index" in df.columns:
+        df["time_int"] = pd.to_numeric(df["frame_index"], errors="raise").astype(int)
     validate_dataframe_schema(df, REQUIRED_COLUMNS_SEGMENTATION_TRACKING, "segmentation_tracking")
 
     dup = df.duplicated(subset=UNIQUE_KEY_SEGMENTATION_TRACKING, keep=False)

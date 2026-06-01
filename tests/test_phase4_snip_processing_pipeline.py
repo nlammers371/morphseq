@@ -47,7 +47,7 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
                 "image_id": image_id,
                 "embryo_id": "embryo_0",
                 "snip_id": snip_id,
-                "frame_index": 0,
+                "time_int": 0,
                 "mask_type": "embryo",
                 "source_image_path": source_rel,
                 "exported_mask_path": mask_rel,
@@ -63,7 +63,7 @@ def test_phase4_snip_processing_well_smoke(tmp_path: Path) -> None:
                 "experiment_id": exp,
                 "well_id": well,
                 "well_index": 1,
-                "frame_index": 0,
+                "time_int": 0,
                 "image_id": image_id,
                 "micrometers_per_pixel": 2.0,
             }

@@ -88,7 +88,7 @@ Pain points:
 | `embryo_id` | embryo key & `embryo['embryo_id']` | Primary grouping key |
 | `experiment_id` | `embryo['experiment_id']` | Preserved for multi-experiment loads |
 | `snip_id` | snip key | Canonical ID |
-| `frame_index` | `snip['frame_number']` | Int, zero-based |
+| `time_int` | `snip['frame_number']` | Int, zero-based |
 | `Time (s)` | `snip['pipeline_metadata']['time_s']` | Raw time stamp |
 | `Time Rel (s)` | `snip['pipeline_metadata']['time_rel_s']` | Relative timestamp |
 | `predicted_stage_hpf` | `pipeline_metadata` | Float |

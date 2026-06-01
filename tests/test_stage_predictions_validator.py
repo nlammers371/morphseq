@@ -14,7 +14,7 @@ def test_validate_stage_predictions_accepts_valid_table() -> None:
                 "well_index": "A01",
                 "image_id": "20240418_A01_BF_f0000",
                 "embryo_id": "embryo_0",
-                "frame_index": 0,
+                "time_int": 0,
                 "snip_id": "20240418_A01_embryo_0_BF_f0000",
                 "elapsed_time_s": 0.0,
                 "start_age_hpf": 24.0,

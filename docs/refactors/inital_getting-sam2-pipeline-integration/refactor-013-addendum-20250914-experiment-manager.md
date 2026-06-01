@@ -306,7 +306,7 @@ python -m scripts.check_paths_experiment \
 - **Issue:** SAM2 CSV missing `well`, `time_int`, `time_string` columns required by Build03
 - **Fix:** Updated `export_sam2_metadata_to_csv.py` to extract these from SAM2 JSON structure:
   - `well` = `video_data.get('well_id')` (e.g., "E09")
-  - `time_int` = `frame_index + 1` (0-based → 1-based)
+  - `time_int` = `time_int + 1` (0-based → 1-based)
   - `time_string` = `f"T{time_int:04d}"` (e.g., "T0001")
 - **Result:** SAM2 CSV now fully compatible with Build03 pipeline
 

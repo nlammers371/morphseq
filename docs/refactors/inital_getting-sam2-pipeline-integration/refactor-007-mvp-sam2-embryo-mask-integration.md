@@ -483,7 +483,7 @@ During implementation, we discovered that the current SAM2 script was using JPEG
 ```json
 "image_ids": {
   "20250612_30hpf_ctrl_atf6_B06_ch00_t0000": {
-    "frame_index": 0,
+    "time_int": 0,
     "raw_image_data_info": { ... },
     "raw_stitch_image_path": "/path/to/stitched_FF_images/20250612_30hpf_ctrl_atf6/B06_t0000.jpg",
     "processed_image_path": "/path/to/raw_data_organized/20250612_30hpf_ctrl_atf6/images/..."

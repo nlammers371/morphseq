@@ -16,7 +16,7 @@ from data_pipeline.segmentation_and_tracking.normalizers import (
 
 def test_normalize_frame_detections_requires_provenance() -> None:
     det = RawDetection(
-        frame_index=0,
+        time_int=0,
         image_id="exp_A01_BF_f0000",
         box_xyxy_norm=[0.1, 0.1, 0.2, 0.2],
         confidence=0.9,
@@ -31,7 +31,7 @@ def test_normalize_frame_detections_requires_provenance() -> None:
 def test_normalize_frame_detections_outputs_schema() -> None:
     dets = [
         RawDetection(
-            frame_index=0,
+            time_int=0,
             image_id="exp_A01_BF_f0000",
             box_xyxy_norm=[0.1, 0.1, 0.2, 0.2],
             confidence=0.9,
@@ -44,7 +44,7 @@ def test_normalize_frame_detections_outputs_schema() -> None:
             run_id="r1",
         ),
         RawDetection(
-            frame_index=0,
+            time_int=0,
             image_id="exp_A01_BF_f0000",
             box_xyxy_norm=[0.3, 0.3, 0.4, 0.4],
             confidence=0.8,
@@ -68,7 +68,7 @@ def test_normalize_seed_selection_outputs_schema() -> None:
         experiment_id="exp",
         well_id="A01",
         video_id="exp_A01",
-        seed_frame_index=0,
+        seed_time_int=0,
         seed_image_id="exp_A01_BF_f0000",
         num_detections=2,
         avg_confidence=0.85,
@@ -85,7 +85,7 @@ def test_normalize_seed_selection_outputs_schema() -> None:
 
 def test_normalize_tracks_and_masks_round_trip(tmp_path: Path) -> None:
     t = RawTrack(
-        frame_index=0,
+        time_int=0,
         image_id="exp_A01_BF_f0000",
         embryo_id="embryo_0",
         embryo_local_id="embryo_0",
@@ -105,7 +105,7 @@ def test_normalize_tracks_and_masks_round_trip(tmp_path: Path) -> None:
     assert bool(tracks_df.loc[0, "is_seed_frame"]) is True
 
     m = RawMask(
-        frame_index=0,
+        time_int=0,
         image_id="exp_A01_BF_f0000",
         embryo_id="embryo_0",
         embryo_local_id="embryo_0",

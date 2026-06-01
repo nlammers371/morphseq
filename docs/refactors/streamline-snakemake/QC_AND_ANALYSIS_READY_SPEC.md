@@ -220,7 +220,16 @@ compute_death_detection  compute_auxiliary_mask_qc  compute_focus_qc  compute_mo
 
 All 7 compute rules are independent and run in parallel. `consolidate_qc` waits for all.
 
-### config.yaml additions
+### config layering
+
+Use code defaults plus Snakemake overrides.
+
+- `src/data_pipeline/quality_control/config.py` holds the canonical default QC values.
+- `config.yaml` and `snakemake --config` provide override values only.
+- Each QC entrypoint merges `defaults + overrides` before calling core logic.
+- Snakemake remains the operator-facing tuning surface, but defaults are not duplicated in YAML.
+
+### config.yaml overrides
 ```yaml
 quality_control:
   segmentation_qc:
@@ -249,6 +258,7 @@ quality_control:
 ```
 
 Each Snakemake rule reads only its own `config["quality_control"]["<stage>"]` block via `params`.
+The entrypoint merges that override block onto the canonical code defaults for the stage.
 
 ### Exclusion policy (code, not config)
 Which flags gate `use_snip` is an architectural decision, not an operator knob. It lives in:

@@ -56,7 +56,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     assert set(manifest_df["well_index"].astype(str).unique()).issubset(allowed_wells)
 
     for col in [
-        "frame_index",
+        "time_int",
         "time_int",
         "experiment_time_s",
         "frame_interval_s",
@@ -68,7 +68,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     ]:
         assert col in scope_df.columns
 
-    scope_frame_vals = pd.to_numeric(scope_df["frame_index"], errors="coerce")
+    scope_frame_vals = pd.to_numeric(scope_df["time_int"], errors="coerce")
     scope_time_vals = pd.to_numeric(scope_df["time_int"], errors="coerce")
     assert (scope_frame_vals == scope_time_vals).all()
 
@@ -76,7 +76,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         "experiment_id",
         "well_id",
         "well_index",
-        "frame_index",
+        "time_int",
         "channel_id",
         "image_id",
         "time_int",
@@ -86,7 +86,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
 
     assert list(stitched_df.columns[: len(base_cols)]) == base_cols
 
-    frame_vals = pd.to_numeric(stitched_df["frame_index"], errors="coerce")
+    frame_vals = pd.to_numeric(stitched_df["time_int"], errors="coerce")
     time_vals = pd.to_numeric(stitched_df["time_int"], errors="coerce")
     assert (frame_vals == time_vals).all()
     for col in [
@@ -117,7 +117,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         "experiment_id",
         "well_id",
         "well_index",
-        "frame_index",
+        "time_int",
         "channel_id",
         "image_id",
         "time_int",
@@ -131,7 +131,7 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
         "channel_name_raw",
         "stitched_image_path",
         "micrometers_per_pixel",
-        "frame_index",
+        "time_int",
         "frame_interval_s",
         "frame_interval_min",
         "frame_interval_hr",
@@ -142,6 +142,6 @@ def test_output_scope_if_artifacts_exist(experiment: str) -> None:
     ]:
         assert col in manifest_df.columns
 
-    frame_vals = pd.to_numeric(manifest_df["frame_index"], errors="coerce")
+    frame_vals = pd.to_numeric(manifest_df["time_int"], errors="coerce")
     time_vals = pd.to_numeric(manifest_df["time_int"], errors="coerce")
     assert (frame_vals == time_vals).all()

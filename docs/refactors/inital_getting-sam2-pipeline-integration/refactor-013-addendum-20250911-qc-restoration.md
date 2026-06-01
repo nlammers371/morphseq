@@ -601,7 +601,7 @@ CLI changes:
 - `region_label`: parse from `embryo_id` suffix `_eNN`.
 - `experiment_date`: copy from `exp_name`.
 - `well_id`/`well`: extract from `video_id` suffix `_[A-H]\d\d`.
-- `time_int`: from `frame_index`.
+- `time_int`: from `time_int`.
 - `predicted_stage_hpf`: `start_age_hpf + (Time Rel (s)/3600) * (0.055*temperature - 0.57)`.
 
 ## Testing Checklist (Actionable)

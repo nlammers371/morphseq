@@ -24,11 +24,11 @@ def test_tracks_to_raw_masks_encodes_rle_and_exports_png(tmp_path: Path) -> None
             }
         }
     }
-    image_id_by_frame_index = {0: "exp_A01_BF_f0000"}
+    image_id_by_time_int = {0: "exp_A01_BF_f0000"}
     tracks = ingest_propagation(
         results,
-        image_id_by_frame_index=image_id_by_frame_index,
-        seed_frame_index=0,
+        image_id_by_time_int=image_id_by_time_int,
+        seed_time_int=0,
         seed_image_id="exp_A01_BF_f0000",
         well_id="exp_A01",
         channel_id="BF",

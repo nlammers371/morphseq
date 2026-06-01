@@ -255,11 +255,11 @@ def _extract_time_stub(row) -> str:
             return f"{int(text):04d}"
         return ""
 
-    for key in ("time_key", "time_string", "time_int", "frame_index"):
+    for key in ("time_key", "time_string", "time_int", "time_int"):
         if key not in row:
             continue
         value = row[key]
-        if key == "time_int" or key == "frame_index":
+        if key == "time_int" or key == "time_int":
             try:
                 return f"{int(value):04d}"
             except (TypeError, ValueError):
@@ -1150,7 +1150,7 @@ def segment_wells_sam2_csv(
     exp_df.loc[missing_int_mask, 'time_int'] = exp_df.loc[missing_int_mask, 'time_string'].str[1:].astype(int)
 
     if exp_df['time_string'].isna().any() or exp_df['time_int'].isna().any():
-        unresolved = exp_df.loc[exp_df['time_string'].isna() | exp_df['time_int'].isna(), ['image_id', 'frame_index']]
+        unresolved = exp_df.loc[exp_df['time_string'].isna() | exp_df['time_int'].isna(), ['image_id', 'time_int']]
         raise ValueError(
             "Unable to resolve acquisition indices for the following rows:\n"
             + unresolved.head().to_string(index=False)
@@ -1169,7 +1169,7 @@ def segment_wells_sam2_csv(
         )
 
     exp_df['time_key'] = exp_df['time_string'].str[1:]
-    exp_df['frame_index_0'] = exp_df['frame_index']
+    exp_df['time_int_0'] = exp_df['time_int']
 
     # Add SAM2 QC flag processing (Refactor-011-B)
     if 'sam2_qc_flags' in exp_df.columns:
@@ -1711,10 +1711,10 @@ def _collect_rows_from_sam2_csv(csv_path: Path, exp: str, verbose: bool = False)
                         except ValueError:
                             time_stub = ""
                 if not time_stub:
-                    frame_index = r.get("frame_index", "").strip()
-                    if frame_index:
+                    time_int = r.get("time_int", "").strip()
+                    if time_int:
                         try:
-                            time_stub = f"{int(frame_index):04d}"
+                            time_stub = f"{int(time_int):04d}"
                         except ValueError:
                             time_stub = ""
 

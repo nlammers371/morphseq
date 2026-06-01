@@ -12,6 +12,7 @@ import warnings
 
 from ..schemas.features import REQUIRED_COLUMNS_FEATURES
 from ..schemas.plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
+from .io.loaders import load_frame_contract, load_segmentation_tracking, merge_tracking_with_frame_contract
 from ..io.validators import validate_dataframe_schema
 
 
@@ -161,6 +162,7 @@ def save_consolidated_features(
 
 def load_and_consolidate_features(
     tracking_path: Path,
+    frame_contract_path: Path,
     geometry_path: Path,
     curvature_path: Path,
     kinematics_path: Path,
@@ -186,7 +188,8 @@ def load_and_consolidate_features(
         Consolidated features DataFrame
     """
     # Load all feature tables
-    tracking_df = pd.read_csv(tracking_path)
+    tracking_df = load_segmentation_tracking(tracking_path)
+    frame_contract_df = load_frame_contract(frame_contract_path)
     geometry_df = pd.read_csv(geometry_path)
     curvature_df = pd.read_csv(curvature_path)
     kinematics_df = pd.read_csv(kinematics_path)
@@ -197,6 +200,11 @@ def load_and_consolidate_features(
     if metadata_path and metadata_path.exists():
         metadata_df = pd.read_csv(metadata_path)
         validate_dataframe_schema(metadata_df, REQUIRED_COLUMNS_PLATE_METADATA, "plate_metadata.csv")
+
+    # Reintroduce the canonical frame contract fields here so the final
+    # consolidated table keeps the calibration and acquisition context
+    # without forcing each feature writer to duplicate it.
+    tracking_df = merge_tracking_with_frame_contract(tracking_df, frame_contract_df)
 
     # Consolidate
     consolidated = consolidate_snip_features(

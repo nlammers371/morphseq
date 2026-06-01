@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Iterable
 
@@ -125,3 +126,27 @@ def apply_series_mapping(
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     mapped_df.to_csv(output_csv, index=False)
     return mapped_df
+
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--scope-metadata-csv", type=Path, required=True)
+    p.add_argument("--series-well-mapping-csv", type=Path, required=True)
+    p.add_argument("--output-scope-metadata-mapped-csv", type=Path, required=True)
+    p.add_argument("--experiment-id", required=True)
+    return p.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    apply_series_mapping(
+        scope_metadata_csv=args.scope_metadata_csv,
+        mapping_csv=args.series_well_mapping_csv,
+        output_csv=args.output_scope_metadata_mapped_csv,
+        experiment_id=args.experiment_id,
+    )
+
+
+if __name__ == "__main__":
+    main()

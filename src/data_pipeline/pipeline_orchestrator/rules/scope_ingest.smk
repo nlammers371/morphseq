@@ -15,6 +15,7 @@ def _scope_ingest_cfg() -> dict:
 
 
 def _allow_unmapped_wells() -> bool:
+    # Explicit opt-in for alternative workflows only; default path must validate wells.
     return _as_bool(_scope_ingest_cfg().get("allow_unmapped_wells", False))
 
 
@@ -100,7 +101,6 @@ rule map_series_to_wells_yx1:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
         experiment=lambda wc: wc.experiment,
-        allow_unmapped=lambda wc: str(_allow_unmapped_wells()).lower(),
         ref_xy_csv=lambda wc: (_scope_ingest_cfg().get("yx1_mapping", {}) or {}).get("ref_xy_csv", ""),
         row_y_tol_um=lambda wc: (_scope_ingest_cfg().get("yx1_mapping", {}) or {}).get("row_y_tol_um", 1200.0),
         col_x_tol_um=lambda wc: (_scope_ingest_cfg().get("yx1_mapping", {}) or {}).get("col_x_tol_um", 1200.0),
@@ -115,7 +115,6 @@ rule map_series_to_wells_yx1:
             '--raw-images-dir "{input.raw_images_dir}" --output-mapping-csv "{output.mapping_csv}" '
             '--output-provenance-json "{output.provenance_json}" --ref-xy-csv "{params.ref_xy_csv}" '
             '--max-distance-um "{params.max_distance_um}" '
-            '--allow-unmapped-wells "{params.allow_unmapped}"'
             ' --row-y-tol-um "{params.row_y_tol_um}" --col-x-tol-um "{params.col_x_tol_um}"'
             ' --dx-cv-tol "{params.dx_cv_tol}" --dy-cv-tol "{params.dy_cv_tol}"'
         )
@@ -193,13 +192,11 @@ rule validate_physical_well_mapping_yx1:
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
-        allow_unmapped=lambda wc: str(_allow_unmapped_wells()).lower(),
     shell:
         (
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.scope.shared.validate_physical_well_mapping '
             '--scope-metadata-csv "{input.scope_csv}" --mapping-csv "{input.mapping_csv}" '
-            '--output-flag "{output.validated_flag}" --diagnostics-json "{output.diagnostics_json}" '
-            '--allow-unmapped-wells "{params.allow_unmapped}"'
+            '--output-flag "{output.validated_flag}" --diagnostics-json "{output.diagnostics_json}"'
         )
 
 
@@ -214,12 +211,10 @@ rule validate_physical_well_mapping_keyence:
     params:
         python=PYTHON_EXE,
         pythonpath=SRC_ROOT,
-        allow_unmapped=lambda wc: str(_allow_unmapped_wells()).lower(),
     shell:
         (
             'PYTHONPATH="{params.pythonpath}" "{params.python}" -m data_pipeline.metadata_ingest.scope.shared.validate_physical_well_mapping '
             '--scope-metadata-csv "{input.scope_csv}" --mapping-csv "{input.mapping_csv}" '
-            '--output-flag "{output.validated_flag}" --diagnostics-json "{output.diagnostics_json}" '
-            '--allow-unmapped-wells "{params.allow_unmapped}"'
+            '--output-flag "{output.validated_flag}" --diagnostics-json "{output.diagnostics_json}"'
         )
 

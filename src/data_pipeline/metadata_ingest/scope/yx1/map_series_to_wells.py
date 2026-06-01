@@ -7,6 +7,7 @@ Maps YX1 ND2 series numbers to plate well positions using:
 3. Implicit positional mapping (fallback)
 """
 
+import argparse
 from pathlib import Path
 import logging
 import json
@@ -459,3 +460,51 @@ def map_nd2_to_wells_by_xy(
 
     # Map via XY matching
     return _map_positions_to_wells_by_xy(nd2_positions, ref_coordinates, max_distance_um)
+
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--raw-yx1-experiment-dir", type=Path, required=True)
+    p.add_argument("--output-mapping-csv", type=Path, required=True)
+    p.add_argument("--output-provenance-json", type=Path, required=True)
+    p.add_argument("--experiment-id", required=True)
+    p.add_argument("--nd2-path", type=Path, default=None)
+    p.add_argument("--use-xy-reference", action="store_true")
+    p.add_argument("--ref-xy-csv", type=Path, default=None)
+    p.add_argument("--max-distance-um", type=float, default=4500.0)
+    p.add_argument("--allow-unmapped-wells", action="store_true")
+    p.add_argument("--row-y-tol-um", type=float, default=1200.0)
+    p.add_argument("--col-x-tol-um", type=float, default=1200.0)
+    p.add_argument("--dx-cv-tol", type=float, default=0.15)
+    p.add_argument("--dy-cv-tol", type=float, default=0.15)
+    return p.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    nd2_path = args.nd2_path
+    if nd2_path is None:
+        nd2_files = sorted(args.raw_yx1_experiment_dir.glob("*.nd2"))
+        if len(nd2_files) == 1:
+            nd2_path = nd2_files[0]
+        elif len(nd2_files) > 1:
+            raise RuntimeError(f"Multiple ND2 files found in {args.raw_yx1_experiment_dir}: {nd2_files}")
+    map_series_to_wells_yx1(
+        scope_metadata_csv=(args.raw_yx1_experiment_dir.parents[3] / "experiment_metadata" / args.experiment_id / "scope_metadata_raw.csv"),
+        output_mapping_csv=args.output_mapping_csv,
+        output_provenance_json=args.output_provenance_json,
+        nd2_path=nd2_path,
+        use_xy_reference=bool(args.use_xy_reference),
+        ref_xy_csv=args.ref_xy_csv,
+        max_distance_um=args.max_distance_um,
+        allow_unmapped_wells=bool(args.allow_unmapped_wells),
+        row_y_tol_um=args.row_y_tol_um,
+        col_x_tol_um=args.col_x_tol_um,
+        dx_cv_tol=args.dx_cv_tol,
+        dy_cv_tol=args.dy_cv_tol,
+    )
+
+
+if __name__ == "__main__":
+    main()

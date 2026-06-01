@@ -11,6 +11,8 @@ from data_pipeline.shared.identifiers import build_image_id
 from data_pipeline.schemas.scope_metadata import REQUIRED_COLUMNS_SCOPE_METADATA
 
 
+
+
 def _stitched_ff_path(
     *,
     built_image_data_root: Path,
@@ -25,7 +27,7 @@ def _stitched_ff_path(
         / "stitched_ff_images"
         / well_index
         / channel_id
-        / f"{well_index}_{channel_id}_t{int(time_int):04d}.tif"
+        / f"{well_index}_{channel_id}_t{int(time_int):04d}.jpg"
     )
 
 
@@ -81,7 +83,7 @@ def build_frame_contract(
     df["absolute_start_time"] = df["absolute_start_time"].astype(str)
     df["image_width_px"] = pd.to_numeric(df["image_width_px"], errors="raise").astype(int)
     df["image_height_px"] = pd.to_numeric(df["image_height_px"], errors="raise").astype(int)
-    df["objective_magnification"] = pd.to_numeric(df["objective_magnification"], errors="coerce")
+    df["objective_magnification"] = df["objective_magnification"].astype(str)
 
     out = df.loc[:, REQUIRED_COLUMNS_FRAME_CONTRACT].copy()
     validate_dataframe_schema(out, REQUIRED_COLUMNS_FRAME_CONTRACT, "frame_contract.csv")

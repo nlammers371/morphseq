@@ -14,7 +14,7 @@ from data_pipeline.metadata_ingest.stitched_index.validate_stitched_image_index 
 def _write_stitched_row(
     stitched_csv: Path,
     *,
-    frame_index: int,
+    time_int: int,
     include_time_int: bool,
     time_int: int | None = None,
 ) -> None:
@@ -24,8 +24,8 @@ def _write_stitched_row(
         "well_id": "A01",
         "well_index": "A01",
         "channel_id": "BF",
-        "frame_index": frame_index,
-        "image_id": f"exp1_A01_BF_f{frame_index:04d}",
+        "time_int": time_int,
+        "image_id": f"exp1_A01_BF_f{time_int:04d}",
         "stitched_image_path": "built_image_data/exp1/stitched_ff_images/A01/BF/exp1_A01_BF_f0000.jpg",
         "materialization_status": "created",
         "source_artifact_path": "raw_image_data/Keyence/exp1/W001/P00001",
@@ -33,17 +33,17 @@ def _write_stitched_row(
         "frame_interval_s": 600.0,
         "frame_interval_min": 10.0,
         "frame_interval_hr": 600.0 / 3600.0,
-        "experiment_time_s": float(frame_index * 600),
-        "elapsed_time_s": float(frame_index * 600),
-        "elapsed_time_min": float(frame_index * 10),
-        "elapsed_time_hr": float(frame_index * 600 / 3600),
+        "experiment_time_s": float(time_int * 600),
+        "elapsed_time_s": float(time_int * 600),
+        "elapsed_time_min": float(time_int * 10),
+        "elapsed_time_hr": float(time_int * 600 / 3600),
     }
     if include_time_int:
-        row["time_int"] = frame_index if time_int is None else time_int
+        row["time_int"] = time_int if time_int is None else time_int
     pd.DataFrame([row]).to_csv(stitched_csv, index=False)
 
 
-def test_validate_stitched_index_accepts_frame_index_without_time_int(tmp_path: Path) -> None:
+def test_validate_stitched_index_accepts_time_int_without_time_int(tmp_path: Path) -> None:
     data_root = tmp_path / "data_pipeline_output"
     exp_dir = data_root / "experiment_metadata" / "exp1"
     exp_dir.mkdir(parents=True)
@@ -53,14 +53,14 @@ def test_validate_stitched_index_accepts_frame_index_without_time_int(tmp_path: 
 
     stitched_csv = exp_dir / "stitched_image_index.csv"
     validation_flag = exp_dir / ".stitched_image_index.validated"
-    _write_stitched_row(stitched_csv, frame_index=0, include_time_int=False)
+    _write_stitched_row(stitched_csv, time_int=0, include_time_int=False)
 
     validated = validate_stitched_image_index(stitched_csv, validation_flag)
     assert len(validated) == 1
     assert validation_flag.exists()
 
 
-def test_validate_stitched_index_rejects_time_int_frame_index_mismatch(tmp_path: Path) -> None:
+def test_validate_stitched_index_rejects_time_int_time_int_mismatch(tmp_path: Path) -> None:
     data_root = tmp_path / "data_pipeline_output"
     exp_dir = data_root / "experiment_metadata" / "exp1"
     exp_dir.mkdir(parents=True)
@@ -70,13 +70,13 @@ def test_validate_stitched_index_rejects_time_int_frame_index_mismatch(tmp_path:
 
     stitched_csv = exp_dir / "stitched_image_index.csv"
     validation_flag = exp_dir / ".stitched_image_index.validated"
-    _write_stitched_row(stitched_csv, frame_index=1, include_time_int=True, time_int=0)
+    _write_stitched_row(stitched_csv, time_int=1, include_time_int=True, time_int=0)
 
-    with pytest.raises(ValueError, match="frame_index != time_int"):
+    with pytest.raises(ValueError, match="time_int != time_int"):
         validate_stitched_image_index(stitched_csv, validation_flag)
 
 
-def test_build_frame_contract_joins_on_frame_index_and_emits_time_alias(tmp_path: Path) -> None:
+def test_build_frame_contract_joins_on_time_int_and_emits_time_alias(tmp_path: Path) -> None:
     data_root = tmp_path / "data_pipeline_output"
     exp_dir = data_root / "experiment_metadata" / "exp1"
     exp_dir.mkdir(parents=True)
@@ -85,7 +85,7 @@ def test_build_frame_contract_joins_on_frame_index_and_emits_time_alias(tmp_path
     scope_csv = exp_dir / "scope_series_metadata_mapped.csv"
     output_csv = exp_dir / "frame_contract.csv"
 
-    _write_stitched_row(stitched_csv, frame_index=3, include_time_int=False)
+    _write_stitched_row(stitched_csv, time_int=3, include_time_int=False)
 
     scope_row = {
         "experiment_id": "exp1",
@@ -116,5 +116,5 @@ def test_build_frame_contract_joins_on_frame_index_and_emits_time_alias(tmp_path
         output_csv=output_csv,
     )
     assert output_csv.exists()
-    assert manifest.loc[0, "frame_index"] == 3
+    assert manifest.loc[0, "time_int"] == 3
     assert manifest.loc[0, "time_int"] == 3

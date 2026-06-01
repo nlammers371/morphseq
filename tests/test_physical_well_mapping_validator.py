@@ -10,8 +10,8 @@ from data_pipeline.metadata_ingest.scope.shared.validate_physical_well_mapping i
 def test_validate_physical_well_mapping_passes_for_complete_mapping(tmp_path) -> None:
     scope = pd.DataFrame(
         [
-            {"experiment_id": "20240418", "well_index": "0", "frame_index": 0},
-            {"experiment_id": "20240418", "well_index": "1", "frame_index": 0},
+            {"experiment_id": "20240418", "well_index": "0", "time_int": 0},
+            {"experiment_id": "20240418", "well_index": "1", "time_int": 0},
         ]
     )
     mapping = pd.DataFrame(
@@ -37,8 +37,8 @@ def test_validate_physical_well_mapping_passes_for_complete_mapping(tmp_path) ->
 def test_validate_physical_well_mapping_fails_for_incomplete_mapping(tmp_path) -> None:
     scope = pd.DataFrame(
         [
-            {"experiment_id": "20240418", "well_index": "0", "frame_index": 0},
-            {"experiment_id": "20240418", "well_index": "1", "frame_index": 0},
+            {"experiment_id": "20240418", "well_index": "0", "time_int": 0},
+            {"experiment_id": "20240418", "well_index": "1", "time_int": 0},
         ]
     )
     mapping = pd.DataFrame([{"series_number": 1, "well_index": "A01"}])

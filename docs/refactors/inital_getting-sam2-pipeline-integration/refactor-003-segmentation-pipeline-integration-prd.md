@@ -83,7 +83,7 @@ Validation: 60% mask files found (expected for sample data)
 
 **📈 CSV Schema (14 columns):**
 ```
-image_id, embryo_id, snip_id, frame_index, area_px, bbox_x_min, bbox_y_min, 
+image_id, embryo_id, snip_id, time_int, area_px, bbox_x_min, bbox_y_min, 
 bbox_x_max, bbox_y_max, mask_confidence, exported_mask_path, experiment_id, 
 video_id, is_seed_frame
 ```

@@ -51,7 +51,7 @@ def consolidated_features_path(data_root: Path, experiment_id: str) -> Path:
 
 
 def analysis_ready_path(data_root: Path, experiment_id: str) -> Path:
-    return Path(data_root) / "analysis_ready" / str(experiment_id) / "features_qc_embeddings.csv"
+    return Path(data_root) / "analysis_ready" / str(experiment_id) / "analysis_ready.csv"
 
 
 def feature_sentinel_path(table_path: Path) -> Path:

@@ -5,11 +5,13 @@ from pathlib import Path
 import pandas as pd
 
 from data_pipeline.io.validators import validate_dataframe_schema
-from data_pipeline.schemas.frame_contract import REQUIRED_COLUMNS_FRAME_CONTRACT
 from data_pipeline.schemas.auxiliary_masks import REQUIRED_COLUMNS_AUXILIARY_MASKS
+from data_pipeline.schemas.frame_contract import REQUIRED_COLUMNS_FRAME_CONTRACT
 from data_pipeline.schemas.plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
 from data_pipeline.schemas.segmentation import REQUIRED_COLUMNS_SEGMENTATION_TRACKING
 from data_pipeline.schemas.snip_processing import REQUIRED_COLUMNS_SNIP_MANIFEST
+from data_pipeline.shared.path_contracts import require_existing_path
+from data_pipeline.shared.path_contracts import resolve_data_root_relative_path
 
 
 def load_table(path: Path) -> pd.DataFrame:
@@ -24,21 +26,45 @@ def load_optional_table(path: Path | None) -> pd.DataFrame | None:
     return load_table(path)
 
 
+def _resolve_path_columns(df: pd.DataFrame, columns: tuple[str, ...]) -> pd.DataFrame:
+    df = df.copy()
+    for column in columns:
+        if column in df.columns:
+            df[column] = df[column].map(resolve_data_root_relative_path)
+    return df
+
+
 def load_segmentation_tracking(path: Path) -> pd.DataFrame:
     df = load_table(path)
+    if "time_int" not in df.columns and "frame_index" in df.columns:
+        df["time_int"] = pd.to_numeric(df["frame_index"], errors="raise").astype(int)
+    df = _resolve_path_columns(df, ("source_image_path", "exported_mask_path"))
     validate_dataframe_schema(df, REQUIRED_COLUMNS_SEGMENTATION_TRACKING, "segmentation_tracking.csv")
+    for _, row in df.iterrows():
+        row_id = str(row.get("snip_id", row.get("image_id", "")))
+        require_existing_path(row.get("source_image_path"), context="segmentation_tracking", field_name="source_image_path", row_id=row_id)
+        require_existing_path(row.get("exported_mask_path"), context="segmentation_tracking", field_name="exported_mask_path", row_id=row_id)
     return df
 
 
 def load_frame_contract(path: Path) -> pd.DataFrame:
     df = load_table(path)
+    df = _resolve_path_columns(df, ("stitched_image_path",))
     validate_dataframe_schema(df, REQUIRED_COLUMNS_FRAME_CONTRACT, "frame_contract.csv")
+    for _, row in df.iterrows():
+        row_id = str(row.get("image_id", ""))
+        require_existing_path(row.get("stitched_image_path"), context="frame_contract", field_name="stitched_image_path", row_id=row_id)
     return df
 
 
 def load_snip_manifest(path: Path) -> pd.DataFrame:
     df = load_table(path)
+    df = _resolve_path_columns(df, ("source_image_path", "exported_mask_path", "yolk_mask_path", "processed_snip_path", "raw_crop_path"))
     validate_dataframe_schema(df, REQUIRED_COLUMNS_SNIP_MANIFEST, "snip_manifest.csv")
+    for _, row in df.iterrows():
+        row_id = str(row.get("snip_id", ""))
+        for field in ("source_image_path", "exported_mask_path"):
+            require_existing_path(row.get(field), context="snip_manifest", field_name=field, row_id=row_id)
     return df
 
 
@@ -50,7 +76,14 @@ def load_plate_metadata(path: Path) -> pd.DataFrame:
 
 def load_auxiliary_masks_manifest(path: Path) -> pd.DataFrame:
     df = load_table(path)
+    if "time_int" not in df.columns and "frame_index" in df.columns:
+        df["time_int"] = pd.to_numeric(df["frame_index"], errors="raise").astype(int)
+    df = _resolve_path_columns(df, ("source_image_path", "via_mask_path", "yolk_mask_path", "focus_mask_path", "bubble_mask_path"))
     validate_dataframe_schema(df, REQUIRED_COLUMNS_AUXILIARY_MASKS, "auxiliary_masks.csv")
+    for _, row in df.iterrows():
+        row_id = str(row.get("image_id", ""))
+        require_existing_path(row.get("source_image_path"), context="auxiliary_masks", field_name="source_image_path", row_id=row_id)
+        require_existing_path(row.get("via_mask_path"), context="auxiliary_masks", field_name="via_mask_path", row_id=row_id)
     return df
 
 

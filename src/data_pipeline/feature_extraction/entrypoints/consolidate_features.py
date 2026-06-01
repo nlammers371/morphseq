@@ -21,14 +21,15 @@ def main() -> None:
     ap.add_argument("--output-csv", type=Path, required=True)
     args = ap.parse_args()
 
-    # Explicitly require the upstream contracts even though only the
-    # plate metadata is late-bound here. This keeps the merge boundary
-    # visible and prevents accidental drift in the consolidated table.
+    # Explicitly require the upstream contracts before consolidation.
+    # The frame contract is also merged into the final table so the canonical
+    # calibration and acquisition fields survive the merge boundary.
     _ = load_segmentation_tracking(args.segmentation_tracking)
     _ = load_frame_contract(args.frame_contract)
 
     consolidated_df = load_and_consolidate_features(
         tracking_path=args.segmentation_tracking,
+        frame_contract_path=args.frame_contract,
         geometry_path=args.mask_geometry,
         curvature_path=args.curvature_metrics,
         kinematics_path=args.pose_kinematics,

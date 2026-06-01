@@ -91,7 +91,7 @@ To effectively integrate this information without redundancy and maintain logica
           ... and any other video level info from orignal gsam pipline and the build scripts amasses at this stage
           "image_ids": {
             "<image_id>": {
-              "frame_index": 0,
+              "time_int": 0,
               "raw_image_data_info": {
                 "Height (um)": 7080.86,
                 "Height (px)": 2189,
