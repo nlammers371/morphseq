@@ -41,6 +41,8 @@ That split is deliberate. Users should not need to know which low-level file com
   - package overview and naming conventions
 - [ALGORITHM.md](ALGORITHM.md)
   - method semantics
+- [INITIAL_INSPIRATION.md](INITIAL_INSPIRATION.md)
+  - original conceptual motivation
 - [DESIGN.md](DESIGN.md)
   - architecture and ownership
 
@@ -183,16 +185,17 @@ Keeping `principal_tree/` separate prevents a false story where the optimizer is
 ## Developer Reading Order
 For a new developer, the clean reading order is:
 1. [ALGORITHM.md](ALGORITHM.md)
-2. [README.md](README.md)
-3. [schema.py](schema.py)
-4. [init_embedding.py](init_embedding.py)
-5. [condensation/state.py](condensation/state.py)
-6. [condensation/geometry_refs.py](condensation/geometry_refs.py)
-7. [condensation/forces/total.py](condensation/forces/total.py)
-8. [condensation/engine/run.py](condensation/engine/run.py)
-9. [iteration_ranking.py](iteration_ranking.py)
-10. [viz/api.py](viz/api.py)
-11. [principal_tree/core.py](principal_tree/core.py)
+2. [INITIAL_INSPIRATION.md](INITIAL_INSPIRATION.md)
+3. [README.md](README.md)
+4. [schema.py](schema.py)
+5. [init_embedding.py](init_embedding.py)
+6. [condensation/state.py](condensation/state.py)
+7. [condensation/geometry_refs.py](condensation/geometry_refs.py)
+8. [condensation/forces/total.py](condensation/forces/total.py)
+9. [condensation/engine/run.py](condensation/engine/run.py)
+10. [iteration_ranking.py](iteration_ranking.py)
+11. [viz/api.py](viz/api.py)
+12. [principal_tree/core.py](principal_tree/core.py)
 
 ## Future Improvements
 - add a short force registry table with one row per force term and one owner file

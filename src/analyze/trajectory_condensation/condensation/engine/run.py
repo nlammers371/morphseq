@@ -162,17 +162,29 @@ def run_dynamics(
     prev_total_energy: float | None = None
     prev_coherence: np.ndarray | None = None
 
+    # Uniform coherence never changes — compute once before the loop.
+    # Computed coherence is cached inside the loop at coherence_cache_every cadence.
+    coherence_last_computed: int = -1
+    if config.temporal_cohere_mode == "uniform":
+        coherence: np.ndarray = _uniform_coherence(mask)
+    elif config.temporal_cohere_mode == "computed":
+        coherence = None  # type: ignore[assignment]  # will be set on first iteration
+    else:
+        raise ValueError(f"Unsupported temporal_cohere_mode={config.temporal_cohere_mode!r}")
+
     for n in range(config.solver_max_iter):
-        if config.temporal_cohere_mode == "computed":
+        # Recompute coherence on cadence (uniform was computed once above).
+        # Coherence is a frozen weight matrix passed into attraction(); no explicit gradient.
+        if config.temporal_cohere_mode == "computed" and (
+            coherence is None
+            or (n - coherence_last_computed) >= config.coherence_cache_every
+        ):
             coherence = compute_coherence(
                 positions, mask,
                 sigma=sigma_coh,
                 delta=config.temporal_cohere_window,
             )
-        elif config.temporal_cohere_mode == "uniform":
-            coherence = _uniform_coherence(mask)
-        else:
-            raise ValueError(f"Unsupported temporal_cohere_mode={config.temporal_cohere_mode!r}")
+            coherence_last_computed = n
 
         mu = config.fidelity_init_strength * (config.fidelity_half_life ** n)
 
@@ -212,14 +224,19 @@ def run_dynamics(
         velocities = config.solver_momentum * velocities - config.solver_lr * grad
         new_positions = positions + velocities
 
-        support_metrics = summarize_attraction_support(
-            positions=positions,
-            mask=mask,
-            coherence=coherence,
-            sigma=sigma_att,
-            sigma_attract_local=None,
-            k_attract=config.attract_k,
-        )
+        # Only compute support diagnostics on log iterations — avoids duplicating
+        # the full attraction pass (diff, sq_dist, K, C, kNN) every iteration.
+        if n % log_every == 0:
+            support_metrics: dict[str, float] | None = summarize_attraction_support(
+                positions=positions,
+                mask=mask,
+                coherence=coherence,
+                sigma=sigma_att,
+                sigma_attract_local=None,
+                k_attract=config.attract_k,
+            )
+        else:
+            support_metrics = None
 
         row = log_metrics(
             iteration=n,
@@ -234,6 +251,7 @@ def run_dynamics(
             support_metrics=support_metrics,
         )
         row['mu'] = mu
+        row['coherence_stale'] = n - coherence_last_computed
         metrics_history.append(row)
 
         positions = new_positions
@@ -251,7 +269,8 @@ def run_dynamics(
                 f"att={energies['attract']:+.4f} rep={energies['repel']:+.4f}"
                 f"{void_str}{scale_str}{outlier_str} "
                 f"ela={energies['elastic']:+.4f} fid={energies['fidelity']:+.4f} "
-                f"disp_rms={row['disp_rms_rel']:.5f} disp_max={row['disp_max_rel']:.5f}"
+                f"disp_rms={row['disp_rms_rel']:.5f} disp_max={row['disp_max_rel']:.5f} "
+                f"coh_stale={row['coherence_stale']}"
             )
 
         should_stop, reason = monitor.update(row)

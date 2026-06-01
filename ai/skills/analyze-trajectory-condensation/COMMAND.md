@@ -38,7 +38,7 @@ import analyze.trajectory_condensation as tc
 
 ```python
 data = tc.from_pairwise_margin_csv("results/.../raw_contrast_scores_long.csv")
-x0 = tc.init_embedding.pca_init(data.features, data.mask)
+x0 = tc.init_embedding.aligned_umap_init(data.features, data.mask)
 
 config = tc.CondensationConfig(solver_max_iter=500)
 result = tc.run_condensation(
@@ -51,6 +51,13 @@ result = tc.run_condensation(
 run = tc.load_run("results/.../condensed_positions.npz", title="my run")
 tc.render_run(run, "figures/my_run/")
 ```
+
+Do not route normal trajectory-condensation workflows through `pca_init(...)`
+in this repo. It remains available as a low-level helper, but it has not
+produced acceptable runs here.
+
+Treat `aligned_umap_init(...)` as the normal initialization entry point. It now
+uses the NaN-aware UMAP path by default.
 
 ## Visualization
 

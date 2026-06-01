@@ -549,23 +549,37 @@ code into it, preserving behavior.** ✅ DONE
   save_classifier_directions=True)` on a synthetic fixture (same `vector_id` set,
   same `unit_coef`, same `preprocess_fingerprint`, same `feature_names`).
 
-**Step 3 — Refactor B, part 1: `morphology_geometry/validation.py`.** 🔄 IN PROGRESS
+**Step 3 — Refactor B, part 1: `morphology_geometry/validation.py`.** ✅ DONE
 - `validation.py` written: `ClassifierDirectionContractError`, `ValidatedDirections`
   (frozen dataclass), `validate_classifier_directions()` with all 10 checks:
   feature_set present, required metadata columns, filter + sort, vector_id integrity,
   vector stacking with shape/finite/unit-norm checks, direction_space, preprocess
   fingerprint constancy, required_comparison_ids, bin uniformity + expected_bin_width,
   has_auroc detection.
-- `tests/` directory created. `test_validation.py` to be written before committing the
-  next batch.
+- `tests/test_validation.py` written: 44 tests covering all 10 checks, all error paths,
+  happy-path field values, and zero-norm warn-and-drop behavior. All 44 pass.
 
-**Step 4 — Refactor B, part 2: promote vectors + projection + io.**
-Copy the three prototype modules into `morphology_geometry/`. Rewire them to take
-`ValidatedDirections`. `morphology_geometry/io.py::load_classifier_directions(path, *,
-feature_set, ...)` loads the raw artifact, calls `validate_classifier_directions`, and
-returns `ValidatedDirections`. Tests use synthetic fixtures (no sklearn, no on-disk
-artifacts). Leave the shim in `phenotype_direction/__init__.py`. Existing PBX scripts
-produce identical figures when re-run.
+**Step 4 — Refactor B, part 2: promote vectors + projection + io.** ✅ DONE
+- `io.py`: `load_classifier_directions(path, *, feature_set, ...)` — only file importing
+  from `analyze.classification`; loads raw artifact, runs validator, returns
+  `ValidatedDirections`.
+- `vectors.py`: `cosine_alignment`, `axis_alignment`, `direction_matrix`,
+  `weighted_axis` — all accept `ValidatedDirections`. `weighted_axis` falls back to
+  "uniform" when `has_auroc=False`.
+- `projection.py`: `project_binned_features` — takes `vd: ValidatedDirections` for
+  authoritative feature column order; `feature_set` parameter removed.
+- `__init__.py`: re-exports full public API.
+- `tests/conftest.py`: shared `minimal_directions` + `validated` fixtures.
+- `tests/test_io.py`: 7 tests (round-trip, missing files, error forwarding).
+- `tests/test_vectors.py`: 21 tests (cosine, axis, direction_matrix, weighted_axis).
+- `tests/test_projection.py`: 9 tests including column-order invariance, bin-center
+  arithmetic, projection-math exact check.
+- `tests/test_no_classification_internal_imports.py`: AST guard — only io.py and
+  validation.py may import from analyze.classification, only the artifact type.
+- `phenotype_direction/__init__.py` replaced with shim: re-exports pure math helpers
+  from `analyze.morphology_geometry`; `load_classifier_directions` returns raw
+  `ClassifierDirections` with DeprecationWarning (backward compat for scripts 01/02/03).
+- **All 254 tests pass (88 morphology_geometry + 166 classification).**
 
 **Step 5 — `cosine_alignment_matrix()` in `vectors.py`.**
 Takes a `ValidatedDirections` + list of comparison IDs, returns a long-format df with

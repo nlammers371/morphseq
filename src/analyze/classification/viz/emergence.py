@@ -467,6 +467,7 @@ def _build_html_spec(
     class_colors: dict[str, str],
     bin_width: float,
     min_cross_support: float,
+    heatmap_font_scale: float,
 ) -> str:
     """Serialize EmergenceData + render kwargs to the JSON expected by the JS.
 
@@ -503,8 +504,9 @@ def _build_html_spec(
         "tree_tmin":         data.color_scale_min,
         "tree_tmax":         data.color_scale_max,
         # JS client-side algorithm parameters
-        "bin_width":         bin_width,
-        "min_cross_support": min_cross_support,
+        "bin_width":          bin_width,
+        "min_cross_support":  min_cross_support,
+        "heatmap_font_scale": heatmap_font_scale,
     }
 
     return json.dumps(spec, allow_nan=False, separators=(",", ":"))
@@ -530,6 +532,7 @@ def render_emergence_html(
     class_colors: Optional[Mapping[str, str]] = None,
     bin_width: float = 4.0,
     min_cross_support: float = 0.5,
+    heatmap_font_scale: float = 1.0,
     output_path: Optional[Union[str, Path]] = None,
 ) -> str:
     """Render an ``EmergenceData`` to a self-contained interactive HTML file.
@@ -554,6 +557,9 @@ def render_emergence_html(
     min_cross_support:
         Minimum fraction of finite cross-partition onset pairs required for a
         bipartition to be accepted during within-block resolution. Default 0.5.
+    heatmap_font_scale:
+        Multiplier for the interactive heatmap's row/column/cell text sizing.
+        Default 1.0 preserves the existing layout.
     output_path:
         If provided, the HTML is written here (UTF-8, overwriting). The HTML
         string is always returned regardless.
@@ -583,6 +589,7 @@ def render_emergence_html(
         class_colors=resolved_colors,
         bin_width=bin_width,
         min_cross_support=min_cross_support,
+        heatmap_font_scale=heatmap_font_scale,
     )
 
     html = template.replace("__D3_PLACEHOLDER__", d3_text)
@@ -608,6 +615,7 @@ def render_emergence_html_from_scores(
     class_colors: Optional[Mapping[str, str]] = None,
     bin_width: float = 4.0,
     min_cross_support: float = 0.5,
+    heatmap_font_scale: float = 1.0,
     # Column name overrides
     time_col: str = "time_bin_center",
     positive_class_col: str = "positive_label",
@@ -645,5 +653,6 @@ def render_emergence_html_from_scores(
         class_colors=class_colors,
         bin_width=bin_width,
         min_cross_support=min_cross_support,
+        heatmap_font_scale=heatmap_font_scale,
         output_path=output_path,
     )

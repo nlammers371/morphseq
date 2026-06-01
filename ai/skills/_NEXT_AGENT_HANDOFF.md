@@ -1,7 +1,7 @@
 # Handoff — skill docs restructure
 
 **Last updated:** 2026-04-20
-**Status:** classification done. trajectory_condensation schema migration done. One skill task remains (#4).
+**Status:** classification done. trajectory_condensation schema migration done. morphology_geometry skill docs done.
 
 ## Completed (reference implementation)
 
@@ -51,15 +51,17 @@ See the classification structure as the template for the remaining two.
   subpackage): trajectory_condensation is now migrated off contrast coords, so this
   is ready to revisit if desired.
 
+## Completed
+
+### Task #4 — `ai/skills/analyze-morphology-geometry/` ✅ DONE
+
+- Added `src/analyze/morphology_geometry/README.md` as the user-facing overview.
+- Added `ai/skills/analyze-morphology-geometry/SKILL.md` as the thin pointer skill.
+- Kept the package focused on `validation.py`, `vectors.py`, and `projection.py`.
+
 ## Remaining tasks
 
-### Task #4 — morphology_geometry (no skill currently exists)
-
-- Source: `src/analyze/morphology_geometry/`
-- Existing `docs/IMPLEMENTATION_PLAN.md` is in git status modified — inspect first
-- Multiple new untracked files in this module per git status; may need a doc pass before skill creation
-- **No existing `ai/skills/analyze-morphology-geometry/` dir** — will need to be created
-- Start by auditing what's in `src/analyze/morphology_geometry/` and `tests/` to understand the API, then build docs + skill together
+None from this restructure pass.
 
 ## Guardrails that bit me on classification
 
