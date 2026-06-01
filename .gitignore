@@ -118,5 +118,9 @@ _Archive/
 **/output/phase0_*/
 **/scripts/output/
 
+# Pipeline outputs and build artifacts
+data_pipeline_output/
+.snakemake/
+
 # mdcolon results-specific rules moved to results/mcolon/.gitignore
 # (see results/mcolon/.gitignore for details)
