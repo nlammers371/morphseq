@@ -164,6 +164,13 @@ def main():
         summary["true_label"] = summary["query_embryo_id"].map(true_labels)
         summary["heldout_experiment_id"] = exp_id
 
+        # Print reference label profile for this fold
+        profile = results["reference_label_profile"]
+        print(f"  Reference label profile:")
+        print(profile[["reference_purity", "main_confusion_label",
+                        "main_confusion_fraction", "mixing_entropy",
+                        "label_is_mixed"]].round(3).to_string())
+
         all_fold_predictions.append(summary)
 
         # Per-fold QC
@@ -184,6 +191,36 @@ def main():
         out_pred = OUT_DIR / "leave_one_experiment_out_predictions.csv"
         pred_df.to_csv(out_pred, index=False)
         print(f"\nSaved predictions to {out_pred}")
+
+        # --- Correlation check: do new purity columns track correctness? ---
+        eval_df = pred_df[
+            pred_df["true_label"].notna()
+            & pred_df["predicted_label"].notna()
+            & (pred_df["predicted_label"] != "not_assigned")
+        ].copy()
+        eval_df["correct"] = (eval_df["true_label"] == eval_df["predicted_label"]).astype(float)
+
+        purity_cols = [
+            "ref_reference_purity", "ref_mixing_entropy",
+            "purity_adjusted_top_probability", "beats_reference_purity",
+            "top_label_probability", "embryo_confidence",
+            "mean_image_neighbor_agreement", "embryo_distance_score",
+        ]
+        available = [c for c in purity_cols if c in eval_df.columns]
+        print("\n=== Point-biserial correlation with correctness (all evaluated) ===")
+        for col in available:
+            vals = eval_df[col].dropna().astype(float)
+            idx = vals.index.intersection(eval_df["correct"].dropna().index)
+            if len(idx) < 10:
+                continue
+            r = np.corrcoef(vals.loc[idx].values, eval_df.loc[idx, "correct"].values)[0, 1]
+            print(f"  {col:<40s}: r = {r:+.3f}  (n={len(idx)})")
+
+        # Per-label: mean purity_adjusted_top_probability for correct vs incorrect
+        if "purity_adjusted_top_probability" in eval_df.columns:
+            print("\n=== purity_adjusted_top_probability: correct vs incorrect by label ===")
+            grp = eval_df.groupby(["true_label", "correct"])["purity_adjusted_top_probability"].mean().round(3)
+            print(grp.to_string())
 
     if all_fold_summaries:
         sum_df = pd.DataFrame(all_fold_summaries)

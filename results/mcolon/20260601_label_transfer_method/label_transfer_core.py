@@ -15,10 +15,83 @@ from sklearn.neighbors import NearestNeighbors
 VALID_STATUSES = ("assigned", "ambiguous", "low_density", "not_evaluated")
 MAIN_LABELS = ["Low_to_High", "High_to_Low", "Intermediate", "Not Penetrant"]
 
+# Threshold below which a label is considered structurally mixed in embedding space.
+# Derived from reference KNN purity; not tunable per-query.
+MIXED_PURITY_THRESHOLD = 0.6
+
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def compute_reference_label_profile(
+    ref_X: np.ndarray,
+    ref_labels: np.ndarray,
+    k: int,
+    metric: str = "euclidean",
+    mixed_purity_threshold: float = MIXED_PURITY_THRESHOLD,
+) -> pd.DataFrame:
+    """
+    Characterise how well each label is separated in reference feature space.
+
+    For each reference image, finds k nearest reference neighbors (excluding self)
+    and computes the fraction of neighbors sharing the same label (KNN purity).
+    Aggregates to per-label statistics.
+
+    Returns a DataFrame indexed by label with columns:
+        reference_purity         : mean fraction of same-label neighbors
+        main_confusion_label     : label most often found in neighbors (excluding self-label)
+        main_confusion_fraction  : fraction of neighbors with that label
+        mixing_entropy           : Shannon entropy of the neighbor label distribution
+                                   (0 = perfectly pure, log(n_labels) = maximally mixed)
+        label_is_mixed           : bool, reference_purity < mixed_purity_threshold
+        n_images                 : number of reference images with this label
+    """
+    nn = NearestNeighbors(n_neighbors=k + 1, metric=metric)
+    nn.fit(ref_X)
+    _, indices = nn.kneighbors(ref_X)
+    neighbor_indices = indices[:, 1:]  # drop self
+
+    neighbor_labels = ref_labels[neighbor_indices]  # (n_ref, k)
+    all_labels = sorted(np.unique(ref_labels))
+
+    records = []
+    for lbl in all_labels:
+        focal_mask = ref_labels == lbl
+        if focal_mask.sum() == 0:
+            continue
+        nl = neighbor_labels[focal_mask]  # (n_focal, k)
+
+        # Per-label neighbor fractions
+        label_fracs = {
+            l2: (nl == l2).mean()
+            for l2 in all_labels
+        }
+
+        purity = label_fracs[lbl]
+
+        # Main confusion label: highest fraction among other labels
+        other_fracs = {l2: f for l2, f in label_fracs.items() if l2 != lbl}
+        main_conf_label = max(other_fracs, key=other_fracs.get) if other_fracs else None
+        main_conf_frac = other_fracs[main_conf_label] if main_conf_label else 0.0
+
+        # Shannon entropy of neighbor label distribution
+        fracs = np.array(list(label_fracs.values()))
+        fracs = fracs[fracs > 0]
+        entropy = float(-np.sum(fracs * np.log(fracs)))
+
+        records.append({
+            "label": lbl,
+            "reference_purity": purity,
+            "main_confusion_label": main_conf_label,
+            "main_confusion_fraction": main_conf_frac,
+            "mixing_entropy": entropy,
+            "label_is_mixed": purity < mixed_purity_threshold,
+            "n_images": int(focal_mask.sum()),
+        })
+
+    return pd.DataFrame(records).set_index("label")
 
 def run_label_transfer(
     reference_df: pd.DataFrame,
@@ -129,9 +202,12 @@ def run_label_transfer(
         warnings.warn("No query rows remain after filtering. Returning empty results.")
         return _empty_results(excluded_embryos, embryo_col)
 
-    # --- Step 3: KNN search ---
+    # --- Step 3: KNN search + reference label profile ---
     ref_X = ref[feature_cols].values.astype(float)
     qry_X = qry[feature_cols].values.astype(float)
+    ref_labels_arr = ref[label_col].values
+
+    label_profile = compute_reference_label_profile(ref_X, ref_labels_arr, k, metric)
 
     nn = NearestNeighbors(n_neighbors=k, metric=metric)
     nn.fit(ref_X)
@@ -184,6 +260,9 @@ def run_label_transfer(
         top_probability_threshold=top_probability_threshold,
     )
 
+    # --- Attach reference label profile metadata to each embryo ---
+    embryo_summary_df = _attach_label_profile(embryo_summary_df, label_profile)
+
     # Append excluded embryos
     if excluded_embryos:
         excl_df = pd.DataFrame(excluded_embryos).rename(columns={embryo_col: "query_embryo_id"})
@@ -207,6 +286,7 @@ def run_label_transfer(
         "image_prediction_summary": image_summary_df,
         "embryo_label_probabilities": embryo_prob_df,
         "embryo_label_transfer_summary": embryo_summary_df,
+        "reference_label_profile": label_profile,
         "embryo_pred_label_dict": embryo_pred_label_dict,
         "embryo_confidence_dict": embryo_confidence_dict,
         "embryo_status_dict": embryo_status_dict,
@@ -488,6 +568,57 @@ def _image_pred_label_from_group(grp):
         return np.nan
     label_probs = grp.groupby("ref_label")["weight"].sum() / total
     return label_probs.idxmax()
+
+
+def _attach_label_profile(
+    embryo_summary_df: pd.DataFrame,
+    label_profile: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Attach reference label profile metadata for each embryo's predicted label.
+
+    Adds columns (all prefixed ref_*) from label_profile, plus two derived columns:
+        purity_adjusted_top_probability : top_label_probability / reference_purity
+            Normalises the raw probability by how pure the predicted label's reference
+            neighborhood is. Values > 1 mean the query is MORE concentrated toward
+            that label than the average reference image of that label.
+        beats_reference_purity : bool
+            True when top_label_probability > reference_purity of the predicted label.
+            A simple flag: the query's evidence exceeds the reference self-consistency.
+    """
+    df = embryo_summary_df.copy()
+
+    profile_cols = [
+        "reference_purity",
+        "main_confusion_label",
+        "main_confusion_fraction",
+        "mixing_entropy",
+        "label_is_mixed",
+    ]
+    # Only attach columns that exist in the profile
+    available = [c for c in profile_cols if c in label_profile.columns]
+
+    profile_lookup = label_profile[available].rename(
+        columns={c: f"ref_{c}" for c in available}
+    )
+
+    df = df.merge(
+        profile_lookup,
+        left_on="predicted_label",
+        right_index=True,
+        how="left",
+    )
+
+    # Derived columns
+    if "ref_reference_purity" in df.columns:
+        df["purity_adjusted_top_probability"] = (
+            df["top_label_probability"] / df["ref_reference_purity"].replace(0, np.nan)
+        )
+        df["beats_reference_purity"] = (
+            df["top_label_probability"] > df["ref_reference_purity"]
+        )
+
+    return df
 
 
 def _assign_status(
