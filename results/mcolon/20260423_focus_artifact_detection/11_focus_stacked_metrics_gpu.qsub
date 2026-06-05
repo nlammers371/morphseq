@@ -1,0 +1,31 @@
+#!/bin/bash
+#$ -N focus_stack_metrics
+#$ -q trapnell-long.q
+#$ -pe serial 1
+#$ -l gpgpu=TRUE,cuda=1
+#$ -l mfree=16G
+#$ -l h_rt=2:00:00
+#$ -cwd
+#$ -o results/mcolon/20260423_focus_artifact_detection/11_focus_stacked_metrics/logs/
+#$ -e results/mcolon/20260423_focus_artifact_detection/11_focus_stacked_metrics/logs/
+#$ -V
+
+set -euo pipefail
+
+mkdir -p results/mcolon/20260423_focus_artifact_detection/11_focus_stacked_metrics/logs
+
+echo "[$(date)] Starting post-stack focus metrics on $(hostname)"
+nvidia-smi || true
+
+conda run -n segmentation_grounded_sam --no-capture-output \
+  python results/mcolon/20260423_focus_artifact_detection/11_focus_stacked_metrics.py \
+    --range-min -0.70 \
+    --range-max -0.40 \
+    --samples 8 \
+    --include D05:97 \
+    --include A05:66 \
+    --include D03:0 \
+    --device cuda \
+    --out-csv results/mcolon/20260423_focus_artifact_detection/11_focus_stacked_metrics/focus_stacked_metric_transition_gpu.csv
+
+echo "[$(date)] Done."

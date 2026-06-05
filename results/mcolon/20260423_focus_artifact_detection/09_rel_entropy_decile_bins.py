@@ -11,8 +11,9 @@ bars) that fall in that decile of rel_entropy_mean.
 Ranking: ascending = most negative = worst focus (D1 worst, D10 best).
 
 Inputs:
+  - results/mcolon/20260423_focus_artifact_detection/10_scan_output/rel_entropy_summaries.csv
   - results/mcolon/20260421_motion_artifact_detection/07_embryo_ncc_output/embryo_ncc_summaries.csv
-  - results/mcolon/20260421_motion_artifact_detection/slice_metrics_relative.csv
+    (optional motion-context metrics)
 
 Output:
   - figures/threshold_bins/rel_entropy_deciles/D01_<lo>_to_<hi>.png  ... D10_...png
@@ -30,8 +31,8 @@ sys.path.insert(0, str(MORPHSEQ_ROOT))
 
 HERE           = Path(__file__).resolve().parent
 MOTION_DIR     = HERE.parent / "20260421_motion_artifact_detection"
-SUMMARIES_CSV  = MOTION_DIR / "07_embryo_ncc_output/embryo_ncc_summaries.csv"
-SLICE_REL_CSV  = MOTION_DIR / "slice_metrics_relative.csv"
+FOCUS_CSV      = HERE / "10_scan_output/rel_entropy_summaries.csv"
+MOTION_CSV     = MOTION_DIR / "07_embryo_ncc_output/embryo_ncc_summaries.csv"
 ND2_PATH       = MORPHSEQ_ROOT / "morphseq_playground/raw_image_data/YX1/20250912/20250912_WT_tricane_serial_dilution_experiment.nd2"
 MASKS_DIR      = MORPHSEQ_ROOT / "morphseq_playground/sam2_pipeline_files/exported_masks/20250912/masks"
 IMAGES_DIR     = MORPHSEQ_ROOT / "morphseq_playground/sam2_pipeline_files/raw_data_organized/20250912/images"
@@ -42,6 +43,7 @@ OUT_DIR        = HERE / "figures/threshold_bins/rel_entropy_deciles"
 DATE        = "20250912"
 N_DECILES   = 10
 SAMPLES_PER = 6   # columns per figure
+MIN_VALID_ROWS = N_DECILES * SAMPLES_PER
 
 DECILE_COLORS = [
     "#d62728", "#e05000", "#e07800", "#e0a000", "#c8c000",
@@ -50,6 +52,8 @@ DECILE_COLORS = [
 
 METRICS = [
     ("rel_entropy_mean", "REL ENTROPY mean",  True),   # good_high=True: closer to 0 is better
+    ("rel_entropy_min",  "REL ENTROPY min",   True),
+    ("rel_entropy_std",  "REL ENTROPY std",   False),
     ("ncc_p05",          "NCC p05",            True),
     ("bad_pair_frac",    "Bad-pair frac",      False),
     ("ncc_min",          "NCC min",            True),
@@ -57,19 +61,50 @@ METRICS = [
 
 
 def build_merged() -> pd.DataFrame:
-    summaries = pd.read_csv(SUMMARIES_CSV)
+    if not FOCUS_CSV.exists():
+        raise FileNotFoundError(
+            f"Missing full focus scan CSV: {FOCUS_CSV}. "
+            "Run 10_rel_entropy_full_scan.py and 10_merge_chunks.py first."
+        )
 
-    rel = pd.read_csv(SLICE_REL_CSV)
-    rel_mean = (
-        rel.groupby(["well", "time_int", "embryo"], observed=True)["rel_entropy"]
-        .mean()
-        .reset_index()
-        .rename(columns={"rel_entropy": "rel_entropy_mean", "time_int": "t"})
+    focus = pd.read_csv(FOCUS_CSV)
+    required = {"t", "p", "well", "rel_entropy_mean"}
+    missing = sorted(required - set(focus.columns))
+    if missing:
+        raise ValueError(f"{FOCUS_CSV} missing required columns: {missing}")
+
+    focus = focus[focus.get("has_mask", True).astype(bool)].copy()
+    focus["t"] = pd.to_numeric(focus["t"], errors="raise").astype(int)
+    focus["p"] = pd.to_numeric(focus["p"], errors="raise").astype(int)
+    focus["well"] = focus["well"].astype(str)
+
+    if not MOTION_CSV.exists():
+        return focus
+
+    motion = pd.read_csv(MOTION_CSV)
+    keep = [
+        "t",
+        "p",
+        "well",
+        "ncc_min",
+        "ncc_p05",
+        "bad_pair_frac",
+        "ncc_bad_tile_frac",
+        "longest_bad_run",
+    ]
+    cols = [c for c in keep if c in motion.columns]
+    motion = motion[cols].copy()
+    motion["t"] = pd.to_numeric(motion["t"], errors="raise").astype(int)
+    motion["p"] = pd.to_numeric(motion["p"], errors="raise").astype(int)
+    motion["well"] = motion["well"].astype(str)
+
+    metric_cols = [c for c in cols if c not in {"t", "p", "well"}]
+    return focus.merge(
+        motion[["t", "well", *metric_cols]],
+        on=["t", "well"],
+        how="left",
+        validate="many_to_one",
     )
-    # summaries uses column "t" for time_int; embryo is always 1 in this dataset
-    merged = summaries.merge(rel_mean[["well", "t", "rel_entropy_mean"]],
-                             on=["well", "t"], how="left")
-    return merged
 
 
 def sample_decile(df: pd.DataFrame, dec: int) -> list[dict]:
@@ -104,7 +139,7 @@ def sample_decile(df: pd.DataFrame, dec: int) -> list[dict]:
 def main() -> None:
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "ranked_stack_figure", MOTION_DIR / "ranked_stack_figure.py"
+        "ranked_stack_figure", HERE / "ranked_stack_figure.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -114,6 +149,15 @@ def main() -> None:
 
     df = build_merged()
     valid = df["rel_entropy_mean"].notna()
+    n_valid = int(valid.sum())
+    if n_valid < MIN_VALID_ROWS:
+        raise ValueError(
+            f"Only {n_valid} rows have rel_entropy_mean in {FOCUS_CSV}; "
+            f"need at least {MIN_VALID_ROWS} to render {N_DECILES} bins with "
+            f"{SAMPLES_PER} examples each. The CSV likely points to a smoke run "
+            "rather than the merged full scan."
+        )
+
     ranked = df[valid].sort_values("rel_entropy_mean").reset_index(drop=True)
     ranked["decile"] = pd.qcut(ranked["rel_entropy_mean"], N_DECILES,
                                labels=False, duplicates="drop")
