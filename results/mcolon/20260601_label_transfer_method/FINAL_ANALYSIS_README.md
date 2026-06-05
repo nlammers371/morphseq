@@ -176,6 +176,73 @@ correcting it.
 
 ---
 
+## Finding 4: Global Model (A) is Fragile to Batch Effects — Per-bin/Embryo (C) is More Robust
+
+**LOEO benchmark across all 7 experiments reveals that Mode A (global logistic, one model
+over all time) is brittle to per-experiment batch shifts, while Mode C (per-bin/embryo)
+degrades more gracefully.**
+
+Summary statistics (mean ± std across 7 LOEO folds, full 12–120 hpf range):
+
+| Mode | Balanced acc | Macro F1 |
+|---|---:|---:|
+| A — global, mean rollup | 0.572 ± 0.168 | 0.526 ± 0.125 |
+| B — per-bin/image, mean | 0.597 ± 0.079 | 0.580 ± 0.077 |
+| **C — per-bin/embryo, mean** | **0.605 ± 0.084** | **0.598 ± 0.084** |
+
+Mode A has the highest variance (±0.168) — it produces the best results on easy folds and
+the worst on hard folds. Mode C is consistently in the middle, never collapsing.
+
+### The batch-effect failure mode
+
+Two experiments (20251112, 20251205) expose the failure sharply:
+
+| Fold | Mode A bal acc | Mode C bal acc | Δ |
+|---|---:|---:|---:|
+| 20251112 | 0.375 | 0.677 | **+0.30 for C** |
+| 20251205 | 0.462 | 0.600 | **+0.14 for C** |
+
+In both cases Mode A completely collapses `Intermediate` and `Low_to_High` F1 to 0.00.
+Mode C rescues both: Intermediate F1=0.67 in 20251112, 0.50 in 20251205.
+
+The mechanism: Mode A fits a single linear boundary over the entire developmental
+trajectory. When a held-out experiment has a batch shift at a specific time window, that
+shift rotates the decision boundary globally, pushing minority classes (Intermediate,
+Low_to_High) below the NP/HtL hyperplane everywhere. Mode C fits independently per 4-hpf
+bin, so a shift at one window only affects that bin's model — the failure is contained.
+
+See `plots/loeo_batchfx_failure_A_vs_C.png`.
+
+### Does τ rescue Mode A?
+
+Yes, partially. The τ sweep (margin-based abstention) shows that above τ≈0.2 Mode A's
+committed predictions reach similar quality to Mode C — the margin correctly identifies
+the images where A is confused. However, A only achieves high Intermediate precision at
+very low coverage (τ>0.6, <10% of images committed), whereas C holds Intermediate
+precision more stably across the coverage range.
+
+The practical implication: τ filtering can recover A's precision but at the cost of
+abstaining on a large fraction of the dataset. If coverage matters (you need predictions
+on most embryos), C is the better default.
+
+See `plots/loeo_tau_sweep_A_vs_C.png` and `plots/loeo_tau_sweep_perclass_A_vs_C.png`.
+
+### What can we learn from this?
+
+The morphological embedding encodes genuine discriminative signal across the full
+developmental window (12–120 hpf). The global model reads that signal well when
+experiments are consistent, but the minority classes (Intermediate, Low_to_High) sit near
+the decision boundary and are the first to be misclassified when that boundary shifts.
+Per-bin fitting acts as a form of local batch correction — each bin's model adapts to
+whatever embedding distribution the reference data shows at that timepoint, making the
+boundary more resilient.
+
+**Recommendation**: Use Mode C (per-bin/embryo) as the default production model. Run
+Mode A in parallel as a diagnostic — strong agreement between A and C is a positive
+quality signal; large disagreement flags potential batch effects in that experiment.
+
+---
+
 ## Decision: Production Path
 
 **Use multiclass logistic argmax with a margin-based abstention rule (τ threshold).**
@@ -254,3 +321,15 @@ as an optional diagnostic module but is not on the prediction path.
 | `q_conformal_benchmark_full_time_image_predictions.csv` | Full image-level predictions with q-scores, set membership |
 | `coverage_diagnostics_covgap.csv` | Per-class CovGap table |
 | `coverage_diagnostics_mondrian_summary.csv` | Pooled vs Mondrian per-fold comparison |
+| `logistic_label_transfer.py` | New logistic label transfer: 3 modes × 2 rollups |
+| `run_loeo_logistic_benchmark.py` | LOEO benchmark for all 6 mode×rollup combinations |
+| `loeo_logistic_results.csv` | Per-fold metrics for all 6 combinations |
+| `loeo_logistic_image_predictions.csv` | Image-level predictions with true labels and time bin |
+| `loeo_tau_sweep.csv` | τ sweep results for Mode A and C |
+| `plots/loeo_logistic_balanced_acc.png` | LOEO balanced accuracy by mode×rollup |
+| `plots/loeo_logistic_macro_f1.png` | LOEO macro F1 by mode×rollup |
+| `plots/loeo_logistic_f1_by_class.png` | Mean per-class F1 heatmap |
+| `plots/loeo_logistic_f1_by_timebin.png` | Image-level F1 by 4-hpf bin across full HPF range |
+| `plots/loeo_tau_sweep_A_vs_C.png` | τ sweep: macro F1 and balanced acc vs coverage, A vs C |
+| `plots/loeo_tau_sweep_perclass_A_vs_C.png` | τ sweep: per-class precision/recall vs coverage |
+| `plots/loeo_batchfx_failure_A_vs_C.png` | Batch-effect failure mode: 20251112 and 20251205 |
