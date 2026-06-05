@@ -52,13 +52,16 @@ def main() -> None:
     joint = drop_excluded_temperatures(pd.read_csv(CACHE_DIR / "joint_141_morph_seq.csv"))
     cohort = build_bootstrap_summary(joint)
     cohort.to_csv(CACHE_DIR / "tempo_noise_cohort_summary_bootstrap_se_no19C.csv", index=False)
+    cohort_plot = cohort.loc[
+        ~((np.isclose(cohort["temperature"], 25.0)) & (np.isclose(cohort["timepoint"], 24.0))), :
+    ].copy()
 
     fig, ax = plt.subplots(figsize=(5.2, 4.6))
     ax.errorbar(
-        cohort["morph_stage_std"],
-        cohort["seq_stage_std"],
-        xerr=cohort["morph_stage_std_boot_se"],
-        yerr=cohort["seq_stage_std_boot_se"],
+        cohort_plot["morph_stage_std"],
+        cohort_plot["seq_stage_std"],
+        xerr=cohort_plot["morph_stage_std_boot_se"],
+        yerr=cohort_plot["seq_stage_std_boot_se"],
         fmt="none",
         ecolor="#444444",
         elinewidth=0.9,
@@ -68,17 +71,18 @@ def main() -> None:
     )
     temperature_timepoint_scatter(
         ax,
-        cohort["morph_stage_std"],
-        cohort["seq_stage_std"],
-        cohort["temperature"],
-        cohort["timepoint"],
+        cohort_plot["morph_stage_std"],
+        cohort_plot["seq_stage_std"],
+        cohort_plot["temperature"],
+        cohort_plot["timepoint"],
         s=55,
         zorder=2,
     )
-    add_identity(ax, cohort["morph_stage_std"], cohort["seq_stage_std"])
+    ax.set_xlim(0, 4.5)
+    ax.set_ylim(0, 4.5)
+    add_identity(ax)
     ax.set_xlabel("morphology stage variability (sd hpf)")
     ax.set_ylabel("sequence stage variability (sd hpf)")
-    ax.set_title("Staging variability with bootstrap SE")
     savefig(fig, "01b_staging_variability_comparison_bootstrap_se")
     plt.close(fig)
 

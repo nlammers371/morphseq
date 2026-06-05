@@ -24,6 +24,7 @@ FIG_DIR = CACHE_DIR / "figures_no19C_timepoint"
 EXCLUDED_TEMPERATURES = (19.0,)
 TEMP_CMAP = "RdBu_r"
 TEMP_VMIN = 24
+TEMP_CENTER = 28.5
 TEMP_VMAX = 35
 TIMEPOINT_MARKERS = {
     24.0: "o",
@@ -32,6 +33,10 @@ TIMEPOINT_MARKERS = {
 }
 BOOTSTRAP_N = 5000
 BOOTSTRAP_SEED = 20260528
+
+
+def temperature_norm() -> mpl.colors.Normalize:
+    return mpl.colors.TwoSlopeNorm(vmin=TEMP_VMIN, vcenter=TEMP_CENTER, vmax=TEMP_VMAX)
 
 
 def ensure_dirs() -> None:
@@ -72,14 +77,12 @@ def temperature_scatter(ax, x, y, temp, **kwargs):
         y,
         c=temp,
         cmap=TEMP_CMAP,
-        vmin=TEMP_VMIN,
-        vmax=TEMP_VMAX,
+        norm=temperature_norm(),
         edgecolor="black",
         linewidth=0.25,
+        rasterized=True,
         **kwargs,
     )
-    cb = plt.colorbar(sc, ax=ax)
-    cb.set_label("temperature (C)")
     return sc
 
 
@@ -140,6 +143,7 @@ def value_timepoint_scatter(
     cmap=TEMP_CMAP,
     vmin=None,
     vmax=None,
+    norm=None,
     colorbar_label="",
     add_colorbar=True,
     add_legend=True,
@@ -157,18 +161,20 @@ def value_timepoint_scatter(
         plot_df["z"] = z
     plot_df = plot_df.dropna(subset=["x", "y", "value", "timepoint"])
 
-    if vmin is None:
+    if norm is None and vmin is None:
         vmin = float(plot_df["value"].min())
-    if vmax is None:
+    if norm is None and vmax is None:
         vmax = float(plot_df["value"].max())
 
     cmap_obj = plt.get_cmap(cmap)
-    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    if norm is None:
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
     scatter_kwargs = {
         "s": 38,
         "alpha": 0.9,
         "edgecolor": "black",
         "linewidth": 0.25,
+        "rasterized": True,
         **kwargs,
     }
     for timepoint_value, group in plot_df.groupby("timepoint", sort=True):
@@ -207,6 +213,7 @@ def value_timepoint_scatter(
 
 
 def temperature_timepoint_scatter(ax, x, y, temp, timepoint, *, z=None, **kwargs):
+    kwargs.setdefault("add_colorbar", False)
     return value_timepoint_scatter(
         ax,
         x,
@@ -215,11 +222,18 @@ def temperature_timepoint_scatter(ax, x, y, temp, timepoint, *, z=None, **kwargs
         timepoint,
         z=z,
         cmap=TEMP_CMAP,
-        vmin=TEMP_VMIN,
-        vmax=TEMP_VMAX,
+        norm=temperature_norm(),
         colorbar_label="temperature (C)",
         **kwargs,
     )
+
+
+def bootstrap_mean_se(values: pd.Series, rng: np.random.Generator, n_bootstrap: int = BOOTSTRAP_N) -> float:
+    arr = pd.to_numeric(values, errors="coerce").dropna().to_numpy(dtype=float)
+    if arr.size < 2:
+        return np.nan
+    samples = rng.choice(arr, size=(n_bootstrap, arr.size), replace=True)
+    return float(np.std(np.mean(samples, axis=1), ddof=1))
 
 
 def bootstrap_std_se(values: pd.Series, rng: np.random.Generator, n_bootstrap: int = BOOTSTRAP_N) -> float:
