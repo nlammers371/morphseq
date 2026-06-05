@@ -21,7 +21,7 @@ _DIVERGING_CMAPS |= {f'{c}_r' for c in _DIVERGING_CMAPS}
 
 from ..ir import FigureData, HeatmapData, HeatmapStyle, ColorbarSpec, TraceData, TraceStyle, FacetSpec
 from ..style.defaults import StyleSpec
-from ..utils import calculate_grid_map
+from ..utils import calculate_grid_map, compute_figure_size
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +170,8 @@ def render_matplotlib(
     if has_heatmaps:
         # Heatmap figures: use constrained_layout for proper colorbar placement
         # Extra width reserved for colorbar
-        figsize = (5 * n_cols + 1.5, 4.0 * n_rows)
+        height, width = compute_figure_size(n_rows, n_cols, style)
+        figsize = (width / 100.0 + 1.5, height / 100.0)
         # Disable axis sharing for heatmaps (each panel has its own categorical axes)
         fig, axes = plt.subplots(
             n_rows, n_cols, figsize=figsize,
@@ -178,7 +179,8 @@ def render_matplotlib(
             constrained_layout=True,
         )
     else:
-        figsize = (5 * n_cols, 4.5 * n_rows)
+        height, width = compute_figure_size(n_rows, n_cols, style)
+        figsize = (width / 100.0, height / 100.0)
         try:
             sharex = "all" if facet.sharex else False
             sharey = "row" if facet.sharey else False

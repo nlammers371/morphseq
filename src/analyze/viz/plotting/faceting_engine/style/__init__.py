@@ -1,7 +1,7 @@
 """Style module for faceted plotting."""
 
-from .defaults import StyleSpec, default_style, paper_style
+from .defaults import StyleSpec, default_style, paper_style, presentation_style, dense_facet_style
 
 __all__ = [
-    'StyleSpec', 'default_style', 'paper_style',
+    'StyleSpec', 'default_style', 'paper_style', 'presentation_style', 'dense_facet_style',
 ]

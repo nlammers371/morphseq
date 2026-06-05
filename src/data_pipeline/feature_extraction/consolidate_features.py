@@ -11,6 +11,8 @@ from typing import Optional
 import warnings
 
 from ..schemas.features import REQUIRED_COLUMNS_FEATURES
+from ..schemas.plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
+from ..io.validators import validate_dataframe_schema
 
 
 def consolidate_snip_features(
@@ -182,6 +184,7 @@ def load_and_consolidate_features(
     metadata_df = None
     if metadata_path and metadata_path.exists():
         metadata_df = pd.read_csv(metadata_path)
+        validate_dataframe_schema(metadata_df, REQUIRED_COLUMNS_PLATE_METADATA, "plate_metadata.csv")
 
     # Consolidate
     consolidated = consolidate_snip_features(

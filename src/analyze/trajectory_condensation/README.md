@@ -20,6 +20,8 @@ For method semantics, read [ALGORITHM.md](ALGORITHM.md). For file ownership and
 extension points, read [DESIGN.md](DESIGN.md). The older
 `results/.../trajectory_cosmology/` copies should be treated as experiment-local
 history; new reusable work should target this package.
+For the original conceptual motivation behind trajectory cosmology / trajectory
+condensation, see [INITIAL_INSPIRATION.md](INITIAL_INSPIRATION.md).
 
 For agent-facing usage notes, see
 [`ai/skills/analyze-trajectory-condensation`](../../../ai/skills/analyze-trajectory-condensation).
@@ -37,8 +39,8 @@ Stable public entry points currently include:
 | Task | Entry point |
 |------|-------------|
 | Validate package-native tensors | `tc.CondensationData`, `tc.validate(...)` |
-| Load classification/margin CSV outputs | `tc.from_multiclass_csv(...)`, `tc.from_pairwise_margin_csv(...)` |
-| Build initialization | `tc.init_embedding.aligned_umap_init(...)`, `tc.init_embedding.nan_aware_aligned_umap_init(...)`, `tc.init_embedding.pca_init(...)` |
+| Build input from classifier directions | `tc.from_classifier_directions(df, vd, time_col=...)` |
+| Build initialization | `tc.init_embedding.aligned_umap_init(...)` |
 | Run solver | `tc.run_condensation(...)` with `tc.CondensationConfig` and optional `tc.StoppingConfig` |
 | Load a saved NPZ run | `tc.load_run(...)` |
 | Render the standard viz bundle | `tc.render_run(...)` |
@@ -59,7 +61,7 @@ specific owner file from [DESIGN.md](DESIGN.md).
 | `viz/` | Visualization surface: static plots, GIFs, run comparison, condensed time-slice viewer |
 | `viz/condensed_time_slice_viewer.py` | Interactive condensed trajectory viewer: 3D trajectory context plus per-time 2D slice slider |
 | `schema.py` | `CondensationData` - canonical input tensors |
-| `init_embedding.py` | UMAP / PCA initialization |
+| `init_embedding.py` | NaN-aware UMAP-based initialization |
 | `iteration_ranking.py` | Geometry scoring and iteration selection |
 | `space_density_metrics.py` | Per-iteration geometry metrics |
 | `force_diagnostics.py` | Force decomposition diagnostics |
@@ -75,7 +77,7 @@ specific owner file from [DESIGN.md](DESIGN.md).
 ### Config field prefixes
 | Prefix | Domain |
 |--------|--------|
-| `attract_*` | Attraction force (e.g. `attract_k`, `attract_weight`) |
+| `attract_*` | Attraction force (e.g. `attract_k`, with `attract_weight` as the legacy field name for the strength) |
 | `temporal_cohere_*` | Temporal coherence (e.g. `temporal_cohere_window`) |
 | `elastic_*` | Elasticity force (e.g. `elastic_strength`, `elastic_mix`) |
 | `outlier_*` | Slice outlier correction (e.g. `outlier_strength`, `outlier_cutoff_mode`) |
@@ -109,20 +111,37 @@ set by geometry calibration and are not user-facing.
 
 ```python
 import analyze.trajectory_condensation as tc
+from analyze.morphology_geometry.io import load_classifier_directions
 
-x0 = tc.init_embedding.pca_init(data.features, data.mask)
+# 1. Load validated classifier directions
+vd = load_classifier_directions("results/.../classifier_directions/", feature_set="vae")
+
+# 2. Build canonical tensors (raw dot-product projection, one dim per vector_id)
+data = tc.from_classifier_directions(df, vd, time_col="stage_hpf")
+
+# 3. Initialize and run solver
+x0 = tc.init_embedding.aligned_umap_init(data.features, data.mask)
 config = tc.CondensationConfig(solver_max_iter=500)
+result = tc.run_condensation(x0=x0, mask=data.mask, config=config, save_every=10)
 
-result = tc.run_condensation(
-    x0=x0,
-    mask=data.mask,
-    config=config,
-    save_every=10,
-)
-
+# 4. Visualize
 run = tc.load_run("results/.../condensed_positions.npz", title="my run")
 tc.render_run(run, "output/my_run/")
 ```
+
+`aligned_umap_init(...)` is the standard public initialization entry point and
+routes through the NaN-aware UMAP path by default. Do not use `pca_init(...)` —
+it has not produced acceptable trajectory layouts in this repo.
+
+## Legacy input path (deprecated)
+
+`from_pairwise_margin_csv()` and `from_multiclass_csv()` accepted CSVs from the
+old contrast-coordinate classification path. Those values are clipped by the SVM
+margin or softmax saturation and give a distorted projection onto the classifier
+axis. They are retained in `schema.py` for historical script compatibility
+(`results/mcolon/20260329_pbx_crispant_analysis_cont/`) but are **not re-exported
+from the package** and emit `DeprecationWarning`. Use `from_classifier_directions()`
+for all new work.
 
 ## Visualization
 
@@ -140,3 +159,4 @@ coordinates.
 
 See [condensation/state.py](condensation/state.py) for `CondensationConfig` and
 [condensation/engine/run.py](condensation/engine/run.py) for `run_condensation`.
+For the force breakdown and scale-determination details, see [FORCES.md](FORCES.md).

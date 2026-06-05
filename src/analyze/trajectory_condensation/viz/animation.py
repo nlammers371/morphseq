@@ -39,6 +39,8 @@ from pathlib import Path
 
 import numpy as np
 
+from analyze.viz.styling.color_utils import apply_label_map
+
 
 # ---------------------------------------------------------------------------
 # Video A: final structure, slow rotation
@@ -49,6 +51,7 @@ def animate_rotation(
     mask: np.ndarray,
     time_values: np.ndarray,
     labels: np.ndarray | None = None,
+    label_map: dict[str, str] | None = None,
     color_map: dict[str, str] | None = None,
     output_path: str | Path = "rotation.mp4",
     n_frames: int = 120,
@@ -84,7 +87,8 @@ def animate_rotation(
     from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
     _validate_inputs(positions, mask, time_values)
-    color_map = _resolve_color_map(labels, color_map)
+    labels = apply_label_map(labels, label_map)
+    color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection="3d")
@@ -121,6 +125,7 @@ def animate_iterations(
     time_values: np.ndarray,
     snapshot_iters: list[int] | None = None,
     labels: np.ndarray | None = None,
+    label_map: dict[str, str] | None = None,
     color_map: dict[str, str] | None = None,
     output_path: str | Path = "iterations.mp4",
     elev: float = 25.0,
@@ -162,7 +167,8 @@ def animate_iterations(
 
     n_iters = position_history.shape[0]
     _validate_inputs(position_history[0], mask, time_values)
-    color_map = _resolve_color_map(labels, color_map)
+    labels = apply_label_map(labels, label_map)
+    color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     if snapshot_iters is None:
         snapshot_iters = list(range(n_iters))
@@ -205,6 +211,7 @@ def animate_time_slice(
     mask: np.ndarray,
     time_values: np.ndarray,
     labels: np.ndarray | None = None,
+    label_map: dict[str, str] | None = None,
     color_map: dict[str, str] | None = None,
     output_path: str | Path = "time_slice.gif",
     elev: float = 25.0,
@@ -254,7 +261,8 @@ def animate_time_slice(
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
     _validate_inputs(positions, mask, time_values)
-    color_map = _resolve_color_map(labels, color_map)
+    labels = apply_label_map(labels, label_map)
+    color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     T = positions.shape[1]
 
@@ -417,6 +425,7 @@ def animate_init_final_rotation(
     mask: np.ndarray,
     time_values: np.ndarray,
     labels: np.ndarray | None = None,
+    label_map: dict[str, str] | None = None,
     color_map: dict[str, str] | None = None,
     output_path: str | Path = "init_final_rotation.gif",
     n_frames: int = 120,
@@ -440,7 +449,8 @@ def animate_init_final_rotation(
 
     _validate_inputs(x0, mask, time_values)
     _validate_inputs(positions, mask, time_values)
-    color_map = _resolve_color_map(labels, color_map)
+    labels = apply_label_map(labels, label_map)
+    color_map = _resolve_color_map(labels, color_map, label_map=label_map)
 
     fig = plt.figure(figsize=figsize)
     ax_init = fig.add_subplot(121, projection="3d")
@@ -536,6 +546,7 @@ def _draw_stacked_3d(
 
 def _save_animation(anim, output_path: str | Path, fps: int, dpi: int) -> None:
     output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     suffix = output_path.suffix.lower()
     if suffix == ".gif":
         writer = "pillow"
@@ -569,12 +580,16 @@ def _validate_inputs(
 def _resolve_color_map(
     labels: np.ndarray | None,
     color_map: dict[str, str] | None,
+    label_map: dict[str, str] | None = None,
 ) -> dict[str, str]:
     if labels is None:
         return {}
     if color_map is not None:
+        if label_map:
+            return {label_map.get(str(k), str(k)): v for k, v in color_map.items()}
         return color_map
     import matplotlib.pyplot as plt
     unique = sorted(np.unique(labels))
     cmap = plt.get_cmap("tab10")
     return {l: cmap(i % 10) for i, l in enumerate(unique)}
+

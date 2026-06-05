@@ -1,26 +1,30 @@
-"""
-Schema definition for analysis-ready table.
+"""Schema definition for analysis-ready table.
 
-This module defines required columns for the final analysis-ready table,
-which combines features, QC flags, plate/scope metadata, and embeddings.
+This module defines the final flat table contract after feature and QC
+consolidation.
 """
+
+from __future__ import annotations
 
 from .features import REQUIRED_COLUMNS_FEATURES
-from .quality_control import REQUIRED_COLUMNS_QC
 from .plate_metadata import REQUIRED_COLUMNS_PLATE_METADATA
+from .quality_control import REQUIRED_COLUMNS_QC
 from .scope_metadata import REQUIRED_COLUMNS_SCOPE_METADATA
 
-REQUIRED_COLUMNS_ANALYSIS_READY = [
-    # Core IDs (must be preserved from features)
-    'snip_id',
-    'embryo_id',
-    'experiment_id',
-    'time_int',
-    'well_id',
-    'well_index',
+def _ordered_unique(columns: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for column in columns:
+        if column not in seen:
+            seen.add(column)
+            ordered.append(column)
+    return ordered
 
-    # Embedding status
-    'embedding_calculated',  # Boolean: True if embeddings present
 
-    # Note: Embedding columns (z0...z{dim-1}) are optional and checked separately
-] + REQUIRED_COLUMNS_FEATURES + REQUIRED_COLUMNS_QC + REQUIRED_COLUMNS_PLATE_METADATA + REQUIRED_COLUMNS_SCOPE_METADATA
+REQUIRED_COLUMNS_ANALYSIS_READY = _ordered_unique(
+    REQUIRED_COLUMNS_FEATURES
+    + REQUIRED_COLUMNS_QC
+    + REQUIRED_COLUMNS_PLATE_METADATA
+    + REQUIRED_COLUMNS_SCOPE_METADATA
+    + ["embedding_calculated"]
+)

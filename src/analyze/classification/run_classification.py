@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..utils.binning import add_time_bins
 from .engine.analysis import ClassificationAnalysis, ClassifierDirections, _LazyLayers
 from .engine.comparison_resolution import (
     ComparisonScheme,
@@ -216,9 +217,12 @@ def run_classification(
             df_str[class_col] = df_str[class_col].astype(str)
             df_mc = df_str[df_str[class_col].isin(class_labels)].copy()
             df_mc["_class_label"] = df_mc[class_col]
-            df_mc["_time_bin"] = (
-                np.floor(df_mc[time_col] / bin_width) * bin_width
-            ).astype(int)
+            df_mc = add_time_bins(
+                df_mc,
+                time_col=time_col,
+                bin_width=bin_width,
+                bin_col="_time_bin",
+            )
             groupby_cols = [id_col, "_time_bin", "_class_label"]
             df_binned = df_mc.groupby(groupby_cols, as_index=False)[feature_cols].mean()
 

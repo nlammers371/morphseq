@@ -30,7 +30,7 @@ def compute_size_validation_qc(
     k_upper: float = 1.2,
     k_lower: float = 0.9,
     stage_col: str = "predicted_stage_hpf",
-    sa_col: str = "surface_area_um"
+    sa_col: str = "area_um2"
 ) -> pd.DataFrame:
     """
     Compute surface area outlier flags using global reference curves.
@@ -42,7 +42,7 @@ def compute_size_validation_qc(
     ----------
     features_df : pd.DataFrame
         consolidated_snip_features.csv with columns:
-        [snip_id, embryo_id, predicted_stage_hpf, surface_area_um, ...]
+        [snip_id, embryo_id, predicted_stage_hpf, area_um2, ...]
     sa_reference_path : Path
         Path to metadata/sa_reference_curves.csv
     k_upper : float, default 1.2
@@ -51,8 +51,9 @@ def compute_size_validation_qc(
         Lower threshold multiplier (SA < k_lower × p5 flagged)
     stage_col : str, default "predicted_stage_hpf"
         Column name for developmental stage
-    sa_col : str, default "surface_area_um"
-        Column name for surface area
+    sa_col : str, default "area_um2"
+        Canonical column name for surface area. Legacy ``surface_area_um``
+        inputs are still accepted by the underlying detector.
 
     Returns
     -------

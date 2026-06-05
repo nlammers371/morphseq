@@ -1,11 +1,23 @@
 # MorphSeq Pipeline Configuration
 
-# Data paths
-data_root: "data_pipeline_output"
+# Data paths.
+# Relative paths resolve from PROJECT_ROOT (repo root). Absolute paths used as-is.
+# Defaults:
+#   data_root:           PROJECT_ROOT/data_pipeline_output
+#   data_pipeline_code:  PROJECT_ROOT/src/data_pipeline
+# Override examples:
+#   data_root: "/net/trapnell/vol1/home/mdcolon/proj/morphseq-docs/data_pipeline_output"
+#   data_pipeline_code: "/some/other/pipeline/src"
 
 # Experiments to process
 experiments:
   - 20250912
+
+# Optional smoke-test subset. Accepts canonical wells (B01) or full well IDs
+# (20250912_B01). Non-empty values write outputs under:
+#   {data_root}/scoped_runs/wells-.../
+# Leave empty for full-plate processing in canonical output locations.
+target_wells: []
 
 # Microscope selection.
 # If you need per-experiment microscope selection, add:
@@ -30,6 +42,7 @@ scope_metadata:
 image_building:
   device: "cuda"
   overwrite: false
+  image_format: "jpg"
   yx1:
     z_buffer: false
   # Keyence support depends on having FF tiles/inputs wired; leave disabled for now.
@@ -47,11 +60,18 @@ segmentation_and_tracking:
     text_threshold: 0.25
     confidence_threshold: 0.45
     iou_threshold: 0.5
-    config_path: ""
-    weights_path: ""
+    config_path: "segmentation_sandbox/models/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
+    weights_path: "/net/trapnell/vol1/home/mdcolon/proj/image_segmentation/Open-GroundingDino/finetune_output/finetune_output_run_nick_masks_20250308/checkpoint_best_regular.pth"
   sam2:
-    config_path: ""
-    checkpoint_path: ""
+    config_path: "configs/sam2.1/sam2.1_hiera_l.yaml"
+    checkpoint_path: "/net/trapnell/vol1/home/mdcolon/proj/image_segmentation/sam2/checkpoints/sam2.1_hiera_large.pt"
+
+# Auxiliary masks (UNet-derived QC masks).
+auxiliary_masks:
+  model_root: "models/segmentation"
+  batch_size: 64
+  num_workers: 1
+  overwrite: false
 
 # Snip processing (crop + rotate + augment).
 snip_processing:

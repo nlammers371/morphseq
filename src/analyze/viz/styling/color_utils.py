@@ -5,12 +5,45 @@ These helpers are intentionally plotting-backend agnostic and can be shared
 across faceted, time-series, 3D, or other plot implementations.
 """
 
+from dataclasses import dataclass
 import colorsys
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import matplotlib.colors as mcolors
+import numpy as np
 
 from .genotype_colors import get_known_genotype_color
+
+
+@dataclass(frozen=True)
+class ColorPreset:
+    """Reusable color configuration for a family of plots."""
+
+    colors: Mapping[Any, Any]
+    order: Optional[Sequence[Any]] = None
+    fill: str = "error"
+    name: Optional[str] = None
+    version: Optional[str] = None
+    source: Optional[str] = None
+
+    def apply(
+        self,
+        values: Sequence[Any],
+        *,
+        color_lookup: Optional[Mapping[Any, Any]] = None,
+        color_mode: str = "auto",
+        label_map: Optional[Mapping[Any, Any]] = None,
+        palette: Optional[List[str]] = None,
+    ) -> Dict[Any, str]:
+        """Resolve colors for values using this preset."""
+        return resolve_color_lookup(
+            values,
+            color_lookup=color_lookup,
+            palette=palette,
+            color_preset=self,
+            color_mode=color_mode,
+            label_map=label_map,
+        )
 
 
 STANDARD_PALETTE = [
@@ -53,6 +86,77 @@ def create_color_lookup(
     return {v: palette[i % len(palette)] for i, v in enumerate(unique_values)}
 
 
+def apply_label_map(
+    values: Sequence[Any],
+    label_map: Optional[Mapping[Any, Any]] = None,
+) -> np.ndarray:
+    """Remap values through a display-name map while preserving order."""
+    if not label_map:
+        return np.asarray(values, dtype=object)
+    return np.asarray(
+        [label_map.get(str(value), label_map.get(value, str(value))) for value in values],
+        dtype=object,
+    )
+
+
+def _apply_label_map_to_key(
+    value: Any,
+    label_map: Optional[Mapping[Any, Any]] = None,
+) -> Any:
+    """Apply a label map to a single key if one is provided."""
+    if not label_map:
+        return value
+    return label_map.get(str(value), label_map.get(value, value))
+
+
+def ordered_present_values(
+    values: Sequence[Any],
+    preferred_order: Optional[Sequence[Any]] = None,
+    label_map: Optional[Mapping[Any, Any]] = None,
+) -> List[Any]:
+    """Return unique values in preferred order, then remaining values in encounter order."""
+    remapped = apply_label_map(values, label_map=label_map)
+    seen: set[Any] = set()
+    ordered: List[Any] = []
+
+    def _add(value: Any) -> None:
+        if value in seen:
+            return
+        seen.add(value)
+        ordered.append(value)
+
+    if preferred_order is not None:
+        preferred = apply_label_map(preferred_order, label_map=label_map)
+        for value in preferred:
+            if value in remapped:
+                _add(value)
+
+    for value in remapped:
+        _add(value)
+
+    return ordered
+
+
+def build_ordered_color_lookup(
+    values: Sequence[Any],
+    preferred_order: Optional[Sequence[Any]] = None,
+    label_map: Optional[Mapping[Any, Any]] = None,
+    color_lookup: Optional[Mapping[Any, Any]] = None,
+    palette: Optional[List[str]] = None,
+) -> Dict[Any, str]:
+    """Build an ordered value->color mapping with optional remapping and palette fallback."""
+    ordered_values = ordered_present_values(
+        values,
+        preferred_order=preferred_order,
+        label_map=label_map,
+    )
+    assigned = create_color_lookup(ordered_values, palette=palette)
+    if color_lookup:
+        for key, value in color_lookup.items():
+            assigned[_apply_label_map_to_key(key, label_map)] = normalize_color(value)
+    return assigned
+
+
 def _generate_distinct_color(index: int) -> str:
     """Generate additional distinct colors when the palette is exhausted."""
     hue = (index * 0.618033988749895) % 1.0  # Golden-ratio spacing
@@ -90,6 +194,10 @@ def resolve_color_lookup(
     default_resolver: Optional[Callable[[Any], Optional[Any]]] = get_known_genotype_color,
     enforce_distinct: bool = True,
     warn_on_collision: bool = True,
+    *,
+    color_preset: Optional[ColorPreset] = None,
+    color_mode: str = "auto",
+    label_map: Optional[Mapping[Any, Any]] = None,
 ) -> Dict[Any, str]:
     """
     Resolve per-value colors with optional collision handling.
@@ -102,19 +210,71 @@ def resolve_color_lookup(
       Explicit and default-resolved colors are treated as preferred starting
       assignments, but later collisions are reassigned to unused colors.
     """
-    values = list(unique_values)
+    values = list(apply_label_map(unique_values, label_map=label_map))
     if not values:
         return {}
 
     palette_norm = [normalize_color(c) for c in (palette or STANDARD_PALETTE)]
+    mode = str(color_mode or "auto").lower()
+    if color_preset is not None:
+        if color_preset.fill == "error":
+            mode = "error"
+        elif color_preset.fill == "genotype":
+            mode = "genotype"
+        elif color_preset.fill == "neutral":
+            mode = "neutral"
+        elif color_preset.fill == "palette":
+            mode = "palette"
+        else:
+            raise ValueError(
+                "ColorPreset.fill must be one of 'error', 'palette', 'neutral', or 'genotype'."
+            )
+
+    if mode not in {"auto", "genotype", "palette", "neutral", "error"}:
+        raise ValueError(
+            "color_mode must be one of 'auto', 'genotype', 'palette', 'neutral', or 'error'."
+        )
+
     assigned: Dict[Any, str] = {}
     used_colors = set()
     palette_idx = [0]
     generated_idx = [0]
+    explicit_lookup: Dict[Any, Any] = {}
+
+    if color_preset is not None:
+        for key, value in color_preset.colors.items():
+            explicit_lookup[_apply_label_map_to_key(key, label_map)] = normalize_color(value)
+
+    if color_lookup is not None:
+        for key, value in color_lookup.items():
+            explicit_lookup[_apply_label_map_to_key(key, label_map)] = normalize_color(value)
+
+    if mode == "error":
+        missing = [val for val in values if val not in explicit_lookup]
+        if missing:
+            raise KeyError(
+                "Color preset does not define colors for: "
+                + ", ".join(sorted({str(v) for v in missing}))
+            )
+
+    if mode == "neutral":
+        for val in values:
+            explicit_lookup.setdefault(val, "#808080")
+
+    if color_preset is not None and color_preset.fill == "genotype":
+        default_resolver = get_known_genotype_color
+    elif color_preset is not None and color_preset.fill in {"error", "neutral"}:
+        default_resolver = None
+    elif mode == "palette":
+        default_resolver = None
+    elif mode in {"auto", "genotype"}:
+        default_resolver = default_resolver or get_known_genotype_color
+    elif mode == "error":
+        default_resolver = None
 
     get_color = (
-        color_lookup.get
-        if color_lookup is not None and hasattr(color_lookup, "get")
+        explicit_lookup.get
+        if explicit_lookup is not None and hasattr(explicit_lookup, "get")
         else None
     )
 
@@ -160,6 +320,26 @@ def resolve_color_lookup(
     return assigned
 
 
+def build_color_preset(
+    colors: Mapping[Any, Any],
+    *,
+    order: Optional[Sequence[Any]] = None,
+    fill: str = "error",
+    name: Optional[str] = None,
+    version: Optional[str] = None,
+    source: Optional[str] = None,
+) -> ColorPreset:
+    """Convenience constructor for an immutable ColorPreset."""
+    return ColorPreset(
+        colors=dict(colors),
+        order=list(order) if order is not None else None,
+        fill=fill,
+        name=name,
+        version=version,
+        source=source,
+    )
+
+
 def build_genotype_color_lookup(
     genotypes: Sequence[Any],
     color_lookup: Optional[Mapping[Any, Any]] = None,
@@ -184,10 +364,15 @@ def build_genotype_color_lookup(
 
 
 __all__ = [
+    "ColorPreset",
     "STANDARD_PALETTE",
     "normalize_color",
     "to_rgba_string",
     "create_color_lookup",
+    "apply_label_map",
+    "ordered_present_values",
+    "build_ordered_color_lookup",
     "resolve_color_lookup",
     "build_genotype_color_lookup",
+    "build_color_preset",
 ]

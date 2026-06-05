@@ -87,7 +87,8 @@ def _write_stitched_ff(
     channel_name: str,
     time_int: int,
     image: np.ndarray,
-    overwrite: bool = False
+    overwrite: bool = False,
+    image_format: str = "jpg",
 ):
     """
     Write stitched FF image to standardized location.
@@ -98,12 +99,15 @@ def _write_stitched_ff(
     well_dir = output_dir / well_name / channel_name
     well_dir.mkdir(parents=True, exist_ok=True)
 
-    output_path = well_dir / f"{well_name}_{channel_name}_t{time_int:04d}.tif"
+    output_path = well_dir / f"{well_name}_{channel_name}_t{time_int:04d}.{image_format}"
 
     if output_path.exists() and not overwrite:
         return
 
-    skio.imsave(output_path, image, check_contrast=False)
+    save_kwargs = {"check_contrast": False}
+    if image_format == "jpg":
+        save_kwargs["quality"] = 95
+    skio.imsave(output_path, image, **save_kwargs)
 
 
 def compile_yx1_data(
@@ -115,6 +119,7 @@ def compile_yx1_data(
     device: str = "cuda" if torch.cuda.is_available() else "cpu",  # GPU BUG FIX: NOT commented out
     n_workers: int = 1,
     z_buffer: bool = False,
+    image_format: str = "jpg",
 ):
     """
     Compile YX1 ND2 data into stitched FF images.
@@ -175,7 +180,7 @@ def compile_yx1_data(
     for nd2_idx, well_name in sorted(well_name_lookup.items()):
         for t in range(n_t):
             # Check if already exists
-            output_path = output_dir / well_name / "BF" / f"{well_name}_BF_t{t:04d}.tif"
+            output_path = output_dir / well_name / "BF" / f"{well_name}_BF_t{t:04d}.{image_format}"
             if output_path.exists() and not overwrite:
                 skipped += 1
                 continue
@@ -188,7 +193,7 @@ def compile_yx1_data(
                 ff = _focus_stack(stack, device, filter_size=3)
 
                 # Write output
-                _write_stitched_ff(output_dir, well_name, "BF", t, ff, overwrite)
+                _write_stitched_ff(output_dir, well_name, "BF", t, ff, overwrite, image_format)
 
                 processed += 1
 

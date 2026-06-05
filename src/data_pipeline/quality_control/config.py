@@ -12,7 +12,7 @@ QC_DEFAULTS = {
     "dead_lead_time_hours": 4.0,
     # Number of hours BEFORE detected death to retroactively flag embryo as compromised.
     # This buffer time accounts for the period when an embryo is already dying but
-    # has not yet triggered the death detection threshold. Used in compute_dead_flag2_persistence()
+    # has not yet triggered the death detection threshold. Used in compute_dead_flag_persistence()
     # to exclude data from compromised embryos.
 
     # Persistence threshold for dead flag confirmation

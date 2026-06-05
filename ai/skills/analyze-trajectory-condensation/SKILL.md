@@ -30,8 +30,8 @@ import analyze.trajectory_condensation as tc
 | Task | Entry point |
 |---|---|
 | Data contract | `tc.CondensationData`, `tc.validate(...)` |
-| CSV conversion | `tc.from_multiclass_csv(...)`, `tc.from_pairwise_margin_csv(...)`, `tc.subset_pairwise(...)` |
-| Initialization | `tc.init_embedding.aligned_umap_init(...)`, `tc.init_embedding.nan_aware_aligned_umap_init(...)`, `tc.init_embedding.pca_init(...)` |
+| Build input from directions | `tc.from_classifier_directions(df, vd, time_col=...)` |
+| Initialization | `tc.init_embedding.aligned_umap_init(...)` |
 | Solver config | `tc.CondensationConfig`, `tc.StoppingConfig` |
 | Run solver | `tc.run_condensation(...)` |
 | Force diagnostics | `tc.force_snapshot(...)`, `tc.force_target_table(...)`, `tc.describe_force_balance(...)` |
@@ -44,9 +44,11 @@ import analyze.trajectory_condensation as tc
 
 ```python
 import analyze.trajectory_condensation as tc
+from analyze.morphology_geometry.io import load_classifier_directions
 
-data = tc.from_pairwise_margin_csv("results/.../raw_contrast_scores_long.csv")
-x0 = tc.init_embedding.pca_init(data.features, data.mask)
+vd = load_classifier_directions("results/.../classifier_directions/", feature_set="vae")
+data = tc.from_classifier_directions(df, vd, time_col="stage_hpf")
+x0 = tc.init_embedding.aligned_umap_init(data.features, data.mask)
 
 config = tc.CondensationConfig(
     solver_max_iter=500,
@@ -65,6 +67,14 @@ result = tc.run_condensation(
     verbose=True,
 )
 ```
+
+Do not use `from_pairwise_margin_csv()` or `from_multiclass_csv()` for new work —
+those functions read contrast-coordinate CSVs where values are clipped by the SVM
+margin, giving a distorted projection. They emit `DeprecationWarning` and are not
+re-exported from the package. Historical scripts in
+`results/mcolon/20260329_pbx_crispant_analysis_cont/` still use them.
+
+Do not recommend `pca_init(...)`. It has not worked well enough to be supported.
 
 ## Data Contract
 
@@ -93,7 +103,7 @@ usually NaN where `mask=False`.
 ## Ownership Map
 
 - `schema.py` owns shapes, masks, labels, and CSV conversion.
-- `init_embedding.py` owns aligned UMAP, NaN-aware aligned UMAP, and PCA starts.
+- `init_embedding.py` owns the NaN-aware UMAP initialization path.
 - `condensation/state.py` owns `CondensationConfig`, `CondensationResult`, and state dataclasses.
 - `condensation/geometry_refs.py` owns geometry-dependent calibration scales.
 - `condensation/forces/*` owns individual force families.

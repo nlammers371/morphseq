@@ -70,6 +70,23 @@ fig = plot_feature_over_time(
 )
 ```
 
+### Style Presets
+```python
+from src.analyze.viz.plotting import (
+    default_style,
+    paper_style,
+    presentation_style,
+)
+
+base = default_style()
+paper = paper_style()
+talk = presentation_style()
+```
+
+Use these presets when you want a standard layout without spelling out every
+trace and spacing knob. If you need to tune one thing, pass `style=` and then
+override the field you care about.
+
 ### Custom Colors
 ```python
 # Custom color palette
@@ -79,6 +96,7 @@ fig = plot_feature_over_time(
     time_col='time',
     color_by='category',
     color_palette=['#FF5733', '#33FF57', '#3357FF'],
+    label_map={'a': 'A', 'b': 'B'},
     show_individual=True,
     backend='both',  # Generate both HTML and PNG
     output_path='custom_colors.html'
@@ -149,6 +167,29 @@ from src.analyze.viz.plotting import plot_feature_over_time
 
 # Domain-specific (multi-metric trajectories)
 from src.analyze.viz.plotting import plot_feature_over_time
+```
+
+### Example API
+```python
+from src.analyze.viz.plotting import plot_feature_over_time, presentation_style
+
+fig = plot_feature_over_time(
+    df,
+    features="curvature",
+    time_col="predicted_stage_hpf",
+    color_by="genotype",
+    color_lookup={
+        "cep290_homozygous": "#B2182B",
+        "cep290_wildtype": "#888888",
+    },
+    label_map={
+        "cep290_homozygous": "Homozygous",
+        "cep290_wildtype": "Wildtype",
+    },
+    style=presentation_style(),
+    backend="matplotlib",
+    ylim=(0, 1),
+)
 ```
 
 ## Related Modules

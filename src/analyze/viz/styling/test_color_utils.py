@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = os.environ.get("MORPHSEQ_REPO_ROOT")
 if not REPO_ROOT:
     REPO_ROOT = str(Path(__file__).resolve().parents[4])
@@ -12,6 +14,7 @@ if SRC_DIR not in sys.path:
 
 from analyze.trajectory_analysis.viz.styling import get_color_for_genotype as legacy_get_color_for_genotype
 from analyze.viz.styling import (
+    ColorPreset,
     build_genotype_color_lookup,
     get_color_for_genotype,
     get_known_genotype_color,
@@ -87,3 +90,48 @@ def test_known_genotype_color_returns_none_for_non_genotype_values():
 def test_trajectory_helper_delegates_to_shared_genotype_color_logic():
     assert legacy_get_color_for_genotype("pbx4") == get_color_for_genotype("pbx4")
     assert legacy_get_color_for_genotype("cep290_homozygous") == get_color_for_genotype("cep290_homozygous")
+
+
+def test_color_preset_object_is_resolved_with_explicit_colors():
+    preset = ColorPreset(
+        colors={"inj_ctrl": "#7f7f7f", "pbx4": "#d62728"},
+        order=["inj_ctrl", "pbx4"],
+        fill="error",
+    )
+
+    colors = resolve_color_lookup(
+        ["pbx4", "inj_ctrl"],
+        color_preset=preset,
+        warn_on_collision=False,
+    )
+
+    assert colors["inj_ctrl"] == "#7f7f7f"
+    assert colors["pbx4"] == "#d62728"
+
+
+def test_color_preset_respects_label_map_for_display_keys():
+    preset = ColorPreset(
+        colors={"pbx1b_crispant": "#9467bd"},
+        order=["pbx1b_crispant"],
+        fill="error",
+    )
+
+    colors = resolve_color_lookup(
+        ["pbx1b_crispant"],
+        color_preset=preset,
+        label_map={"pbx1b_crispant": "pbx1b"},
+        warn_on_collision=False,
+    )
+
+    assert colors["pbx1b"] == "#9467bd"
+
+
+def test_color_preset_fill_error_raises_for_missing_labels():
+    preset = ColorPreset(colors={"inj_ctrl": "#7f7f7f"}, fill="error")
+
+    with pytest.raises(KeyError):
+        resolve_color_lookup(
+            ["inj_ctrl", "pbx4"],
+            color_preset=preset,
+            warn_on_collision=False,
+        )

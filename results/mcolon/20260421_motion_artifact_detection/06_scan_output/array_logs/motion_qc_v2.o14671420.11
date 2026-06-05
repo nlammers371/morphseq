@@ -1,0 +1,23 @@
+[Wed Apr 22 17:43:38 PDT 2026] Task 11: T=98–103  host=t003.grid.gs.washington.edu  NSLOTS=4
+[t003.grid.gs.washington.edu] Scanning T=98–103/112, P=0–94 → 570 stacks  (workers=4)
+  100/570 stacks done
+  200/570 stacks done
+  300/570 stacks done
+  400/570 stacks done
+  500/570 stacks done
+  checkpoint → /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/06_scan_output/chunk_summaries_t098_t104.csv (500 rows)
+Saved CSV → /net/trapnell/vol1/home/mdcolon/proj/morphseq/results/mcolon/20260421_motion_artifact_detection/06_scan_output/chunk_summaries_t098_t104.csv  (570 rows)
+
+=== Timing report (570 freshly computed stacks, 4 workers) ===
+  metric                   mean   median      p95
+  --------------------  -------  -------  -------
+  ND2 load                8.83s    7.84s   15.66s
+  grid compute            2.48s    2.31s    4.05s
+  npz save                0.02s    0.01s    0.07s
+  total/stack            11.34s   10.47s   18.29s
+
+  Throughput (estimated): 21.2 stacks/min × 4 workers
+  Dominant phase: ND2 load (I/O-bound)
+
+Done.
+[Wed Apr 22 18:12:51 PDT 2026] Task 11 done.

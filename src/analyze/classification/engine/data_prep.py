@@ -12,13 +12,15 @@ Public API (used via relative import within the classification package)
 -----------------------------------------------------------------------
 _resolve_feature_columns  -- feature spec -> concrete column lists
 _build_binary_labels      -- pooling-aware binary labeling (_y column)
-_bin_and_aggregate        -- floor-bin + per-(id, bin, label) mean aggregation
+_bin_and_aggregate        -- bin via add_time_bins + per-(id, bin, label) mean aggregation
+_aggregate_binned         -- mean-aggregate a pre-binned DataFrame (no flooring)
 """
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
+
+from ...utils.binning import add_time_bins
 
 from .comparison_resolution import ResolvedComparison
 
@@ -98,7 +100,7 @@ def _bin_and_aggregate(
     feature_cols: list[str],
     bin_width: float,
 ) -> pd.DataFrame:
-    """Floor-bin by *time_col*, then mean-aggregate per (id, bin, label).
+    """Bin by *time_col*, then mean-aggregate per (id, bin, label).
 
     Adds two columns to the result:
       _time_bin      : int floor of the time bin (e.g. 22 for [22, 24) hpf)
@@ -115,10 +117,36 @@ def _bin_and_aggregate(
     feature_cols : feature columns to aggregate
     bin_width : time bin width in hpf
     """
-    out = df.copy()
-    out["_time_bin"] = (np.floor(out[time_col] / bin_width) * bin_width).astype(int)
-    out["time_bin_center"] = out["_time_bin"].astype(float) + bin_width / 2.0
+    binned = add_time_bins(df, time_col=time_col, bin_width=bin_width, bin_col="_time_bin")
+    return _aggregate_binned(
+        binned,
+        id_col=id_col,
+        feature_cols=feature_cols,
+        label_col="_y",
+        bin_col="_time_bin",
+        bin_width=bin_width,
+    )
 
-    groupby_cols = [id_col, "_time_bin", "time_bin_center", "_y"]
+
+def _aggregate_binned(
+    df_binned: pd.DataFrame,
+    id_col: str,
+    feature_cols: list[str],
+    *,
+    label_col: str | None = None,
+    bin_col: str = "time_bin",
+    bin_width: float,
+) -> pd.DataFrame:
+    """Mean-aggregate features from a pre-binned DataFrame.
+
+    ``df_binned`` must already contain ``bin_col``. This helper only groups and
+    averages; it does not perform flooring/bin assignment.
+    """
+    out = df_binned.copy()
+    out["time_bin_center"] = out[bin_col].astype(float) + bin_width / 2.0
+
+    groupby_cols = [id_col, bin_col, "time_bin_center"]
+    if label_col:
+        groupby_cols.append(label_col)
     agg_cols = [c for c in feature_cols if c in out.columns]
     return out.groupby(groupby_cols, as_index=False)[agg_cols].mean()

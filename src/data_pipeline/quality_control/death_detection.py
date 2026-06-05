@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Death Persistence Validation for dead_flag2 Computation
+Death Persistence Validation for dead_flag Computation
 
 This module implements a biologically-grounded approach to detect embryo death
 by leveraging the fundamental constraint that death is permanent. Instead of
@@ -11,7 +11,7 @@ Key Features:
 - Uses fraction_alive decline detection with persistence validation
 - Adds dead_inflection_time_int column for precise death time tracking
 - Parameters: 80% persistence threshold, 0.05 decline rate, 4hr buffer
-- Maintains compatibility with existing dead_flag2 interface
+- Maintains compatibility with existing dead_flag interface
 
 Algorithm:
 1. For each embryo, find fraction_alive decline points (rate < -0.05)
@@ -213,11 +213,11 @@ def detect_persistent_death_inflection(embryo_data: pd.DataFrame,
     return None
 
 
-def compute_dead_flag2_persistence(df: pd.DataFrame, dead_lead_time: float = None) -> pd.DataFrame:
+def compute_dead_flag_persistence(df: pd.DataFrame, dead_lead_time: float = None) -> pd.DataFrame:
     """
-    Compute dead_flag2 using death persistence validation method.
+    Compute dead_flag using death persistence validation method.
 
-    This function replaces the legacy dead_flag2 computation with a biologically-grounded
+    This function replaces the legacy dead_flag computation with a biologically-grounded
     approach that validates death inflection points by checking for persistent death signals.
 
     Parameters
@@ -232,7 +232,7 @@ def compute_dead_flag2_persistence(df: pd.DataFrame, dead_lead_time: float = Non
     -------
     df : pd.DataFrame
         DataFrame with added columns:
-        - dead_flag2: Boolean flags for death detection with buffer
+        - dead_flag: Boolean flags for death detection with buffer
         - dead_inflection_time_int: time_int of death inflection (same for all snip_ids of embryo)
 
     Notes
@@ -242,7 +242,7 @@ def compute_dead_flag2_persistence(df: pd.DataFrame, dead_lead_time: float = Non
     2. Validate persistence: ≥80% of post-inflection points must have dead_flag=True
     3. If persistent, set dead_inflection_time_int for all rows of that embryo
     4. Apply 4-hour buffer using predicted_stage_hpf for flagging
-    5. Flag dead_flag2=True for timepoints >= buffer_start_hpf
+    5. Flag dead_flag=True for timepoints >= buffer_start_hpf
 
     Expected detection rate: ~80% of embryos (vs lower rate with legacy method)
     """
@@ -253,7 +253,7 @@ def compute_dead_flag2_persistence(df: pd.DataFrame, dead_lead_time: float = Non
     df = df.copy()
 
     # Initialize new columns
-    df['dead_flag2'] = False
+    df['dead_flag'] = False
     df['dead_inflection_time_int'] = np.nan
 
     # Check required columns
@@ -296,7 +296,7 @@ def compute_dead_flag2_persistence(df: pd.DataFrame, dead_lead_time: float = Non
 
                 # Flag using predicted_stage_hpf >= buffer_start_hpf
                 flag_mask = embryo_mask & (df['predicted_stage_hpf'] >= buffer_start_hpf)
-                df.loc[flag_mask, 'dead_flag2'] = True
+                df.loc[flag_mask, 'dead_flag'] = True
                 flagged_count += flag_mask.sum()
 
     # Report results

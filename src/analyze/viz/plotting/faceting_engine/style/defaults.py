@@ -2,7 +2,8 @@
 Style specification for faceted plots.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
+from typing import Any
 
 
 @dataclass
@@ -67,3 +68,59 @@ def paper_style() -> StyleSpec:
         trend_width=2.0,
         legend_fontsize=10,
     )
+
+
+def presentation_style() -> StyleSpec:
+    return StyleSpec(
+        height_per_row=320,
+        width_per_col=360,
+        min_height=420,
+        min_width=640,
+        individual_alpha=0.18,
+        individual_width=0.8,
+        trend_alpha=1.0,
+        trend_width=2.4,
+        band_alpha=0.18,
+        legend_fontsize=10,
+        legend_loc='outside',
+        repeat_xlabels=False,
+        repeat_ylabels=False,
+        repeat_xticklabels=False,
+        repeat_yticklabels=False,
+    )
+
+
+def dense_facet_style() -> StyleSpec:
+    return StyleSpec(
+        height_per_row=300,
+        width_per_col=320,
+        min_height=360,
+        min_width=520,
+        legend_fontsize=10,
+        legend_loc='outside',
+        repeat_xlabels=False,
+        repeat_ylabels=False,
+        repeat_xticklabels=False,
+        repeat_yticklabels=False,
+    )
+
+
+def update_style(base: StyleSpec | None = None, **overrides: Any) -> StyleSpec:
+    """Return a copy of StyleSpec with selected fields overridden.
+
+    This is the ergonomic path for "start from a preset, tweak one or two
+    fields" without requiring callers to know the full dataclass layout.
+    """
+    style = replace(base) if base is not None else StyleSpec()
+    valid_fields = {f.name for f in fields(StyleSpec)}
+    unknown = sorted(set(overrides) - valid_fields)
+    if unknown:
+        raise TypeError(
+            "Unknown StyleSpec override(s): "
+            + ", ".join(unknown)
+            + ". Valid fields are: "
+            + ", ".join(sorted(valid_fields))
+        )
+    for key, value in overrides.items():
+        setattr(style, key, value)
+    return style

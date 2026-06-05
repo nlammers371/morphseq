@@ -3,6 +3,13 @@ Time binning utilities for embryo morphological data.
 
 This module provides functions for binning VAE embeddings by developmental time
 and embryo identity, enabling temporal analysis of phenotype emergence.
+
+Contract
+--------
+Binning is a preprocessing step, not an analysis step. Call ``add_time_bins``
+at the boundary where ``bin_width`` is decided, then pass prepared DataFrames
+downstream. Analysis code should consume the bin column and avoid re-flooring
+``time / bin_width`` outside this module.
 """
 
 import numpy as np

@@ -2,7 +2,7 @@
 """
 Imaging Quality QC Module (STUB for MVP)
 
-Validates imaging quality using UNet auxiliary masks:
+Validates imaging quality using auxiliary masks:
 - yolk_flag: Yolk sac detection issues
 - focus_flag: Out-of-focus regions
 - bubble_flag: Air bubbles present
@@ -41,7 +41,7 @@ def compute_imaging_quality_qc(
     snip_manifest_df : pd.DataFrame
         Snip manifest with columns: [snip_id, image_id, ...]
     unet_masks_dir : Path, optional
-        Path to UNet auxiliary masks directory (not used in stub)
+        Path to auxiliary masks directory (not used in stub)
 
     Returns
     -------
@@ -52,7 +52,7 @@ def compute_imaging_quality_qc(
     Notes
     -----
     Future implementation will:
-    1. Load UNet predictions from segmentation/{exp}/unet_masks/
+    1. Load auxiliary masks from auxiliary_masks/{exp}/
     2. Threshold via/, yolk, focus, bubble masks
     3. Compute per-snip flags based on mask overlap with embryo region
     4. See legacy: src/build/qc_utils.py for threshold logic
@@ -103,7 +103,7 @@ def compute_imaging_quality_qc_from_unet(
     snip_manifest_df : pd.DataFrame
         Snip manifest with image_id mapping
     unet_masks_dir : Path
-        Directory containing UNet auxiliary masks:
+        Directory containing auxiliary masks:
         - yolk/{image_id}_yolk.png
         - focus/{image_id}_focus.png
         - bubble/{image_id}_bubble.png
@@ -141,7 +141,7 @@ def main():
     """Example usage and documentation."""
     print("Imaging Quality QC Module (STUB)")
     print("=" * 50)
-    print("Validates imaging quality using UNet auxiliary masks")
+    print("Validates imaging quality using auxiliary masks")
     print("- yolk_flag: Yolk sac issues")
     print("- focus_flag: Out-of-focus regions")
     print("- bubble_flag: Air bubbles")

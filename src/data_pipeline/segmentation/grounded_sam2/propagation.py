@@ -62,6 +62,8 @@ import cv2
 import numpy as np
 import torch
 
+DEFAULT_SAM2_REPO = Path("/net/trapnell/vol1/home/mdcolon/proj/image_segmentation/sam2")
+
 
 def load_sam2_model(
     config_path: str,
@@ -89,13 +91,23 @@ def load_sam2_model(
         ...     "checkpoints/sam2_hiera_large.pt"
         ... )
     """
-    config_path = Path(config_path)
+    config_path_raw = str(config_path)
+    config_path = Path(config_path_raw)
     checkpoint_path = Path(checkpoint_path)
 
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config not found: {config_path}")
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+
+    # The upstream builder expects Hydra package-relative config names such as
+    # "configs/sam2.1/sam2.1_hiera_l.yaml", not necessarily filesystem paths.
+    if config_path.is_absolute() or config_path.exists():
+        sam2_config_name = str(config_path)
+    else:
+        sam2_config_name = config_path_raw
+
+    sam2_repo = DEFAULT_SAM2_REPO
+    if sam2_repo.exists() and str(sam2_repo) not in sys.path:
+        sys.path.insert(0, str(sam2_repo))
 
     try:
         from sam2.build_sam import build_sam2_video_predictor
@@ -106,7 +118,7 @@ def load_sam2_model(
         )
 
     predictor = build_sam2_video_predictor(
-        str(config_path),
+        sam2_config_name,
         str(checkpoint_path),
         device=device
     )
