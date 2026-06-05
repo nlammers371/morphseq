@@ -7,6 +7,7 @@ from .engine.margins import class_signed_margin, truth_signed_margin, coerce_mar
 from . import viz
 from . import misclassification
 from . import emergence
+from . import label_transfer
 
 # Misclassification pipeline (unchanged)
 from .misclassification import run_misclassification_pipeline, run_stage_geometry
