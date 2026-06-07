@@ -1021,7 +1021,7 @@ class Experiment:
     def export_metadata(self):
         if self.microscope == "Keyence":
             from src.build.build01A_compile_keyence_torch import build_ff_from_keyence
-            build_ff_from_keyence(data_root=self.data_root, exp_name=self.date, overwrite=True, metadata_only=True)
+            build_ff_from_keyence(data_root=self.data_root, repo_root=self.repo_root, exp_name=self.date, overwrite=True, metadata_only=True)
         else:
             from src.build.build01B_compile_yx1_images_torch import build_ff_from_yx1
             build_ff_from_yx1(

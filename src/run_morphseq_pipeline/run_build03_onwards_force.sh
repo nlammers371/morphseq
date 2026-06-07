@@ -388,3 +388,8 @@ echo "🎉 SAM2 onwards pipeline completed for ${EXPERIMENT}!"
   #   --data-root morphseq_playground \
   #   --experiments 20250501,20250912,20251020,20251104,20251106,20251113,20251119,20251121,20251125 \
   #   --action build03 --force
+
+
+  # qsub -t 1-23 -tc 3 \
+  #   -v EXP_FILE=/net/trapnell/vol1/home/mdcolon/proj/morphseq/src/run_morphseq_pipeline/run_experiment_lists/20260605_sci_cilia_qc_first_pass.txt \
+  #   src/run_morphseq_pipeline/run_experiment_manager_qsub.sh

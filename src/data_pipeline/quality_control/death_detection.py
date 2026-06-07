@@ -310,6 +310,71 @@ def compute_dead_flag_persistence(df: pd.DataFrame, dead_lead_time: float = None
     return df
 
 
+def compute_dead_flag2_persistence(df: pd.DataFrame, dead_lead_time: float = None) -> pd.DataFrame:
+    """
+    Compute Build04 death lead-time flags in ``dead_flag2``.
+
+    This variant keeps the incoming ``dead_flag`` column as the observed death
+    signal used for persistence validation, then writes buffered exclusion flags
+    to ``dead_flag2``. Build04 expects this behavior so that ``dead_flag`` and
+    ``dead_flag2`` remain separate QC columns.
+    """
+    if dead_lead_time is None:
+        dead_lead_time = QC_DEFAULTS['dead_lead_time_hours']
+
+    df = df.copy()
+    df['dead_flag2'] = False
+    df['dead_inflection_time_int'] = np.nan
+
+    required_cols = ['embryo_id', 'time_int', 'fraction_alive', 'dead_flag', 'predicted_stage_hpf']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        print(f"⚠️  Warning: Missing required columns {missing_cols}, skipping death lead-time detection")
+        return df
+
+    time_col = 'time_int'
+    flagged_count = 0
+    detected_count = 0
+
+    for embryo_id in df['embryo_id'].dropna().unique():
+        embryo_mask = df['embryo_id'] == embryo_id
+        embryo_data = df.loc[embryo_mask].sort_values(time_col)
+
+        if len(embryo_data) < 3:
+            continue
+
+        result = detect_persistent_death_inflection(embryo_data)
+        if result is None:
+            continue
+
+        detected_count += 1
+        inflection_time_int = result['inflection_time']
+        df.loc[embryo_mask, 'dead_inflection_time_int'] = inflection_time_int
+
+        inflection_row = embryo_data[embryo_data[time_col] == inflection_time_int]
+        if inflection_row.empty:
+            continue
+
+        inflection_hpf = inflection_row['predicted_stage_hpf'].iloc[0]
+        if pd.isna(inflection_hpf):
+            continue
+
+        buffer_start_hpf = inflection_hpf - dead_lead_time
+        flag_mask = embryo_mask & (df['predicted_stage_hpf'] >= buffer_start_hpf)
+        df.loc[flag_mask, 'dead_flag2'] = True
+        flagged_count += int(flag_mask.sum())
+
+    total_embryos = df['embryo_id'].nunique()
+    detection_rate = detected_count / total_embryos if total_embryos else 0.0
+    print("Death Persistence Validation Results:")
+    print(f"├─ Detected death in: {detected_count}/{total_embryos} embryos ({detection_rate:.1%})")
+    print(f"├─ Flagged dead_flag2 timepoints: {flagged_count}")
+    print(f"├─ Parameters: 80% persistence threshold, 0.05 decline rate, {dead_lead_time}hr buffer")
+    print("└─ Algorithm: fraction_alive decline → validate ≥80% post-inflection dead_flag=True")
+
+    return df
+
+
 def main():
     """
     Main function for testing the death persistence validation module.

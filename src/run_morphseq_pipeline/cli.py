@@ -777,11 +777,11 @@ def main(argv: list[str] | None = None) -> int:
                     raw_present = False
                 try:
                     # Check Build01 outputs separately:
-                    #  - ff_images_exist: stitched FF images (required for SAM2 on Keyence)
+                    #  - ff_images_exist: complete stitched FF images (required for SAM2 on Keyence)
                     #  - built_metadata_exist: per-exp built metadata CSV
-                    ff_images_exist = bool(getattr(exp, "stitch_ff_path", None))
+                    ff_images_exist = bool(exp._ff_complete())
                     built_metadata_exist = bool(getattr(exp, "meta_path_built", None))
-                    # Display FF presence based purely on stitched images to avoid confusion with stale flags
+                    # Display FF presence based on actual stitched image completeness, not directory existence.
                     ff_present = ff_images_exist
                 except Exception:
                     ff_images_exist = False
@@ -805,8 +805,9 @@ def main(argv: list[str] | None = None) -> int:
                 # This unblocks downstream SAM2 which requires stitched images for Keyence.
                 try:
                     mic = getattr(exp, "microscope", None)
-                    # Export builds metadata and prerequisite artifacts; decide based on metadata presence
-                    need_export = args.force or not built_metadata_exist
+                    # Export builds metadata and prerequisite artifacts. If stitched FF is incomplete,
+                    # run full export rather than metadata-only so SAM2 has real image inputs.
+                    need_export = args.force or (not built_metadata_exist) or (not ff_images_exist)
                     metadata_only = (not args.force) and need_export and ff_images_exist
                     # For Keyence specifically, ensure stitched FF images exist for SAM2
                     need_ff_stitch = args.force or ((mic == "Keyence") and (not ff_images_exist))

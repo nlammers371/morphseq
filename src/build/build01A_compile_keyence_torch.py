@@ -298,12 +298,28 @@ def build_ff_from_keyence(data_root: Union[Path, str],
     raw_dir = RAW / exp_name 
     ff_dir.mkdir(parents=True, exist_ok=True)
 
-    well_list = sorted((raw_dir.glob("XY*") or raw_dir.glob("W0*")))
-    cytometer_flag = not any(raw_dir.glob("XY*"))
-    if cytometer_flag:
-        well_list = sorted(raw_dir.glob("W0*"))
-    else:
-        well_list = sorted(raw_dir.glob("XY*"))
+    xy_wells = sorted(raw_dir.glob("XY*"))
+    w0_wells = sorted(raw_dir.glob("W0*"))
+    if not xy_wells and not w0_wells:
+        nested_raw_dirs = []
+        for child in sorted(p for p in raw_dir.iterdir() if p.is_dir()):
+            if any(child.glob("XY*")) or any(child.glob("W0*")):
+                nested_raw_dirs.append(child)
+        if len(nested_raw_dirs) == 1:
+            log.info("Keyence Build01: using nested acquisition directory %s", nested_raw_dirs[0])
+            raw_dir = nested_raw_dirs[0]
+            xy_wells = sorted(raw_dir.glob("XY*"))
+            w0_wells = sorted(raw_dir.glob("W0*"))
+        elif len(nested_raw_dirs) > 1:
+            raise ValueError(
+                f"Multiple nested Keyence acquisition directories found under {raw_dir}: "
+                + ", ".join(str(p.name) for p in nested_raw_dirs)
+            )
+
+    cytometer_flag = not bool(xy_wells)
+    well_list = w0_wells if cytometer_flag else xy_wells
+    if not well_list:
+        raise FileNotFoundError(f"No Keyence XY*/W0* well directories found under {raw_dir}")
     # Debug summary
     dbg = str(os.environ.get("MSEQ_BUILD01_DEBUG", "0")).lower() in ("1","true","yes","on")
     if dbg:
@@ -351,6 +367,22 @@ def build_ff_from_keyence(data_root: Union[Path, str],
         bs, _= estimate_max_blocks(Z, Y, X, dtype=ff_proc_dtype, safety=0.75, device=device)
         if bs > 2:
             bs = 2
+
+        # Wells can have heterogeneous shapes across samples:
+        #   • different tile counts (e.g. some 3-tile, some 6-tile), and/or
+        #   • different Z-depth (e.g. some wells imaged with 14 z-planes, others 15).
+        # The dataset pads Z to max_z *within* a sample but not across samples, so a
+        # batch of differently-shaped (n_tiles, Z, H, W) tensors breaks collation:
+        # default_collate -> torch.stack fails on tile-count mismatch, and with
+        # pin_memory the pre-allocated buffer raises "resize storage that is not
+        # resizable" on Z mismatch. The per-batch loop also assumes one n_tiles for
+        # tile naming. Force batch_size=1 when either tiles or Z vary across samples.
+        tile_counts = {len(s["tile_zpaths"]) for s in sample_list}
+        z_depths = {len(zp) for s in sample_list for zp in s["tile_zpaths"]}
+        if len(tile_counts) > 1 or len(z_depths) > 1:
+            log.info("Heterogeneous samples in %s (tile counts=%s, z-depths=%s) -> forcing batch_size=1",
+                     exp_name, sorted(tile_counts), sorted(z_depths))
+            bs = 1
         print(f"Batch size: {bs}")
         if dbg:
             log.info("Keyence Build01: device=%s, ZYX per-tile=%s, tiles=%d, stitched X=%d, batch=%d",
