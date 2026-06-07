@@ -1,6 +1,6 @@
 # Handoff — cilia QC first-pass label transfer
 
-**Last updated:** 2026-06-07 (late) · mdcolon
+**Last updated:** 2026-06-07 (sci PCA + sequenced-focus plan) · mdcolon
 Resume-after-clear doc. Read this + `README.md` + `LABEL_STANDARDIZATION.md`.
 
 Goal: project the NEW cilia QC experiments onto OLD labeled reference data, per gene, to QC the new
@@ -18,6 +18,9 @@ data. GENOTYPE transfer = the benchmark (scored vs known truth); PHENOTYPE = pre
    separately), only-existing-build06 kept. Single source of truth for config.
 4. `make_plots.py` — all static plots (see Outputs). Reuses #3's loaders.
 5. `make_3d_pca.py` — interactive 3D PCA HTMLs with a dropdown to toggle views.
+6. `make_3d_pca_sci.py` — SAME, but for the sci_ snapshot plates (handled separately); projects each
+   into its gene's reference PCA space; adds a `sequenced` view. Outputs `plots/pca_3d_sci/`.
+7. `make_plots_sequenced.py` — (NEXT, not yet written) sequenced-FOCUS plots; see NEXT TASK below.
 
 Env: `conda run -n segmentation_grounded_sam --no-capture-output python <script>`.
 (Note: CLAUDE.md says `morphseq-env` but that env does NOT exist on this machine.)
@@ -52,42 +55,71 @@ Env: `conda run -n segmentation_grounded_sam --no-capture-output python <script>
 
 ---
 
-## IN FLIGHT (started this session)
-- **Build job `20785806` task 18** running (t001): builds `20260415_b9d2_30to48hpf_plate02_t02`
-  (b9d2 30→48 plate02 — raw existed in `raw_image_data/Keyence/`, was never built). Its Excel was
-  fixed: renamed to `..._well_metadata.xlsx` AND sheet `start_stage_hpf`→`start_age_hpf` (it had
-  reintroduced the staging bug). `.xlsx.orig` backup kept.
-  - **When done:** confirm
-    `build06_output/df03_final_output_with_latents_20260415_b9d2_30to48hpf_plate02_t02.csv` exists +
-    `predicted_stage_hpf` non-null, then re-run `make_plots.py` + `make_3d_pca.py` (auto-picks it up
-    via the list — it's already line 18). Verify build with `qstat`/the `logs/` dir.
-- The two experiment lists are now **symlinked**: results-folder copy → canonical
-  `src/run_morphseq_pipeline/run_experiment_lists/20260605_sci_cilia_qc_first_pass.txt`. Edit only
-  the source.
+## DONE this session (was IN FLIGHT)
+- **b9d2 plate02_t02 built** (`20260415_b9d2_30to48hpf_plate02_t02`). build06 CSV exists,
+  `predicted_stage_hpf` 35/35 non-null. `make_plots.py` + `make_3d_pca.py` re-ran with it in (b9d2
+  now 7 plates). DONE.
+- **sci_ snapshot plates staged + PCA'd.** Both `20260414_sci_b9d2_48hpf_plate01` and
+  `20260415_sci_cep290_48hpf_plate01` are built. Added them to `patch_predicted_stage_hpf.py`'s list
+  → `start_age_hpf`/`predicted_stage_hpf` now 100% non-null (`.bak_prestage` backups).
+  - **`make_3d_pca_sci.py`** (NEW, standalone): projects each sci_ plate into its gene's REFERENCE
+    PCA space (ref+query combined, like `make_3d_pca.py`) to check batch effects. Views: HPF /
+    genotype(zygosity) / experiment(batch) / source(ref vs query) / **sequenced**. Outputs in
+    `plots/pca_3d_sci/`. **VERDICT: no batch effects** — sci snapshots overlay the reference cleanly.
+  - The `sequenced` PCA view reads the plate Excel `sequenced` sheet directly (NOT in build06) and
+    joins by well via `snip_id`→`well`. Coding seen: code 1 = wt-confirmed, code 2 = mutant-confirmed.
+- Committed: `d158bdd6` (sci PCA + stage patch). Followed repo convention = commit straight to `main`.
+- The two experiment lists are **symlinked**: results-folder copy → canonical
+  `src/run_morphseq_pipeline/run_experiment_lists/20260605_sci_cilia_qc_first_pass.txt`. Edit the source.
 
-## NEXT TASK — sequenced-sample QC (the real goal)
-**Finding (verified):** the Build01 metadata reader (`src/build/export_utils.py:116` `well_sheets`)
-parses only `medium, genotype, chem_perturbation, start_age_hpf, embryos_per_well, temperature, pair`.
-It **does NOT parse the `sequenced` sheet** (nor `strain`, `notes`, `qc`). Confirmed: no seq/strain
-column in built metadata OR build06 for query plates. So `sequenced` never reaches the analysis.
+## sci_ snapshots are handled SEPARATELY (do not fold into the transfer scripts)
+The sci_ (sky/sequenced) plates are snapshots processed differently from the transfer workflow:
+no reference/transfer step, `phenotype`==`genotype` (no transferred labels), and a genotype
+vocabulary (`b9d2_het`, `cep290_homo`, `ab`, `uncertain`, ...) that `T.to_zygosity` doesn't map.
+They are EXCLUDED from `build_reference_and_transfer.py` DATASETS and from `make_plots.py`/
+`make_3d_pca.py`. Their analysis lives in dedicated `*_sci.py` scripts.
 
-**`sequenced` sheet coding (verified on b9d2 plates):**
-`0`/blank = not sequenced · `1` = wildtype-confirmed (b9d2_wt, ab) · `2` = mutant-allele-confirmed
-(covers BOTH het AND homo — NOT homo-only). Coverage is patchy: e.g. b9d2_18hpf_plate01 has 32
-sequenced wells; cep290_24hpf_plate01 has ZERO.
+---
 
-**Plan (bypass the rebuild — do a 1:1 well join, like the start_age patch):**
-1. Add a `sequenced` (and maybe `strain`) loader that reads the plate Excel `sequenced` sheet as the
-   8×12 grid (same parse as `fill_excel_start_age.py` / `export_utils.py`), keyed by `well`, and
-   joins onto build06 by well. (Do NOT construct well_id — keep the existing well-grid approach.)
-   - Optionally also fix `export_utils.py` `well_sheets` to include `sequenced`+`strain` for future
-     builds, but the join bypass unblocks analysis now without a rerun.
-2. **Restrict the QC to sequenced>0 embryos** — that's the high-confidence truth set. For those:
-   - genotype-transfer accuracy (does the embedding agree with the sequenced call: 1↔wt, 2↔het/homo?)
-   - phenotype-prediction distribution
-   - the 3D PCA quality check (do sequenced samples sit cleanly, or look low-quality / batch-shifted?)
-3. **Report the genotype×phenotype diversity of the sequenced samples** — how many wt vs mutant, and
-   what phenotypes they land in, per gene/stage. This is the deliverable mdcolon asked for.
+## NEXT TASK — sequenced-FOCUS QC (Phase 1; the real goal)
+We checked the projection (no batch effects), so now hone in on the SEQUENCED embryos. This mirrors
+the existing per-plate/general plots ONE-TO-ONE, but restricted to sequenced embryos and stratified.
+
+**The `sequenced` sheet (verified):** `0`/blank = not sequenced · `1` = wildtype-confirmed
+(includes AB) · `2` = mutant-allele-confirmed (BOTH het AND homo — not homo-only). NOT parsed by
+Build01 (`src/build/export_utils.py:116` `well_sheets`) → must be joined from the Excel by well.
+
+**FOUR strata** (decided 2026-06-07) — built from sequenced>0 embryos:
+`homozygous` · `heterozygous` · `wildtype-sibling` (code 1, non-AB) · `AB` (the Trachnal AB).
+Split code-2 into homo vs het using the `genotype` column. The four are what we care about; there
+turn out to be many heterozygotes, hence 4 not 3.
+
+**Decisions (confirmed with mdcolon):**
+- **Registry: CSV here only** for now — `sequenced_registry.csv` (embryo_id, plate, well, sequenced
+  code, genotype, zygosity, stratum, predicted_stage_hpf). Do NOT touch the Excel / `export_utils.py`
+  yet.
+- **New script `make_plots_sequenced.py`**, mirroring `make_plots.py` ~1:1, writing to a new
+  `plots/sequenced_focus/` subtree. Reproduce the same plot set as the general/per-plate ones
+  (composition-by-plate, transfer-result, reference-confusion, quality-by-timebin, accuracy
+  heatmap/bars, per-plate transfer panels) but RESTRICTED to sequenced embryos and faceted/colored by
+  the 4 strata + sequenced-vs-not where it makes sense. (One-to-one unless a plot clearly needs a
+  tweak — use judgment.)
+- **F1 is REAL here** (we have sequenced truth): score the genotype/zygosity label-transfer against
+  the **sequenced genotype call** (3-class homo/het/wt; AB→wildtype). Report per-stratum F1.
+- **Phenotype** still has NO truth → predictions only, NO F1. Report the predicted-phenotype
+  DISTRIBUTION per stratum (and per plate/stage). The walk-through wants, per stratum:
+  (a) phenotype distribution, (b) what we collectively predict them as, (c) the label-transfer result
+  per embryo, (d) genotype F1 (phenotype has none, by design — we'll "work our way to it" later).
+
+**Open scope notes:** sequenced coverage is patchy (some plates have 0 sequenced wells); the sci_
+plates have the richest sequenced grids. Decide whether Phase 1 covers ALL query plates' sequenced
+wells, or just the sci_ snapshots — likely both, but the sci_ plates are the dense ones.
+
+## THEN — Phase 2 (raw-snapshot canvas; after Phase 1 is reviewed)
+Using the honed-in sequenced set, build an image canvas: a grid where each cell is the raw snapshot
+image of an embryo, captioned with **actual (sequenced) genotype · predicted genotype · predicted
+phenotype**. Organize the canvas by what Phase 1 reveals (by stratum / predicted class). This is the
+visual QC of whether the embeddings' calls match the images. NOT started — Phase 1 first.
 
 ## Gotchas
 - New plate Excels keep arriving with sheet `start_stage_hpf` (the bug) and without the
