@@ -49,6 +49,8 @@ EXPERIMENTS = """
 20260416_cep290_30to48hpf_plate01_t02
 20260415_cep290_30to48hpf_plate02_t01
 20260416_cep290_30to48hpf_plate02_t02
+20260414_sci_b9d2_48hpf_plate01
+20260415_sci_cep290_48hpf_plate01
 """.split()
 
 WELLS = [f"{r}{c:02}" for r in "ABCDEFGH" for c in range(1, 13)]
