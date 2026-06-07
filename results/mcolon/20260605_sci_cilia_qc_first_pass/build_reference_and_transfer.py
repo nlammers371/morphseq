@@ -1,6 +1,12 @@
 """
 Cilia QC first-pass — PER-DATASET label transfer.
 
+LEGACY ENTRY POINT. The publication-critical transfer is now driven by `label_transfer_snapshots.py`,
+which imports the loaders / references / transfer functions from THIS module but adds the `sequenced`
+join + stratum tagging and is the script to run. This file is kept as the audited library of
+loaders/refs (DATASETS, _load, run_genotype_transfer, run_phenotype_transfer); its own main() still
+works but does not tag sequenced. Prefer `label_transfer_snapshots.py`.
+
 Each new query experiment is transferred against ITS OWN dataset's reference (no cross-dataset
 mixing — we already know which gene each experiment is):
 
