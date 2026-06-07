@@ -81,7 +81,34 @@ They are EXCLUDED from `build_reference_and_transfer.py` DATASETS and from `make
 
 ---
 
-## NEXT TASK — sequenced-FOCUS QC (Phase 1; the real goal)
+## CODE ARCHITECTURE (atomized 2026-06-07)
+The label-transfer step is ISOLATED from plotting (mdcolon: it's the publication-critical part, must
+be auditable on its own). Data flow:
+  `label_transfer_snapshots.py`  → writes CSVs → `make_plots*.py` (plotting only, no transfer).
+- **`label_transfer_snapshots.py`** = THE transfer script (genotype + phenotype). Runs on ALL query
+  embryos; tags each output row with `sequenced` (raw 0/1/2 from the Excel `sequenced` sheet, joined
+  by well) + `stratum`. Writes `transfer_results/{genotype,phenotype}_transfer_predictions.csv` +
+  `sequenced_registry.csv`. Reuses loaders/refs from `build_reference_and_transfer.py` (now LEGACY —
+  kept as the audited loader library; prefer the new script).
+- **`make_plots.py`** = general per-plate plots (re-runs transfer to get model objects for the core
+  reference_quality/transfer_result figures).
+- **`make_plots_sequenced.py`** = sequenced-FOCUS plots; consumes the CSVs only (no transfer/model).
+
+## Phase 1 DONE — sequenced-FOCUS QC
+No batch effects (Phase-0 PCA), so we honed in on SEQUENCED embryos across the QUERY plates (the two
+sci_ time-lapse experiments are analyzed SEPARATELY, not here). 487 sequenced embryos, FOUR strata.
+
+**Genotype label-transfer is the benchmark with a REAL F1** (vs the sequenced call, 3-class zygosity,
+AB→wildtype). Headline (sequenced embryos): b9d2 macro-F1 0.31, cep290 macro-F1 0.35. wildtype
+recovers best; homozygous under-called (embedding calls many homo as wt/het). cep290 has 0 het in the
+sequenced set, b9d2 only ~4 — that is the REAL genotype data (Excel genotype = ground truth, do NOT
+reconcile against sequenced; see the gotcha). **Phenotype = predicted distributions only, NO F1.**
+
+Outputs `plots/sequenced_focus/`: per gene — `_seq_genotype_confusion.png`, `_seq_genotype_f1.png`,
+`_seq_predicted_{genotype,phenotype}_by_stratum.png`, `_seq_phenotype_distribution_by_stratum.png`;
+plus `seq_genotype_f1_summary.csv`, `seq_stratum_counts.csv`.
+
+## (superseded) original NEXT TASK — sequenced-FOCUS QC plan
 We checked the projection (no batch effects), so now hone in on the SEQUENCED embryos. This mirrors
 the existing per-plate/general plots ONE-TO-ONE, but restricted to sequenced embryos and stratified.
 
@@ -122,6 +149,11 @@ phenotype**. Organize the canvas by what Phase 1 reveals (by stratum / predicted
 visual QC of whether the embeddings' calls match the images. NOT started — Phase 1 first.
 
 ## Gotchas
+- **Excel `genotype` = GROUND TRUTH.** Genotyping had some pre-pipeline errors; what's in the Excel
+  (and flowed through to build06) is the corrected/known call. That's why there are many
+  unknown/uncertain entries and why sequenced-code-2 wells may be labeled mostly homozygous with few
+  het. Do NOT cross-check genotype vs sequenced to "reconcile" het/homo counts, and do NOT flag a low
+  het count as a bug — it's real. (mdcolon, 2026-06-07.)
 - New plate Excels keep arriving with sheet `start_stage_hpf` (the bug) and without the
   `_well_metadata` filename suffix — always check+fix before building.
 - crispant has no zygosity benchmark column and no phenotype label; its accuracy heatmap may be empty
