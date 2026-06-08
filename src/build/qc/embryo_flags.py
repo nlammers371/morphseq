@@ -36,11 +36,11 @@ def determine_use_embryo_flag(df: pd.DataFrame) -> pd.Series:
         - dead_flag2: Death within lead time (Build04)
         - sa_outlier_flag: Surface area outlier (Build04)
         - sam2_qc_flag: SAM2 segmentation issues
-        - frame_flag: Out of frame issues
     NOT used for exclusion (informational only):
         - no_yolk_flag: No yolk detected
         - focus_flag: Focus issues (too many false positives)
         - bubble_flag: Bubble presence (too many false positives)
+        - frame_flag: Embryo near/touching frame border (too many false positives on snapshot plates)
 
     Examples:
         >>> # In Build04 after computing QC flags
@@ -65,11 +65,11 @@ def determine_use_embryo_flag(df: pd.DataFrame) -> pd.Series:
         df["dead_flag"].fillna(False).astype(bool) |
         df["dead_flag2"].fillna(False).astype(bool) |
         df["sa_outlier_flag"].fillna(False).astype(bool) |
-        df["sam2_qc_flag"].fillna(False).astype(bool) |
-        df["frame_flag"].fillna(False).astype(bool)
+        df["sam2_qc_flag"].fillna(False).astype(bool)
     )
 
-    # no_yolk_flag, focus_flag, and bubble_flag are NOT used for exclusion
-    # They remain in the DataFrame for informational purposes only
+    # no_yolk_flag, focus_flag, bubble_flag, and frame_flag are NOT used for exclusion.
+    # frame_flag stays informational: the embryo may be clipped but is still usable.
+    # They remain in the DataFrame for informational purposes only.
 
     return ~exclude

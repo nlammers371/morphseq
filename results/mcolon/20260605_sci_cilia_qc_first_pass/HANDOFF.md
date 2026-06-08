@@ -148,6 +148,40 @@ image of an embryo, captioned with **actual (sequenced) genotype · predicted ge
 phenotype**. Organize the canvas by what Phase 1 reveals (by stratum / predicted class). This is the
 visual QC of whether the embeddings' calls match the images. NOT started — Phase 1 first.
 
+## Sequenced embryo audit (2026-06-07) — why embryos are missing from sequenced_registry
+
+Total: 604 sequenced wells in Excel across all non-sci plates. 491 in registry after fixes below.
+Breakdown by cause (sci_ plates excluded throughout — analyzed separately):
+
+**Fixed bugs (already resolved):**
+- `20260414_b9d2_14hpf_plate01` — sequenced sheet header cols 6–9 were typed as `0` instead of
+  `6,7,8,9`. Parser skipped those columns → E06, E07, G07, H07 silently dropped. Fixed in Excel
+  (`.bak_sequenced_header_fix`). Registry now has 491 (was 487).
+- `plate01_t02` B01 genotype changed `b9d2_wt` → `b9d2_unknown` (clearly not wt visually). Note
+  added to Excel notes sheet. Backup: `.bak_b01_genotype_fix`.
+- `frame_flag` removed from `use_embryo_flag` exclusion in `src/build/qc/embryo_flags.py` (too many
+  false positives on snapshot plates — embryos with a tail near the well edge). Now informational
+  only. qc_staged CSVs patched for all 23 named cilia plates. Recovery takes effect on next build06
+  rerun (build06 was generated before the patch).
+
+**Genuine imaging gaps (not bugs — no fix possible):**
+- **Crispant plates imaged in columns 1–7 only** (56-well layout). Cols 8–12 were never used.
+  - `20260319_cilia_crispant_24hpf` D01, E02: empty wells at collection, no embryo present.
+  - `20260320_cilia_crispant_48hpf` row H (H01–H05, H07): embryos not detected due to height error
+    in the microscope acquisition; H06 only survived. Lost to imaging QC.
+- **Other plates with absent wells**: embryos were plated + sequenced but not imaged (dead/lost at
+  collection, or the plate wasn't filled to 96 wells). Confirmed by cross-checking: genotype=None
+  in Excel = template artifact (not a real embryo); genotype present = real embryo, just not imaged.
+  Only 2 template artifacts found: `20260324_cep290_18hpf_24hpf_plate02` G08 and H08.
+
+**Hard QC exclusions (frame_flag + sam2_qc_flag both True — not recoverable):**
+- Both flags together = SAM2 segmentation genuinely failed (not just frame-clipping). These embryos
+  don't have valid masks and can't contribute to the analysis.
+
+**sa_outlier_flag:**
+- `20260415_b9d2_30to48hpf_plate02_t02` B01: embryo looks fine visually but has unusual orientation
+  → triggers SA outlier. Needs sa_outlier threshold review + rebuild to recover.
+
 ## Gotchas
 - **Excel `genotype` = GROUND TRUTH.** Genotyping had some pre-pipeline errors; what's in the Excel
   (and flowed through to build06) is the corrected/known call. That's why there are many
