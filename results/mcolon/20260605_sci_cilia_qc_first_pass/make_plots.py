@@ -42,11 +42,11 @@ from src.analyze.classification.label_transfer import (  # noqa: E402
 import src.analyze.classification.label_transfer.core as _lt_core  # noqa: E402
 from src.analyze.viz.styling.color_mapping_config import (  # noqa: E402
     GENOTYPE_SUFFIX_COLORS,
-    B9D2_PHENOTYPE_COLORS,
 )
 
 # reuse the exact config + loaders from the transfer script (single source of truth)
 import build_reference_and_transfer as T  # noqa: E402
+from sequenced_focus_config import PHENOTYPE_COLORS  # noqa: E402
 
 # cep290 phenotype palette: Northwest Def Bio "talk" colors (src/analyze/viz/presets/nwdb.py).
 # Only the two directional classes are used now (Not Penetrant / Intermediate are dropped).
@@ -57,11 +57,7 @@ CEP290_PHENO_COLORS = {
 CEP290_PHENO_ORDER = ["High_to_Low", "Low_to_High"]
 
 # b9d2 phenotype palette: BA_rescue is MERGED into HTA (head-trunk angle); classes = CE / HTA / wt.
-B9D2_PHENO_COLORS = {
-    "CE": B9D2_PHENOTYPE_COLORS["CE"],
-    "HTA": B9D2_PHENOTYPE_COLORS["HTA"],
-    "wildtype": GENOTYPE_SUFFIX_COLORS["wildtype"],
-}
+B9D2_PHENO_COLORS = PHENOTYPE_COLORS["b9d2"]
 B9D2_PHENO_ORDER = ["CE", "HTA", "wildtype"]
 
 # The core plot helpers color classes via core._CLASS_COLORS, which only defines the cep290

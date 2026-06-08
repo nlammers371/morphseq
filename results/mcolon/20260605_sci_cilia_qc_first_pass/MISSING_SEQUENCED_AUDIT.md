@@ -42,6 +42,15 @@ Sequenced in Excel: 26 | In registry: 19 | Missing: 7
 ### Next step
 Check the raw file to see if they were actually captured. 
 
+### Investigation result (2026-06-07)
+- **G11, H01, H05, H06**: Raw Keyence data CONFIRMED ABSENT. Keyence dir
+  `raw_image_data/Keyence/20260324_cep290_18hpf_24hpf_plate02/cep290_18hpf_24hpf_plate02/`
+  has G/H rows only up to G06. XY dirs stop at G06 (78 total). These wells were never acquired
+  on the microscope. Confirmed truly absent.
+- **Note on G/H truncation**: Keyence has G01–G06 and no H rows at all. 78 stitched images matches
+  exactly. The acquisition stopped at G06 on this plate (likely microscope ran out of time or was
+  stopped early). These are not recoverable — they were never imaged.
+
 
 ## 20260324_cep290_18hpf_plate01
 Sequenced in Excel: 26 | In registry: 22 | Missing: 4
@@ -54,7 +63,14 @@ Sequenced in Excel: 26 | In registry: 22 | Missing: 4
 | H09 | 2 | cep290_homo | ABSENT |  | not imaged — lost at collection or empty well |
 
 ### Next step
-Check the raw file to see if they were actually captured. 
+Check the raw file to see if they were actually captured.
+
+### Investigation result (2026-06-07)
+- **G09, H02, H06, H09**: Raw Keyence data CONFIRMED ABSENT. Keyence dir
+  `raw_image_data/Keyence/20260324_cep290_18hpf_plate01/cep290_18hpf_plate01/`
+  has G/H rows only up to G06 (78 wells total, matches stitched). No H rows at all.
+  The acquisition stopped at G06 — same pattern as `cep290_18hpf_24hpf_plate02`.
+  These wells were never imaged. Not recoverable.
 
 ## 20260324_cep290_24hpf_plate02
 Sequenced in Excel: 15 | In registry: 14 | Missing: 1
@@ -73,9 +89,25 @@ Sequenced in Excel: 23 | In registry: 21 | Missing: 2
 
 ### Next step
  
-This is really odd. That 809 isn't there. We clearly sequenced it, but there's nothing at all in the image. I want to check to see if there was a parsing error here and how we prescribed the well name. 
+This is really odd. That A09 isn't there. We clearly sequenced it, but there's nothing at all in the image. I want to check to see if there was a parsing error here and how we prescribed the well name. 
 
-ALso i confirmed that G07 is uncrecoverable its tail it largely clipped off frame 
+ALso i confirmed that G07 is uncrecoverable its tail it largely clipped off frame
+
+### Investigation result (2026-06-07)
+- **A09**: Raw image EXISTS at
+  `raw_data_organized/20260324_cep290_30hpf_plate01/images/20260324_cep290_30hpf_plate01_A09/`
+  (file: `20260324_cep290_30hpf_plate01_A09_ch00_t0000.jpg`). BUT A09 is absent from
+  build03 and build04. Root cause: **GDino detected 0 embryos** in this image
+  (`num_detections=0` in `gdino_detections_20260324_cep290_30hpf_plate01.json`). The image
+  was exported but the embryo detector failed to find anything. Likely an empty well or
+  the embryo fell out of focus and GDino missed it. Review the JPG to confirm.
+  To recover: would require re-running GDino with a lower box_threshold OR manually adding
+  the detection. Recommend: view the JPG first — if there's truly nothing there, mark ABSENT.
+- **G07**: Confirmed unrecoverable (tail clipped). ✓
+
+
+### Next Next step
+A09 deterimine if we actually sequenced it as there was nothing in the wel...
 
 ## 20260324_cep290_30hpf_plate02
 ✅ All 9 sequenced wells in registry.
@@ -99,7 +131,41 @@ Sequenced in Excel: 32 | In registry: 21 | Missing: 11
 
 ### Next step
 - A06 Check to see why it was skipped / is it present in keyence raw data
-- Everything after G01 is missing. Seems like there is a pipeline issue processing this experiment. This needs to be recovered. Thoroughly figure this out. 
+- Everything after G01 is missing. Seems like there is a pipeline issue processing this experiment. This needs to be recovered. Thoroughly figure this out.
+
+### Investigation result (2026-06-07)
+**Root cause: `stitch_experiment()` had a `KeyError: 6` bug — A06 was re-acquired with 6 tiles,
+and the `target` dict in `build01A_compile_keyence_torch.py` only handled 2 and 3 tiles.**
+
+- **G02–H12 (and A06)**: Raw Keyence data CONFIRMED PRESENT. All G/H rows have XY dirs
+  in `raw_image_data/Keyence/20260331_b9d2_18hpf_plate01/b9d2_18ss_plate01/` with real
+  multi-Z TIFF files (XY73=G01, XY74=G02, ..., XY85=H12, XY97=A06). 97 total XY dirs,
+  all with real data. FF projections (`built_image_data/Keyence/FF_images/`) exist for all
+  96 wells (the projection step handled mixed tile counts via batch_size=1).
+- **A06 is the culprit**: A06 was re-acquired (XY97). Keyence has both XY06 and XY97 both
+  labeled `_A06`. `get_image_paths` appends both XY dirs into one `A06_t0000` entry → 6
+  tiles. `stitch_experiment()` does `target = {2:.., 3:..}[n_tiles]` → `KeyError: 6` when
+  it hits A06. This killed the stitch pass before G02–H12 were processed.
+- **A06 duplicate not yet resolved**: How to handle two acquisitions of the same well
+  (keep first? keep last? treat as separate time points?) is left for a future decision.
+  For now, A06 will stitch with all 6 tiles (fix applied — see below), which is not
+  biologically meaningful but won't crash. A06 likely needs manual review.
+- **Logs confirm**: `logs/morphseq_experiment_mngr.o20781949.2` shows FF projections completed
+  all 96/96, then stitch failed with `KeyError: 6`, and GDino + SAM2 ran on only 72 images.
+- **Fix applied**: Added `6: np.array([2280, 630])` (and fallback `return {}` for any
+  unknown tile count) to `stitch_experiment()` in `build01A_compile_keyence_torch.py`.
+- **Action needed**: Re-run build01 stitch step for this experiment to stitch G02–H12 + A06.
+  The FF tile images already exist, so only the stitch step needs to run:
+  ```bash
+  conda run -n segmentation_grounded_sam --no-capture-output python -m src.run_morphseq_pipeline.cli \
+    pipeline e2e --data-root morphseq_playground \
+    --experiments 20260331_b9d2_18hpf_plate01 --force
+  ```
+  Then re-run sam2 for the experiment to get GDino + SAM2 for the 25 new wells.
+
+**cep290_18hpf plates (Priority 5) — NOT a pipeline bug**: Both `cep290_18hpf_plate01`
+and `cep290_18hpf_24hpf_plate02` Keyence dirs only go to G06 (no H rows). Those 78 stitched
+images match exactly. The microscope acquisition stopped at G06. NOT recoverable.
 
 
 ## 20260331_b9d2_18hpf_plate02
@@ -114,6 +180,17 @@ Sequenced in Excel: 31 | In registry: 30 | Missing: 1
 
 ### Next step
 H06 clearly embryo here invesrivate what happened
+
+### Investigation result (2026-06-07)
+- **H06**: Raw image EXISTS at
+  `raw_data_organized/20260414_b9d2_14hpf_plate01/images/20260414_b9d2_14hpf_plate01_H06/`
+  (file: `20260414_b9d2_14hpf_plate01_H06_ch00_t0000.jpg`). BUT H06 is absent from
+  build03 and build04. Root cause: **GDino detected 0 embryos** in this image
+  (`num_detections=0` in `gdino_detections_20260414_b9d2_14hpf_plate01.json`).
+  The image exists, GDino ran on it, but it found nothing. Review the JPG — mdcolon says
+  "clearly an embryo" so this is a GDino false negative. To recover: either lower the
+  GDino box_threshold and re-run detection for just this well, or manually add the detection
+  and re-run SAM2 for H06.
 
 ## 20260414_b9d2_30hpf_plate01
 Sequenced in Excel: 32 | In registry: 31 | Missing: 1
@@ -145,8 +222,17 @@ Sequenced in Excel: 29 | In registry: 26 | Missing: 3
 | F11 | 1 | ab | ABSENT |  | not imaged — lost at collection or empty well |
 ### Next Steps
 - B06 Confirmed unsavable clipped off
-- E07 Confirmed clipped off 
+- E07 Confirmed clipped off
 - F11 clearly there, not sure what happened
+
+### Investigation result (2026-06-07)
+- **F11**: Raw image EXISTS at
+  `raw_data_organized/20260415_b9d2_30to48hpf_plate01_t02/images/20260415_b9d2_30to48hpf_plate01_t02_F11/`
+  (file: `20260415_b9d2_30to48hpf_plate01_t02_F11_ch00_t0000.jpg`). BUT F11 is absent
+  from build03 and build04. Root cause: **GDino detected 0 embryos**
+  (`num_detections=0` in `gdino_detections_20260415_b9d2_30to48hpf_plate01_t02.json`).
+  GDino false negative. mdcolon says "clearly there". Same recovery path as H06 above —
+  review JPG, then re-run GDino with lower threshold or manually seed the detection.
 
 ## 20260415_b9d2_30to48hpf_plate02_t02
 Sequenced in Excel: 10 | In registry: 9 | Missing: 1
@@ -168,6 +254,17 @@ Sequenced in Excel: 11 | In registry: 9 | Missing: 2
 ### Next Steps
 - C05 No embryo in here at all in the image. Need to double check if it was sequence
 - F04 No embryo in here at all in the image. Need to double check if it was sequence
+
+### Investigation result (2026-06-07)
+- **C05 and F04**: Raw images EXIST at
+  `raw_data_organized/20260415_cep290_18hpf_plate03/images/20260415_cep290_18hpf_plate03_C05/`
+  and `..._F04/`. BUT both are absent from build03 and build04. Root cause: **GDino detected
+  0 embryos** for both (`num_detections=0` in
+  `gdino_detections_20260415_cep290_18hpf_plate03.json`).
+  mdcolon says "no embryo at all in the image" — consistent with GDino finding nothing.
+  Since the user confirmed there's nothing in the images, these are true empty wells.
+  The sequencing record exists but the embryo was likely lost before imaging.
+  Status: **ABSENT** (empty well at imaging time, not a pipeline bug). No recovery needed.
 
 ## 20260415_cep290_30to48hpf_plate02_t01
 Sequenced in Excel: 5 | In registry: 4 | Missing: 1

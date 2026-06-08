@@ -88,6 +88,10 @@ classes**:
 
 The query has no phenotype ground truth, so this only standardizes the **reference**.
 
+**Update for cep290 Phase A:** see `cep290_LABEL_TRANSFER_README.md`. The standalone cep290
+Phase-A audit keeps `Not Penetrant` as a real class and merges `Intermediate` into `Low_to_High`.
+The older general cep290 plots may still show the two-directional-class view for continuity.
+
 **cep290** — grounded in the most recent reference logic
 (`results/mcolon/20260302_NWDB_talk_figures_analysis/02_run_reference_genotype_condensation.py:213`),
 which folds **Intermediate into Low_to_High**:
