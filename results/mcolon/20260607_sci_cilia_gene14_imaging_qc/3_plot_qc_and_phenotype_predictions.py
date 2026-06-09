@@ -83,8 +83,6 @@ def plot_accuracy_heatmap(df: pd.DataFrame, plot_spec: dict) -> None:
     labels = plot_spec["labels"]
     prefix = plot_spec["prefix"]
 
-    DESIGN_STAGES = [14, 18, 24, 30, 48]
-
     sub = df[(df["gene"] == gene) & df[truth_col].isin(labels)].copy()
     if sub.empty:
         return
@@ -297,6 +295,111 @@ def plot_homozygous_phenotype(df: pd.DataFrame, plot_spec: dict) -> None:
         print(f"  saved plots/homozygous_phenotype/{prefix}_homo_probability_trend.png")
 
 
+DESIGN_STAGES = [14, 18, 24, 30, 48]
+
+STRATUM_ORDER = ["AB", "wildtype_sibling", "heterozygous", "homozygous"]
+STRATUM_LABELS = {
+    "AB": "AB (wildtype)",
+    "wildtype_sibling": "wildtype sibling",
+    "heterozygous": "heterozygous",
+    "homozygous": "homozygous",
+}
+
+SPECTRUM_COLORS = {
+    "b9d2": {
+        "left":  "#4393C3",
+        "right": "#D6604D",
+    },
+    "cep290": {
+        "left":  "#E76FA2",
+        "right": "#2FB7B0",
+    },
+}
+
+
+def plot_phenotype_spectrum(df: pd.DataFrame, plot_spec: dict) -> None:
+    gene = plot_spec["gene"]
+    left = plot_spec["labels"][0]
+    right = plot_spec["labels"][1]
+    positive_label = plot_spec["positive_label"]
+    prefix = plot_spec["prefix"]
+
+    prob_col = f"prob_{positive_label}"
+    if prob_col not in df.columns:
+        print(f"\n[{gene}] phenotype spectrum: {prob_col} not in predictions — skip")
+        return
+
+    sub = df[df["gene"] == gene].copy()
+    sub = sub[sub["sequenced_stratum"].isin(STRATUM_ORDER)].copy()
+    if sub.empty:
+        print(f"\n[{gene}] phenotype spectrum: no sequenced rows — skip")
+        return
+
+    # snap predicted_stage_hpf to nearest design stage within ±2 hpf
+    stage_raw = pd.to_numeric(sub["predicted_stage_hpf"], errors="coerce")
+    sub["stage"] = stage_raw.map(lambda h: next((s for s in DESIGN_STAGES if abs(h - s) <= 2), None) if pd.notna(h) else None)
+    sub = sub[sub["stage"].notna()].copy()
+    sub["stage"] = sub["stage"].astype(int)
+
+    stages = sorted(sub["stage"].unique())
+    strata = [s for s in STRATUM_ORDER if (sub["sequenced_stratum"] == s).any()]
+    colors = SPECTRUM_COLORS[gene]
+    cmap = LinearSegmentedColormap.from_list(
+        "spectrum", [colors["left"], "#E6E6E6", colors["right"]], N=256
+    )
+    rng = np.random.default_rng(0)
+
+    print(f"\n[{gene}] phenotype spectrum plots")
+
+    fig, axes = plt.subplots(
+        len(strata), len(stages),
+        figsize=(3.0 * len(stages) + 1.5, 1.0 + 0.9 * len(strata)),
+        sharey="row", squeeze=False,
+    )
+    for row, stratum in enumerate(strata):
+        stratum_sub = sub[sub["sequenced_stratum"] == stratum]
+        for col, stage in enumerate(stages):
+            ax = axes[row][col]
+            cell = stratum_sub[stratum_sub["stage"] == stage]
+
+            ax.axvspan(0.45, 0.55, color="#EEEEEE", zorder=0)
+            ax.axvline(0.5, color="#777777", lw=0.8, ls=":", zorder=1)
+
+            if not cell.empty:
+                x = cell[prob_col].astype(float).to_numpy()
+                y = rng.uniform(-0.18, 0.18, size=len(cell))
+                ax.scatter(x, y, c=x, cmap=cmap, vmin=0, vmax=1,
+                           s=36, edgecolors="black", linewidths=0.25, alpha=0.9, zorder=3)
+            ax.text(1.0, 1.0, f"n={len(cell)}", ha="right", va="top",
+                    fontsize=7, transform=ax.transAxes, color="#555555")
+            ax.set_xlim(-0.03, 1.03)
+            ax.set_ylim(-0.45, 0.45)
+            ax.set_yticks([])
+            if row == 0:
+                ax.set_title(f"{stage} hpf", fontsize=8)
+            if row == len(strata) - 1:
+                ax.set_xlabel(f"{left}  ←  P({right})  →  {right}", fontsize=7)
+            ax.tick_params(axis="x", labelsize=7)
+
+        axes[row][0].set_ylabel(STRATUM_LABELS[stratum], fontsize=8)
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
+    sm.set_array([])
+    fig.subplots_adjust(left=0.16, right=0.88, top=0.90, bottom=0.12, wspace=0.28, hspace=0.38)
+    cax = fig.add_axes([0.91, 0.20, 0.018, 0.58])
+    cbar = fig.colorbar(sm, cax=cax)
+    cbar.set_label(f"P({right})", fontsize=8)
+    cbar.set_ticks([0, 0.5, 1])
+    cbar.set_ticklabels(["0", "0.5", "1"], fontsize=7)
+    fig.suptitle(
+        f"{gene} homozygous phenotype probability spectrum (sequenced embryos)",
+        fontsize=10,
+    )
+    fig.savefig(PHENO_PLOT_DIR / f"{prefix}_homo_phenotype_spectrum.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  saved plots/homozygous_phenotype/{prefix}_homo_phenotype_spectrum.png")
+
+
 genotype_plot_plan = [
     {
         "gene": "b9d2",
@@ -350,5 +453,6 @@ for plot_spec in genotype_plot_plan:
 
 for plot_spec in phenotype_plot_plan:
     plot_homozygous_phenotype(pheno, plot_spec)
+    plot_phenotype_spectrum(pheno, plot_spec)
 
 print(f"\nWrote plots under: {PLOT_DIR.relative_to(RUN_DIR)}/")
