@@ -55,7 +55,7 @@ ref = ref.dropna(subset=[TIME_COL, "zygosity"])
 ref = ref[ref["zygosity"].isin(["wildtype", "heterozygous", "homozygous"])]
 features = sorted(
     set(c for c in ref.columns if c.startswith("z_mu_b_")) & set(c for c in query.columns if c.startswith("z_mu_b_")),
-    key=lambda c: int(c.split("_")[-1]),
+    key=lambda c: int(c.split("_")[-1]), #remove the _NN suffix
 )
 model = prepare_reference(
     ref,
