@@ -40,8 +40,8 @@ Labeled by true genotype, predicted genotype, predicted phenotype, and QC status
 ### 3d  pca plots
 -  For seeing if there's batch effects 
    -  results/mcolon/20260605_sci_cilia_qc_first_pass/make_3d_pca_sci.py and results/mcolon/20260605_sci_cilia_qc_first_pass/make_3d_pca.py
-
-### Label Transfer 
+### sequenced vs get through pipleine plots
+### Label Transfer plots
 note that for palte01 for cep290 and b9d2 we will use these we wont use redundant "_t01" and "_t02" labels for the time points as we should use the time series for these embryos 
 #### genotype predication q plots 
 - results/mcolon/20260607_sci_cilia_gene14_imaging_qc/plots/genotype_qc/b9d2_sequenced_accuracy_heatmap.png this class of plots prettymuich does it well!
@@ -214,7 +214,197 @@ records the *why* so a future reader does not re-litigate it.
   48 hpf have snapshots). Lets us see whether predictions line up with biological reality.
 
 
+# Resolved ambiguities (2026-06-09)
+
+Additive clarifications agreed after the interview. These record what the prose above left
+implicit so a future reader does not have to re-derive it from the data. They refine, they
+do not override, the LOCKED DECISIONS.
+
+- **Which `experiment_id` is the plate01 timeseries.** It is the `_sci_..._plate01`
+  experiment — `20260414_sci_b9d2_48hpf_plate01` (4437 rows, stage 30→48 hpf) and
+  `20260415_sci_cep290_48hpf_plate01` (3337 rows). Despite the `48hpf` in the name, these
+  ARE the long timeseries. The `..._30to48hpf_plate01_t01/_t02` and `plate02_t01/_t02`
+  experiments are the redundant ~40–90-row **48 hpf snapshots**. (The LOUD rule said
+  "plate01 timeseries" without naming the string; this is the string.)
+
+- **CV group column = `experiment_id`** (build06-native; identical values to the
+  `experiment` column written by `0_load_and_clean_datasets.py`). Matches what
+  `1_fit_reference_models.py` already passes.
+
+- **plate01 redundancy is kept, not dropped.** The timeseries and snapshot rows already
+  carry **distinct `embryo_id`s** (the id embeds the experiment_id, e.g.
+  `...sci...A01_e01` ≠ `...30to48..._t02_A01_e01`). Two new columns disambiguate them:
+  - `data_source` ∈ {`timeseries`, `snapshot`}.
+  - `physical_embryo_id = {gene}_{collection_time_hpf}_{plate}_{well}` — keyed on
+    **biological collection time, NOT `experiment_id`** — so the plate01 timeseries row and
+    its `_t02` 48 hpf snapshot row for one physical embryo join cleanly for portfolio/QC,
+    across all cohorts. `experiment_id` stays the analysis/source id and is kept OUT of
+    `physical_embryo_id`; analysis rows stay distinct via `experiment_id` + `data_source`.
+  - Reference/label-transfer uses `data_source == "timeseries"` for plate01; prediction
+    uses the `_t02` (48 hpf) snapshot.
+
+- **Ambiguous experiment names are surfaced, never silently guessed** (e.g.
+  `20260324_cep290_18hpf_24hpf_plate02`, two ages in one name): the collection-time parser
+  warns with the offending name and documents the chosen age.
+
+- **Label-transfer engine lives in a NEW module** `label_transfer/perbin.py` (sibling of
+  `core.py`, which is untouched). Two-step API mirrors core: `prepare_reference_perbin`
+  (fit + reference performance) → read quality → `transfer_labels_perbin` (apply to query).
+  Return contract is the two-layer per-bin shape (`per_bin` / `embryo_support` /
+  `reference_performance` / `missing_support`).
+
+
 # Code we were went looking around 
 results/mcolon/20260605_sci_cilia_qc_first_pass 
  
 
+# PLOT PLAN
+
+A cold-start brief for an agent building the plotting layer. The engine + data layer
+(scripts 0/1/2) are DONE and verified. This section is the contract for the plots that
+sit on top. Build them as **separate scripts `3a`…`3f`** in this directory (retire the
+current monolith `3_plot_qc_and_phenotype_predictions.py` once `3a/3b` cover its job).
+
+## Environment & conventions
+- Run: `conda run -n segmentation_grounded_sam --no-capture-output python <script>`.
+  Never bare `python` / `conda activate`.
+- Each script is standalone: `RUN_DIR = Path(__file__).resolve().parent`, then
+  `sys.path.insert(0, str(PROJECT_ROOT)); sys.path.insert(0, str(PROJECT_ROOT/"src"))`,
+  and `sys.path.insert(0, str(RUN_DIR))` to import `cilia_qc_helpers`.
+- Save PNGs under `plots/<family>/` (e.g. `plots/genotype_qc/`, `plots/confidence/`),
+  `dpi=150, bbox_inches="tight"`. Mirror the existing save/print pattern.
+- **Sequenced-only**: query plots read the `predictions/` tables, which are already
+  sequenced-only (script 2 filters once, up front).
+- **Genotype Excel is ground truth** for true labels (zygosity / genotype_clean). Do not
+  reconcile against sequencing codes.
+
+## Shared facts the plots depend on
+
+**Features**: 80 `z_mu_b_*` only (biological latents). Plots don't refit; they read the
+saved predictions. (Engine excludes `z_mu_n_*` nuisance.)
+
+**The 5 columns (cep290 & b9d2) = collection × support**, driven by two per-row columns
+on every query table (`collection_time_hpf`, `data_source`):
+`18, 24, 30, 48-snapshot(plate02), 48-timeseries(plate01)`. The 48 hpf collection appears
+TWICE on purpose — plate02 = single 48 hpf snapshot; plate01 = 30→48 timeseries. Rows 4/5
+of the confidence plot should look BETTER for the timeseries column. Crispant → 4 columns
+(`18, 24, 30, 48`), no split (no timeseries).
+- Split by: `data_source == "timeseries"` (the `_sci_` plate01) vs `"snapshot"`; and
+  `collection_time_hpf ∈ {14,18,24,30,48}`.
+- LOUD plate01 rule already applied in script 2 via `select_for_label_transfer` (timeseries
+  wins per `physical_embryo_id`); the redundant `_t02` backup is dropped from prediction.
+
+## Input tables (all under this run dir, produced by scripts 1 & 2)
+
+Reference CV (one row per **reference embryo × bin**) — `models/<model_id>_reference_cv.csv`:
+`embryo_id, time_bin, time_bin_center, cv_group, true_label, predicted_label, prob_<CLASS>…`
+Models: `b9d2_homozygous_phenotype`, `cep290_homozygous_phenotype`,
+`b9d2_genotype_qc`, `cep290_genotype_qc`, `cilia_crispant_genotype_qc`.
+
+Full `ref_model` pickle — `models/<model_id>.pkl` (the per-bin contract): keys
+`reference_performance.per_bin_metrics` (df: `time_bin_center, class, precision, recall,
+n_embryos, n_experiments`), `reference_performance.per_bin_confusion` (`{bin: {matrix,
+labels}}`), `reference_performance.transferability` (`{class: ok/warn/skip}`),
+`missing_bins` (df of bins that failed CV), `embryo_support.n_bins_scored`,
+`config.cv_mode` (`loeo`|`kfold`). Read these for rows 4/5 rather than recomputing.
+
+Query per-bin (one row per **query embryo × bin**) — split by kind:
+`predictions/sequenced_homozygous_phenotype_per_bin.csv`,
+`predictions/sequenced_genotype_qc_per_bin.csv`. Non-latent cols:
+`model_id, prediction_kind, query_embryo_id, time_bin, time_bin_center, predicted_label,
+prob_<CLASS>…, embryo_id, experiment, gene, well, sequenced, sequenced_stratum,
+genotype_clean, zygosity, phenotype_clean, predicted_stage_hpf, collection_time_hpf,
+data_source, physical_embryo_id`.
+
+Query cross-bin (one row per **query embryo**) — `…_cross_bin.csv`: adds
+`top_probability, argmax_margin, n_bins_contributed, bins_contributed`.
+
+Missing support — `predictions/sequenced_missing_support.csv`:
+`model_id, query_embryo_id, time_bin, time_bin_center` (query bins with no model).
+
+> CLEANUP: `predictions/sequenced_embryo_predictions.csv`, `*_image_predictions.csv`, and
+> `*_predictions.csv` are STALE outputs from the old core-engine script. The new script 2
+> writes `*_cross_bin.csv` / `*_per_bin.csv`. Delete the stale files when convenient; do
+> not build plots against them.
+
+## Class conventions (binary v1)
+- b9d2 phenotype: `CE` vs `HTA` (homozygous only). cep290 phenotype: `High_to_Low` vs
+  `Low_to_High` (homozygous only). Confidence plot v1 is **homozygous-only binary** because
+  genotype isn't clean (some b9d2 hets look homozygous); multi-class deferred.
+- Genotype QC labels: `wildtype/heterozygous/homozygous` (b9d2/cep290),
+  `ab_wildtype/foxj1a_crispant/ift88_crispant/ift88_ift74_crispant/sspo_crispant` (crispant).
+- Colors + constants: **`plot_config.py`** in this dir (shared so all 3x plots match the
+  earlier published figures). Holds `PHENOTYPE_COLORS` (CE=`#1b9e77` green, HTA=`#d95f02`
+  orange, High_to_Low=`#E76FA2`, Low_to_High=`#2FB7B0`), `GENOTYPE_COLORS` (wt=`#2166AC`,
+  het=`#F7B267`, homo=`#B2182B`, + crispants), `STATUS_COLORS`, `DESIGN_STAGES_HPF`,
+  `PHENOTYPE_COLUMNS` / `CRISPANT_COLUMNS` (the collection×support column spec), and a
+  `color_for(label, kind)` lookup. Import it; don't redefine colors per script. Keep it
+  lean — add shared *functions* only when a 2nd script repeats them.
+
+## The scripts (build order = QC → decision → deep-dive)
+
+### 3a — sequenced-vs-pipeline coverage audit
+"Excel says sequenced vs what actually made it through the pipeline." Port + retarget
+`results/mcolon/20260605_sci_cilia_qc_first_pass/audit_sequenced_coverage.py` (produced
+`MISSING_SEQUENCED_AUDIT.md`). For each non-`sci_` plate it reads the `sequenced` Excel
+sheet and the build04 `qc_staged_<exp>.csv` and classifies every sequenced well: `OK` /
+`QC_EXCLUDED` (with flags) / `ABSENT` / `NO_BUILD04`. Update the `EXPS` list to this
+cohort; emit a markdown audit (`MISSING_SEQUENCED_AUDIT.md`) + a CSV. This is data-sanity,
+not a matplotlib figure (a table/heatmap of coverage per plate is the deliverable).
+
+### 3b — genotype QC per plate (accuracy heatmap + confusion)
+The `*_sequenced_accuracy_heatmap.png` style already does this well (keep it). Reads
+`predictions/sequenced_genotype_qc_cross_bin.csv` (one row per embryo) + truth
+(`zygosity` / `genotype_clean`). Per gene: accuracy heatmap (plate × design-stage, snap
+`collection_time_hpf`), confusion matrix, accuracy-by-class. Reuse the existing functions
+in the monolith `3_plot_qc_and_phenotype_predictions.py`: `plot_accuracy_heatmap`,
+`plot_genotype_qc`, `snap_to_design_stage`. NOT the key plot.
+
+### 3c — confidence plot (THE KEY GREENLIGHT ARTIFACT)
+v1 = homozygous-phenotype binary, per gene. **Columns = collection × support** (5 for
+cep290/b9d2, 4 crispant — see "5 columns" above). **Rows (5):**
+1. argmax model prediction — **bar plot** (predicted-class counts/fractions) from the query
+   per-bin / cross-bin predictions.
+2. **query** sequenced prediction probabilities (confidence in the embryos we sequenced) —
+   from `…_homozygous_phenotype_per_bin.csv` `prob_<CLASS>`.
+3. **reference** prediction probabilities, **stripped with true classes on y** — from
+   `models/<model_id>_reference_cv.csv` (`true_label`, `prob_<CLASS>`).
+4. **reference** precision & recall per class·bin — from
+   `ref_model["reference_performance"]["per_bin_metrics"]`.
+5. **reference** confusion matrix — from
+   `ref_model["reference_performance"]["per_bin_confusion"]`.
+Rows 2 vs 3 = the query/reference pair. Group each column by `collection_time_hpf` +
+`data_source`. Reference material: `plot_phenotype_spectrum_with_ref` (3-row version) in
+the monolith — this is its 5-row, multi-column generalization. Multi-class deferred.
+
+### 3d — feature plot (24→48 hpf)
+Physical-reality check. Reference TRAINING points = **low alpha**. Timeseries embryos =
+**high-alpha line ending in a circle colored by predicted class**. Snapshots = **square**
+(30 & 48 hpf have snapshots). Uses query per-bin (`predicted_stage_hpf` x a feature/score,
+colored by `predicted_label`) + the reference CV as the low-alpha backdrop. Distinguish
+timeseries vs snapshot via `data_source`. Lets us see predictions line up with biology.
+
+### 3e — 3D PCA (batch-effect check)  [DEFER / REUSE]
+Existing working scripts: `…/20260605_sci_cilia_qc_first_pass/make_3d_pca_sci.py` and
+`make_3d_pca.py` (interactive plotly HTML; dropdowns for hpf/genotype/experiment/source/
+sequenced). Reuse as-is or retarget to this cohort's tables later. Not MVP.
+
+### 3f — portfolio (per-embryo image grid)  [DEFER / REUSE]
+End goal: per-embryo image grid with seq genotype / predicted genotype / predicted
+phenotype / QC-exclusion status above each photo. Existing:
+`…/20260605_sci_cilia_qc_first_pass/make_embryo_portfolio.py` +
+`make_sequenced_portfolio_views.py`. Snapshots feed the portfolio (you can't put a
+timeseries in a contact sheet); join timeseries↔snapshot rows by `physical_embryo_id`.
+Not MVP.
+
+## Status snapshot (what's done vs to-build)
+- DONE: `0_load_and_clean_datasets.py` (collection_time_hpf, data_source,
+  physical_embryo_id), `src/analyze/classification/label_transfer/perbin.py` (engine),
+  `1_fit_reference_models.py` (all 5 models per-bin; loeo for b9d2/cep290, kfold for
+  crispant), `2_predict_sequenced_embryos.py` (sequenced-only, timeseries-priority dedup,
+  cross-bin + per-bin outputs), `cilia_qc_helpers.py` (`select_for_label_transfer`),
+  `plot_config.py` (shared colors + column spec).
+- TO BUILD: `3a` (audit), `3b` (genotype per plate), `3c` (confidence — KEY), `3d`
+  (feature). REUSE/DEFER: `3e` (PCA), `3f` (portfolio).
+- Current `3_plot_qc_and_phenotype_predictions.py` is the MONOLITH to mine for reusable
+  functions, then retire.

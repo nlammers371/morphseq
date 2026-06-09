@@ -5,3 +5,7 @@ from .core import (
     plot_reference_quality,
     plot_transfer_result,
 )
+from .perbin import (
+    prepare_reference_perbin,
+    transfer_labels_perbin,
+)

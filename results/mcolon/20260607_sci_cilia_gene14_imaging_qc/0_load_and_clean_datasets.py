@@ -18,10 +18,14 @@ Run:
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # for the local cilia_qc_helpers module
+from cilia_qc_helpers import select_for_label_transfer  # noqa: E402,F401
 
 
 # -----------------------------------------------------------------------------
@@ -94,6 +98,117 @@ HOMO_PHENOTYPE_LABELS = {
 }
 
 WELLS = [f"{row}{col:02}" for row in "ABCDEFGH" for col in range(1, 13)]
+
+
+# -----------------------------------------------------------------------------
+# Collection time and data-source bookkeeping
+# -----------------------------------------------------------------------------
+#
+# LOUD plate01 rule (cep290 & b9d2): plate01 carries BOTH the `_sci_` timeseries AND
+# redundant `_t01`/`_t02` 48 hpf snapshots for the SAME physical embryos. The snapshots
+# were backups only.
+#   - Label transfer uses the `_sci_` TIMESERIES for plate01.
+#   - `_t01`/`_t02` snapshots are for portfolio / QC spot-checking ONLY.
+#   - For label PREDICTION, plate01 uses only the `_t02` (48 hpf) snapshot.
+# `data_source` below encodes which experiments are timeseries vs snapshot so downstream
+# scripts can honor this without re-deriving it.
+#
+# `collection_time_hpf` is a FACT about each experiment (when the cohort was collected),
+# NOT something inferred from imaging. It is a manual per-experiment map. The `_sci_`
+# timeseries and `30to48` plates are collected at 48 hpf. The ONE genuinely ambiguous
+# plate `20260324_cep290_18hpf_24hpf_plate02` holds two collections (18 and 24 hpf) in
+# one plate, so it is resolved PER EMBRYO from predicted_stage_hpf (see below).
+
+# Experiments that are continuous timeseries (the plate01 label-transfer source).
+TIMESERIES_DATA = [
+    "20260414_sci_b9d2_48hpf_plate01",
+    "20260415_sci_cep290_48hpf_plate01",
+]
+
+# Everything else collected for this cohort is a single-stage snapshot.
+SNAPSHOT_DATA = [
+    "20260319_cilia_crispant_18hpf",
+    "20260319_cilia_crispant_24hpf",
+    "20260319_cilia_crispant_30hpf",
+    "20260320_cilia_crispant_48hpf",
+    "20260324_cep290_18hpf_24hpf_plate02",
+    "20260324_cep290_18hpf_plate01",
+    "20260324_cep290_24hpf_plate01",
+    "20260324_cep290_24hpf_plate02",
+    "20260324_cep290_30hpf_plate01",
+    "20260324_cep290_30hpf_plate02",
+    "20260331_b9d2_18hpf_plate01",
+    "20260331_b9d2_18hpf_plate02",
+    "20260414_b9d2_14hpf_plate01",
+    "20260414_b9d2_30hpf_plate01",
+    "20260414_b9d2_30hpf_plate02",
+    "20260415_b9d2_30to48hpf_plate01_t02",
+    "20260415_b9d2_30to48hpf_plate02_t02",
+    "20260415_cep290_18hpf_plate03",
+    "20260415_cep290_30to48hpf_plate02_t01",
+    "20260416_cep290_30to48hpf_plate01_t02",
+    "20260416_cep290_30to48hpf_plate02_t02",
+]
+
+# Manual collection-time map (hpf) per query experiment_id. `_sci_`/`30to48` -> 48.
+# The split-age plate is intentionally absent here -> resolved per-embryo from stage.
+COLLECTION_TIME_HPF = {
+    "20260319_cilia_crispant_18hpf": 18,
+    "20260319_cilia_crispant_24hpf": 24,
+    "20260319_cilia_crispant_30hpf": 30,
+    "20260320_cilia_crispant_48hpf": 48,
+    "20260324_cep290_18hpf_plate01": 18,
+    "20260324_cep290_24hpf_plate01": 24,
+    "20260324_cep290_24hpf_plate02": 24,
+    "20260324_cep290_30hpf_plate01": 30,
+    "20260324_cep290_30hpf_plate02": 30,
+    "20260331_b9d2_18hpf_plate01": 18,
+    "20260331_b9d2_18hpf_plate02": 18,
+    "20260414_b9d2_14hpf_plate01": 14,
+    "20260414_b9d2_30hpf_plate01": 30,
+    "20260414_b9d2_30hpf_plate02": 30,
+    "20260414_sci_b9d2_48hpf_plate01": 48,        # timeseries, collected at 48 hpf
+    "20260415_b9d2_30to48hpf_plate01_t02": 48,
+    "20260415_b9d2_30to48hpf_plate02_t02": 48,
+    "20260415_cep290_18hpf_plate03": 18,
+    "20260415_cep290_30to48hpf_plate02_t01": 30,  # _t01 snapshot = 30 hpf
+    "20260415_sci_cep290_48hpf_plate01": 48,      # timeseries, collected at 48 hpf
+    "20260416_cep290_30to48hpf_plate01_t02": 48,
+    "20260416_cep290_30to48hpf_plate02_t02": 48,
+}
+
+# The single plate whose name carries two collection ages (18 and 24 hpf only);
+# resolved per embryo from predicted_stage_hpf.
+SPLIT_AGE_EXPERIMENTS = {"20260324_cep290_18hpf_24hpf_plate02"}
+
+
+def data_source_for_experiment(experiment_id: str) -> str:
+    """timeseries vs snapshot, from the manually-encoded lists. Unknown -> 'snapshot'."""
+    if experiment_id in TIMESERIES_DATA:
+        return "timeseries"
+    if experiment_id in SNAPSHOT_DATA or experiment_id in SPLIT_AGE_EXPERIMENTS:
+        return "snapshot"
+    return "snapshot"
+
+
+def split_age_collection_hpf(stage: float) -> int | float:
+    """Split-age plate holds ONLY 18 and 24 hpf collections. Match exactly; NaN otherwise."""
+    rounded = int(round(stage))
+    if rounded == 18:
+        return 18
+    if rounded == 24:
+        return 24
+    return np.nan
+
+
+def plate_token(experiment_id: str) -> str:
+    """Pull the plateNN token from an experiment_id; default plate01 if absent."""
+    for part in experiment_id.split("_"):
+        if part.startswith("plate"):
+            return part
+    return "plate01"
+
+
 
 
 def gene_for_experiment(experiment: str) -> str | None:
@@ -238,6 +353,43 @@ def load_query_table(row: pd.Series) -> pd.DataFrame:
     else:
         df["phenotype_clean"] = np.nan
 
+    # collection_time_hpf: manual per-experiment fact, EXCEPT the split-age plate which
+    # holds two collections (18 & 24 hpf) and is resolved per embryo from stage.
+    df["data_source"] = data_source_for_experiment(experiment)
+    if experiment in SPLIT_AGE_EXPERIMENTS:
+        emb_stage = df.groupby("embryo_id")["predicted_stage_hpf"].transform("median")
+        df["collection_time_hpf"] = emb_stage.map(
+            lambda s: split_age_collection_hpf(s) if pd.notna(s) else np.nan
+        )
+        # Every embryo on this plate must resolve to exactly 18 or 24; surface any that didn't.
+        unassigned = df.loc[df["collection_time_hpf"].isna(), "embryo_id"].unique()
+        if len(unassigned):
+            print(
+                f"    WARNING: {experiment}: {len(unassigned)} embryo(s) matched neither "
+                f"18 nor 24 hpf -> NaN: {list(unassigned)[:5]}"
+            )
+        print(
+            f"    {experiment}: split-age plate -> collection_time_hpf resolved per embryo "
+            f"from predicted_stage_hpf ({df['collection_time_hpf'].dropna().astype(int).value_counts().to_dict()})"
+        )
+    else:
+        ct = COLLECTION_TIME_HPF.get(experiment)
+        if ct is None:
+            print(f"    WARNING: {experiment} has no collection_time_hpf mapping -> NaN")
+            df["collection_time_hpf"] = np.nan
+        else:
+            df["collection_time_hpf"] = ct
+
+    # physical_embryo_id keys on biological collection time (NOT experiment_id), so the
+    # plate01 timeseries row and its _t02 48 hpf snapshot row for one physical embryo join.
+    ct_token = df["collection_time_hpf"].map(
+        lambda x: f"{int(x)}hpf" if pd.notna(x) else "naHpf"
+    )
+    plate = plate_token(experiment)
+    df["physical_embryo_id"] = (
+        gene + "_" + ct_token + "_" + plate + "_" + df["well"].astype(str)
+    )
+
     sequenced_grid = read_sequenced_grid(experiment)
     if sequenced_grid is None:
         df["sequenced"] = np.nan
@@ -265,6 +417,12 @@ def load_reference_table(gene: str, path: Path) -> pd.DataFrame:
         df["phenotype_clean"] = df["cluster_categories"].map(lambda x: clean_phenotype(gene, x))
     else:
         df["phenotype_clean"] = np.nan
+    # The collection bookkeeping is a query-cohort concern; reference experiment_ids are
+    # bare dates with no age/plate/well structure. Emit the columns for schema parity but
+    # leave them unset (label transfer trains on labels + features, not collection time).
+    df["data_source"] = "reference"
+    df["collection_time_hpf"] = np.nan
+    df["physical_embryo_id"] = np.nan
     return df
 
 
@@ -349,6 +507,22 @@ def main() -> None:
         }
     )
     pd.DataFrame(label_rows).to_csv(TABLE_DIR / "label_plan.csv", index=False)
+
+    print("\nLOUD plate01 rule: `_sci_` experiments are the TIMESERIES (label transfer);")
+    print("`_t01`/`_t02` are redundant 48 hpf snapshots (portfolio/QC; prediction uses _t02).")
+    print("\ncollection_time_hpf x data_source (query rows):")
+    print(query.groupby(["collection_time_hpf", "data_source"]).size().to_string())
+    missing_ct = query.loc[query["collection_time_hpf"].isna(), "experiment"].value_counts()
+    if not missing_ct.empty:
+        print("\nWARNING: query rows with NO collection_time_hpf, by experiment:")
+        print(missing_ct.to_string())
+    else:
+        print("\nAll query rows have a collection_time_hpf.")
+
+    print("\nphysical_embryo_id example (split-age plate, should show 18hpf AND 24hpf):")
+    split_eg = query[query["experiment"].isin(SPLIT_AGE_EXPERIMENTS)]
+    if not split_eg.empty:
+        print(split_eg.drop_duplicates("embryo_id")["physical_embryo_id"].head(4).to_string(index=False))
 
     print("\nSequenced embryo counts:")
     print(sequenced_embryos.groupby(["gene", "sequenced_stratum"]).size().to_string())

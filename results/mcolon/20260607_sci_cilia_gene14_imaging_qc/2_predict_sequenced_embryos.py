@@ -1,24 +1,31 @@
 """
-2 - Predict sequenced query embryos using saved reference models.
+2 - Predict SEQUENCED query embryos using saved per-bin reference models.
 
-This is a plain analysis script:
-    load tables -> define prediction plan -> load each saved model -> predict -> save CSVs
+==============================================================================
+SCOPE — SEQUENCED EMBRYOS ONLY.
+    Every embryo predicted, benchmarked and written by this script is in the
+    sequenced registry (query_sequenced_embryos.csv, sequenced > 0). Unsequenced
+    query embryos are deliberately excluded — this script is the sequencing
+    greenlight read-out, not a whole-cohort prediction. The filter is applied
+    ONCE, up front (see the SEQUENCED-ONLY line below), so everything downstream
+    is sequenced-only by construction.
+==============================================================================
 
-The only loop in this script is the prediction plan. Each row in the plan is one
-saved model we want to apply to sequenced query embryos.
+Plain analysis script:
+    load tables -> filter to sequenced -> per model: select query -> transfer -> save
+
+The per-bin engine returns TWO grains (both written out):
+    - cross-bin : one row per query embryo (the headline prediction).
+    - per-bin   : one row per query embryo x time bin (feeds the confidence plot).
+Plus missing_support: query (embryo, bin) rows with no model -> no prediction.
+
 For each model, we:
-1. subset sequenced query images to the relevant gene group
-2. load the saved reference model from models/
-3. run label transfer on those query images
-4. attach embryo and snip metadata back onto the predictions
-5. collect embryo-level and image-level outputs
-6. benchmark genotype QC predictions against sequencing truth when available
-
-It predicts only sequenced query embryos and writes out:
-- embryo-level genotype QC predictions
-- embryo-level homozygous phenotype predictions
-- image-level prediction tables for both model types
-- a compact per-model prediction summary
+1. subset SEQUENCED query rows to the gene group (phenotype models: homozygous only)
+2. apply timeseries-priority selection (plate01 LOUD rule)
+3. load the saved per-bin reference model from models/
+4. run transfer_labels_perbin and attach embryo metadata
+5. collect cross-bin + per-bin outputs
+6. benchmark genotype QC cross-bin predictions against sequencing truth
 
 Run:
     conda run -n segmentation_grounded_sam --no-capture-output python \
@@ -37,8 +44,10 @@ RUN_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = RUN_DIR.parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(RUN_DIR))  # so the local cilia_qc_helpers module is importable
 
-from src.analyze.classification.label_transfer import transfer_labels  # noqa: E402
+from src.analyze.classification.label_transfer import transfer_labels_perbin  # noqa: E402
+from cilia_qc_helpers import select_for_label_transfer  # noqa: E402
 
 TABLE_DIR = RUN_DIR / "tables"
 MODEL_DIR = RUN_DIR / "models"
@@ -48,16 +57,24 @@ PRED_DIR.mkdir(exist_ok=True)
 QUERY_PATH = TABLE_DIR / "query_all_rows_clean.csv"
 SEQUENCED_REGISTRY_PATH = TABLE_DIR / "query_sequenced_embryos.csv"
 
-print("2 - predict sequenced embryos")
-print("Load saved models.")
-print("Predict only sequenced query embryos.")
-print("Save genotype QC predictions and homozygous phenotype predictions.")
+print("=" * 70)
+print("2 - PREDICT  |  SCOPE: SEQUENCED EMBRYOS ONLY (sequenced > 0)")
+print("    Unsequenced query embryos are excluded — this is the sequencing")
+print("    greenlight read-out, not a whole-cohort prediction.")
+print("=" * 70)
 
 query_all = pd.read_csv(QUERY_PATH, low_memory=False)
 registry = pd.read_csv(SEQUENCED_REGISTRY_PATH, low_memory=False)
 registry = registry[["embryo_id", "sequenced", "sequenced_stratum"]].drop_duplicates("embryo_id")
 
+# ==========================================================================
+# SEQUENCED-ONLY FILTER (applied ONCE, here). Everything downstream inherits it.
+# Every embryo evaluated below is in the sequenced registry (sequenced > 0).
+# ==========================================================================
+n_all = query_all["embryo_id"].nunique()
 query = query_all[query_all["embryo_id"].isin(registry["embryo_id"])].copy()
+print(f"\nSEQUENCED-ONLY filter: {query['embryo_id'].nunique()} of {n_all} query embryos "
+      f"are sequenced; the other {n_all - query['embryo_id'].nunique()} are dropped here.")
 query = query.merge(
     registry,
     on="embryo_id",
@@ -84,28 +101,49 @@ meta_cols = [
     "zygosity",
     "phenotype_clean",
     "predicted_stage_hpf",
+    "collection_time_hpf",
+    "data_source",
+    "physical_embryo_id",
 ]
+
+# Every field is set on every row. Nothing is implied by absence.
+#
+# The main fields that differ between models are:
+#   homozygous_only
+#       Whether to restrict the query to homozygous embryos.
+#       True for phenotype models.
+#
+#   benchmark_truth
+#       Truth column used for scoring predictions.
+#       None means the model is prediction-only and not benchmarked.
+#
+#   valid_truth_labels
+#       Allowed truth labels for benchmarkable models.
+#       Empty for non-benchmarkable phenotype models.
 
 prediction_plan = [
     {
         "model_id": "b9d2_genotype_qc",
         "gene": "b9d2",
         "prediction_kind": "genotype_qc",
-        "truth_col": "zygosity",
+        "homozygous_only": False,
+        "benchmark_truth": "zygosity",
         "valid_truth_labels": ["wildtype", "heterozygous", "homozygous"],
     },
     {
         "model_id": "cep290_genotype_qc",
         "gene": "cep290",
         "prediction_kind": "genotype_qc",
-        "truth_col": "zygosity",
+        "homozygous_only": False,
+        "benchmark_truth": "zygosity",
         "valid_truth_labels": ["wildtype", "heterozygous", "homozygous"],
     },
     {
         "model_id": "cilia_crispant_genotype_qc",
         "gene": "crispant",
         "prediction_kind": "genotype_qc",
-        "truth_col": "genotype_clean",
+        "homozygous_only": False,
+        "benchmark_truth": "genotype_clean",
         "valid_truth_labels": [
             "ab_wildtype",
             "foxj1a_crispant",
@@ -118,142 +156,128 @@ prediction_plan = [
         "model_id": "b9d2_homozygous_phenotype",
         "gene": "b9d2",
         "prediction_kind": "homozygous_phenotype",
+        "homozygous_only": True,
+        "benchmark_truth": None,
+        "valid_truth_labels": [],
     },
     {
         "model_id": "cep290_homozygous_phenotype",
         "gene": "cep290",
         "prediction_kind": "homozygous_phenotype",
+        "homozygous_only": True,
+        "benchmark_truth": None,
+        "valid_truth_labels": [],
     },
 ]
 
-all_embryo = []
-all_image = []
+all_cross_bin = []   # one row per (model, query embryo)
+all_per_bin = []     # one row per (model, query embryo, time bin)
+all_missing = []     # query (embryo, bin) with no model -> missing support
 summary_rows = []
+
+print("\nLOUD: query uses timeseries-priority selection per physical embryo")
+print("(plate01 timeseries wins over its redundant _t02 snapshot; plate02/crispant snapshots kept).")
 
 for model_spec in prediction_plan:
     model_id = model_spec["model_id"]
     gene = model_spec["gene"]
     prediction_kind = model_spec["prediction_kind"]
-    truth_col = model_spec.get("truth_col")
-    valid_truth_labels = model_spec.get("valid_truth_labels", [])
+    benchmark_truth = model_spec["benchmark_truth"]
+    valid_truth_labels = model_spec["valid_truth_labels"]
 
-    print(f"\n[{model_id}] gene={gene} | prediction_kind={prediction_kind}")
+    print(f"\n[{model_id}] gene={gene} | kind={prediction_kind}")
     query_for_model = query[query["gene"] == gene].copy()
+    if model_spec["homozygous_only"]:
+        query_for_model = query_for_model[query_for_model["zygosity"] == "homozygous"]
+        print("  homozygous_only: restricted query to homozygous embryos")
     if query_for_model.empty:
         print(f"  no sequenced query rows for gene={gene} — skipping")
         continue
 
-    print(f"  query_rows={len(query_for_model)}")
+    # plate01 special case: a plate01 48 hpf embryo has BOTH a timeseries AND a redundant
+    # _t02 snapshot backup (same physical_embryo_id). Drop the backup so the model uses the
+    # timeseries. plate02 (snapshot-only) and crispants (no timeseries) are untouched.
+    n_before = query_for_model["embryo_id"].nunique()
+    query_for_model = select_for_label_transfer(query_for_model)
+    n_after = query_for_model["embryo_id"].nunique()
+    print(f"  query embryos: {n_before} -> {n_after} after timeseries-priority select; "
+          f"rows={len(query_for_model)}")
 
-    # Load the saved reference model.
-    model_path = MODEL_DIR / f"{model_id}.pkl"
-    with model_path.open("rb") as fh:
+    with (MODEL_DIR / f"{model_id}.pkl").open("rb") as fh:
         model = pickle.load(fh)
 
-    # Predict embryo-level and image-level labels.
-    result = transfer_labels(model, query_for_model, skip_flagged=False)
+    result = transfer_labels_perbin(model, query_for_model, verbose=True)
 
-    # Attach embryo metadata.
-    embryo_predictions = result["embryo_predictions"].copy()
     embryo_metadata = query_for_model[meta_cols].drop_duplicates("embryo_id")
-    embryo_predictions = embryo_predictions.merge(
-        embryo_metadata,
-        left_on="query_embryo_id",
-        right_on="embryo_id",
-        how="left",
+
+    # Cross-bin: one row per query embryo (the headline prediction).
+    cross_bin = result["embryo_support"]["embryo_cross_bin_prediction"].merge(
+        embryo_metadata, left_on="query_embryo_id", right_on="embryo_id", how="left"
     )
-    embryo_predictions.insert(0, "model_id", model_id)
-    embryo_predictions.insert(1, "prediction_kind", prediction_kind)
-    all_embryo.append(embryo_predictions)
+    cross_bin.insert(0, "model_id", model_id)
+    cross_bin.insert(1, "prediction_kind", prediction_kind)
+    all_cross_bin.append(cross_bin)
 
-    # Attach image metadata.
-    image_predictions = result["image_predictions"].copy()
-    image_metadata = query_for_model[["snip_id", *meta_cols]].drop_duplicates("snip_id")
-    image_predictions = image_predictions.merge(
-        image_metadata,
-        left_on="query_snip_id",
-        right_on="snip_id",
-        how="left",
+    # Per-bin: one row per query embryo x time bin (feeds the confidence plot).
+    per_bin = result["per_bin"]["embryo_per_bin_prediction"].merge(
+        embryo_metadata, left_on="query_embryo_id", right_on="embryo_id", how="left"
     )
-    image_predictions.insert(0, "model_id", model_id)
-    image_predictions.insert(1, "prediction_kind", prediction_kind)
-    all_image.append(image_predictions)
+    per_bin.insert(0, "model_id", model_id)
+    per_bin.insert(1, "prediction_kind", prediction_kind)
+    all_per_bin.append(per_bin)
 
-    # Compact summary for this block.
-    predicted_classes = sorted(
-        pd.unique(embryo_predictions["predicted_label"].astype(str))
-    )
-    summary_rows.append(
-        {
-            "model_id": model_id,
-            "gene": gene,
-            "prediction_kind": prediction_kind,
-            "n_query_embryos": int(embryo_predictions["query_embryo_id"].nunique()),
-            "n_query_images": int(len(image_predictions)),
-            "predicted_classes": ", ".join(predicted_classes),
-            "mean_top_probability": float(embryo_predictions["top_probability"].mean()),
-        }
-    )
+    missing = result["missing_support"].copy()
+    if not missing.empty:
+        missing.insert(0, "model_id", model_id)
+        all_missing.append(missing)
 
-    # Only genotype QC predictions have matching sequencing truth labels.
-    if prediction_kind == "genotype_qc":
-        if truth_col is None or not valid_truth_labels:
-            raise ValueError(f"{model_id} is genotype_qc but has no truth labels configured")
+    perf = model["reference_performance"]
+    summary_rows.append({
+        "model_id": model_id, "gene": gene, "prediction_kind": prediction_kind,
+        "n_query_embryos": int(cross_bin["query_embryo_id"].nunique()),
+        "n_query_embryo_bins": int(len(per_bin)),
+        "n_query_missing_support": int(missing["query_embryo_id"].nunique()) if not missing.empty else 0,
+        "predicted_classes": ", ".join(sorted(cross_bin["predicted_label"].astype(str).unique())),
+        "mean_top_probability": float(cross_bin["top_probability"].mean()) if not cross_bin.empty else float("nan"),
+        "reference_transferability": "; ".join(f"{k}:{v}" for k, v in perf["transferability"].items()),
+    })
 
-        predictions_with_truth = embryo_predictions[
-            embryo_predictions[truth_col].isin(valid_truth_labels)
-        ].copy()
-
-        if predictions_with_truth.empty:
+    # Benchmark against sequencing truth when this model has one (genotype QC only).
+    if benchmark_truth is not None:
+        with_truth = cross_bin[cross_bin[benchmark_truth].isin(valid_truth_labels)].copy()
+        if with_truth.empty:
             print("  no benchmarkable sequenced truth labels")
         else:
-            predicted_label = predictions_with_truth["predicted_label"].astype(str)
-            true_label = predictions_with_truth[truth_col].astype(str)
-            predictions_with_truth["correct"] = predicted_label == true_label
-            n_correct = int(predictions_with_truth["correct"].sum())
-            n_total = len(predictions_with_truth)
-            accuracy = n_correct / n_total
-            print(f"  benchmarkable accuracy: {accuracy:.1%} ({n_correct}/{n_total})")
+            correct = with_truth["predicted_label"].astype(str) == with_truth[benchmark_truth].astype(str)
+            print(f"  benchmarkable accuracy (cross-bin): "
+                  f"{correct.mean():.1%} ({int(correct.sum())}/{len(with_truth)})")
 
-embryo_out = pd.concat(all_embryo, ignore_index=True) if all_embryo else pd.DataFrame()
-image_out = pd.concat(all_image, ignore_index=True) if all_image else pd.DataFrame()
+cross_bin_out = pd.concat(all_cross_bin, ignore_index=True) if all_cross_bin else pd.DataFrame()
+per_bin_out = pd.concat(all_per_bin, ignore_index=True) if all_per_bin else pd.DataFrame()
+missing_out = pd.concat(all_missing, ignore_index=True) if all_missing else pd.DataFrame()
 summary = pd.DataFrame(summary_rows)
 
-embryo_path = PRED_DIR / "sequenced_embryo_predictions.csv"
-image_path = PRED_DIR / "sequenced_image_predictions.csv"
+cross_bin_path = PRED_DIR / "sequenced_cross_bin_predictions.csv"
+per_bin_path = PRED_DIR / "sequenced_per_bin_predictions.csv"
+missing_path = PRED_DIR / "sequenced_missing_support.csv"
 summary_path = PRED_DIR / "prediction_summary.csv"
 
-embryo_out.to_csv(embryo_path, index=False)
-image_out.to_csv(image_path, index=False)
+cross_bin_out.to_csv(cross_bin_path, index=False)
+per_bin_out.to_csv(per_bin_path, index=False)
+missing_out.to_csv(missing_path, index=False)
 summary.to_csv(summary_path, index=False)
 
-if not embryo_out.empty:
-    genotype_qc_embryo = embryo_out[embryo_out["prediction_kind"] == "genotype_qc"].copy()
-    phenotype_embryo = embryo_out[embryo_out["prediction_kind"] == "homozygous_phenotype"].copy()
+# Split by prediction_kind so genotype-QC and phenotype plots read focused tables.
+for kind, tag in [("genotype_qc", "genotype_qc"), ("homozygous_phenotype", "homozygous_phenotype")]:
+    if not cross_bin_out.empty:
+        cross_bin_out[cross_bin_out["prediction_kind"] == kind].to_csv(
+            PRED_DIR / f"sequenced_{tag}_cross_bin.csv", index=False)
+    if not per_bin_out.empty:
+        per_bin_out[per_bin_out["prediction_kind"] == kind].to_csv(
+            PRED_DIR / f"sequenced_{tag}_per_bin.csv", index=False)
 
-    genotype_qc_embryo.to_csv(
-        PRED_DIR / "sequenced_genotype_qc_predictions.csv",
-        index=False,
-    )
-    phenotype_embryo.to_csv(
-        PRED_DIR / "sequenced_homozygous_phenotype_predictions.csv",
-        index=False,
-    )
-
-if not image_out.empty:
-    genotype_qc_image = image_out[image_out["prediction_kind"] == "genotype_qc"].copy()
-    phenotype_image = image_out[image_out["prediction_kind"] == "homozygous_phenotype"].copy()
-
-    genotype_qc_image.to_csv(
-        PRED_DIR / "sequenced_genotype_qc_image_predictions.csv",
-        index=False,
-    )
-    phenotype_image.to_csv(
-        PRED_DIR / "sequenced_homozygous_phenotype_image_predictions.csv",
-        index=False,
-    )
-
-print(f"\nWrote embryo predictions to: {embryo_path.relative_to(RUN_DIR)}")
-print(f"Wrote image predictions to: {image_path.relative_to(RUN_DIR)}")
+print(f"\nWrote cross-bin (per-embryo) predictions to: {cross_bin_path.relative_to(RUN_DIR)}")
+print(f"Wrote per-bin (per-embryo-bin) predictions to: {per_bin_path.relative_to(RUN_DIR)}")
+print(f"Wrote missing-support rows to: {missing_path.relative_to(RUN_DIR)}")
 print(f"Wrote prediction summary to: {summary_path.relative_to(RUN_DIR)}")
 print("Wrote split prediction files under predictions/ for genotype QC and phenotype plots.")
