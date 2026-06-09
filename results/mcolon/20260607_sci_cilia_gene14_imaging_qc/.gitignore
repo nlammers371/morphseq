@@ -1,0 +1,8 @@
+# Large regenerated cleaned row tables. Recreate with 0_load_and_clean_datasets.py.
+/tables/query_all_rows_clean.csv
+/tables/reference_all_clean.csv
+/tables/reference_b9d2_clean.csv
+/tables/reference_cep290_clean.csv
+/tables/reference_crispant_clean.csv
+
+__pycache__/

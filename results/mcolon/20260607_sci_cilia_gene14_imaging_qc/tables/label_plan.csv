@@ -1,0 +1,6 @@
+gene,model,reference_labels,query_scope
+b9d2,genotype_qc,"wildtype, heterozygous, homozygous",sequenced embryos only
+b9d2,homozygous_phenotype,"CE, HTA",sequenced homozygous embryos for main interpretation
+cep290,genotype_qc,"wildtype, heterozygous, homozygous",sequenced embryos only
+cep290,homozygous_phenotype,"High_to_Low, Low_to_High",sequenced homozygous embryos for main interpretation
+crispant,genotype_qc,crispant/control labels,sequenced embryos only if present
