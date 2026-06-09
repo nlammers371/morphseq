@@ -1,3 +1,11 @@
+
+# Future improvements 
+There might sometimes be cases where we don't want to, for example in label transfer, where we want to train on all images. I don't know, I need to think about this: train on all images, but do the image-level group-by images, but then do the k-fold group-level classification. Also, I have to make my bootstrapping be embryo ID-aware to get statistical significance. 
+
+
+
+
+
 # Future improvements — classification (AUROC over time)
 
 > **Status: historical snapshot (2026-03-05).** Kept for roadmap context.

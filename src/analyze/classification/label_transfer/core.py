@@ -51,10 +51,17 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import LeaveOneGroupOut, cross_val_predict
 
+# Shared binning/aggregation engine — same logic run_classification uses internally.
+# Future improvement: run_classification should expose its fitted per-bin pipelines
+# so label_transfer can reuse them directly instead of refitting here.
+from ..engine.data_prep import _aggregate_binned
+from ...utils.binning import add_time_bins
+
 # ── thresholds ─────────────────────────────────────────────────────────────────
 PREC_WARN = 0.50   # per-class precision floor for "ok" flag
 REC_WARN  = 0.30   # per-class recall floor for "ok" flag
 MIN_BIN_EMBRYOS = 3
+MIN_BIN_EMBRYOS_PERBIN = 5  # minimum embryos per bin to fit a dedicated bin model
 
 # ── model spec (matches classification module) ─────────────────────────────────
 def _make_pipeline(random_state: int = 42) -> Any:
@@ -83,6 +90,7 @@ def prepare_reference(
     cv_group_col: str | None = None,
     n_folds: int = 5,
     random_state: int = 42,
+    model_type: str = "global",
 ) -> dict:
     """Fit reference models and assess label quality via cross-validation.
 
@@ -102,6 +110,12 @@ def prepare_reference(
                    - Pass None → k-fold CV (n_folds used).
     n_folds      : Number of folds when cv_group_col is None (k-fold).
     random_state : Sklearn random seed.
+    model_type   : "global" (default) — one model fit on all reference embryos.
+                   "per_bin" — one model per time bin (bin_width) using embryo-mean
+                   features; falls back to the global model for bins with fewer than
+                   MIN_BIN_EMBRYOS_PERBIN embryos or fewer than 2 classes.
+                   Per-bin is Mode C from the benchmark in
+                   results/mcolon/20260601_label_transfer_method/.
 
     Returns
     -------
@@ -120,10 +134,14 @@ def prepare_reference(
     else:
         cv_strategy_label = f"leave-one-{cv_group_col}-out"
 
+    if model_type not in ("global", "per_bin"):
+        raise ValueError(f"model_type must be 'global' or 'per_bin', got {model_type!r}")
+
     config = dict(
         feature_cols=feature_cols, label_col=label_col, group_col=group_col,
         time_col=time_col, bin_width=bin_width,
         cv_group_col=cv_group_col, cv_strategy=cv_strategy_label,
+        model_type=model_type,
     )
 
     # ── embryo-level aggregation for CV ──────────────────────────────────────
@@ -202,11 +220,46 @@ def prepare_reference(
     # ── confusion matrix (embryo level, recall-normalized) ────────────────────
     cm = confusion_matrix(y_emb, y_pred_cv, labels=classes, normalize="true")
 
-    # ── final model: fit on all reference embryos ─────────────────────────────
+    # ── final model: fit on all reference embryos (global fallback) ──────────
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         final_pipe = _make_pipeline(random_state)
         final_pipe.fit(X_emb, y_emb)
+
+    # ── per-bin models (Mode C) ───────────────────────────────────────────────
+    # Uses within-bin embryo aggregation via the same _aggregate_binned helper
+    # that run_classification uses internally — one row per (embryo, bin) rather
+    # than one row per embryo averaged across all time. This is the principled
+    # approach: an embryo spanning 20–80 hpf contributes independently to each
+    # bin it has images in, with features computed only from images in that window.
+    bin_models: dict[float, Any] = {}  # bin_center → fitted pipeline
+    if model_type == "per_bin":
+        # Build within-bin embryo means from raw image rows using shared engine
+        ref_binned = add_time_bins(ref, time_col=time_col, bin_width=bin_width, bin_col="_time_bin")
+        # attach label for groupby (label_col is modal per embryo within bin)
+        ref_binned["_label_for_agg"] = ref_binned[label_col]
+        emb_binned = _aggregate_binned(
+            ref_binned, id_col=group_col, feature_cols=feature_cols,
+            bin_col="_time_bin", bin_width=bin_width,
+        )
+        # re-attach modal label per (embryo, bin)
+        modal_per_bin = (
+            ref_binned.groupby([group_col, "_time_bin"])[label_col]
+            .agg(lambda s: s.mode().iloc[0])
+            .reset_index()
+        )
+        emb_binned = emb_binned.merge(modal_per_bin, on=[group_col, "_time_bin"], how="left")
+
+        for bin_center in sorted(emb_binned["time_bin_center"].unique()):
+            sub = emb_binned[emb_binned["time_bin_center"] == bin_center].dropna(subset=[label_col])
+            y_bin = sub[label_col].to_numpy()
+            n_classes_bin = len(np.unique(y_bin))
+            if len(sub) >= MIN_BIN_EMBRYOS_PERBIN and n_classes_bin >= 2:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    pipe_bin = _make_pipeline(random_state)
+                    pipe_bin.fit(sub[feature_cols].to_numpy(dtype=float), y_bin)
+                bin_models[bin_center] = pipe_bin
 
     # ── label profile: class centroids + time distributions ───────────────────
     label_profile = {}
@@ -242,6 +295,7 @@ def prepare_reference(
         config=config,
         classes=classes,
         final_model=final_pipe,
+        bin_models=bin_models,   # empty dict when model_type="global"
         quality_report=dict(
             per_class=quality_per_class,
             by_timebin=quality_by_timebin,
@@ -294,17 +348,42 @@ def transfer_labels(
     group_col    = cfg["group_col"]
     time_col     = cfg["time_col"]
     bin_width    = cfg["bin_width"]
+    model_type   = cfg.get("model_type", "global")
     classes      = ref_model["classes"]
     pipe         = ref_model["final_model"]
+    bin_models   = ref_model.get("bin_models", {})
     flags        = ref_model["diagnostics"]["flags"]
 
     qry = query_df.copy().reset_index(drop=True)
     X_qry = qry[feature_cols].to_numpy(dtype=float)
 
     # ── image-level probabilities ──────────────────────────────────────────────
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        proba = pipe.predict_proba(X_qry)   # (n_images, n_classes)
+    # per_bin: route each image to its time-bin model; fall back to global
+    if model_type == "per_bin" and bin_models:
+        bin_centers = np.array(sorted(bin_models.keys()))
+        hpf_vals = qry[time_col].to_numpy(dtype=float)
+        proba = np.zeros((len(qry), len(classes)), dtype=float)
+        bin_used = np.full(len(qry), np.nan)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for i, hpf in enumerate(hpf_vals):
+                nearest = bin_centers[int(np.argmin(np.abs(bin_centers - hpf)))]
+                chosen = bin_models.get(nearest, pipe)
+                p = chosen.predict_proba(X_qry[i : i + 1])
+                # align to full class list (bin model may have seen fewer classes)
+                p_full = np.zeros(len(classes))
+                for j, cls in enumerate(classes):
+                    if cls in chosen.classes_:
+                        p_full[j] = p[0, list(chosen.classes_).index(cls)]
+                proba[i] = p_full
+                bin_used[i] = nearest
+        qry = qry.copy()
+        qry["_bin_used"] = bin_used
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            proba = pipe.predict_proba(X_qry)   # (n_images, n_classes)
+        qry["_bin_used"] = np.nan
 
     # Mask out skipped classes before argmax
     skipped = [c for c, f in flags.items() if f == "skip"] if skip_flagged else []
@@ -325,6 +404,7 @@ def transfer_labels(
         "argmax_label": argmax_labels,
         "argmax_margin": margin,
         "top_probability": top1,
+        "bin_used": qry["_bin_used"].to_numpy(),
     })
     for i, c in enumerate(classes):
         img_df[f"prob_{c}"] = proba[:, i]
@@ -352,7 +432,16 @@ def transfer_labels(
         .reset_index(name="consistency_score")
     )
 
+    # modal bin used per embryo (for per_bin p-value lookup downstream)
+    bin_modal = (
+        img_df.groupby(group_col)["bin_used"]
+        .agg(lambda s: s.dropna().mode().iloc[0] if s.dropna().size > 0 else np.nan)
+        .reset_index()
+        .rename(columns={"bin_used": "bin_used"})
+    )
+
     emb_df = emb_proba[[group_col] + prob_cols].copy()
+    emb_df = emb_df.merge(bin_modal, on=group_col, how="left")
     emb_df["predicted_label"] = emb_labels
     emb_df["top_probability"] = emb_top1
     emb_df["argmax_margin"] = emb_margin
