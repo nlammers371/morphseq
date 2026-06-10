@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 
 from analyze.viz.styling import (
     STANDARD_PALETTE,
@@ -93,6 +93,8 @@ def plot_3d_scatter(
     group_by: Optional[str] = None,
     colorscale: str = 'Viridis',
     colorbar_title: Optional[str] = None,
+    # Multi-view dropdown (overrides color_by / color_palette / color_continuous when set)
+    color_views: Optional[List[Dict[str, Any]]] = None,
     # Filtering
     line_by: str = 'id',
     min_points_per_line: int = 20,
@@ -136,6 +138,23 @@ def plot_3d_scatter(
     color_continuous : bool, default=False
         If True, color by continuous numeric values instead of categorical groups.
         Uses colorscale for mapping values to colors.
+    color_views : list of dict, optional
+        When provided, renders multiple coloring views with a Plotly dropdown menu
+        to toggle between them. Each dict specifies one view:
+            {"label": str,           # dropdown button label
+             "color_by": str,        # column to color by
+             "continuous": bool,     # True for continuous (Viridis), False for categorical
+             "palette": dict,        # optional {value: hex} for categorical views
+             "colorscale": str,      # optional colorscale override for continuous views
+             "colorbar_title": str}  # optional colorbar title for continuous views
+        When color_views is set, the top-level color_by / color_palette /
+        color_continuous arguments are ignored. Example::
+
+            color_views=[
+                {"label": "HPF", "color_by": "predicted_stage_hpf", "continuous": True},
+                {"label": "genotype", "color_by": "zygosity", "palette": ZYG_COLORS},
+                {"label": "source", "color_by": "source", "palette": SRC_COLORS},
+            ]
     group_by : str, optional
         Optional column to split points into legend-clickable traces while keeping
         continuous coloring from color_by. Useful for toggling groups (e.g., experiment_id)
@@ -237,6 +256,28 @@ def plot_3d_scatter(
         ...     group_by='experiment_id'
         ... )
     """
+    # ── Multi-view dropdown shortcut ──────────────────────────────────────────
+    if color_views is not None:
+        return _plot_3d_multiview(
+            df=df,
+            coords=coords,
+            color_views=color_views,
+            line_by=line_by,
+            min_points_per_line=min_points_per_line,
+            filter_groups=filter_groups,
+            filter_by_col=filter_by_col,
+            show_lines=show_lines,
+            x_col=x_col,
+            line_opacity=line_opacity,
+            line_width=line_width,
+            point_opacity=point_opacity,
+            point_size=point_size,
+            hover_cols=hover_cols,
+            title=title,
+            output_path=output_path,
+            axis_labels=axis_labels,
+        )
+
     # Validate inputs
     if len(coords) != 3:
         raise ValueError(f"coords must have exactly 3 elements, got {len(coords)}")
@@ -532,5 +573,239 @@ def plot_3d_scatter(
             print(f"Saved: {png_path}")
         except Exception as e:
             print(f"Could not save PNG (kaleido may not be installed): {e}")
+
+    return fig
+
+
+# ==============================================================================
+# Multi-view Dropdown Implementation
+# ==============================================================================
+
+def _mv_add_continuous(fig, df_plot, coords, color_by, colorscale, colorbar_title,
+                       point_size, point_opacity, hover_texts,
+                       colorbar_thickness: int = 12, colorbar_len: float = 0.4) -> int:
+    """Add one continuous-color trace. Returns 1 (trace count)."""
+    x_coord, y_coord, z_coord = coords
+    vals = df_plot[color_by]
+    vmin, vmax = vals.min(), vals.max()
+    if pd.isna(vmin) or vmin == vmax:
+        vmin, vmax = None, None
+    fig.add_trace(go.Scatter3d(
+        x=df_plot[x_coord], y=df_plot[y_coord], z=df_plot[z_coord],
+        mode="markers",
+        marker=dict(
+            size=point_size, color=vals, colorscale=colorscale, opacity=point_opacity,
+            cmin=vmin, cmax=vmax,
+            colorbar=dict(
+                title=colorbar_title if colorbar_title else color_by,
+                thickness=colorbar_thickness,
+                len=colorbar_len,
+                x=1.0,
+            ),
+            showscale=True,
+        ),
+        name=colorbar_title or color_by,
+        showlegend=False, visible=False,
+        text=hover_texts, hovertemplate='%{text}<extra></extra>',
+    ))
+    return 1
+
+
+def _mv_add_categorical(fig, coords, df_plot, color_by, palette,
+                        point_size, point_opacity, hover_texts) -> int:
+    """Add one trace per category value. Returns trace count."""
+    x_coord, y_coord, z_coord = coords
+    vals = df_plot[color_by].astype(str)
+    unique = list(dict.fromkeys(
+        [v for v in palette if v in vals.values]
+        + sorted(vals.dropna().unique().tolist())
+    ))
+    n = 0
+    for v in unique:
+        mask = vals == v
+        if not mask.any():
+            continue
+        sub = df_plot[mask]
+        fig.add_trace(go.Scatter3d(
+            x=sub[x_coord], y=sub[y_coord], z=sub[z_coord],
+            mode="markers",
+            marker=dict(size=point_size, color=palette.get(v, "#888888"), opacity=point_opacity),
+            name=v,
+            legendgroup=f"{color_by}::{v}",
+            showlegend=True, visible=False,
+            text=[hover_texts[i] for i in sub.index],
+            hovertemplate='%{text}<extra></extra>',
+        ))
+        n += 1
+    return n
+
+
+def _build_hover_texts(df_plot, color_by, x_col, coords, hover_cols) -> List[str]:
+    x_coord, y_coord, z_coord = coords
+    texts = []
+    for _, row in df_plot.iterrows():
+        parts = []
+        if 'embryo_id' in df_plot.columns:
+            parts.append(f"<b>embryo_id:</b> {row['embryo_id']}")
+        if x_col and x_col in df_plot.columns:
+            parts.append(f"<b>{x_col}:</b> {row[x_col]:.2f}")
+        parts.append(f"<b>{color_by}:</b> {row[color_by]}")
+        parts.extend([
+            f"<b>{x_coord}:</b> {row[x_coord]:.3f}",
+            f"<b>{y_coord}:</b> {row[y_coord]:.3f}",
+            f"<b>{z_coord}:</b> {row[z_coord]:.3f}",
+        ])
+        if hover_cols:
+            for hcol in hover_cols:
+                if hcol in df_plot.columns and hcol != color_by:
+                    parts.append(f"<b>{hcol}:</b> {row[hcol]}")
+        texts.append("<br>".join(parts))
+    return texts
+
+
+def _plot_3d_multiview(
+    df: pd.DataFrame,
+    coords: List[str],
+    color_views: List[Dict[str, Any]],
+    line_by: str = 'id',
+    min_points_per_line: int = 20,
+    filter_groups: Optional[List[Any]] = None,
+    filter_by_col: Optional[str] = None,
+    show_lines: bool = False,
+    x_col: Optional[str] = 'predicted_stage_hpf',
+    line_opacity: float = 0.3,
+    line_width: float = 1.5,
+    point_opacity: float = 0.65,
+    point_size: int = 4,
+    hover_cols: Optional[List[str]] = None,
+    title: str = "3D Scatter Plot",
+    output_path: Optional[Path] = None,
+    axis_labels: Optional[Dict[str, str]] = None,
+) -> go.Figure:
+    """
+    Build a single Plotly figure with one trace-set per color_view and a
+    dropdown menu that toggles visibility between them.
+
+    Each entry in color_views is a dict:
+        label       : str   — button label shown in dropdown
+        color_by    : str   — column to color by
+        continuous  : bool  — True = Viridis colorscale, False = categorical
+        palette     : dict  — {value: hex} for categorical views (optional)
+        colorscale  : str   — colorscale for continuous (default "Viridis")
+        colorbar_title : str — colorbar title for continuous (default = color_by)
+    """
+    if len(coords) != 3:
+        raise ValueError(f"coords must have exactly 3 elements, got {len(coords)}")
+
+    df_plot = df.copy()
+
+    # Global filtering
+    filter_col = filter_by_col if filter_by_col is not None else (color_views[0]["color_by"] if color_views else None)
+    if filter_groups is not None and filter_col is not None:
+        df_plot = df_plot[df_plot[filter_col].isin(filter_groups)].copy()
+
+    # Minimum-points-per-line filter
+    if line_by in df_plot.columns:
+        counts = df_plot.groupby(line_by).size()
+        valid = counts[counts >= min_points_per_line].index
+        df_plot = df_plot[df_plot[line_by].isin(valid)].copy()
+
+    if df_plot.empty:
+        fig = go.Figure()
+        fig.update_layout(title="No Data Available")
+        return fig
+
+    df_plot = df_plot.reset_index(drop=True)
+
+    fig = go.Figure()
+    view_trace_counts: List[int] = []  # number of traces contributed by each view
+
+    for view in color_views:
+        label = view["label"]
+        cb = view["color_by"]
+        is_continuous = view.get("continuous", False)
+        palette = view.get("palette", {})
+        cs = view.get("colorscale", "Viridis")
+        cb_title = view.get("colorbar_title", None)
+
+        if cb not in df_plot.columns:
+            print(f"  [multiview] '{cb}' not in DataFrame — skipping view '{label}'")
+            view_trace_counts.append(0)
+            continue
+
+        hover = _build_hover_texts(df_plot, cb, x_col, coords, hover_cols)
+
+        if is_continuous:
+            n = _mv_add_continuous(fig, df_plot, coords, cb, cs, cb_title,
+                                   point_size, point_opacity, hover,
+                                   colorbar_thickness=view.get("colorbar_thickness", 12),
+                                   colorbar_len=view.get("colorbar_len", 0.4))
+        else:
+            if not palette:
+                # Auto-build palette from STANDARD_PALETTE
+                unique_vals = sorted(df_plot[cb].dropna().astype(str).unique())
+                palette = {v: STANDARD_PALETTE[i % len(STANDARD_PALETTE)]
+                           for i, v in enumerate(unique_vals)}
+            n = _mv_add_categorical(fig, coords, df_plot, cb, palette,
+                                    point_size, point_opacity, hover)
+
+        view_trace_counts.append(n)
+
+    total_traces = sum(view_trace_counts)
+
+    # Build dropdown buttons — each button shows only its view's traces
+    buttons = []
+    start = 0
+    for view, n in zip(color_views, view_trace_counts):
+        if n == 0:
+            continue
+        vis = [False] * total_traces
+        for k in range(start, start + n):
+            vis[k] = True
+        buttons.append(dict(
+            label=view["label"],
+            method="update",
+            args=[{"visible": vis}, {"title": f"{title} — {view['label']}"}],
+        ))
+        start += n
+
+    # Make first view visible
+    if view_trace_counts and view_trace_counts[0] > 0:
+        for i in range(view_trace_counts[0]):
+            fig.data[i].visible = True
+
+    # Axis labels
+    if axis_labels is None:
+        axis_labels = {}
+    x_coord, y_coord, z_coord = coords
+    x_label = axis_labels.get(x_coord, x_coord)
+    y_label = axis_labels.get(y_coord, y_coord)
+    z_label = axis_labels.get(z_coord, z_coord)
+
+    fig.update_layout(
+        title=f"{title} — {color_views[0]['label']}" if color_views else title,
+        updatemenus=[dict(
+            buttons=buttons,
+            direction="down",
+            showactive=True,
+            x=0.01, xanchor="left",
+            y=0.99, yanchor="top",
+        )],
+        scene=dict(
+            xaxis_title=x_label,
+            yaxis_title=y_label,
+            zaxis_title=z_label,
+        ),
+        legend=dict(title="", itemsizing="constant", groupclick="toggleitem"),
+        margin=dict(l=0, r=0, b=0, t=40),
+        width=1100, height=850,
+    )
+
+    if output_path is not None:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        html_path = output_path.with_suffix('.html')
+        fig.write_html(str(html_path), include_plotlyjs="cdn")
+        print(f"Saved: {html_path}")
 
     return fig
