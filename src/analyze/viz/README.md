@@ -15,6 +15,13 @@ Domain-agnostic visualization tools for time series data. These plotting functio
 - Error bands (SD, SE, IQR, MAD)
 - Customizable colors and styling
 
+### `plotting/plotting_3d.py` - Interactive 3D Scatter Plots
+- `plot_3d_scatter()`: 3D scatter plot with optional trajectory lines and mean trajectories
+- Supports categorical and continuous coloring
+- **Multi-view dropdown** via `color_views` — render multiple coloring perspectives in one HTML,
+  toggled by a Plotly dropdown menu (no page reload, no separate files)
+- Optional trajectory lines per embryo and mean trajectory per group
+
 ## Key Features
 
 ### Backend Flexibility
@@ -35,6 +42,54 @@ Domain-agnostic visualization tools for time series data. These plotting functio
 - Smooth trend lines
 
 ## Usage Examples
+
+### 3D Scatter — Single View
+```python
+from src.analyze.viz.plotting import plot_3d_scatter
+
+fig = plot_3d_scatter(
+    df,
+    coords=['PCA_1', 'PCA_2', 'PCA_3'],
+    color_by='genotype',
+    color_palette={'wildtype': '#2166AC', 'homozygous': '#B2182B'},
+    point_size=3,
+    output_path='pca.html',
+)
+```
+
+### 3D Scatter — Multi-view Dropdown
+Pass `color_views` to embed multiple coloring perspectives in one HTML file.
+Each entry is a dict with `label`, `color_by`, and either `continuous=True`
+(Viridis colorscale) or `palette` (categorical `{value: hex}`).
+
+```python
+fig = plot_3d_scatter(
+    df,
+    coords=['PCA_1', 'PCA_2', 'PCA_3'],
+    color_views=[
+        {"label": "HPF",
+         "color_by": "predicted_stage_hpf",
+         "continuous": True,
+         "colorbar_title": "hpf",
+         "colorbar_thickness": 12,   # pixels wide (default 12)
+         "colorbar_len": 0.35},      # fraction of axis height (default 0.4)
+        {"label": "genotype",
+         "color_by": "zygosity",
+         "palette": {"wildtype": "#2166AC", "homozygous": "#B2182B"}},
+        {"label": "source",
+         "color_by": "source",
+         "palette": {"reference": "#cccccc", "query": "#d62728"}},
+    ],
+    point_size=3,
+    output_path='pca_multiview.html',
+)
+```
+
+The first view is shown on load; the dropdown (top-left) switches between views
+without reloading. All views share the same camera position.
+
+When `color_views` is `None` (default), `plot_3d_scatter` behaves exactly as
+before — no breaking change.
 
 ### Basic Time Series Plot
 ```python
@@ -118,7 +173,8 @@ viz/
 ├── __init__.py
 └── plotting/
     ├── __init__.py
-    └── feature_over_time.py  # Generic time series plotting
+    ├── feature_over_time.py  # Generic time series plotting
+    └── plotting_3d.py        # Interactive 3D scatter + multi-view dropdown
 ```
 
 ## Relationship to Other Modules
