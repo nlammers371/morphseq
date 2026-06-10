@@ -205,6 +205,9 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         if col == 0:
             ax.set_ylabel(row_titles[1], fontsize=8)
 
+        # Compute ref_cell_raw here so both the separator annotation and Row 3 can use it.
+        ref_cell_raw = cv[cv["time_bin_center"].isin(ref_bins)] if ref_bins else cv.iloc[0:0]
+
         # ── Row 2: separator — divider line + per-column CV annotation ────────────
         ax = axes[2][col]
         ax.set_xlim(0, 1)
@@ -216,13 +219,9 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         if ref_bins:
             met_col = metrics[metrics["time_bin_center"].isin(ref_bins)]
             cv_methods = met_col["cv_method"].unique() if not met_col.empty else []
-            n_exps = met_col["n_experiments"].dropna().unique() if not met_col.empty else []
             cv_str = cv_methods[0] if len(cv_methods) == 1 else "/".join(cv_methods)
             if cv_str == "loeo":
-                if len(n_exps) == 1:
-                    n = f"{int(n_exps[0])}"
-                else:
-                    n = f"{int(min(n_exps))}–{int(max(n_exps))}"
+                n = ref_cell_raw["cv_group"].nunique() if not ref_cell_raw.empty else "?"
                 cv_label = f"loeo · {n} exp"
             else:
                 n_emb = int(met_col["n_embryos"].sum()) if not met_col.empty else "?"
@@ -246,7 +245,6 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         ax = axes[3][col]
         ax.axvspan(0.45, 0.55, color="#EEEEEE", zorder=0)
         ax.axvline(0.5, color="#777777", lw=0.8, ls=":", zorder=1)
-        ref_cell_raw = cv[cv["time_bin_center"].isin(ref_bins)] if ref_bins else cv.iloc[0:0]
         if source == "timeseries" and not ref_cell_raw.empty:
             ref_cell = pool_embryos_over_bins(
                 ref_cell_raw, "embryo_id", classes, label_col="true_label"
