@@ -177,15 +177,16 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         counts = cell_q["predicted_label"].astype(str).value_counts()
         vals = [int(counts.get(c, 0)) for c in classes]
         ax.bar(range(len(classes)), vals,
-               color=bar_colors, edgecolor="black", linewidth=0.4)
+               color=bar_colors, edgecolor="black", linewidth=0.8)
         ax.set_xticks(range(len(classes)))
-        ax.set_xticklabels(classes, fontsize=7, rotation=20, ha="right")
-        ax.set_title(col_label, fontsize=8)
+        ax.set_xticklabels(classes, fontsize=10, rotation=20, ha="right")
+        ax.set_title(col_label, fontsize=11, fontweight="bold")
         for i, v in enumerate(vals):
-            ax.text(i, v, str(v), ha="center", va="bottom", fontsize=7)
+            ax.text(i, v, str(v), ha="center", va="bottom", fontsize=11, fontweight="bold")
         ax.set_ylim(0, max(vals + [1]) * 1.25)
+        ax.tick_params(axis="y", labelsize=9)
         if col == 0:
-            ax.set_ylabel(row_titles[0], fontsize=8)
+            ax.set_ylabel(row_titles[0], fontsize=10)
 
         # ── Row 1: query probability strip ────────────────────────────────────────
         ax = axes[1][col]

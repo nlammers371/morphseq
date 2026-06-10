@@ -165,6 +165,7 @@ COLLECTION_TIME_HPF = {
     "20260331_b9d2_18hpf_plate01": 18,
     "20260331_b9d2_18hpf_plate02": 18,
     "20260414_b9d2_14hpf_plate01": 14,
+    "20260414_b9d2_14hpf_plate02": 14,
     "20260414_b9d2_30hpf_plate01": 30,
     "20260414_b9d2_30hpf_plate02": 30,
     "20260414_sci_b9d2_48hpf_plate01": 48,        # timeseries, collected at 48 hpf
