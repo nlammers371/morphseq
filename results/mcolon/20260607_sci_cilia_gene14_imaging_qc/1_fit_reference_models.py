@@ -40,7 +40,9 @@ BIN_WIDTH = 4.0
 print("1 - fit reference models (per-bin engine)")
 print("All models are fit per time bin: one point per (embryo, bin), no global path.")
 print("CV mode is chosen explicitly per model (never inferred):")
-print("  b9d2 / cep290 -> 'loeo' (leave-one-experiment-out; references span >=2 experiments)")
+print("  b9d2 / cep290 -> 'auto' (per-bin: loeo where a bin spans >=2 experiments, else")
+print("                   kfold). Recovers early bins (e.g. b9d2 14/18 hpf) that only ONE")
+print("                   reference experiment imaged; the weaker bins are flagged cv_method=kfold.")
 print("  crispant      -> 'kfold' (single-experiment reference; LOEO-experiment impossible)")
 print("Features = z_mu_b_* biological latents only. Query data is used here only to choose")
 print("the latent features shared with each reference.")
@@ -51,19 +53,20 @@ model_summary = []
 
 
 # Each spec is one load -> filter -> fit -> save block. cv_mode is chosen EXPLICITLY:
-# 'loeo' (leave-one-experiment-out) where the reference spans >=2 experiments; 'kfold'
+# 'auto' (per-bin loeo where >=2 experiments, else kfold) for b9d2/cep290 — recovers the
+# early single-experiment bins (e.g. b9d2 14/18 hpf) that pure 'loeo' would drop; 'kfold'
 # for crispant whose reference is a single experiment (LOEO-experiment is impossible).
 MODEL_SPECS = [
     {"model_id": "b9d2_genotype_qc", "gene": "b9d2", "label_col": "zygosity",
-     "keep_labels": ["wildtype", "heterozygous", "homozygous"], "cv_mode": "loeo"},
+     "keep_labels": ["wildtype", "heterozygous", "homozygous"], "cv_mode": "auto"},
     {"model_id": "cep290_genotype_qc", "gene": "cep290", "label_col": "zygosity",
-     "keep_labels": ["wildtype", "heterozygous", "homozygous"], "cv_mode": "loeo"},
+     "keep_labels": ["wildtype", "heterozygous", "homozygous"], "cv_mode": "auto"},
     {"model_id": "cilia_crispant_genotype_qc", "gene": "crispant", "label_col": "genotype_clean",
      "drop_labels": ["unknown", "nan"], "cv_mode": "kfold"},
     {"model_id": "b9d2_homozygous_phenotype", "gene": "b9d2", "label_col": "phenotype_clean",
-     "homozygous_only": True, "keep_labels": ["CE", "HTA"], "cv_mode": "loeo"},
+     "homozygous_only": True, "keep_labels": ["CE", "HTA"], "cv_mode": "auto"},
     {"model_id": "cep290_homozygous_phenotype", "gene": "cep290", "label_col": "phenotype_clean",
-     "homozygous_only": True, "keep_labels": ["High_to_Low", "Low_to_High"], "cv_mode": "loeo"},
+     "homozygous_only": True, "keep_labels": ["High_to_Low", "Low_to_High"], "cv_mode": "auto"},
 ]
 
 

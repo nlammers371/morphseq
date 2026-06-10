@@ -274,9 +274,10 @@ def _pred_columns(group_col: str, classes: list, *, query: bool) -> list[str]:
     return base + [f"prob_{c}" for c in classes]
 
 
-_SUPPORT_COLS = ["time_bin_center", "n_embryos", "n_experiments", "status"]
+_SUPPORT_COLS = ["time_bin_center", "n_embryos", "n_experiments", "status", "cv_method"]
 _FAILED_COLS = ["time_bin_center", "n_embryos", "n_experiments", "reason"]
-_METRIC_COLS = ["time_bin_center", "class", "precision", "recall", "n_embryos", "n_experiments"]
+_METRIC_COLS = ["time_bin_center", "class", "precision", "recall", "n_embryos",
+                "n_experiments", "cv_method"]
 _MISSING_COLS = ["query_embryo_id", "time_bin", "time_bin_center"]
 
 
@@ -308,21 +309,31 @@ def prepare_reference_perbin(
       - ``"kfold"``: stratified ``n_folds``-fold within each bin. Use when the reference has
         a single experiment (e.g. crispant), so leave-one-experiment-out is impossible. A
         bin FAILS if it has <2 classes or any class with fewer than ``n_folds`` members.
+      - ``"auto"``: decide PER BIN. Use loeo where the bin spans >=2 experiments; otherwise
+        fall back to k-fold within the bin (folds reduced toward the smallest class, min 2).
+        This recovers bins the reference only imaged in ONE experiment (e.g. b9d2 10-22 hpf)
+        that loeo would drop, at the cost of a weaker (within-experiment, not cross-
+        experiment) estimate there. The method actually used is recorded per bin as
+        ``cv_method`` in ``support`` and ``per_bin_metrics`` so the weaker bins are visible,
+        never hidden. A bin still FAILS if it has <2 classes (or a class with <2 members).
 
     Everything is per-bin; there is no global-model path. See the module docstring for the
     full return contract.
     """
     from sklearn.model_selection import StratifiedKFold
 
-    if cv_mode not in ("loeo", "kfold"):
-        raise ValueError(f"cv_mode must be 'loeo' or 'kfold', got {cv_mode!r}.")
-    if cv_mode == "loeo" and cv_group_col not in ref_df.columns:
+    if cv_mode not in ("loeo", "kfold", "auto"):
+        raise ValueError(f"cv_mode must be 'loeo', 'kfold' or 'auto', got {cv_mode!r}.")
+    # 'auto' and 'loeo' both need the cv_group_col present (auto uses it where a bin has
+    # >=2 groups; loeo needs it everywhere).
+    needs_group = cv_mode in ("loeo", "auto")
+    if needs_group and cv_group_col not in ref_df.columns:
         raise ValueError(f"cv_group_col={cv_group_col!r} not found in ref_df columns.")
     if cv_mode == "loeo" and ref_df[cv_group_col].nunique() < 2:
         raise ValueError(
             f"cv_mode='loeo' needs >=2 distinct {cv_group_col} values, but found "
             f"{ref_df[cv_group_col].nunique()}. This reference cannot do "
-            f"leave-one-{cv_group_col}-out — pass cv_mode='kfold' instead."
+            f"leave-one-{cv_group_col}-out — pass cv_mode='kfold' or 'auto' instead."
         )
 
     ref = ref_df.dropna(subset=[label_col]).copy().reset_index(drop=True)
@@ -331,7 +342,7 @@ def prepare_reference_perbin(
     eb = _build_embryo_bin_frame(
         ref, feature_cols, group_col, time_col, bin_width,
         label_col=label_col,
-        cv_group_col=(cv_group_col if cv_mode == "loeo" else None),
+        cv_group_col=(cv_group_col if needs_group else None),
     )
 
     pred_rows: list[pd.DataFrame] = []
@@ -348,28 +359,43 @@ def prepare_reference_perbin(
     for bc in sorted(eb["time_bin_center"].unique()):
         sub = eb[eb["time_bin_center"] == bc]
         n_emb = len(sub)
-        n_exp = int(sub[cv_group_col].nunique()) if cv_mode == "loeo" else np.nan
+        # n_exp is meaningful whenever we carried cv_group_col (loeo or auto).
+        n_exp = int(sub[cv_group_col].nunique()) if needs_group else np.nan
         y = sub[label_col].to_numpy()
         n_cls = int(len(np.unique(y)))
         min_class_count = int(pd.Series(y).value_counts().min()) if n_cls else 0
 
-        # ── FAIL conditions: never fall back ──────────────────────────────────────
-        if cv_mode == "loeo":
-            # leave-one-group-out: need >=2 groups and >=2 classes
+        # ── Choose the EFFECTIVE per-bin method ───────────────────────────────────
+        # 'auto': leave-one-experiment-out where the bin spans >=2 experiments (the
+        # honest cross-experiment analog of transfer); else fall back to k-fold within
+        # the bin (each (embryo,bin) is one row, so k-fold here is leave-some-embryos-out,
+        # NOT cross-experiment — less strict, recorded as cv_method so it's not hidden).
+        if cv_mode == "auto":
+            bin_method = "loeo" if (not np.isnan(n_exp) and n_exp >= 2) else "kfold"
+        else:
+            bin_method = cv_mode
+
+        # ── FAIL conditions: never silently fall back to a different bin's model ───
+        if bin_method == "loeo":
             fail_reason = (
-                f"<=1 {cv_group_col} (try cv_mode='kfold')" if n_exp <= 1
+                f"<=1 {cv_group_col} (try cv_mode='kfold'/'auto')" if n_exp <= 1
                 else "<2 classes" if n_cls < 2 else None
             )
+            # k-fold needs each class to have >= the (possibly reduced) fold count.
+            eff_folds = n_folds
         else:
-            # stratified k-fold: need >=2 classes and each class >= n_folds members
+            # stratified k-fold: need >=2 classes; reduce folds toward the smallest class
+            # so a tiny single-experiment bin still gets scored (>=2-fold). FAIL only if a
+            # class has <2 members (can't split it at all).
+            eff_folds = max(2, min(n_folds, min_class_count)) if n_cls >= 2 else n_folds
             fail_reason = ("<2 classes" if n_cls < 2
-                           else f"<{n_folds} per class for {n_folds}-fold"
-                           if min_class_count < n_folds else None)
+                           else "a class has <2 members for k-fold"
+                           if min_class_count < 2 else None)
         if fail_reason is not None:
             failed_rows.append(dict(time_bin_center=bc, n_embryos=n_emb,
                                     n_experiments=n_exp, reason=fail_reason))
             support_rows.append(dict(time_bin_center=bc, n_embryos=n_emb,
-                                     n_experiments=n_exp, status="failed"))
+                                     n_experiments=n_exp, status="failed", cv_method="none"))
             if verbose:
                 print(f"[perbin] bin {bc}: FAILED ({fail_reason}; n_emb={n_emb}, n_exp={n_exp})")
             continue
@@ -377,7 +403,7 @@ def prepare_reference_perbin(
         X = sub[feature_cols].to_numpy(dtype=float)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            if cv_mode == "loeo":
+            if bin_method == "loeo":
                 cv = LeaveOneGroupOut()
                 groups = sub[cv_group_col].to_numpy()
                 y_pred = cross_val_predict(_make_pipeline(random_state), X, y,
@@ -385,7 +411,7 @@ def prepare_reference_perbin(
                 proba = cross_val_predict(_make_pipeline(random_state), X, y,
                                           groups=groups, cv=cv, method="predict_proba")
             else:
-                cv = StratifiedKFold(n_splits=n_folds, shuffle=True,
+                cv = StratifiedKFold(n_splits=eff_folds, shuffle=True,
                                      random_state=random_state)
                 y_pred = cross_val_predict(_make_pipeline(random_state), X, y, cv=cv)
                 proba = cross_val_predict(_make_pipeline(random_state), X, y,
@@ -393,7 +419,7 @@ def prepare_reference_perbin(
         bin_classes = list(np.unique(y))  # sorted -> matches proba column order
         proba_full = _align_proba(proba, bin_classes, classes)
 
-        if cv_mode == "loeo":
+        if bin_method == "loeo":
             block = sub[[group_col, "time_bin", "time_bin_center", cv_group_col]].copy()
             block = block.rename(columns={cv_group_col: "cv_group"})
         else:
@@ -415,7 +441,8 @@ def prepare_reference_perbin(
             bin_prec[c], bin_rec[c] = p, r
             metric_rows.append(dict(time_bin_center=bc, **{"class": c},
                                     precision=round(p, 4), recall=round(r, 4),
-                                    n_embryos=n_c, n_experiments=n_exp))
+                                    n_embryos=n_c, n_experiments=n_exp,
+                                    cv_method=bin_method))
         per_bin_prec[bc] = bin_prec
         per_bin_rec[bc] = bin_rec
 
@@ -424,10 +451,10 @@ def prepare_reference_perbin(
         per_bin_cm[bc] = cm
 
         support_rows.append(dict(time_bin_center=bc, n_embryos=n_emb,
-                                 n_experiments=n_exp, status="scored"))
+                                 n_experiments=n_exp, status="scored", cv_method=bin_method))
         scored_centers.append(bc)
         if verbose:
-            print(f"[perbin] bin {bc}: scored (n_emb={n_emb}, n_exp={n_exp})")
+            print(f"[perbin] bin {bc}: scored via {bin_method} (n_emb={n_emb}, n_exp={n_exp})")
 
     # ── final per-bin models: fit on ALL ref rows in each scored bin ──────────────
     bin_models: dict[float, Any] = {}
@@ -572,7 +599,7 @@ def transfer_labels_perbin(
             block[f"prob_{c}"] = proba_full[:, j]
         pred_rows.append(block)
         support_rows.append(dict(time_bin_center=bc, n_embryos=len(sub),
-                                 n_experiments=np.nan, status="scored"))
+                                 n_experiments=np.nan, status="scored", cv_method="query"))
 
     predictions_df = _concat(pred_rows, _pred_columns(group_col, classes, query=True))
     predictions_df = predictions_df.rename(columns={group_col: "query_embryo_id"})

@@ -1,6 +1,6 @@
 model_id,gene,label_col,cv_mode,classes,n_reference_embryos,n_features,n_bins_scored,n_bins_failed,transferability,model_file
-b9d2_genotype_qc,b9d2,zygosity,loeo,"heterozygous, homozygous, wildtype",167,80,19,11,heterozygous:ok; homozygous:warn; wildtype:warn,models/b9d2_genotype_qc.pkl
-cep290_genotype_qc,cep290,zygosity,loeo,"heterozygous, homozygous, wildtype",528,80,31,2,heterozygous:warn; homozygous:ok; wildtype:skip,models/cep290_genotype_qc.pkl
+b9d2_genotype_qc,b9d2,zygosity,auto,"heterozygous, homozygous, wildtype",167,80,30,0,heterozygous:ok; homozygous:warn; wildtype:warn,models/b9d2_genotype_qc.pkl
+cep290_genotype_qc,cep290,zygosity,auto,"heterozygous, homozygous, wildtype",528,80,31,2,heterozygous:warn; homozygous:ok; wildtype:skip,models/cep290_genotype_qc.pkl
 cilia_crispant_genotype_qc,crispant,genotype_clean,kfold,"ab_wildtype, foxj1a_crispant, ift88_crispant, ift88_ift74_crispant, sspo_crispant",198,80,11,0,ab_wildtype:warn; foxj1a_crispant:warn; ift88_crispant:skip; ift88_ift74_crispant:warn; sspo_crispant:ok,models/cilia_crispant_genotype_qc.pkl
-b9d2_homozygous_phenotype,b9d2,phenotype_clean,loeo,"CE, HTA",37,80,19,11,CE:ok; HTA:ok,models/b9d2_homozygous_phenotype.pkl
-cep290_homozygous_phenotype,cep290,phenotype_clean,loeo,"High_to_Low, Low_to_High",223,80,31,2,High_to_Low:ok; Low_to_High:ok,models/cep290_homozygous_phenotype.pkl
+b9d2_homozygous_phenotype,b9d2,phenotype_clean,auto,"CE, HTA",37,80,29,1,CE:ok; HTA:ok,models/b9d2_homozygous_phenotype.pkl
+cep290_homozygous_phenotype,cep290,phenotype_clean,auto,"High_to_Low, Low_to_High",223,80,33,0,High_to_Low:ok; Low_to_High:ok,models/cep290_homozygous_phenotype.pkl

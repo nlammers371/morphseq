@@ -48,16 +48,46 @@ STATUS_COLORS = {
 # ── developmental ages a plate is collected at (hpf) ─────────────────────────────
 DESIGN_STAGES_HPF = [14, 18, 24, 30, 48]
 
-# ── confidence-plot columns = collection x support ───────────────────────────────
-# cep290 & b9d2 -> 5 columns; the 48 hpf collection appears twice (plate02 snapshot vs
-# plate01 timeseries). Each tuple is (collection_time_hpf, data_source, column label).
-PHENOTYPE_COLUMNS = [
-    (18, "snapshot",   "18 hpf"),
-    (24, "snapshot",   "24 hpf"),
-    (30, "snapshot",   "30 hpf"),
-    (48, "snapshot",   "48 hpf\nsnapshot (plate02)"),
-    (48, "timeseries", "48 hpf\ntimeseries (plate01)"),
-]
+
+def snap_to_design_stage(hpf, stages=DESIGN_STAGES_HPF, tol: float = 2.0):
+    """Nearest design stage within +/- tol hpf, else None.
+
+    Shared by 3b/3c/3d so the plate x design-stage binning is identical everywhere
+    (was duplicated in the old monolith 3_plot script).
+    """
+    import pandas as pd  # local import keeps this module dependency-light at import time
+
+    if pd.isna(hpf):
+        return None
+    for s in stages:
+        if abs(hpf - s) <= tol:
+            return s
+    return None
+
+
+# ── confidence-plot columns = collection x support (PER GENE) ────────────────────
+# The collection times are NOT shared across genes (verified against the data):
+#   b9d2   collected at 14, 18, 30, 48 hpf  -> HAS 14 hpf, has NO 24 hpf.
+#   cep290 collected at 18, 24, 30, 48 hpf  -> has 24 hpf, has NO 14 hpf.
+# For both, the 48 hpf collection appears TWICE: plate02 single snapshot vs plate01
+# 30->48 timeseries. The timeseries column should look BETTER (more support).
+# Each tuple is (collection_time_hpf, data_source, column label).
+PHENOTYPE_COLUMNS = {
+    "b9d2": [
+        (14, "snapshot",   "14 hpf"),
+        (18, "snapshot",   "18 hpf"),
+        (30, "snapshot",   "30 hpf"),
+        (48, "snapshot",   "48 hpf\nsnapshot (plate02)"),
+        (48, "timeseries", "48 hpf\ntimeseries (plate01)"),
+    ],
+    "cep290": [
+        (18, "snapshot",   "18 hpf"),
+        (24, "snapshot",   "24 hpf"),
+        (30, "snapshot",   "30 hpf"),
+        (48, "snapshot",   "48 hpf\nsnapshot (plate02)"),
+        (48, "timeseries", "48 hpf\ntimeseries (plate01)"),
+    ],
+}
 # crispant -> 4 columns, snapshot only (no timeseries).
 CRISPANT_COLUMNS = [
     (18, "snapshot", "18 hpf"),
