@@ -219,7 +219,10 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
             n_exps = met_col["n_experiments"].dropna().unique() if not met_col.empty else []
             cv_str = cv_methods[0] if len(cv_methods) == 1 else "/".join(cv_methods)
             if cv_str == "loeo":
-                n = int(n_exps[0]) if len(n_exps) == 1 else "?"
+                if len(n_exps) == 1:
+                    n = f"{int(n_exps[0])}"
+                else:
+                    n = f"{int(min(n_exps))}–{int(max(n_exps))}"
                 cv_label = f"loeo · {n} exp"
             else:
                 n_emb = int(met_col["n_embryos"].sum()) if not met_col.empty else "?"
