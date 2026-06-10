@@ -217,17 +217,30 @@ def pool_embryos_over_bins(
     id_col: str,
     classes: list,
     label_col: str | None = None,
+    time_col: str | None = None,
+    min_hpf: float | None = None,
+    max_hpf: float | None = None,
 ) -> pd.DataFrame:
     """Collapse a per-(embryo, bin) frame to one row per embryo.
 
-    Public wrapper over ``_embryo_cross_bin_prediction`` for callers (e.g. plotting
-    scripts) that have a multi-bin frame and want one point per embryo. Used when a
-    column spans multiple time bins (e.g. the timeseries phenotype-window column) and
-    the caller needs one dot/bar per embryo rather than one per embryo×bin.
+    Public wrapper over ``_embryo_cross_bin_prediction``. By default pools across all
+    rows in ``df`` — the caller is responsible for filtering to the correct support
+    window before passing in. The optional ``time_col``/``min_hpf``/``max_hpf`` args
+    let callers declare the biological support window inline:
+
+        pool_embryos_over_bins(
+            df, "physical_embryo_id", classes,
+            time_col="collection_time_hpf", min_hpf=30, max_hpf=48,
+        )
 
     ``label_col`` is optional: pass ``"true_label"`` for a reference CV frame so the
     result carries the modal per-embryo true class for scatter colouring.
     """
+    if time_col is not None:
+        if min_hpf is not None:
+            df = df[df[time_col] >= min_hpf]
+        if max_hpf is not None:
+            df = df[df[time_col] <= max_hpf]
     return _embryo_cross_bin_prediction(df, id_col, classes, label_col=label_col)
 
 

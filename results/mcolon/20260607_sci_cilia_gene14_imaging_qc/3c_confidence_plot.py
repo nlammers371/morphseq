@@ -148,10 +148,13 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
 
     for col, (coll_hpf, source, col_label) in enumerate(columns):
         if source == "timeseries":
-            # Timeseries column = longitudinal phenotype window, not a single hpf bin.
-            # Pool all timeseries rows to one per embryo so query grain matches reference.
+            # Timeseries column = 30–48 hpf phenotype window, not a single snapshot bin.
+            # Filter to the support window first, then pool to one row per embryo.
             cell_q_raw = q[q["data_source"] == "timeseries"]
-            cell_q = pool_embryos_over_bins(cell_q_raw, "physical_embryo_id", classes)
+            cell_q = pool_embryos_over_bins(
+                cell_q_raw, "physical_embryo_id", classes,
+                time_col="time_bin_center", min_hpf=30, max_hpf=48,
+            )
         else:
             cell_q_raw = q[(q["collection_time_hpf"] == coll_hpf) & (q["data_source"] == source)]
             cell_q = cell_q_raw
