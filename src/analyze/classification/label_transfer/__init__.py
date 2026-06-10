@@ -8,4 +8,5 @@ from .core import (
 from .perbin import (
     prepare_reference_perbin,
     transfer_labels_perbin,
+    pool_embryos_over_bins,
 )

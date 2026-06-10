@@ -158,12 +158,18 @@ def _build_embryo_bin_frame(
 
 
 def _embryo_cross_bin_prediction(
-    pred_df: pd.DataFrame, id_col: str, classes: list
+    pred_df: pd.DataFrame,
+    id_col: str,
+    classes: list,
+    label_col: str | None = None,
 ) -> pd.DataFrame:
     """Per-embryo aggregate (one row per embryo): mean per-bin prob vectors -> argmax.
 
     ``bins_contributed`` lists the actual ``time_bin_center`` values that fed each
     embryo's aggregate, so coverage is explicit (not just a count).
+
+    ``label_col`` is optional: when provided (e.g. ``"true_label"`` for a reference CV
+    frame), the modal label across bins is appended so callers can colour by true class.
     """
     prob_cols = [f"prob_{c}" for c in classes]
     out_cols = [id_col] + prob_cols + [
@@ -194,7 +200,35 @@ def _embryo_cross_bin_prediction(
     out["argmax_margin"] = margin
     out = out.merge(n_bins.reset_index(), on=id_col)
     out = out.merge(bins_list.reset_index(), on=id_col)
-    return out[out_cols]
+    out = out[out_cols]
+
+    if label_col is not None and label_col in pred_df.columns:
+        modal = (
+            pred_df.groupby(id_col)[label_col]
+            .agg(lambda s: s.mode().iloc[0])
+            .reset_index()
+        )
+        out = out.merge(modal, on=id_col, how="left")
+    return out
+
+
+def pool_embryos_over_bins(
+    df: pd.DataFrame,
+    id_col: str,
+    classes: list,
+    label_col: str | None = None,
+) -> pd.DataFrame:
+    """Collapse a per-(embryo, bin) frame to one row per embryo.
+
+    Public wrapper over ``_embryo_cross_bin_prediction`` for callers (e.g. plotting
+    scripts) that have a multi-bin frame and want one point per embryo. Used when a
+    column spans multiple time bins (e.g. the timeseries phenotype-window column) and
+    the caller needs one dot/bar per embryo rather than one per embryo×bin.
+
+    ``label_col`` is optional: pass ``"true_label"`` for a reference CV frame so the
+    result carries the modal per-embryo true class for scatter colouring.
+    """
+    return _embryo_cross_bin_prediction(df, id_col, classes, label_col=label_col)
 
 
 def _embryo_bin_coverage(

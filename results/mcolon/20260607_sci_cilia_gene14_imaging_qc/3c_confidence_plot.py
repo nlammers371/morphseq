@@ -64,6 +64,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(RUN_DIR))
 
 from plot_config import PHENOTYPE_COLORS, PHENOTYPE_COLUMNS, snap_to_design_stage  # noqa: E402
+from src.analyze.classification.label_transfer import pool_embryos_over_bins  # noqa: E402
 
 PRED_DIR = RUN_DIR / "predictions"
 MODEL_DIR = RUN_DIR / "models"
@@ -87,6 +88,7 @@ GENE_SPEC = {
 def gene_cmap_stops(left: str, right: str) -> list[str]:
     """Spectrum endpoints from the shared PHENOTYPE_COLORS: left -> gray -> right."""
     return [PHENOTYPE_COLORS.get(left, "#808080"), "#E6E6E6", PHENOTYPE_COLORS.get(right, "#808080")]
+
 
 
 def ref_bins_for_column(collection_hpf: int, data_source: str,
@@ -146,17 +148,10 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
 
     for col, (coll_hpf, source, col_label) in enumerate(columns):
         if source == "timeseries":
-            # Timeseries column = longitudinal phenotype window (30–48 hpf).
-            # coll_hpf is meaningless here; pool all timeseries rows across the window
-            # so query support mirrors the reference bins ref_bins_for_column aggregates.
-            cell_q_raw = q[
-                (q["data_source"] == "timeseries")
-                & (q["collection_time_hpf"].between(30, 48))
-            ]
-            cell_q = cell_q_raw.groupby("physical_embryo_id", as_index=False)[prob_col].mean()
-            cell_q["predicted_label"] = cell_q[prob_col].apply(
-                lambda p: right if p >= 0.5 else left
-            )
+            # Timeseries column = longitudinal phenotype window, not a single hpf bin.
+            # Pool all timeseries rows to one per embryo so query grain matches reference.
+            cell_q_raw = q[q["data_source"] == "timeseries"]
+            cell_q = pool_embryos_over_bins(cell_q_raw, "physical_embryo_id", classes)
         else:
             cell_q_raw = q[(q["collection_time_hpf"] == coll_hpf) & (q["data_source"] == source)]
             cell_q = cell_q_raw
@@ -199,7 +194,13 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         ax = axes[2][col]
         ax.axvspan(0.45, 0.55, color="#EEEEEE", zorder=0)
         ax.axvline(0.5, color="#777777", lw=0.8, ls=":", zorder=1)
-        ref_cell = cv[cv["time_bin_center"].isin(ref_bins)] if ref_bins else cv.iloc[0:0]
+        ref_cell_raw = cv[cv["time_bin_center"].isin(ref_bins)] if ref_bins else cv.iloc[0:0]
+        if source == "timeseries" and not ref_cell_raw.empty:
+            ref_cell = pool_embryos_over_bins(
+                ref_cell_raw, "embryo_id", classes, label_col="true_label"
+            )
+        else:
+            ref_cell = ref_cell_raw
         y_levels = {left: 0.22, right: -0.22}
         for cls in classes:
             sub_cls = ref_cell[ref_cell["true_label"] == cls]
