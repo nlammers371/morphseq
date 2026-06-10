@@ -148,7 +148,7 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         6, ncol,
         figsize=(2.7 * ncol + 1.6, 12.5),
         squeeze=False,
-        gridspec_kw={"height_ratios": [1, 0.7, 0.18, 0.7, 0.9, 0.9]},
+        gridspec_kw={"height_ratios": [1, 0.7, 0.28, 0.7, 0.9, 0.9]},
     )
     row_titles = {
         0: "argmax\nprediction",
@@ -231,12 +231,12 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
             annot = f"ref: {bin_str} | {cv_label}"
         else:
             annot = "no ref support"
-        ax.text(0.5, 0.45, annot, ha="center", va="center", fontsize=6.5,
+        ax.text(0.5, 0.45, annot, ha="center", va="center", fontsize=8.5,
                 color="#444444", transform=ax.transAxes,
                 style="italic")
         if col == 0:
             ax.text(-0.18, 0.45, "▼ reference", ha="right", va="center",
-                    fontsize=6.5, color="#444444", transform=ax.transAxes,
+                    fontsize=8.5, color="#444444", transform=ax.transAxes,
                     style="italic")
 
         # ── Row 3: reference probability strip, true class on y ───────────────────
