@@ -1,3 +1,22 @@
+# =============================================================================
+# TODO (NEXT PIPELINE — ADD A QC LAYER): re-acquired wells produce too many tiles.
+# When a well is imaged twice, both passes' tiles land in one folder, so a
+# normally 3-tile ([1,3]) well becomes 6 tiles ([1,6]) and stitches into a doubled
+# image (e.g. 720x3420 instead of 720x1710). get_image_paths() below currently
+# only DETECTS this and WARNS, passing tiles through unchanged — it does NOT try to
+# split passes or pick one. That is deliberate: any pass-selection here would have
+# to GUESS which tiles belong to which acquisition, because the grouping signal
+# (per-image ShootingDateTime / acquisition timestamp) lives on the RAW Keyence
+# images and is already stripped from these FF tiles. Guessing (keep-last / keep-
+# sharpest / contiguous-block split) is tape.
+#
+# The robust fix is a dedicated QC LAYER that runs AFTER generation: read the RAW
+# image metadata to GROUP tiles by actual acquisition, then decide each off-mode
+# well's fate (e.g. keep the sharpest *correctly-grouped* pass, split into frames,
+# or reject) outside this hot path. Build01 should just generate + flag; the QC
+# layer owns the policy. Until it exists, off-mode wells pass through with a warning
+# and surface as off-mode-size stitched images downstream.
+# =============================================================================
 from pathlib import Path
 from typing import Union
 import sys
@@ -156,7 +175,30 @@ def get_image_paths(
                                             "pixel_size_um": pixel_size_um
                                         }
 
-    # convert dict to a list                
+    # --- Detect re-acquired / off-mode wells (DETECT + WARN only) -------------
+    # A well imaged twice has both passes' tiles in one folder, so its tile_count
+    # is an integer multiple of the plate's modal tile_count (e.g. 6 = 2*3) and
+    # would stitch into a doubled image. We do NOT try to split/select a pass here:
+    # doing so requires knowing which tiles belong to which acquisition, and the
+    # grouping signal (per-image ShootingDateTime) lives on the RAW Keyence images,
+    # not on these FF tiles. So we only DETECT and WARN, passing tiles through
+    # unchanged — the downstream QC layer (see TODO at top of file) owns the policy.
+    tile_counts = [len(s["tile_zpaths"]) for s in sample_dict.values()]
+    if tile_counts:
+        mode_tiles = max(set(tile_counts), key=tile_counts.count)
+        for key, s in sample_dict.items():
+            n = len(s["tile_zpaths"])
+            if n != mode_tiles:
+                multiple = f" ({n // mode_tiles}x the mode — likely re-acquired)" \
+                    if mode_tiles > 0 and n % mode_tiles == 0 else ""
+                print("\n" + "!" * 78)
+                print(f"!! OFF-MODE TILE COUNT: {s['well']} (t{s['time_id']:04}) in {exp_name}")
+                print(f"!!   {n} tiles vs plate mode of {mode_tiles}{multiple}.")
+                print(f"!!   Passing through UNCHANGED (no pass-splitting guess). The stitched")
+                print(f"!!   image will be off-mode size — flag for the QC layer. REVIEW {s['well']}.")
+                print("!" * 78 + "\n")
+
+    # convert dict to a list
     return list(sample_dict.values()), pd.DataFrame(meta_rows)
     
 
@@ -232,9 +274,15 @@ def stitch_experiment(
         return {}
 
     n_tiles = len(list(glob(str(ff_path) + "/*.jpg")))
-    target  = {2: np.array([800,  630]),
-               3: np.array([1140, 630]) if orientation == "vertical"
-                  else np.array([1140, 480])}[n_tiles] * size_factor
+    _target_map = {
+        2: np.array([800,  630]),
+        3: np.array([1140, 630]) if orientation == "vertical" else np.array([1140, 480]),
+        6: np.array([2280, 630]) if orientation == "vertical" else np.array([2280, 480]),
+    }
+    if n_tiles not in _target_map:
+        log.warning("stitch_experiment: unexpected tile count %d for %s — skipping", n_tiles, ff_path)
+        return {}
+    target  = _target_map[n_tiles] * size_factor
     target  = tuple(target.astype(int))
 
     mosaic = StructuredMosaic(str(ff_path), dim=n_tiles,
@@ -246,10 +294,17 @@ def stitch_experiment(
               orientation=orientation)
     
     if fallback_flag:
-        master_json=str(Path(ff_tile_dir) / "master_params.json")
-        # flatten_master_params(master_json)
-        # Now:
-        mosaic.load_params(master_json)
+        master_json = str(Path(ff_tile_dir) / "master_params.json")
+        # master_params.json is written for the most-common tile count in this experiment.
+        # If this well has a different tile count, load_params raises ValueError (shape mismatch).
+        # Catching broadly: any failure here just means alignment proceeds without the fallback.
+        try:
+            mosaic.load_params(master_json)
+        except Exception as _e:
+            log.warning(
+                "stitch_experiment: load_params failed for %s (%s) — proceeding without fallback",
+                ff_path, _e,
+            )
 
     mosaic.reset_tiles()
 

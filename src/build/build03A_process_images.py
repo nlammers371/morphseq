@@ -407,7 +407,10 @@ def export_embryo_snips(r: int,
     """
 
     root = Path(root)
-    row = stats_df.iloc[r].copy()
+    # `r` is a DataFrame index *label* (export_indices is built from .index.tolist()),
+    # so use label-based .loc — .iloc would treat it positionally and go out of bounds
+    # whenever stats_df has a non-contiguous index (e.g. a row was dropped upstream).
+    row = stats_df.loc[r].copy()
 
     # Extract key variables from row data
     well = row.get("well")
@@ -1014,6 +1017,26 @@ def _merge_with_build01_metadata(sam2_df: pd.DataFrame, build01_metadata: pd.Dat
     merge_cols = merge_keys + all_build01_cols
     build01_merge = build01_metadata[merge_cols].copy()
 
+    # DEFENSIVE GUARD (not a recovery decision): the left merge below requires a unique
+    # (well, time_int) key on the Build01 side, or it becomes one-to-many and silently
+    # DUPLICATES SAM2 snips (row inflation -> downstream index-out-of-bounds). Re-acquired
+    # wells hit this: both passes land in the same T0000 folder, so both get time_int=0
+    # (time_int comes from the time-dir name) and differ only in Time Rel (s). We collapse
+    # the key to keep the merge 1:1; this is just to stop the crash on already-built
+    # metadata. Deciding WHICH acquisition is correct is the QC layer's job (see Build01
+    # TODO) — here we only warn loudly so the duplicate is never lost silently.
+    dup_mask = build01_merge.duplicated(merge_keys, keep=False)
+    if dup_mask.any():
+        dups = build01_merge.loc[dup_mask, merge_keys].drop_duplicates()
+        print("\n" + "!" * 78)
+        print(f"!! DUPLICATE Build01 {merge_keys} keys (re-acquired wells): "
+              f"{dups.to_dict('records')}")
+        print(f"!!   Collapsing to first to keep the merge 1:1 and avoid row inflation.")
+        print(f"!!   This is a defensive guard, NOT a verified choice of acquisition — "
+              f"the QC layer should decide. REVIEW these wells.")
+        print("!" * 78 + "\n")
+        build01_merge = build01_merge.drop_duplicates(merge_keys, keep='first')
+
     # Perform left merge: keep all SAM2 rows, update metadata where available
     result_df = sam2_df.merge(
         build01_merge,
@@ -1549,7 +1572,7 @@ def extract_embryo_snips(root: str | Path,
     else:
         for r in tqdm(export_indices, "Exporting snips..."):
             # DEBUG: Track attempts for problem embryos
-            snip_id = stats_df.iloc[r]["snip_id"]
+            snip_id = stats_df.loc[r]["snip_id"]  # r is an index label (see export_indices)
             for prefix in debug_snip_prefixes:
                 if snip_id.startswith(prefix):
                     debug_export_attempts[prefix].append(snip_id)
