@@ -145,8 +145,22 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
                   "reference P\n(true class)", "reference\nP / R", "reference\nconfusion"]
 
     for col, (coll_hpf, source, col_label) in enumerate(columns):
-        cell_q = q[(q["collection_time_hpf"] == coll_hpf) & (q["data_source"] == source)]
-        ref_bins = ref_bins_for_column(coll_hpf, source, cell_q, ref_bin_centers)
+        if source == "timeseries":
+            # Timeseries column = longitudinal phenotype window (30–48 hpf).
+            # coll_hpf is meaningless here; pool all timeseries rows across the window
+            # so query support mirrors the reference bins ref_bins_for_column aggregates.
+            cell_q_raw = q[
+                (q["data_source"] == "timeseries")
+                & (q["collection_time_hpf"].between(30, 48))
+            ]
+            cell_q = cell_q_raw.groupby("physical_embryo_id", as_index=False)[prob_col].mean()
+            cell_q["predicted_label"] = cell_q[prob_col].apply(
+                lambda p: right if p >= 0.5 else left
+            )
+        else:
+            cell_q_raw = q[(q["collection_time_hpf"] == coll_hpf) & (q["data_source"] == source)]
+            cell_q = cell_q_raw
+        ref_bins = ref_bins_for_column(coll_hpf, source, cell_q_raw, ref_bin_centers)
 
         # ── Row 0: argmax bar (query predicted-class counts) ──────────────────────
         ax = axes[0][col]
@@ -226,8 +240,8 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
             ax.set_xticks(xpos)
             ax.set_xticklabels(classes, fontsize=7, rotation=20, ha="right")
             ax.set_ylim(0, 1.15)
-            if col == 0:
-                ax.legend(fontsize=6, loc="lower left", ncol=2, frameon=False)
+            ax.legend(fontsize=6, loc="upper right", ncol=1, frameon=True,
+                      framealpha=0.8, edgecolor="#999999")
         else:
             ax.text(0.5, 0.5, "no ref bins", ha="center", va="center",
                     fontsize=7, color="#999999", transform=ax.transAxes)
