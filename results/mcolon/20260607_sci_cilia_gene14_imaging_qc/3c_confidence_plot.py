@@ -142,9 +142,21 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
     rng = np.random.default_rng(0)
     ncol = len(columns)
 
-    fig, axes = plt.subplots(5, ncol, figsize=(2.7 * ncol + 1.6, 11.5), squeeze=False)
-    row_titles = ["argmax\nprediction", "query P\n(sequenced)",
-                  "reference P\n(true class)", "reference\nP / R", "reference\nconfusion"]
+    # 6 rows: 0-1 query, 2 separator, 3-5 reference.
+    # The separator row is thin (height_ratio 0.18) and holds the CV annotation + divider line.
+    fig, axes = plt.subplots(
+        6, ncol,
+        figsize=(2.7 * ncol + 1.6, 12.5),
+        squeeze=False,
+        gridspec_kw={"height_ratios": [1, 0.7, 0.18, 0.7, 0.9, 0.9]},
+    )
+    row_titles = {
+        0: "argmax\nprediction",
+        1: "query P\n(sequenced)",
+        3: "reference P\n(true class)",
+        4: "reference\nP / R",
+        5: "reference\nconfusion",
+    }
 
     for col, (coll_hpf, source, col_label) in enumerate(columns):
         if source == "timeseries":
@@ -193,8 +205,42 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         if col == 0:
             ax.set_ylabel(row_titles[1], fontsize=8)
 
-        # ── Row 2: reference probability strip, true class on y ───────────────────
+        # ── Row 2: separator — divider line + per-column CV annotation ────────────
         ax = axes[2][col]
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        # Full-width divider line at the top of this row
+        ax.axhline(1.0, color="#444444", lw=1.2, clip_on=False)
+        # CV annotation: what reference support backs rows 3–5 for this column
+        if ref_bins:
+            met_col = metrics[metrics["time_bin_center"].isin(ref_bins)]
+            cv_methods = met_col["cv_method"].unique() if not met_col.empty else []
+            n_exps = met_col["n_experiments"].dropna().unique() if not met_col.empty else []
+            cv_str = cv_methods[0] if len(cv_methods) == 1 else "/".join(cv_methods)
+            if cv_str == "loeo":
+                n = int(n_exps[0]) if len(n_exps) == 1 else "?"
+                cv_label = f"loeo · {n} exp"
+            else:
+                n_emb = int(met_col["n_embryos"].sum()) if not met_col.empty else "?"
+                cv_label = f"kfold · {n_emb} emb"
+            if source == "timeseries":
+                bin_str = f"{int(min(ref_bins))}–{int(max(ref_bins))} hpf"
+            else:
+                bin_str = f"{int(ref_bins[0])} hpf"
+            annot = f"ref: {bin_str} | {cv_label}"
+        else:
+            annot = "no ref support"
+        ax.text(0.5, 0.45, annot, ha="center", va="center", fontsize=6.5,
+                color="#444444", transform=ax.transAxes,
+                style="italic")
+        if col == 0:
+            ax.text(-0.18, 0.45, "▼ reference", ha="right", va="center",
+                    fontsize=6.5, color="#444444", transform=ax.transAxes,
+                    style="italic")
+
+        # ── Row 3: reference probability strip, true class on y ───────────────────
+        ax = axes[3][col]
         ax.axvspan(0.45, 0.55, color="#EEEEEE", zorder=0)
         ax.axvline(0.5, color="#777777", lw=0.8, ls=":", zorder=1)
         ref_cell_raw = cv[cv["time_bin_center"].isin(ref_bins)] if ref_bins else cv.iloc[0:0]
@@ -223,10 +269,10 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
         ax.set_xlabel(f"{left} ← P({right}) → {right}", fontsize=6)
         ax.tick_params(axis="x", labelsize=7)
         if col == 0:
-            ax.set_ylabel(row_titles[2], fontsize=8)
+            ax.set_ylabel(row_titles[3], fontsize=8)
 
-        # ── Row 3: reference precision & recall (macro across the column's ref bins)
-        ax = axes[3][col]
+        # ── Row 4: reference precision & recall (macro across the column's ref bins)
+        ax = axes[4][col]
         met = metrics[metrics["time_bin_center"].isin(ref_bins)] if ref_bins else metrics.iloc[0:0]
         if not met.empty:
             agg = met.groupby("class")[["precision", "recall"]].mean().reindex(classes)
@@ -252,10 +298,10 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
             ax.set_xticks([])
             ax.set_yticks([])
         if col == 0:
-            ax.set_ylabel(row_titles[3], fontsize=8)
+            ax.set_ylabel(row_titles[4], fontsize=8)
 
-        # ── Row 4: reference confusion (mean of the column's ref bins, row-normalized)
-        ax = axes[4][col]
+        # ── Row 5: reference confusion (mean of the column's ref bins, row-normalized)
+        ax = axes[5][col]
         mats = [confusion[b]["matrix"] for b in ref_bins if b in confusion]
         if mats:
             cm = np.nanmean(np.stack(mats), axis=0)
@@ -276,7 +322,7 @@ def make_confidence_plot(gene: str, per_bin_all: pd.DataFrame) -> None:
             ax.set_xticks([])
             ax.set_yticks([])
         if col == 0:
-            ax.set_ylabel(row_titles[4], fontsize=8)
+            ax.set_ylabel(row_titles[5], fontsize=8)
 
         if cell_q.empty:
             print(f"  column '{col_label.replace(chr(10), ' ')}': n=0 query (rendered blank)")
